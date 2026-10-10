@@ -12,7 +12,7 @@ description:
       facade.
 source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintPlacement.java, line: 1, end_line: 681}
-revision: 491ba927ffa91889b679f800817dd48763aabd62
+revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 4f180ac42c0f3a8c5e82fbb903baf7af16bb39b8034b0627421fcc8b35fc8a2b
 state: active

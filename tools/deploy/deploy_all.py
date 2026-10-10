@@ -1,10 +1,35 @@
 # -*- coding: utf-8 -*-
 """Deploy the fixed jars to all local instances.
 
-1.21.1 NeoForge 21.1.250  : patched/promaid-1.3.0-neoforge-1.21.1.jar
-1.20.1 Forge 47.4.21      : patched/promaid-1.3.0-forge-1.20.1.jar   (user's main modpack)
-1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
+1.21.1 NeoForge 21.1.250     : patched/promaid-1.3.1-neoforge-1.21.1.jar
+1.20.1 Forge 47.4.10（测试）  : patched/promaid-1.3.1-forge-1.20.1.jar
+1.20.1 主整合包（龙之冒险）    : patched/promaid-1.3.1-forge-1.20.1.jar
+1.20.1 server pack1201        : patched/promaid-1.3.1-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
+
+实测七百九十六（v1.3.0，同名覆盖，未发版）：**"女仆手特别欠"——拿雪球也会主动参战的根因修复（两树镜像）** ——
+① 反馈：「装了模组之后女仆的手特别欠，老是喜欢主动打怪。我实际测试下来，如果女仆拿着雪球的话，
+   那也会主动参战打怪。」② 链路（javap + 反编译实证）：雪球不是武器（TLM TaskAttack.isWeapon = 主手装备
+   带 ATTACK_DAMAGE，雪球没有）→ 参战候选池全空 → ① 切战斗任务根本不发生。真凶是另一条：NeutralThreatDriver
+   把"锁定主人/女仆"的怪直接写进 brain 的 ATTACK_TARGET（每 10 tick），而这一步此前不查任何武器判据。
+   目标一写进去：TLM 空闲任务注册的 MaidSnowballTargetTask（优先级 7）只要「有目标 + 主/副手雪球或空手 +
+   看得见 + 在圈内」就扔雪球——**它门槛里没有"雪地"**（雪地只约束"凭空造目标"的 MaidStartSnowballAttacking，
+   优先级 6），任何群系都成立，且 start() 会主动给空手塞雪球；单兵战术（230）也不查武器就跳劈。
+③ 修法：给 ② 补上与 ① 同源同实现的「真能打」闸 AutoCombatPools.hasAnyCombatWeapon（复用候选池判据，
+   不另写一份武器判定）；两池全空 ⇔ ① 本就不参战 → ② 也不喂目标；并用 ASSIGNED_TARGETS 收回"武器被拿走"
+   前留下的旧目标（不碰 TLM 自己写的）。口径与 COMBAT_UNARMED_SKIP 一致，有武器的女仆行为不变。
+   buildPools 拆 diagnose 开关，新闸每 10 tick 全图扫时不打 "combat pools" 日志。④ 验证：两树 javac 0 错；
+   重打 jar（Forge 12,680,229 / Neo 12,721,025 字节）；drive 字节码偏移核对 canFight(192) 先于 ATTACK_TARGET(210)。
+
+实测七百九十五（v1.3.0，同名覆盖，未发版）：**补上 1.21.1 NeoForge 树漏镜像的专服修复** ——
+① 反馈：「使用 AI 对话以后游戏会崩溃」。根因：neo 树的 ChatInfoUtil.fromMaid 仍在调 TLM 的
+   ChatClientInfo.fromMaid(EntityMaid)，而那方法带 @OnlyIn(CLIENT)，专服上被 RuntimeDistCleaner
+   剥离 → NoSuchMethodError → 总线重抛 → 服务器 tick 崩溃（与 issue #4 逐行同构）。
+② 只影响 1.21.1 NeoForge：Forge 1.20.1 树在 v1.1.0 就修了，neo 树漏镜像；1.2.4 / 1.2.5 / 1.3.0
+   三个已发布 neo 包全带此 bug。触发 = 开着 TLM 的 LLM（dialogue.proactive / autonomous 默认开）。
+③ 修法：neo 版按 Forge 实现改写（服务端自建 ChatClientInfo：语言取配置、名取实体名、描述留空）。
+   另把两树的 PerceptionManager.DANGER_CACHE 换成 ConcurrentHashMap。
+④ 验证：两树 javac 0 错；_audit_clientonly.py 对 neo 树命中从 1 → 0；部署三处逐处核对一致。
 
 实测七百八十六（v1.3.0 beta，同名覆盖，未发版）：**只动"vehicle json 没写射速数据"的炮** ——
 ① 玩家原话：「坦克在安装了创造弹药盒之后，一部分坦克主炮的射速和攻击间隔仍然是异常的。」
@@ -345,7 +370,7 @@ fightAlt / bombStandoff 等）一个字节未动。日志：巡航档多写「�
 **她自己的 Y** → 目标 = 她现在的高度 + 3，每贴到一次就被抬高 3 格、目标水涨船高 = **每拍 +3 的
 棘轮**。修：RideBindManager 近距分支改传 owner.getY()，两档差别只在水平位置；删掉
 MaidAirCombat.followTarget 这个易误用的入口（只留 hoverAt(maid,x,z,baseY)）；顺手删掉已无用的
-groundY/GROUND_SCAN；固定翼日志档名一并改成「比主人高N格」。详见 CHANGELOG.md 顶部 734 段。
+groundY/GROUND_SCAN；固定翼日志档名一并改成「比主人高N格」。详见 rounds/R734-*.md。
 
 实测七百三十三（v1.3.0 beta，同名覆盖，未发版）：长距离不飞偏（直写机头）+ 跟随高度改「比主人高三格」+ 全程每 0.5 秒脉冲
 **本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 732，同名 jar 覆盖——玩家原话
@@ -355,7 +380,7 @@ groundY/GROUND_SCAN；固定翼日志档名一并改成「比主人高N格」。
 三处根因 + 后门：偏航通道权限只有 2.0×propeller(0.09)≈0.18 倍且与滚转耦合（:612/:613）→
 新增 forceHeadingOnto 直写 setYRot + serverYaw（handleClientSync:5443 会用 serverYaw 拽回），
 删掉 `|err|>=60 → 速度=0` 的原地打转分支；跟随高度基准从 groundY(她脚下)+3 改成 owner.getY()+3
-（与扫帚 MaidBroomDrive.followPoint 同口径）；脉冲去掉 24 格门槛、全程每 10 拍一次。详见 CHANGELOG.md 顶部 733 段。
+（与扫帚 MaidBroomDrive.followPoint 同口径）；脉冲去掉 24 格门槛、全程每 10 拍一次。详见 rounds/R733-*.md。
 
 实测七百三十二（v1.3.0 beta，同名覆盖，未发版）：直升机周期急停脉冲（每 0.5 秒收一次，把"用力过猛"封顶）
 **本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 731，同名 jar 覆盖——玩家原话
@@ -375,7 +400,7 @@ groundY/GROUND_SCAN；固定翼日志档名一并改成「比主人高N格」。
 （a）到位后直接把 deltaMovement 的水平分量乘 HARD_BRAKE_RETAIN（减速直通、安全；竖直分量保留），
 接敌盘旋中不刹；（b）MaidAirCombat 加硬高度闸——离敌上 N 格超过 2.5 格时目标点取她自己正上方，
 先爬到位再盘旋；（c）炮塔/武器位朝向写死到目标 + 弹匣空了自己 reloadAmmo + 直接调
-vehicleShoot(LivingEntity,UUID,Vec3) 绕开引擎那道「炮口 4° 内才开火」的闸。详见 CHANGELOG.md 顶部 731 段。
+vehicleShoot(LivingEntity,UUID,Vec3) 绕开引擎那道「炮口 4° 内才开火」的闸。详见 rounds/R731-*.md。
 
 实测七百三十（v1.3.0 beta，同名覆盖，未发版）：直升机真会飞（串级速度环 + 玩家档俯仰量级 + 直接写总距）+
 飞行坐骑锁敌并入扫帚口径（发现 50 / 维持 128）+ 主人超出接敌半径转去追主人
@@ -385,7 +410,7 @@ vehicleShoot(LivingEntity,UUID,Vec3) 绕开引擎那道「炮口 4° 内才开�
 旧版写满 0.6 也只转 1.3°/秒，而直升机的水平推进**只有**"机头下压→升力分水平分量"这一条 → 水平推力
 恒为零。本版把俯仰改成串级速度环（外环 距离→期望速度，上限照搬扫帚 0.75 格/拍；内环 姿态误差→
 mouseY 上限 8，与玩家同档），升降改成直接写 setPower 的 PD（power = 0.091 + 预测落点×k，钳 [0.045,0.12]）。
-锁敌并入射帚那套（发现 50 / 维持 128）；主人离超 50 格则放弃敌人转去追主人。详见 CHANGELOG.md 顶部 730 段。
+锁敌并入射帚那套（发现 50 / 维持 128）；主人离超 50 格则放弃敌人转去追主人。详见 rounds/R730-*.md。
 
 实测七百二十九（v1.3.0 beta，同名覆盖，未发版）：直升机真悬停与真能平移 + 坐骑「光标」不再解不掉 + 龙背漂移根治
 **本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 728，同名 jar 覆盖——玩家三条原话
@@ -393,14 +418,14 @@ mouseY 上限 8，与玩家同档），升降改成直接写 setPower 的 PD（p
 版本比较差劲的就是女仆彻底失去了前后左右移动能力，只会上下飞行。」②「如果一只龙被绑定了以后
 并且上了光标，那就再也没有办法解除他身上的光标了。这边建议在解除女仆乘坐在坐骑上的情况以后
 就顺便解除龙身上的光标。」③「女仆的位置还是在发生漂移。能不能强行绑定女仆坐在龙上龙的某块
-建模，然后每 tick 锁定那个位置呢？这样子也比在空中乱飘强得多。」根因与修法见 CHANGELOG.md 顶部 729 段。
+建模，然后每 tick 锁定那个位置呢？这样子也比在空中乱飘强得多。」根因与修法见 rounds/R729-*.md。
 
 实测七百二十八（v1.3.0 beta，同名覆盖，未发版）：飞行载具高度分两档（跟随离地 / 接敌敌上）+ 收紧盘旋半径
 **本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持上一版，同名 jar 覆盖——玩家对 727 的补正原话
 「我是说跟随的时候保持离地三格的电路。但是遇到敌人还是要升高到比敌人高 15 格的位置的呀，同时缩小
 绕圈的半径。」——727 把「离地三格」误套到了接敌上，本版拆成两档：跟随 = 离地 airAlt（默认 3）、
 接敌 = 敌上 fightAlt（默认 15，新增），盘旋半径 6 → 4；并返修飞行档「悬停档下用前进位顶平飞」导致
-的越爬越高。详见 CHANGELOG.md 顶部 728 段。
+的越爬越高。详见 rounds/R728-*.md。
 
 实测七百二十七（v1.3.0 beta，同名覆盖，未发版）：直升机悬停与同高空盘旋 + 骑龙下鞍 + 装弹返修 + 龙飞行错位 + 载具开火口径
 **本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 725，同名 jar 覆盖——玩家五条原话
@@ -410,7 +435,7 @@ mouseY 上限 8，与玩家同档），升降改成直接写 setPower 的 PD（p
 ④「如果龙是静止的时候还好……但是一旦龙开始飞行和跟随主人的时候，女仆的位置就会发生严重的
 改变和错乱。」⑤「到底什么时候女仆才会让自己的载具发起攻击？我认为是，只要女仆进入了
 I attack 状态下，那么就会让他的载具一起攻击了。」
-根因与修法见 CHANGELOG.md 顶部 727 段。
+根因与修法见 rounds/R727-*.md。
 
 实测七百二十六（v1.3.0 beta，同名覆盖，未发版）：特殊载具传送规矩 + 龙骑位错位 + 直升机空战 + 载具装弹 + 绑定顺序
 **本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 725，同名 jar 覆盖——玩家六条原话
@@ -918,12 +943,14 @@ sys.stdout.reconfigure(encoding='utf-8')
 BASE = _find_repo_root(__file__)
 
 JOBS = [
-    (os.path.join(BASE, 'patched', 'promaid-1.3.0-neoforge-1.21.1.jar'),
-     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.3.0-neoforge-1.21.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.3.0-forge-1.20.1.jar'),
-     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.3.0-forge-1.20.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.3.0-forge-1.20.1.jar'),
-     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.3.0-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.1-neoforge-1.21.1.jar'),
+     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.3.1-neoforge-1.21.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.1-forge-1.20.1.jar'),
+     r'D:\.minecraft\versions\1.20.1-Forge_47.4.10\mods\promaid-1.3.1-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.1-forge-1.20.1.jar'),
+     r'D:\.minecraft\versions\龙之冒险：新征程v2.4a\mods\promaid-1.3.1-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.1-forge-1.20.1.jar'),
+     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.3.1-forge-1.20.1.jar'),
 ]
 
 # refuse while any java/javaw runs (game or server open)

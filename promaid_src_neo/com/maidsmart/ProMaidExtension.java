@@ -106,6 +106,8 @@ public class ProMaidExtension implements ILittleMaid {
         NeoForge.EVENT_BUS.register(new com.maidsmart.task.MaidCakeEatHandler());
         // 实测六百七十三：仿创造飞行（事件驱动：core 行为被实例化了却从不被咨询，见控制器类注释）
         NeoForge.EVENT_BUS.register(new com.maidsmart.flight.MaidFreeFlightHandler());
+        // 实测八百一十四：干活时把移速压回 0 好感档（挂 MaidTickEvent，每 tick 自纠正一次）
+        NeoForge.EVENT_BUS.register(new com.maidsmart.task.MaidWorkSpeedHandler());
         // v1.1.0 实测二百三十三：随手种树任务级驱动注册（模块自监听 ServerTick，
         // 扫"任务=伐木"的女仆——触发=伐木模式，与行为运行窗口无关）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
@@ -191,6 +193,34 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.combat.MaidMaceSmashBehavior.clearForcedClutch();
     }
 
+    /**
+     * 实测八百二十八【女仆死亡 → 垫脚方块立即落地】：旧版女仆一死，她名下在
+     * {@code PlacedBlockTracker} 里登记的垫脚方块会因"绑定女仆不在线"永久暂停计时
+     * ——。
+     * 这里在死亡事件当场把她的全部垫脚方块销毁并落地成掉落物（不塞背包：人已死）。
+     * 覆盖挖矿/伐木/搭路/战斗搭高四张表（reclaimAllFor 遍历全部实例）。
+     */
+    @net.neoforged.bus.api.SubscribeEvent
+    public void onMaidDeath(net.neoforged.neoforge.event.entity.living.LivingDeathEvent event) {
+        if (!(event.getEntity() instanceof EntityMaid maid)) {
+            return;
+        }
+        try {
+            if (maid.level() instanceof net.minecraft.server.level.ServerLevel
+                    && maid.level().getServer() != null) {
+                com.maidsmart.task.PlacedBlockTracker.reclaimAllFor(
+                        maid.level().getServer(), maid.getUUID());
+            }
+        } catch (Throwable ignored) {
+        }
+        // 实测八百三十三：她 NBT 里若还压着"拆笼借镐时摘下的那件原副手物品"，人一死就落地
+        // （先清 NBT 再掉落——复活若从 NBT 重建，不会多出一份）
+        try {
+            com.maidsmart.combat.MaidSpawnerTorchBehavior.dropSavedOffhand(maid);
+        } catch (Throwable ignored) {
+        }
+    }
+
     @net.neoforged.bus.api.SubscribeEvent
     public void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event) {
         // v1.5.28：挖矿搭的方块 10 秒清场的最终兜底——内存追踪器随进程消失，
@@ -254,20 +284,19 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             // 摆设（配置+面板都在，followIfCrossDimension 却从未被任何代码调用）。
             // 开关开启时每 5 秒扫描全服女仆，异维度跟随者自动传送到主人身边；
             // home/坐姿/骑乘/主人非存活/同维度等豁免在 followIfCrossDimension 内自判。
-            // 实测六百九十【玩家崩溃报告·肇因就在下面这一层 for】：这里必须走
-            // EntitySnapshot.of(lvl) 取快照——老版直接 for (Entity en : lvl.getAllEntities())，
-            // 而 getAllEntities() 是原版实体表的活视图（Int2ObjectLinkedOpenHashMap + Guava
+            // 实测六百九十【玩家崩溃报告·肇因就在下面这一层 for】：这里必须走"先攒快照
+            // 再遍历"——老版直接 for (Entity en : lvl.getAllEntities())，而 getAllEntities()
+            // 是原版实体表的活视图（Int2ObjectLinkedOpenHashMap + Guava
             // unmodifiableIterable，javap 实证）。循环体里的 followIfCrossDimension 会对
             // 女仆做跨维度 teleportTo = 从本维度 byId 里删实体，同一个迭代器接着读
             // link[槽位] 就越界：玩家那局报的就是 Index 877 / length 513
             // →「Exception in server tick loop」整合服务端崩回桌面。详见 EntitySnapshot。
+            // 实测八百三十九：快照来源从"整张实体表"换成 MaidRoster（只攒女仆、按 20 tick 复用）
+            // ——同样安全，且零女仆时不再白拷全表（见 MaidRoster 类注释的采样报告）。
             if (com.maidsmart.config.MaidSmartConfig.MISC_DIMENSION_FOLLOW.get()) {
-                for (net.minecraft.server.level.ServerLevel lvl : server.getAllLevels()) {
-                    for (net.minecraft.world.entity.Entity en : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
-                        if (en instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid fm) {
-                            com.maidsmart.follow.MaidChunkLoadManager.followIfCrossDimension(fm);
-                        }
-                    }
+                for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid fm
+                        : com.maidsmart.tool.MaidRoster.all(server)) {
+                    com.maidsmart.follow.MaidChunkLoadManager.followIfCrossDimension(fm);
                 }
             }
         }
@@ -319,6 +348,12 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             // v1.3.0(beta)【骑乘指挥棒】：坐骑链路校验/驱动/恢复（与拴绳同频，2 tick 一次）
             com.maidsmart.combat.RideBindManager.tick(server);
         }
+        // v1.5.393 实测八百零四：饰品「大运」玩家侧——戴着它的玩家鞘翅滑翔时，逐 tick
+        // 开路（5×5×5）。女仆侧不在这里（走她自己饰品栏的 onTick，见 DaYunBauble）。
+        // 空跑代价 = 一次 List 遍历 + 每个玩家一次 isFallFlying，无人在飞时几乎为零。
+        // v1.5.394 实测八百零五：**不再在这里判总开关**——BGM 与破坏的两条开关无关
+        //（"戴着 + 滑翔"就该响），闸门移到 DaYunPlayerHook.tick 内部（它自己判 mayBreak）。
+        com.maidsmart.accessory.DaYunPlayerHook.tick(server);
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
     }
 
@@ -432,16 +467,13 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     private static final java.util.Map<java.util.UUID, Long> EQUIP_WATCH_CD =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /**
-     * v1.2.2 实测五百九十六【谁把她的装备拿走了】——诊断用，纯日志、不改任何状态。
-     *
-     * 女仆的**装备槽**（头盔/胸甲/护腿/靴子/主手/副手）从"有东西"变成"空"时记一行：
-     * 哪个槽、丢的是什么、她背包此刻的快照、以及一小段调用栈。反馈里的"收放魂符后把
-     * 装备从装备栏拖进物品栏，装备直接没了"——服务端的拖拽逻辑本身经模拟点击实测是
-     * 正确的（东西确实进了她背包），所以下一枪要能指出**到底是谁把装备槽清空的**
-     * （调用栈里若是 `AbstractContainerMenu.clicked` 就是玩家拖拽；若是别的类就是代码路径），
-     * 以及东西最后落在哪（背包快照）。复现一次，日志里就有答案。
-     */
+    /** 【实测八百三十三】女仆装备槽被清空时：①留痕（哪个槽、丢什么、背包快照、调用栈）；
+     *  ②**把那件东西接回来**——此刻它只剩本事件这一份引用（原版 tick 里补发的清空事件，
+     *  随后只把"当前空值"写回她身上并广播），不接就永远拿不回来（玩家实测丢过盾/剑/靴/帽子）。
+     *  【只救真丢的，五道闸缺一不救】服务端且她活着；不在她任何容器里（背包/隐藏/任务/饰品，
+     *  按同物品同组件且数量够判——**不能**用对象同一性，TLM 那条"副手→背包"是 copy 进去的）；
+     *  不在主人背包里；调用栈里没有玩家/菜单/网络帧；不是消耗品（可食用/药水/桶/烟花）或
+     *  耐久见底的那件。救回：原本副手且副手空 → 原位；否则背包；背包也满 → 落地。任何路径都不删。 */
     @net.neoforged.bus.api.SubscribeEvent
     public void onMaidEquipmentLeave(
             net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent event) {
@@ -453,38 +485,220 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             }
             net.minecraft.world.item.ItemStack from = event.getFrom();
             if (from.isEmpty() || !event.getTo().isEmpty()) {
-                return; // 只记"槽位被清空"
+                return; // 只处理"槽位被清空"
             }
+            StackTraceElement[] stack = new Throwable().getStackTrace();
+            // ---- ① 留痕（限频 1.5 秒：同一只女仆只记一条）----
             long now = System.currentTimeMillis();
             Long last = EQUIP_WATCH_CD.get(maid.getUUID());
-            if (last != null && now - last < 1500L) {
-                return; // 限频：同一只女仆 1.5 秒内只记一条
-            }
-            EQUIP_WATCH_CD.put(maid.getUUID(), now);
-            StringBuilder inv = new StringBuilder();
-            for (int i = 0; i < maid.getMaidInv().getSlots(); i++) {
-                net.minecraft.world.item.ItemStack st = maid.getMaidInv().getStackInSlot(i);
-                if (!st.isEmpty()) {
-                    inv.append(i).append(':').append(st.getCount()).append('x')
-                            .append(st.getItem()).append(' ');
+            if (last == null || now - last >= 1500L) {
+                EQUIP_WATCH_CD.put(maid.getUUID(), now);
+                StringBuilder inv = new StringBuilder();
+                for (int i = 0; i < maid.getMaidInv().getSlots(); i++) {
+                    net.minecraft.world.item.ItemStack st = maid.getMaidInv().getStackInSlot(i);
+                    if (!st.isEmpty()) {
+                        inv.append(i).append(':').append(st.getCount()).append('x')
+                                .append(st.getItem()).append(' ');
+                    }
                 }
+                StringBuilder frames = new StringBuilder();
+                for (int i = 0; i < stack.length && i < 8; i++) {
+                    frames.append("\n    at ").append(stack[i]);
+                }
+                com.maidsmart.tool.PromaidLog.log("装备离开", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 槽=" + event.getSlot() + " 失去 " + from.getCount() + "x" + from.getItem()
+                        + " | 她背包[" + inv + "] 头=" + short0(maid.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD))
+                        + " 主手=" + short0(maid.getMainHandItem())
+                        + " | 调用栈：" + frames);
             }
-            StringBuilder frames = new StringBuilder();
-            StackTraceElement[] stack = new Throwable().getStackTrace();
-            for (int i = 0; i < stack.length && i < 8; i++) {
-                frames.append("\n    at ").append(stack[i]);
+            // ---- ② 救回（限频不拦这一步：1.5 秒内连丢两件也要都接回来）----
+            // 实测八百四十一：第二道闸由"看调用栈"改成"看那件此刻在不在玩家手里"——原 isPlayerDriven
+            // 因为本事件是实体 tick 补发而**恒为 false**（等于没写），玩家在界面里取走副手物会被塞回来
+            // = 刷物品。判据与实证见 heldByAnyPlayer。
+            if (!maid.isAlive() || heldByAnyPlayer(maid, from) || !rescuable(from)
+                    || inMaidContainers(maid, from) || inOwnerInventory(maid, from)) {
+                return;
             }
-            com.maidsmart.tool.PromaidLog.log("装备离开", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 槽=" + event.getSlot() + " 失去 " + from.getCount() + "x" + from.getItem()
-                    + " | 她背包[" + inv + "] 头=" + short0(maid.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.HEAD))
-                    + " 主手=" + short0(maid.getMainHandItem())
-                    + " | 调用栈：" + frames);
+            net.minecraft.world.entity.EquipmentSlot lostSlot = event.getSlot();
+            net.minecraft.world.item.ItemStack left = putBack(maid, from, lostSlot);
+            if (!left.isEmpty()) {
+                maid.spawnAtLocation(left, 0.5f); // 副手占了、背包也满 → 落地（绝不删）
+            }
+            com.maidsmart.tool.PromaidLog.log("装备救回", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 槽=" + lostSlot + " 找回 " + from.getCount() + "x" + from.getItem()
+                    + "（清空事件是它最后一份引用，已放回她身上）");
         } catch (Throwable ignored) {
         }
     }
 
     private static String short0(net.minecraft.world.item.ItemStack st) {
         return st.isEmpty() ? "空" : (st.getCount() + "x" + st.getItem());
+    }
+
+    /**
+     * 这件东西此刻在**任何一个玩家手里**吗（界面光标或玩家背包）——命中 = 没丢，不救。
+     * <p>javap 实证（两树都核）：{@code LivingEquipmentChangeEvent} 是实体每 tick 在
+     * {@code detectEquipmentUpdates} 里补发的（比较上次/当前装备），栈里永远没有容器/网络帧；
+     * 旧判据 {@code isPlayerDriven} 因此**恒为 false**（形同没写），玩家在界面取走副手物会被当成
+     * "丢了"塞回来 = 凭空复制（实测八百四十一）。现在的判据是直接找那件在不在玩家手里：
+     * 一次界面取走只可能落到"光标"或"玩家背包"，见 {@link #inPlayerPossession}；真丢失不命中照旧救回。
+     */
+    private static boolean heldByAnyPlayer(EntityMaid maid, net.minecraft.world.item.ItemStack want) {
+        try {
+            if (!(maid.level() instanceof net.minecraft.server.level.ServerLevel level)) {
+                return false;
+            }
+            for (net.minecraft.server.level.ServerPlayer p : level.players()) {
+                if (inPlayerPossession(p, want)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 这件东西此刻在这个玩家手里吗：界面光标（拿起未放下）或背包任一格 */
+    private static boolean inPlayerPossession(net.minecraft.world.entity.player.Player p,
+                                              net.minecraft.world.item.ItemStack want) {
+        try {
+            if (matchOne(p.containerMenu.getCarried(), want)) {
+                return true; // 光标上（他在界面里拿着还没放下）
+            }
+            net.minecraft.world.entity.player.Inventory inv = p.getInventory();
+            for (int i = 0; i < inv.getContainerSize(); i++) {
+                if (matchOne(inv.getItem(i), want)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 单件比对："同一件、数量够"（与 {@link #hasSame} 同口径，给光标与背包格用） */
+    private static boolean matchOne(net.minecraft.world.item.ItemStack s,
+                                    net.minecraft.world.item.ItemStack want) {
+        return s != null && !s.isEmpty() && s.getCount() >= want.getCount()
+                && net.minecraft.world.item.ItemStack.isSameItemSameComponents(s, want);
+    }
+
+    /** 这件东西能不能救：按设计该消失的（吃掉的最后一件、用坏的那件）不救，救回=凭空多一件 */
+    private static boolean rescuable(net.minecraft.world.item.ItemStack st) {
+        try {
+            net.minecraft.world.item.Item it = st.getItem();
+            // 1.21.1 没有 Item.isEdible：食物是数据组件（DataComponents.FOOD）
+            if (st.has(net.minecraft.core.component.DataComponents.FOOD)) {
+                return false; // 可食用
+            }
+            net.minecraft.resources.ResourceLocation id =
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(it);
+            if (id != null) {
+                String s = id.toString();
+                if (s.contains("potion") || s.contains("firework") || s.contains("bucket")) {
+                    return false; // 药水 / 烟花 / 桶：都是一次性消耗品
+                }
+            }
+            if (st.isDamageableItem() && st.getDamageValue() >= st.getMaxDamage() - 1) {
+                return false; // 耐久见底 / 已用坏（例：挡到 0 的盾）
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 她身上（背包 / 隐藏格 / 任务格 / 饰品 / **两只手**）还有没有"同一件、数量够"的东西 */
+    private static boolean inMaidContainers(EntityMaid maid, net.minecraft.world.item.ItemStack want) {
+        try {
+            return hasSame(maid.getMaidInv(), want)
+                    || hasSame(maid.getHideInv(), want)
+                    || hasSame(maid.getTaskInv(), want)
+                    || hasSame(maid.getMaidBauble(), want)
+                    // 实测八百四十三：还要查她的两只手 —— 本模组自己的"主手⇄副手换手"（如 MaidPlanting）
+                    // 会把副手原物挪到主手再腾空副手，"挪到另一只手"不是丢，否则一样会被救回成复制。
+                    || hasSame(maid.getHandsInvWrapper(), want);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean hasSame(net.neoforged.neoforge.items.IItemHandler inv,
+                                   net.minecraft.world.item.ItemStack want) {
+        if (inv == null) {
+            return false;
+        }
+        try {
+            for (int i = 0; i < inv.getSlots(); i++) {
+                net.minecraft.world.item.ItemStack s = inv.getStackInSlot(i);
+                if (s.isEmpty() || s.getCount() < want.getCount() || s.getItem() != want.getItem()) {
+                    continue; // 空 / 数量不够 / 连物品都不是同一个 → 直接跳过（省掉后面的拷贝）
+                }
+                if (sameIgnoringDurability(s, want)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * 【实测八百四十三】"是不是同一件" = 同物品 + 数量够 + **除耐久外**完全相同。
+     * <p>不能拿 {@code isSameItemSameComponents} 原样比：可损坏物品的耐久是数据组件 {@code minecraft:damage}，它要求两件一模一样；
+     * 而事件里的 {@code from} 是原版**上一 tick 记下的副本** —— 她刚用这把镐拆掉刷怪笼（同一 tick 扣了 1 点耐久）再还镐，
+     * 背包里那件的耐久就比它新 1 → 判成"她身上没有" → 镐又被救回副手 = 凭空多一把（实测八百四十一 之后仍复现的那条刷物品）。
+     * 耐久是易变量，不该参与"是不是同一件"；附魔等其它组件照旧要比，"另一把不同附魔的镐"仍不算同一件。
+     * 耐久附魔这次没扣耐久（差 0）时走上面那条老路，行为不变。
+     */
+    private static boolean sameIgnoringDurability(net.minecraft.world.item.ItemStack s,
+                                                   net.minecraft.world.item.ItemStack want) {
+        try {
+            if (s.getDamageValue() == want.getDamageValue()) {
+                return net.minecraft.world.item.ItemStack.isSameItemSameComponents(s, want);
+            }
+            if (!s.isDamageableItem() || !want.isDamageableItem()) {
+                return false; // 不可损坏却"耐久"不同 → 不是同一件
+            }
+            net.minecraft.world.item.ItemStack a = s.copy();
+            net.minecraft.world.item.ItemStack b = want.copy();
+            a.setDamageValue(0); // 只把耐久对齐，别的组件不动
+            b.setDamageValue(0);
+            return net.minecraft.world.item.ItemStack.isSameItemSameComponents(a, b);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 主人手里还有没有同一件（玩家把她的装备拖自己身上时，东西在主人那边；含光标） */
+    private static boolean inOwnerInventory(EntityMaid maid, net.minecraft.world.item.ItemStack want) {
+        try {
+            net.minecraft.world.entity.LivingEntity owner = maid.getOwner();
+            if (owner instanceof net.minecraft.world.entity.player.Player p) {
+                return inPlayerPossession(p, want);
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 放回：原本是副手且副手空着 → 原位；否则背包。返回没能放进去的剩余（空栈 = 已安置好） */
+    private static net.minecraft.world.item.ItemStack putBack(
+            EntityMaid maid, net.minecraft.world.item.ItemStack lost,
+            net.minecraft.world.entity.EquipmentSlot slot) {
+        try {
+            net.neoforged.neoforge.items.IItemHandlerModifiable hands =
+                    (net.neoforged.neoforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper();
+            if (slot == net.minecraft.world.entity.EquipmentSlot.OFFHAND
+                    && hands.getStackInSlot(1).isEmpty()) {
+                hands.setStackInSlot(1, lost);
+                return net.minecraft.world.item.ItemStack.EMPTY;
+            }
+            return net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(
+                    maid.getAvailableBackpackInv(), lost, false);
+        } catch (Throwable ignored) {
+            return lost;
+        }
     }
 
     @net.neoforged.bus.api.SubscribeEvent
@@ -509,8 +723,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         }
         // 【实测六百七十五】武装拴绳：女仆重新入世界（魂符放出的**最后一步** / 区块重载 / 跨维度）
         //  —— 他还挂在她身上就把链路当场重建，否则把残留的金色描边标记与拴绳键清掉。
-        //  玩家原话："再讲这个女仆收进魂符再放出来…那个像光灵箭一样的效果会仍然存在，但是效果却没了。
-        //  在把他从魂符放出来之后的最后一步应该就是将她身上已有的此类边框先清掉。" 放在这里
+        //
+        //
         //  （事件链的最末）而不是魂符自己的流程里，正是因为"最后一步最安全"。
         com.maidsmart.combat.GunnerTetherManager.onMaidJoin(maid);
     }
@@ -664,6 +878,19 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     manager.add(new com.maidsmart.combat.MaidBroomTask());
     }
 
+    /**
+     * v1.5.393 实测八百零四：把「大运」登记成女仆饰品。
+     *
+     * <p>她饰品栏里放了「大运」→ TLM 的 {@code EntityMaid.tick()} 每 tick 调
+     * {@code IMaidBauble.onTick} → {@link com.maidsmart.accessory.DaYunBauble} 判「是否空袭模式 + 是否
+     * 真在滑翔」后开路。**只登记，不碰任何原版饰品逻辑**——没放过这件饰品的女仆零影响。
+     */
+    @Override
+    public void bindMaidBauble(com.github.tartaricacid.touhoulittlemaid.item.bauble
+            .BaubleManager manager) {
+        manager.bind(ProMaidMod.DA_YUN, new com.maidsmart.accessory.DaYunBauble());
+    }
+
     @Override
     public void registerTaskData(TaskDataRegister register) {
         BuildPlan.KEY = register.register(BuildPlan.KEY_ID, BuildPlan.CODEC);
@@ -739,7 +966,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                         Pair.of(190, new com.maidsmart.combat.MaidAidOwnerBehavior()),
                         Pair.of(185, new com.maidsmart.combat.MaidTorchPlacerBehavior()),
                         // v1.3.3【防刷怪：发现刷怪笼就插火把】——比被动插火把（185）高一位：
-                        // 玩家原话里的"优先"落在这一格上（她发现刷怪笼会先过去把它按哑，再回去
+                        // 落在这一格上（她发现刷怪笼会先过去把它按哑，再回去
                         // 干自己的活）。比自动装备（200）低、比战斗/自保那一群更低——打架和逃命
                         // 永远排在插火把前面。开关 combat.spawnerTorch.enable，半径同板块可配。
                         Pair.of(186, new com.maidsmart.combat.MaidSpawnerTorchBehavior()),

@@ -67,6 +67,11 @@ public class ProMaidMod {
     public static final DeferredItem<Item> PATROL_CHART = ITEMS.register("patrol_chart",
             () -> new com.maidsmart.patrol.PatrolChartItem(new Item.Properties()));
 
+    /** 饰品「大运」（v1.5.393 实测八百零四）：鞘翅飞行途中击毁周边 5×5×5 内的软方块。
+     *  女仆侧 = 放进她自己的饰品栏且处于空袭模式；玩家侧 = 放进 Curios 饰品栏后滑翔 */
+    public static final DeferredItem<Item> DA_YUN = ITEMS.register("da_yun",
+            () -> new com.maidsmart.accessory.DaYunItem(new Item.Properties()));
+
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
         ITEMS.register(modBus);
@@ -81,6 +86,9 @@ public class ProMaidMod {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(com.maidsmart.combat.PinkFireSweep.class);
         // v1.2.2 实测五百九十七：粉色火焰方块（maid_smart:pink_fire）——爆炸火焰改粉色的载体
         com.maidsmart.combat.PinkFireBlock.register(modBus);
+        // v1.5.394 实测八百零五：「大运」BGM 声音事件注册（MOD 总线）。
+        // 网络层由 @EventBusSubscriber 自注册（见 DaYunMusicNetworking），这里不用手动挂。
+        com.maidsmart.accessory.DaYunSounds.register(modBus);
         // v1.1.0：排班表调度器（按游戏内时间自动切工作模式/任务；网络层经 @EventBusSubscriber 自注册）
         com.maidsmart.schedule.ScheduleManager.register();
         // v1.1.0 实测二百七十七：女仆药剂手册网络层 + 右键女仆交互
@@ -127,6 +135,8 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerRideViewClamp();
             // 【实测七百二十七·点4】退出世界清掉"悬空鞍位（龙）"的客户端镜像表
             com.maidsmart.client.PromaidClientSetup.registerSeatSyncClear();
+            // v1.5.394 实测八百零五：「大运」BGM 客户端（每刻推进 + 退出世界清表）
+            com.maidsmart.client.PromaidClientSetup.registerDaYunMusicHooks();
         }
     }
 
@@ -162,7 +172,7 @@ public class ProMaidMod {
             // 【实测六百八十一】同上：原来这里**无条件**把可用性检测关成 false，与声明默认
             // 值 true 打架。撤掉，让声明值说了算。
             // v1.2.0：落地水触发高度默认 6 → 4 格（旧档存的旧默认自动迁移；手改过的不动）
-            // v1.2.2 实测五百八十九：投掷 TNT 间隔默认 120 → 40（玩家反馈"CD 太长"）
+            // v1.2.2 实测五百八十九：投掷 TNT 间隔默认 120 → 40（）
             // 只迁移"还是旧默认值"的配置，玩家自己调过的值不动
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get() == 120) {
                 com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.set(40);
@@ -284,7 +294,7 @@ public class ProMaidMod {
                     repaired++;
                 }
                 com.maidsmart.tool.PromaidLog.log("配置迁移",
-                        "实测六百八十一 默认值修复：把 679 误当默认的 12 项搬回真默认，本次改了 " + repaired + " 项");
+                        "默认值修复：把 679 误当默认的 12 项搬回真默认，本次改了 " + repaired + " 项");
             }
             // v1.3.0(beta) 实测六百八十二：扫帚接敌爬升高度默认 10 → 15（一次性标记）。
             // 【为什么必须迁】只改 defineInRange 的默认值对老档毫无作用（老 toml 里已经写着 10）；
@@ -367,6 +377,7 @@ public class ProMaidMod {
                             "骑飞行载具盘旋半径不需要迁移（现值 " + orbitBefore + "）");
                 }
             }
+            changed |= migrateDangerCampfire();
             changed |= migrateOreTable();
         } catch (Exception ignored) {
         }
@@ -436,6 +447,39 @@ public class ProMaidMod {
      * ① 空表 = 从未配置过 → 播种当前默认全家桶；
      * ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
      */
+    /**
+     * v1.5.395 实测八百二十一：把营火/灵魂营火补进老档的危险表（一次性）。
+     *
+     * <p>【为什么必须迁】营火每 tick 直接造成火焰伤害却【不会点燃】她，旧默认危险表里
+     * 没有它 → 她站在营火上只会持续掉血、不主动跑开。改 defineList 的默认值对老 toml
+     * 毫无作用（老档里已写着旧列表）。判据同 {@link #migrateOreTable()}：只【补缺】，
+     * 绝不动玩家已有条目——表里已含营火就什么都不做（玩家自己删过的也不硬塞）。
+     */
+    private static boolean migrateDangerCampfire() {
+        if (com.maidsmart.config.MaidSmartConfig.DANGER_CAMPFIRE_MIGRATED.get()) {
+            return false;
+        }
+        java.util.LinkedHashSet<String> blocks = new java.util.LinkedHashSet<>(
+                com.maidsmart.config.MaidSmartConfig.MISC_DANGER_BLOCKS.get());
+        boolean changed = false;
+        if (!blocks.contains("minecraft:campfire")) {
+            blocks.add("minecraft:campfire");
+            changed = true;
+        }
+        if (!blocks.contains("minecraft:soul_campfire")) {
+            blocks.add("minecraft:soul_campfire");
+            changed = true;
+        }
+        com.maidsmart.config.MaidSmartConfig.DANGER_CAMPFIRE_MIGRATED.set(true);
+        if (changed) {
+            com.maidsmart.config.MaidSmartConfig.MISC_DANGER_BLOCKS.set(
+                    new java.util.ArrayList<>(blocks));
+            com.maidsmart.tool.PromaidLog.log("配置迁移",
+                    "危险方块表补入营火/灵魂营火（营火伤害不点燃，旧表下她会站在火上白挨）");
+        }
+        return changed;
+    }
+
     private static boolean migrateOreTable() {
         java.util.LinkedHashSet<String> ores = new java.util.LinkedHashSet<>(
                 com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get());

@@ -34,9 +34,9 @@ import net.neoforged.neoforge.common.NeoForge;
  *       <b>完全回原版</b>——原版自己会走去收成熟作物，不再需要一个"随机巡逻"替她找活。</li>
  * </ul>
  *
- * <p>现在农场这条链路的口径与用户对"正常"的定义一致（六百四十六 原话："车万女仆本体
- * 对农场工作选项的支持，正常来说就是……平常就是跟着走或者站着，只有作物成熟了才跑过去
- * 收割"）：<b>本驱动不再给农场女仆注入任何移动</b>——闲着时走的是
+ * <p>现在农场这条链路的口径与用户对"正常"的定义一致（六百四十六
+ *
+ *
  * {@code MaidStrollBehavior}（空闲散步，自带"已有移动目标就不打扰"的门禁，不会抢
  * TLM 的路径），忙时走的是原版农场任务自己。宰杀保持原样（TLM 那边没有"自己找活"的
  * 能力，无牲畜可杀时会永久站桩，必须由本驱动兜着）。</p>
@@ -77,10 +77,9 @@ if (++this.throttle < 5) {
             // 有限 AABB（±∞ 经 blockToSection 溢出收敛 → 扫描恒空，实测三百三十二）
             for (ServerLevel level : server.getAllLevels()) {
                 // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                    if (e instanceof EntityMaid maid) {
-                        drive(level, maid);
-                    }
+                // 实测八百三十九：来源改 MaidRoster（只攒女仆、按 20 tick 复用）；零女仆时零成本
+                for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, level)) {
+                    drive(level, maid);
                 }
             }
         } catch (Throwable ignored) {
@@ -110,8 +109,7 @@ if (++this.throttle < 5) {
                 return;
             }
             // 巡逻半径：home 限制半径内（留 1 格余量防触发越界传送），上限 12 格
-            int radius = Math.max(3, Math.min((int) maid.getRestrictRadius() - 1, 12));
-            int dx = maid.getRandom().nextInt(radius * 2 + 1) - radius;
+            int radius = Math.max(3, Math.min((int) maid.getRestrictRadius() - 1, 12));            int dx = maid.getRandom().nextInt(radius * 2 + 1) - radius;
             int dz = maid.getRandom().nextInt(radius * 2 + 1) - radius;
             // 目标与女仆同一高度层（脚部方块），寻路器自动落地
             BlockPos target = new BlockPos(center.getX() + dx,
@@ -119,7 +117,8 @@ if (++this.throttle < 5) {
             // 直连导航（moveTo = moveTo(x,y,z,speed)）——不走 MoveToTargetSink，
             // 站桩标记/移动抑制拦不住（自保逃跑验证过的通道）
             maid.getNavigation().moveTo(target.getX() + 0.5,
-                    target.getY(), target.getZ() + 0.5, 0.7f);
+                    target.getY(), target.getZ() + 0.5,
+                    (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get()); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
             // 实测六百四十六：落一行限频日志——"她没有牲畜可杀时才由本驱动带着走"
             // 这件事要能从日志里直接对账（本驱动不再碰农场女仆）
             long now = level.getGameTime();

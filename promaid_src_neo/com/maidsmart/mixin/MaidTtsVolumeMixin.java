@@ -6,7 +6,7 @@ import org.spongepowered.asm.mixin.injection.ModifyArg;
 
 /**
  * v1.5.198：TTS 音量倍率——TLM 的 MaidAISoundInstance 构造时 super 音量参数
- * 硬编码 1.0f（玩家反馈"TTS 播放声音太小"）。在构造调用处把音量参数（index 2）
+ * 硬编码 1.0f（）。在构造调用处把音量参数（index 2）
  * 按配置倍率放大：LLM 对话 TTS 与系统消息 TTS 都经该类播放，一并生效。
  * 客户端专用 mixin（mixins.promaid.json "client" 段，专服不应用）。
  */

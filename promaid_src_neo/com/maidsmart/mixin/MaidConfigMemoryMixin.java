@@ -9,6 +9,7 @@ import com.maidsmart.memory.AiMemoryModels;
 import com.maidsmart.memory.AiMemoryStore;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
@@ -45,9 +46,10 @@ public abstract class MaidConfigMemoryMixin {
 
     /** v1.5.242：界面里的"AI 记忆"开关按钮——renderAddition 每次渲染同步文本，
      *  旧版只在 initAdditionWidgets 设置一次，Query/Sync 回来后按钮还显示旧值
-     *  （显示"开"时点一下 = 又开，回弹的体感来源之一） */
-    private com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton
-            maidsmart$memoryBtn = null;
+     *  （显示"开"时点一下 = 又开，回弹的体感来源之一）
+     *  <p>实测八百零五：位置改由 {@link com.maidsmart.client.MaidConfigRowLayout} 统一算
+     *  （面板左侧外边距竖排，整列在面板之外，不遮 TLM 控件、彼此不重叠）。 */
+    private Button maidsmart$memoryBtn = null;
 
     /**
      * v1.5.98 修复：无 refmap 环境下 @Shadow 无法定位【继承】成员（Screen/
@@ -136,7 +138,7 @@ public abstract class MaidConfigMemoryMixin {
             if (maid == null) {
                 return;
             }
-            int w = ((Screen) (Object) this).width;
+            Screen screen = (Screen) (Object) this;
             boolean cur = AiMemoryManager.isEnabled(maid);
             // v1.5.227：界面打开时主动查询真实状态（缓存为空时按钮显示会停留在
             // 旧值——查询后服务端回 MemoryStateSyncPacket 纠正显示）
@@ -145,30 +147,41 @@ public abstract class MaidConfigMemoryMixin {
             String uid = maid.getUUID().toString();
             net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                     new com.maidsmart.build.BlueprintBookEntityPackets.MemoryStateQueryPacket(uid));
-            com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton btn =
-                    new com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton(
-                            w - 174, 8,
-                            Component.literal("AI 记忆"),
-                            Component.literal(cur ? "\u00a7a开" : "\u00a77关"),
-                            b -> {
-                                // v1.5.227：防连点——600ms 内重复点击忽略（双击 = 关→开）
-                                long now = System.currentTimeMillis();
-                                if (now - LAST_TOGGLE_CLICK < 600) {
-                                    return;
-                                }
-                                LAST_TOGGLE_CLICK = now;
-                                boolean next = !AiMemoryManager.isEnabled(maid);
-                                b.setValue(Component.literal(next ? "\u00a7a开" : "\u00a77关"));
-                                net.neoforged.neoforge.network.PacketDistributor.sendToServer(
-                                        new com.maidsmart.build.BlueprintBookEntityPackets.AiMemoryTogglePacket(
-                                                uid, next));
-                            });
+            Button btn = com.maidsmart.client.MaidConfigRowLayout.toggle(this, screen.width,
+                    screen.height, 0, com.maidsmart.client.MaidConfigRowLayout.LABELS[0],
+                    cur ? "\u00a7a\u5f00" : "\u00a77\u5173", () -> {
+                        // v1.5.227：防连点——600ms 内重复点击忽略（双击 = 关→开）
+                        long now = System.currentTimeMillis();
+                        if (now - LAST_TOGGLE_CLICK < 600) {
+                            return;
+                        }
+                        LAST_TOGGLE_CLICK = now;
+                        boolean next = !AiMemoryManager.isEnabled(maid);
+                        net.neoforged.neoforge.network.PacketDistributor.sendToServer(
+                                new com.maidsmart.build.BlueprintBookEntityPackets.AiMemoryTogglePacket(
+                                        uid, next));
+                    });
             this.maidsmart$memoryBtn = btn;
-            addRenderable((Screen) (Object) this, btn);
+            addRenderable(screen, btn);
         } catch (Exception ignored) {
         }
     }
 
+    /**
+     * 【v1.6.0 实测八百一十三：删掉「AI 长期记忆」整块面板】
+     * 「把图片中长期记忆那段字删掉，它挡住 ui 了」。
+     *
+     * <p>旧版在这块 {@code renderAddition} 里，于 TLM 女仆配置界面**容器内部**左上角
+     * （{@code leftPos+5, topPos+20}）画一整块：「—— AI 长期记忆 —— / 记忆提取：开 /
+     * 人格：xx / TLM 人设：有 / 记忆日记：N 篇 / [salience] 记忆条目…」。
+     * 那一块会压住她自己的图标行与开关列——而同样这些状态在 Promaid 手册的
+     * 「AI 记忆系统」章里写得更完整。所以整块停止绘制。
+     *
+     * <p>【保留什么】只保留**开关按钮文本的同步**：那个窄按钮由
+     * {@link com.maidsmart.client.MaidConfigRowLayout} 摆在面板**之外**的左边距竖排一列
+     * （不遮任何 TLM 控件），仍要在查询/同步包回来之后即时纠正显示——否则会出现
+     * 「显示『开』时点一下反而又开」的回弹观感（v1.5.242 的老问题）。
+     */
     @Inject(method = "renderAddition", at = @At("HEAD"))
     private void maidsmart$renderMemories(GuiGraphics graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
         try {
@@ -177,147 +190,13 @@ public abstract class MaidConfigMemoryMixin {
             if (maid == null) {
                 return;
             }
-            // v1.5.242：每次渲染同步"AI 记忆"开关按钮文本——查询/同步包回来
-            // 后按钮即时纠正（旧版只在 initAdditionWidgets 设置一次，显示旧值
-            // "开"时玩家一点反而又开，是开关回弹的体感来源之一）
             if (this.maidsmart$memoryBtn != null) {
                 boolean e = AiMemoryManager.isEnabled(maid);
-                this.maidsmart$memoryBtn.setValue(Component.literal(e ? "\u00a7a开" : "\u00a77关"));
-            }
-            Font font = net.minecraft.client.Minecraft.getInstance().font;
-            // v1.5.190：面板移到容器内左上（leftPos+5, topPos+20），宽度 ≤245——
-            // 旧版屏幕绝对坐标 x=168 与原生开关列（leftPos+86 起，y=52 起）横向
-            // 重叠，记忆行从 y=45 开始直接压在本机开关按钮上。新位置在图标行
-            // （y 6..15）之下、原生开关列（y=52）之上，互不遮挡。
-            int screenW = ((Screen) (Object) this).width;
-            int screenH = ((Screen) (Object) this).height;
-            int imageW = reflectIntField(this, "imageWidth"); // imageWidth（继承，0=失败）
-            int imageH = reflectIntField(this, "imageHeight");
-            if (imageW == 0) {
-                imageW = 256;
-            }
-            if (imageH == 0) {
-                imageH = 256;
-            }
-            int x = containerLeft(screenW, this, imageW) + 5;
-            int y = containerTop(screenH, this, imageH) + 20;
-            if (x < 4) {
-                x = 4;
-            }
-            if (y < 8) {
-                y = 8;
-            }
-            graphics.drawCenteredString(font, Component.literal("—— AI 长期记忆 ——"), x, y, 0xFFFFD700);
-            y += 11;
-            // per-maid 开关状态（客户端 TaskData 已同步）
-            boolean enabled = AiMemoryManager.isEnabled(maid);
-            graphics.drawCenteredString(font, Component.literal(enabled
-                            ? "\u00a7a记忆提取：开（对话攒满自动提取）"
-                            : "\u00a77记忆提取：关（可在右上角开启）"),
-                    x, y, enabled ? 0xFF55FF55 : 0xFF888888);
-            y += 11;
-            // v1.5.227：记忆关闭时【不显示记忆列表】——"女仆记忆那一栏关不掉"的
-            // 直接体感来源：开关显示"关"但列表还在，看起来像没关掉。关闭时只保留
-            // 开关状态行 + 提示，列表完全隐藏。
-            if (!enabled) {
-                if (y + 10 < 52) {
-                    drawLine(font, graphics, x, y, "（记忆已关闭——开启后恢复显示）", 0xFF666666);
-                }
-                return;
-            }
-            // 记忆条目投影（仅单机/局域网主机可读本地 jsonl；联机只显示提示）——
-            // v1.5.190：只显示 2 条（y 上限 52 = 原生开关列顶部，防重叠；完整记忆
-            // 请看Promaid 手册的"女仆记忆"页）
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            if (mc.getSingleplayerServer() != null) {
-                // v1.5.251：灵魂女仆 → 读全局灵魂目录（客户端单机直接读 config
-                // 目录文件；soulId 由 SyncPacket 缓存）
-                java.nio.file.Path root;
-                String soulId = com.maidsmart.memory.AiMemoryManager.clientSoulId(
-                        maid.getUUID().toString());
-                if (soulId != null && !soulId.isEmpty()) {
-                    root = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get()
-                            .resolve("maid_smart").resolve("souls").resolve(soulId)
-                            .resolve("memory");
-                } else {
-                    root = AiMemoryExtractor.memoryRoot(mc.getSingleplayerServer());
-                }
-                AiMemoryStore store = AiMemoryStore.of(maid.getUUID(), root);
-                // v1.1.0：人格种子状态（只读展示——文件在女仆记忆目录，可手改：
-                // persona.properties 人格 / traits.properties 参数 / core_memories.jsonl 核心记忆）
-                if (y + 10 < 52) {
-                    String pname = com.maidsmart.persona.PersonaPackage.personaName(store.dir());
-                    if (pname != null) {
-                        graphics.drawCenteredString(font, Component.literal("\u00a7b人格：" + pname), x, y, 0xFF55FFFF);
-                        y += 11;
-                    }
-                }
-                // v1.2.1：TLM 人设统一状态（有→补充模式 / 无→完整模式；客户端取不到则跳过）
-                if (y + 10 < 52) {
-                    try {
-                        if (maid.getAiChatManager() != null) {
-                            boolean has = com.maidsmart.memory.AiMemoryContext.tlmHasPersona(maid);
-                            drawLine(font, graphics, x, y,
-                                    has ? "\u00a7bTLM 人设：有（补充模式）" : "\u00a77TLM 人设：无（完整模式）",
-                                    has ? 0xFF55FFFF : 0xFF888888);
-                            y += 11;
-                        }
-                    } catch (Exception ignored) {
-                    }
-                }
-                // v1.5.382：记忆日记状态（多级索引篇数 + 最新日记跨度；索引关闭时无此行）
-                if (com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get() && y + 10 < 52) {
-                    List<com.maidsmart.memory.AiMemoryIndexStore.IndexRecord> idx = store.index().all();
-                    if (!idx.isEmpty()) {
-                        com.maidsmart.memory.AiMemoryIndexStore.IndexRecord last = null;
-                        for (com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r : idx) {
-                            if (last == null || r.endTick() > last.endTick()) {
-                                last = r;
-                            }
-                        }
-                        drawLine(font, graphics, x, y,
-                                "\u00a7d记忆日记：" + idx.size() + " 篇（最新" + last.level()
-                                        + "记 第" + last.startDay() + "~" + last.endDay() + "天）",
-                                0xFFBB77FF);
-                        y += 11;
-                    }
-                }
-                List<AiMemoryModels.Paragraph> top = new ArrayList<>(store.paragraphs());
-                top.sort(Comparator.comparingInt(AiMemoryModels.Paragraph::salience).reversed());
-                if (top.isEmpty()) {
-                    if (y + 10 < 52) {
-                        drawLine(font, graphics, x, y, "（暂无记忆——多和女仆对话会慢慢积累）", 0xFF888888);
-                    }
-                } else {
-                    int shown = 0;
-                    for (AiMemoryModels.Paragraph p : top) {
-                        if (shown >= 2 || y + 10 >= 52) {
-                            break;
-                        }
-                        // v1.5.251：显示来源世界 + 获得时间；v1.5.382：长期沉淀标记
-                        String lt = p.tags().contains("long_term") ? "\u00a7d[长期]\u00a77" : "";
-                        drawLine(font, graphics, x, y,
-                                "[" + p.salience() + "] " + lt + p.content()
-                                        + com.maidsmart.memory.AiMemoryModels.memoryMeta(p), 0xFFAAAAAA);
-                        y += 11;
-                        shown++;
-                    }
-                    if (y + 10 < 52) {
-                        drawLine(font, graphics, x, y, "（完整记忆见 Promaid 手册·女仆记忆页）", 0xFF666666);
-                    }
-                }
-            } else if (y + 10 < 52) {
-                drawLine(font, graphics, x, y, "（联机客户端无法预览记忆文件）", 0xFF666666);
+                this.maidsmart$memoryBtn.setMessage(com.maidsmart.client.MaidConfigRowLayout.text(
+                        com.maidsmart.client.MaidConfigRowLayout.LABELS[0],
+                        e ? "\u00a7a\u5f00" : "\u00a77\u5173"));
             }
         } catch (Exception ignored) {
         }
-    }
-
-    /** 超长截断绘制一行（防溢出界面） */
-    private static void drawLine(Font font, GuiGraphics graphics, int x, int y, String line, int color) {
-        while (font.width(line) > 150 && line.length() > 1) {
-            line = line.substring(0, line.length() - 1);
-        }
-        graphics.drawCenteredString(font, Component.literal(line), x, y, color);
     }
 }

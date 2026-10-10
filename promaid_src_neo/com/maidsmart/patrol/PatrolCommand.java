@@ -17,8 +17,8 @@ import java.util.List;
  * v1.3.8【巡逻航迹 · 指令】{@code /maid_smart broom_goto <x> <y> <z> [女仆]}
  * + {@code /maid_smart broom_patrol status|off [女仆]}。
  *
- * <p>── 玩家原话（为什么这条留给指令）──
- * 「如果说要让女仆飞到哪个地方，那可以参考一下房创造飞行里面的指令操作，我们将这个留给指令就行了。」
+ * <p>──
+ *
  * ⇒ 所以"飞到某处"**不做进编辑器**，照 {@code MaidFreeFlightGotoCommand} 的
  * {@code freeflight_goto} 口径来：坐标参数 + 可选实体选择器 + 只做一件事（给一个目标点）。
  *

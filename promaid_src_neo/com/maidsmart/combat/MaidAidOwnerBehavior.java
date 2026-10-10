@@ -145,6 +145,16 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private static final java.util.Set<String> BUFF_POTIONS = java.util.Set.of(
             "minecraft:swiftness", "minecraft:long_swiftness", "minecraft:strong_swiftness",
             "minecraft:strength", "minecraft:long_strength", "minecraft:strong_strength");
+    /**
+     * 【亡灵专属支援池】伤害药水（harming）——亡灵吃到它反而是【治疗】。
+     *
+     * <p>字节码实证：{@code MobEffect}（instant_damage）对
+     * {@code isInvertedHealAndHarm()} 为真的实体走 {@code heal(...)}，所以伤害药水对亡灵
+     * 是回血品。反向地，治疗药水（instant_health）会对亡灵【扣血】——所以对亡灵绝不能
+     * 走普通治疗池。
+     */
+    private static final java.util.Set<String> HARMING_POTIONS = java.util.Set.of(
+            "minecraft:harming", "minecraft:strong_harming");
     /** 需要解除的负面效果（牛奶全解；蜂蜜只解中毒但回饱食） */
     private static final java.util.Set<String> NEGATIVE_EFFECTS = java.util.Set.of(
             "minecraft:poison", "minecraft:wither", "minecraft:slowness", "minecraft:weakness",
@@ -216,8 +226,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         // 1. 着火 → 抗火药水（v1.5.252g13：正门 = 主人身上无抗火效果才投——
         //    效果在就绝不投，任何变体都不需要；效果消失立即重投，无空档）
         if (owner.isOnFire() && !this.hasEffectOn(owner, "minecraft:fire_resistance")) {
-            if (this.throwPotionToOwner(level, maid, owner, FIRE_RESIST_POTIONS, "抗火", false) >= 0
-                    || this.giveDrinkablePotion(maid, owner, FIRE_RESIST_POTIONS, "抗火", false) >= 0) {
+            if (this.throwPotionToOwner(level, maid, owner, FIRE_RESIST_POTIONS, "抗火", false, MaidSupportPolicy.Ctx.COUNTER) >= 0
+                    || this.giveDrinkablePotion(maid, owner, FIRE_RESIST_POTIONS, "抗火", false, MaidSupportPolicy.Ctx.COUNTER) >= 0) {
                 aided = true;
             }
         }
@@ -225,8 +235,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         //    无效果才投）
         if (!aided && owner.isInWater() && owner.getAirSupply() < 60
                 && !this.hasEffectOn(owner, "minecraft:water_breathing")) {
-            if (this.throwPotionToOwner(level, maid, owner, WATER_BREATHING_POTIONS, "水肺", false) >= 0
-                    || this.giveDrinkablePotion(maid, owner, WATER_BREATHING_POTIONS, "水肺", false) >= 0) {
+            if (this.throwPotionToOwner(level, maid, owner, WATER_BREATHING_POTIONS, "水肺", false, MaidSupportPolicy.Ctx.COUNTER) >= 0
+                    || this.giveDrinkablePotion(maid, owner, WATER_BREATHING_POTIONS, "水肺", false, MaidSupportPolicy.Ctx.COUNTER) >= 0) {
                 aided = true;
             }
         }
@@ -249,16 +259,16 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         if (!aided && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
             // v1.5.252g7：种类 CD 已内化到 throw/give（同种 CD 内自动跳过），
             // 调用处只判成败；aidCooldown 3 秒仍是投掷间隔
-            if (this.throwPotionToOwner(level, maid, owner, HEAL_POTIONS, "治疗", true) >= 0) {
+            if (this.throwPotionToOwner(level, maid, owner, HEAL_POTIONS, "治疗", true, MaidSupportPolicy.Ctx.HEAL) >= 0) {
                 aided = true;
             }
             if (!aided && this.useGoldenApple(maid, owner)) {
                 aided = true; // 金苹果：吸收+再生即时生效，比再生药水更顶用
             }
-            if (!aided && this.throwPotionToOwner(level, maid, owner, REGEN_POTIONS, "再生", true) >= 0) {
+            if (!aided && this.throwPotionToOwner(level, maid, owner, REGEN_POTIONS, "再生", true, MaidSupportPolicy.Ctx.HEAL) >= 0) {
                 aided = true;
             }
-            if (!aided && this.giveDrinkablePotion(maid, owner, HEAL_POTIONS, "治疗", true) >= 0) {
+            if (!aided && this.giveDrinkablePotion(maid, owner, HEAL_POTIONS, "治疗", true, MaidSupportPolicy.Ctx.HEAL) >= 0) {
                 aided = true; // 普通治疗药水塞主人背包（主人自己喝）
             }
             // v1.1.0：饱食度满时不喂食物（feedHealingFood 内部判定）——满饥饿低血时
@@ -320,8 +330,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     /**
      * v1.3.0(beta) 实测七百七十一【支援范围扩大：从"只支援女仆"到"支援其他友方单位"】。
      *
-     * <h2>玩家原话</h2>
-     * 「能不能不要只支援女仆，还可以支援其他的友方单位呢？简单来说就是扩大支援的范围。」
+     * <h2>
+     *
      * 并补充界定：「原版的那些宠物以及仆从这些有什么共同特点？他们都是算作友军的。」
      * 「因为他们没有饥饿值，所以他们只能吃药水这些治疗效果……支援药水以及一些效用性食物
      * （金苹果这种），也就是说相比于女仆间支援，等于少了普通的食物和不死图腾支援。」
@@ -382,6 +392,16 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
                 double hpRatio = ally.getHealth() / Math.max(1.0f, ally.getMaxHealth());
                 String action = null;
+                // 【亡灵支援后门】先判"生死颠倒"（亡灵）——整条治疗链都要换池子：
+                //   治疗药水(instant_health) 对它是【扣血】、再生被 canBeAffected 拒收、
+                //   伤害药水(instant_damage) 对它是【回血】。见 isInvertedHeal / HARMING_POTIONS。
+                boolean undead = isInvertedHeal(ally);
+                // 实测八百一十七：配置开关「支援亡灵单位」——关掉 = 支援链完全跳过亡灵目标
+                // （两张支援分类表原样保留，只是不再对亡灵动手）。
+                if (undead && !com.maidsmart.config.MaidSmartConfig.AID_UNDEAD_UNITS.get()) {
+                    continue;
+                }
+                boolean aided = false;
                 // 1. 着火 → 抗火药水（同女仆链顺序：情境保命最先）
                 if (ally.isOnFire() && !hasEffectOn(ally, "minecraft:fire_resistance")) {
                     if (this.throwPotionTo(level, maid, ally, FIRE_RESIST_POTIONS, "抗火", false) >= 0) {
@@ -392,27 +412,53 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (action == null && hasNegativeEffectOn(ally)) {
                     action = this.feedAllyMilkOrHoney(maid, ally);
                 }
-                // 3. 低血 → 治疗链（喷溅/滞留治疗 → 金苹果 → 再生 → 饮用型直接喂）
-                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                // 3. 低血 → 治疗链
+                boolean lowHp = action == null
+                        && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get();
+                if (lowHp && !undead) {
+                    // 3a. 非亡灵：原链（喷溅治疗 → 金苹果 → 再生 → 饮用型治疗）
                     if (this.throwPotionTo(level, maid, ally, HEAL_POTIONS, "治疗", true) >= 0) {
                         action = "扔了治疗药水";
                     }
-                }
-                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    action = this.goldenAppleOnAlly(maid, ally);
-                }
-                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    if (this.throwPotionTo(level, maid, ally, REGEN_POTIONS, "再生", true) >= 0) {
+                    if (action == null) {
+                        action = this.goldenAppleOnAlly(maid, ally);
+                    }
+                    if (action == null
+                            && this.throwPotionTo(level, maid, ally, REGEN_POTIONS, "再生", true) >= 0) {
                         action = "扔了再生药水";
                     }
-                }
-                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    action = this.feedDrinkablePotionToAlly(maid, ally, HEAL_POTIONS, "治疗", true);
+                    if (action == null) {
+                        action = this.feedDrinkablePotionToAlly(maid, ally, HEAL_POTIONS, "治疗", true);
+                    }
+                } else if (lowHp) {
+                    // 【亡灵专属池】伤害药水(即时回血) → 后门金苹果(吸收+强制再生) →
+                    //   后门饮用型伤害药水。**绝不**走 HEAL_POTIONS/REGEN_POTIONS。
+                    float hpBefore = ally.getHealth();
+                    if (this.throwPotionTo(level, maid, ally, HARMING_POTIONS, "伤害", true) >= 0) {
+                        action = "扔了伤害药水";
+                        aided = true;
+                    }
+                    if (action == null) {
+                        action = this.goldenAppleOnAllyUndead(maid, ally);
+                        aided = action != null; // 实测八百一十七续：前两条后门路径漏置 aided，导致特殊语音不播
+                    }
+                    if (action == null) {
+                        action = this.feedDrinkablePotionToAlly(maid, ally, HARMING_POTIONS, "伤害", true);
+                        aided = action != null;
+                    }
+                    // 实测八百一十七续：瞬时效果（instant_damage 对亡灵=回血）不进效果栏，留一条前后血量日志便于核对
+                    if (action != null) {
+                        com.maidsmart.tool.PromaidLog.log("亡灵支援",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + action
+                                        + " → 友军血量 " + hpBefore + " → " + ally.getHealth());
+                    }
                 }
                 // 注意：这里**没有**普通食物投喂、**没有**不死图腾——友军没有饥饿值，
                 // 这两样对它们无意义（见方法注释"支援内容"）。
                 if (action != null) {
-                    maid.getChatBubbleManager().addTextChatBubble("我来帮你！");
+                    // 【亡灵特殊语音】只在这一轮【真的用了】亡灵专属池时才播那一句。
+                    maid.getChatBubbleManager().addTextChatBubble(undead && aided
+                            ? "我知道这在对你有用！" : "我来帮你！");
                     String allyName = ally.getDisplayName() != null
                             ? ally.getDisplayName().getString() : "友军";
                     String maidName = maid.getDisplayName() != null
@@ -479,7 +525,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /** 友军链认的支援道具：药水（饮用/喷溅/滞留）、金苹果/附魔金苹果、牛奶桶、蜂蜜瓶。
-     *  刻意<b>不含</b>普通食物——友军没有饥饿值（见 aidFriendlyUnits）。 */
+     *  刻意<b>不含</b>普通食物——友军没有饥饿值（见 aidFriendlyUnits）。
+     *  伤害药水也算数：对亡灵友军它是回血品（见 {@link #HARMING_POTIONS}）。 */
     private static boolean isFriendlyAidItem(ItemStack s) {
         if (s == null || s.isEmpty()) {
             return false;
@@ -518,6 +565,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     if (stack.isEmpty() || stack.getItem() != milk) {
                         continue;
                     }
+                    // 实测八百一十七：支援物品分类表门禁（友军牛奶·对策类）
+                    if (!MaidSupportPolicy.allow(stack, isInvertedHeal(ally), MaidSupportPolicy.Ctx.COUNTER)) {
+                        continue;
+                    }
+                    ItemStack milkShow = stack.copy(); // 扣料前快照（副手举它）
                     inv.extractItem(i, 1, false);
                     ally.removeAllEffects(); // 全解
                     net.minecraft.world.item.Item bucket = net.minecraft.core.registries.BuiltInRegistries.ITEM
@@ -527,6 +579,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                 inv, new ItemStack(bucket), false);
                     }
                     maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    com.maidsmart.combat.BombPose.showGated(maid, milkShow); // 副手举一下这桶牛奶
                     playSoundAt(ally, "minecraft:entity.generic.drink");
                     return "喂了牛奶（负面全解）";
                 }
@@ -537,10 +590,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (stack.isEmpty() || stack.getItem() != honey) {
                     continue;
                 }
+                // 实测八百一十七：支援物品分类表门禁（友军蜂蜜·对策类）
+                if (!MaidSupportPolicy.allow(stack, isInvertedHeal(ally), MaidSupportPolicy.Ctx.COUNTER)) {
+                    continue;
+                }
                 ItemStack taken = inv.extractItem(i, 1, false);
                 if (taken.isEmpty()) {
                     continue;
                 }
+                ItemStack honeyShow = taken.copy(); // 扣料前快照（副手举它）
                 int eaten = com.maidsmart.combat.MaidMealBridge.eatByItemLogic(ally, taken);
                 if (eaten == 0) {
                     net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(inv, taken, false);
@@ -557,6 +615,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                             inv, new ItemStack(bottle), false);
                 }
                 maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                com.maidsmart.combat.BombPose.showGated(maid, honeyShow); // 副手举一下这瓶蜂蜜
                 return "喂了蜂蜜瓶（解中毒+回饱食）";
             }
         } catch (Exception ignored) {
@@ -578,6 +637,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (stack.isEmpty()) {
                     continue;
                 }
+                // 实测八百一十七：支援物品分类表门禁（友军金苹果·回复类）
+                if (!MaidSupportPolicy.allow(stack, isInvertedHeal(ally), MaidSupportPolicy.Ctx.HEAL)) {
+                    continue;
+                }
                 net.minecraft.world.item.Item item = stack.getItem();
                 if (item == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE) {
                     bestSlot = i;
@@ -591,6 +654,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (bestSlot < 0) {
                 return null;
             }
+            ItemStack appleShow = inv.getStackInSlot(bestSlot).copy(); // 扣料前留快照（副手举它）
             inv.extractItem(bestSlot, 1, false);
             applyEffect(ally, "minecraft:absorption", 2400, enchanted ? 3 : 0);
             applyEffect(ally, "minecraft:regeneration", enchanted ? 600 : 100, enchanted ? 4 : 1);
@@ -599,8 +663,54 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 applyEffect(ally, "minecraft:fire_resistance", 6000, 0);
             }
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, appleShow); // 补动作表现：副手举这颗苹果
             playSoundAt(ally, "minecraft:entity.generic.eat");
             return enchanted ? "喂了附魔金苹果" : "喂了金苹果";
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 【亡灵专属池】金苹果给亡灵友军——吸收/抗性照给，**再生走强制后门**
+     * （{@link #applyGoldenAppleForUndead}）。返回动作描述，null=没喂成。
+     */
+    private String goldenAppleOnAllyUndead(EntityMaid maid, net.minecraft.world.entity.LivingEntity ally) {
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.getItem() == net.minecraft.world.item.Items.GOLDEN_APPLE
+                        || s.getItem() == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE, -1);
+        try {
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            int bestSlot = -1;
+            boolean enchanted = false;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+                // 实测八百一十七：支援物品分类表门禁（亡灵友军专属池·回复类）
+                if (!MaidSupportPolicy.allow(stack, true, MaidSupportPolicy.Ctx.HEAL)) {
+                    continue;
+                }
+                net.minecraft.world.item.Item item = stack.getItem();
+                if (item == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE) {
+                    bestSlot = i;
+                    enchanted = true;
+                    break;
+                }
+                if (item == net.minecraft.world.item.Items.GOLDEN_APPLE && bestSlot < 0) {
+                    bestSlot = i;
+                }
+            }
+            if (bestSlot < 0) {
+                return null;
+            }
+            ItemStack appleShow = inv.getStackInSlot(bestSlot).copy();
+            inv.extractItem(bestSlot, 1, false);
+            applyGoldenAppleForUndead(ally, enchanted);
+            maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, appleShow);
+            playSoundAt(ally, "minecraft:entity.generic.eat");
+            return enchanted ? "喂了附魔金苹果（亡灵专供）" : "喂了金苹果（亡灵专供）";
         } catch (Exception ignored) {
             return null;
         }
@@ -621,6 +731,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (!isPotionOf(stack, potionNames)) {
                     continue;
                 }
+                // 实测八百一十七：支援物品分类表门禁（喂友军喝药水·治疗/处境共用口）
+                if (!MaidSupportPolicy.allow(stack, isInvertedHeal(ally), MaidSupportPolicy.Ctx.HEAL)) {
+                    continue;
+                }
                 if (useCd && !this.potionReady(
                         potionCdKey(maid.getUUID(), potionKey(stack)), maid.level().getGameTime())) {
                     continue;
@@ -629,20 +743,29 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (taken.isEmpty()) {
                     continue;
                 }
+                ItemStack drinkShow = taken.copy(); // 扣料前快照（副手举它）
+                // 效果仍交给物品自己的 finishUsingItem 结算（非玩家目标的施药分支与玩家无关，照常生效）。
                 ItemStack result = taken.getItem().finishUsingItem(taken, ally.level(), ally);
-                if (!result.isEmpty()) {
-                    net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
-                }
+                // 实测八百一十七·十三【根因·javap 实证，1.20.1/1.21.1 同构】：PotionItem 的消耗被
+                // if (player != null) 包着——目标不是玩家时原栈**原样返回**。旧版把 result 又插回
+                // 背包 ⇒ 净消耗 0（表现：喂了很多次，药水一瓶没少）。这里 taken 已从背包取出、
+                // **不再插回** = 显式净消耗 1，容器按原版口径返还：物品自己交了别的容器就用它的，
+                // 否则补一个空玻璃瓶。
+                ItemStack back = (!result.isEmpty() && result.getItem() != drinkShow.getItem())
+                        ? result // 物品自己交还了别的容器
+                        : new ItemStack(net.minecraft.world.item.Items.GLASS_BOTTLE);
+                net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(inv, back, false);
                 if (useCd) {
                     int maxDur = 0;
-                    for (net.minecraft.world.effect.MobEffectInstance e : potionEffectsOf(taken)) {
+                    for (net.minecraft.world.effect.MobEffectInstance e : potionEffectsOf(drinkShow)) {
                         maxDur = Math.max(maxDur, e.getDuration());
                     }
                     this.markPotionUsed(
-                            potionCdKey(maid.getUUID(), potionKey(taken)),
+                            potionCdKey(maid.getUUID(), potionKey(drinkShow)),
                             maid.level().getGameTime(), maxDur > 0 ? maxDur : 60);
                 }
                 maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                com.maidsmart.combat.BombPose.showGated(maid, drinkShow); // 副手举一下这瓶药水
                 playSoundAt(ally, "minecraft:entity.generic.drink");
                 return "喂了" + label + "药水";
             }
@@ -688,6 +811,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
                 double hpRatio2 = sister.getHealth() / Math.max(1.0f, sister.getMaxHealth());
                 String action = null; // v1.1.0 实测三十二：本轮支援的具体动作描述（系统字幕用）
+                // 【亡灵支援后门】诡厄亡灵系女仆（骷髅/僵尸仆从等 isInvertedHealAndHarm）同样
+                //   适用"生死颠倒"规则——见 aidFriendlyUnits 同款判据与 HARMING_POTIONS。
+                boolean undead = isInvertedHeal(sister);
+                // 实测八百一十七：配置开关「支援亡灵单位」——关掉 = 支援链完全跳过亡灵目标
+                // （两张支援分类表原样保留，只是不再对亡灵动手）。
+                if (undead && !com.maidsmart.config.MaidSmartConfig.AID_UNDEAD_UNITS.get()) {
+                    continue;
+                }
+                boolean aided = false;
                 // 1. 着火 → 抗火药水（与主人链同顺序：情境保命最先）
                 if (sister.isOnFire() && !this.hasEffectOn(sister, "minecraft:fire_resistance")) {
                     if (this.throwPotionTo(level, maid, sister, FIRE_RESIST_POTIONS, "抗火", false) >= 0) {
@@ -699,34 +831,56 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     action = this.feedSisterMilkOrHoney(maid, sister);
                 }
                 // 3. 低血 → 治疗链（喷溅治疗 → 金苹果 → 再生 → 喂食），同主人链顺序
-                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                boolean lowHp2 = action == null
+                        && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get();
+                if (lowHp2 && undead) {
+                    // 【亡灵专属池】伤害药水(即时回血) → 后门金苹果 → 后门饮用型伤害药水
+                    float hpBefore = sister.getHealth();
+                    if (this.throwPotionTo(level, maid, sister, HARMING_POTIONS, "伤害", true) >= 0) {
+                        action = "扔了伤害药水";
+                        aided = true;
+                    }
+                    if (action == null) {
+                        action = this.useGoldenAppleOnUndead(maid, sister);
+                        aided = action != null; // 同上：缺这两处 aided
+                    }
+                    if (action == null) {
+                        action = this.feedDrinkablePotionTo(maid, sister, HARMING_POTIONS, "伤害", true);
+                        aided = action != null;
+                    }
+                    // 实测八百一十七续：同上——前后血量日志（瞬时效果不显示在效果栏）
+                    if (action != null) {
+                        com.maidsmart.tool.PromaidLog.log("亡灵支援",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + action
+                                        + " → 姐妹血量 " + hpBefore + " → " + sister.getHealth());
+                    }
+                } else if (lowHp2) {
                     if (this.throwPotionTo(level, maid, sister, HEAL_POTIONS, "治疗", true) >= 0) {
                         action = "扔了治疗药水";
                     }
-                }
-                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    action = this.useGoldenAppleOn(maid, sister);
-                }
-                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    if (this.throwPotionTo(level, maid, sister, REGEN_POTIONS, "再生", true) >= 0) {
+                    if (action == null) {
+                        action = this.useGoldenAppleOn(maid, sister);
+                    }
+                    if (action == null
+                            && this.throwPotionTo(level, maid, sister, REGEN_POTIONS, "再生", true) >= 0) {
                         action = "扔了再生药水";
                     }
-                }
-                // v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话
-                // 改一下"）：低血链补【饮用型药水直接喂】——喷溅/滞留扔完、金苹果/再生
-                // 都没有时，普通治疗药水直接喂给姐妹（强制饮用，效果即时生效）。
-                // 与主人链的"塞背包"不同：姐妹没有背包 UI，直接喂才是"传递"。
-                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    action = this.feedDrinkablePotionTo(maid, sister, HEAL_POTIONS, "治疗", true);
-                }
-                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    action = this.feedSisterFood(maid, sister);
+                    // v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话
+                    // 改一下"）：低血链补【饮用型药水直接喂】——喷溅/滞留扔完、金苹果/再生
+                    // 都没有时，普通治疗药水直接喂给姐妹（强制饮用，效果即时生效）。
+                    // 与主人链的"塞背包"不同：姐妹没有背包 UI，直接喂才是"传递"。
+                    if (action == null) {
+                        action = this.feedDrinkablePotionTo(maid, sister, HEAL_POTIONS, "治疗", true);
+                    }
+                    if (action == null) {
+                        action = this.feedSisterFood(maid, sister);
+                    }
                 }
                 // v1.1.0 实测二百四十二（反馈："女仆战斗时也应该可以传递食物"）：
                 // 战斗支援——姐妹正在战斗（脑内有攻击目标）且血不满时喂食（回血+饱食，
                 // 战斗续航）。低血链已喂过则跳过（action != null 短路）；血满但战斗中
-                // 也喂（战斗消耗大，提前补）。
-                if (action == null && sisterFighting(sister)
+                // 也喂（战斗消耗大，提前补）。【亡灵不吃普通食物】——跳过这一段。
+                if (action == null && !undead && sisterFighting(sister)
                         && sister.getHealth() < sister.getMaxHealth()) {
                     action = this.feedSisterFood(maid, sister);
                 }
@@ -734,7 +888,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     // v1.1.0 实测三十二（反馈：消息不再固定"药水来了"——牛奶/蜂蜜/食物
                     // 也说药水不真实）：气泡改通用文案 + 绿色系统字幕记录具体支援
                     // 内容（与喂主人 [maid_smart] 绿色字幕同款显示方式）
-                    maid.getChatBubbleManager().addTextChatBubble("姐妹挺住，我来帮你！");
+                    // 【亡灵特殊语音】真的用了亡灵专属池时才播"我知道这在对你有用！"
+                    maid.getChatBubbleManager().addTextChatBubble(undead && aided
+                            ? "我知道这在对你有用！" : "姐妹挺住，我来帮你！");
                     String sisterName = sister.getDisplayName() != null
                             ? sister.getDisplayName().getString() : "姐妹女仆";
                     String maidName = maid.getDisplayName() != null
@@ -793,6 +949,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     if (stack.isEmpty() || stack.getItem() != milk) {
                         continue;
                     }
+                    // 实测八百一十七：支援物品分类表门禁（姐妹牛奶·对策类）
+                    if (!MaidSupportPolicy.allow(stack, isInvertedHeal(sister), MaidSupportPolicy.Ctx.COUNTER)) {
+                        continue;
+                    }
+                    ItemStack milkShow = stack.copy(); // 扣料前快照（副手举它）
                     inv.extractItem(i, 1, false);
                     sister.removeAllEffects(); // removeAllEffects（全解）
                     // 空桶返还喂食者背包
@@ -803,6 +964,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                 inv, new ItemStack(bucket), false);
                     }
                     maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    com.maidsmart.combat.BombPose.showGated(maid, milkShow); // 副手举一下这桶牛奶
                     // v1.1.0 实测三十二：喝牛奶音效（旧版静默——手搓效果路径没有
                     // 任何反馈，反馈："没有音效这一点很难受"）
                     playSoundAt(sister, "minecraft:entity.generic.drink");
@@ -814,6 +976,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack stack = inv.getStackInSlot(i);
                     if (stack.isEmpty() || stack.getItem() != honey) {
+                        continue;
+                    }
+                    // 实测八百一十七：支援物品分类表门禁（姐妹蜂蜜·对策类）
+                    if (!MaidSupportPolicy.allow(stack, isInvertedHeal(sister), MaidSupportPolicy.Ctx.COUNTER)) {
                         continue;
                     }
                     ItemStack taken = inv.extractItem(i, 1, false);
@@ -854,6 +1020,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                 inv, new ItemStack(bottle), false);
                     }
                     maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    com.maidsmart.combat.BombPose.showGated(maid, honeyFed); // 副手举一下这瓶蜂蜜
                     return "喂了蜂蜜瓶（解中毒+回饱食）";
                 }
         } catch (Exception ignored) {
@@ -890,6 +1057,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (stack.isEmpty()) {
                     continue;
                 }
+                // 实测八百一十七：支援物品分类表门禁（喂姐妹金苹果·回复类）
+                if (!MaidSupportPolicy.allow(stack, isInvertedHeal(sister), MaidSupportPolicy.Ctx.HEAL)) {
+                    continue;
+                }
                 net.minecraft.world.item.Item item = stack.getItem();
                 if (item == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE) {
                     bestSlot = i;
@@ -903,6 +1074,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (bestSlot < 0) {
                 return null;
             }
+            ItemStack appleShow = inv.getStackInSlot(bestSlot).copy(); // 扣料前留快照
             inv.extractItem(bestSlot, 1, false);
             applyEffect(sister, "minecraft:absorption", 2400, enchanted ? 3 : 0);
             applyEffect(sister, "minecraft:regeneration", enchanted ? 600 : 100, enchanted ? 4 : 1);
@@ -911,9 +1083,52 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 applyEffect(sister, "minecraft:fire_resistance", 6000, 0);
             }
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, appleShow); // 副手举一下这颗金苹果
             // v1.1.0 实测三十二：吃金苹果音效（旧版手搓效果路径无声）
             playSoundAt(sister, "minecraft:entity.generic.eat");
             return enchanted ? "喂了附魔金苹果" : "喂了金苹果";
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /** 【亡灵专属池】金苹果给亡灵女仆——再生走强制后门，见 {@link #applyGoldenAppleForUndead}。 */
+    private String useGoldenAppleOnUndead(EntityMaid maid, EntityMaid sister) {
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.getItem() == net.minecraft.world.item.Items.GOLDEN_APPLE
+                        || s.getItem() == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE, -1);
+        try {
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            int bestSlot = -1;
+            boolean enchanted = false;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+                // 实测八百一十七：支援物品分类表门禁（亡灵姐妹专属池·回复类）
+                if (!MaidSupportPolicy.allow(stack, true, MaidSupportPolicy.Ctx.HEAL)) {
+                    continue;
+                }
+                net.minecraft.world.item.Item item = stack.getItem();
+                if (item == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE) {
+                    bestSlot = i;
+                    enchanted = true;
+                    break;
+                }
+                if (item == net.minecraft.world.item.Items.GOLDEN_APPLE && bestSlot < 0) {
+                    bestSlot = i;
+                }
+            }
+            if (bestSlot < 0) {
+                return null;
+            }
+            ItemStack appleShow = inv.getStackInSlot(bestSlot).copy();
+            inv.extractItem(bestSlot, 1, false);
+            applyGoldenAppleForUndead(sister, enchanted);
+            maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, appleShow);
+            playSoundAt(sister, "minecraft:entity.generic.eat");
+            return enchanted ? "喂了附魔金苹果（亡灵专供）" : "喂了金苹果（亡灵专供）";
         } catch (Exception ignored) {
             return null;
         }
@@ -1019,6 +1234,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 com.maidsmart.combat.MaidMealBridge.applySelfEatingEffect(sister, fed);
             }
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, fed); // 副手举一下这份食物
             return consumed > 0 ? "喂了" + foodName : "喂了" + foodName + "（遗物类食物，用完不消失）";
         } catch (Exception ignored) {
         }
@@ -1047,6 +1263,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (!this.isPotionOf(stack, potionNames)) {
                     continue;
                 }
+                // 实测八百一十七：支援物品分类表门禁（喂姐妹喝药水·治疗/处境共用口）
+                if (!MaidSupportPolicy.allow(stack, isInvertedHeal(sister), MaidSupportPolicy.Ctx.HEAL)) {
+                    continue;
+                }
                 if (useCd && !this.potionReady(
                         potionCdKey(maid.getUUID(), potionKey(stack)), maid.level().getGameTime())) {
                     continue;
@@ -1055,23 +1275,30 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (taken.isEmpty()) {
                     continue;
                 }
+                ItemStack drinkShow = taken.copy(); // 快照（副手举它）
                 // 强制饮用：finishUsingItem 对姐妹生效（效果直接加上）
                 ItemStack result = taken.getItem().finishUsingItem(taken, sister.level(), sister);
-                // 空玻璃瓶返还喂食者背包
-                if (!result.isEmpty()) {
-                    net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
-                }
+                // 实测八百一十七·十三【根因·javap 实证，1.20.1/1.21.1 同构】：PotionItem 的消耗被
+                // if (player != null) 包着——目标不是玩家时原栈**原样返回**。旧版把 result 又插回
+                // 背包 ⇒ 净消耗 0（表现：喂了很多次，药水一瓶没少）。这里 taken 已从背包取出、
+                // **不再插回** = 显式净消耗 1，容器按原版口径返还：物品自己交了别的容器就用它的，
+                // 否则补一个空玻璃瓶。
+                ItemStack back = (!result.isEmpty() && result.getItem() != drinkShow.getItem())
+                        ? result // 物品自己交还了别的容器
+                        : new ItemStack(net.minecraft.world.item.Items.GLASS_BOTTLE);
+                net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(inv, back, false);
                 if (useCd) {
                     int maxDur = 0;
                     for (net.minecraft.world.effect.MobEffectInstance e :
-                            potionEffectsOf(taken)) {
+                            potionEffectsOf(drinkShow)) {
                         maxDur = Math.max(maxDur, e.getDuration());
                     }
                     this.markPotionUsed(
-                            potionCdKey(maid.getUUID(), potionKey(taken)),
+                            potionCdKey(maid.getUUID(), potionKey(drinkShow)),
                             maid.level().getGameTime(), maxDur > 0 ? maxDur : 60);
                 }
                 maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+                com.maidsmart.combat.BombPose.showGated(maid, drinkShow); // 副手举一下这瓶药水
                 playSoundAt(sister, "minecraft:entity.generic.drink");
                 return "喂了" + label + "药水";
             }
@@ -1110,6 +1337,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
+                    continue;
+                }
+                // 实测八百一十七：支援物品分类表门禁（投掷给姐妹/友军·治疗/处境共用口）
+                if (!MaidSupportPolicy.allow(stack, isInvertedHeal(target), MaidSupportPolicy.Ctx.TREAT)) {
                     continue;
                 }
                 if (useCd && !this.potionReady(
@@ -1205,8 +1436,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         if (!aided && this.ownerInDanger(level, owner)
                 && !owner.hasEffect(net.minecraft.world.effect.MobEffects.DAMAGE_BOOST) // strength
                 && !owner.hasEffect(net.minecraft.world.effect.MobEffects.MOVEMENT_SPEED)) { // swiftness
-            if (this.throwPotionToOwner(level, maid, owner, BUFF_POTIONS, "增益", true) >= 0
-                    || this.giveDrinkablePotion(maid, owner, BUFF_POTIONS, "增益", true) >= 0) {
+            if (this.throwPotionToOwner(level, maid, owner, BUFF_POTIONS, "增益", true, MaidSupportPolicy.Ctx.BUFF) >= 0
+                    || this.giveDrinkablePotion(maid, owner, BUFF_POTIONS, "增益", true, MaidSupportPolicy.Ctx.BUFF) >= 0) {
                 aided = true;
             }
         }
@@ -1253,7 +1484,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      * → 主人旁边生成 AreaEffectCloud；其他形态 → 直接给主人施加所有效果。
      */
     private int throwPotionToOwner(ServerLevel level, EntityMaid maid, ServerPlayer owner,
-                                    java.util.Set<String> potionNames, String label, boolean useCd) {
+                                    java.util.Set<String> potionNames, String label, boolean useCd,
+                                    MaidSupportPolicy.Ctx ctx) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：投掷型药水
         com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.getItem() instanceof net.minecraft.world.item.SplashPotionItem
                         || s.getItem() instanceof net.minecraft.world.item.LingeringPotionItem, -1);
@@ -1270,6 +1502,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
+                    continue;
+                }
+                // 实测八百一十七：支援物品分类表门禁（给主人投掷·治疗/处境共用口）
+                if (!MaidSupportPolicy.allow(stack, false, ctx)) {
                     continue;
                 }
                 // v1.5.252g13：useCd=false（着火/溺水情境）不走 CD——情境药水的
@@ -1411,7 +1647,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  v1.5.252g6：优先塞快捷栏空位
      *  v1.5.252g13：useCd=false（着火/溺水情境）不走 CD——效果判定在调用处 */
     private int giveDrinkablePotion(EntityMaid maid, ServerPlayer owner,
-                                    java.util.Set<String> potionNames, String label, boolean useCd) {
+                                    java.util.Set<String> potionNames, String label, boolean useCd,
+                                    MaidSupportPolicy.Ctx ctx) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：饮用型药水
         com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.getItem() instanceof net.minecraft.world.item.PotionItem, -1);
         try {
@@ -1422,6 +1659,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
+                    continue;
+                }
+                // 实测八百一十七：支援物品分类表门禁（饮用型塞主人背包·治疗/处境共用口）
+                if (!MaidSupportPolicy.allow(stack, false, ctx)) {
                     continue;
                 }
                 // v1.5.252g13：同种药水 CD 内跳过（仅 useCd=true 场景）
@@ -1607,7 +1848,24 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             net.minecraft.resources.ResourceLocation key =
                     net.minecraft.core.registries.BuiltInRegistries.POTION.getKey(potion);
-            return key != null && potionNames.contains(key.toString());
+            if (key != null && potionNames.contains(key.toString())) {
+                return true;
+            }
+            // 实测八百一十七续：伤害药水再按**
+            // 效果**认一次——整合包里的进阶/终极伤害药水
+            // 注册名不是 minecraft:harming/strong_harming，只按注册名会整条漏掉。
+            // 判据本质：能回亡灵血的药水 = 含 instant_damage。
+            if (potionNames == HARMING_POTIONS) {
+                for (net.minecraft.world.effect.MobEffectInstance e : potionEffectsOf(stack)) {
+                    net.minecraft.resources.ResourceLocation eid =
+                            net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT
+                                    .getKey(e.getEffect().value());
+                    if (eid != null && "minecraft:instant_damage".equals(eid.toString())) {
+                        return true;
+                    }
+                }
+            }
+            return false;
         } catch (Exception ignored) {
             return false;
         }
@@ -1673,6 +1931,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  喂空气"（预检硬门槛，与各分支的"摸到才播报"构成双保险）。 */
     private static boolean hasAidItemAtAll(EntityMaid maid) {
         try {
+            // 实测八百一十七：预检也要过支援物品分类表——两张表把她的支援道具全禁了就整轮静默。
+            // includeDefault=true：与旧版"有道具就不静默"一致（未分类物品照常算可用）。
+            if (com.maidsmart.combat.MaidSupportPolicy.anyUsable(maid, true)) {
+                return true;
+            }
             net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (isAidItem(inv.getStackInSlot(i))) {
@@ -1737,6 +2000,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (stack.isEmpty()) {
                     continue;
                 }
+                // 实测八百一十七：支援物品分类表门禁（给主人金苹果·回复类）
+                if (!MaidSupportPolicy.allow(stack, false, MaidSupportPolicy.Ctx.HEAL)) {
+                    continue;
+                }
                 net.minecraft.world.item.Item item = stack.getItem();
                 if (item == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE) { // enchanted_golden_apple
                     bestSlot = i;
@@ -1780,7 +2047,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 给目标施加效果（注册表取效果，避开 SRG 字段名） */
+    /** 给目标施加效果（注册表取效果，避开映射名） */
     private static void applyEffect(net.minecraft.world.entity.LivingEntity target,
                                     String effectId, int duration, int amplifier) {
         try {
@@ -1791,6 +2058,72 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                             net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), duration, amplifier));
             }
         } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * 【亡灵支援后门】目标是不是"生死颠倒"的生物——亡灵。
+     *
+     * <p>字节码实证：{@code LivingEntity.isInvertedHealAndHarm()} 判定
+     * {@code EntityTypeTags.INVERTED_HEALING_AND_HARM}（1.20.1 等价于 MobType UNDEAD）。
+     * 这类生物的即时效果是反的：治疗药水→扣血、伤害药水→回血；且再生/中毒被
+     * {@code canBeAffected} 直接拒收，需要 {@link #applyEffectForced} 走后门。
+     */
+    private static boolean isInvertedHeal(net.minecraft.world.entity.LivingEntity target) {
+        try {
+            return target.isInvertedHealAndHarm();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【亡灵支援后门】绕过 canBeAffected 强制施加效果。
+     *
+     * <p>{@code addEffect}/{@code forceAddEffect} 两个入口都先问
+     * {@code canBeAffected(instance)}（字节码实证）——亡灵拒收 regeneration/poison。唯一
+     * 真正的后门是**活跃效果表本体**：{@code getActiveEffectsMap()} 字节码实证返回的就是
+     * {@code activeEffects} 字段本身（`aload_0; getfield; areturn`，不是副本）。
+     *
+     * <p>本路径只用于**瞬时型**效果（instant_health/instant_damage），它们由实体
+     * tick→效果 tick 结算，不依赖 onEffectAdded；直接 put 进去下一 tick 即正常生效。
+     */
+    private static void applyEffectForced(net.minecraft.world.entity.LivingEntity target,
+                                          String effectId, int duration, int amplifier) {
+        if (target == null) {
+            return;
+        }
+        try {
+            net.minecraft.world.effect.MobEffect effect = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT
+                    .get(net.minecraft.resources.ResourceLocation.parse(effectId));
+            if (effect == null) {
+                return;
+            }
+            net.minecraft.core.Holder<net.minecraft.world.effect.MobEffect> holder =
+                    net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect);
+            net.minecraft.world.effect.MobEffectInstance inst =
+                    new net.minecraft.world.effect.MobEffectInstance(holder, duration, amplifier);
+            if (target.canBeAffected(inst)) {
+                target.addEffect(inst); // 没被拒 → 走正门，保留完整回调
+            } else {
+                target.getActiveEffectsMap().put(holder, inst); // 被拒（亡灵拒再生/中毒）→ 走后门
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【亡灵支援后门】亡灵专用金苹果：吸收恒生效，再生走
+     * {@link #applyEffectForced} 后门；附魔款的伤害抗性/抗火对亡灵无害照给。
+     * 数值与 {@code useGoldenAppleOn} 完全一致。
+     */
+    private static void applyGoldenAppleForUndead(net.minecraft.world.entity.LivingEntity undead,
+                                                  boolean enchanted) {
+        applyEffect(undead, "minecraft:absorption", 2400, enchanted ? 3 : 0);
+        applyEffectForced(undead, "minecraft:regeneration", enchanted ? 600 : 100, enchanted ? 4 : 1);
+        if (enchanted) {
+            applyEffect(undead, "minecraft:damage_resistance", 6000, 0);
+            applyEffect(undead, "minecraft:fire_resistance", 6000, 0);
         }
     }
 
@@ -1919,10 +2252,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     || com.maidsmart.config.MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get())) {
                 // v1.5.299：手持牛奶也认（主手→副手）——旧版只扫背包
                 ItemStack handMilk = maid.getMainHandItem();
-                boolean handIsMilk = !handMilk.isEmpty() && handMilk.getItem() == milk;
+                boolean handIsMilk = !handMilk.isEmpty() && handMilk.getItem() == milk
+                        && MaidSupportPolicy.allow(handMilk, false, MaidSupportPolicy.Ctx.COUNTER);
                 if (!handIsMilk) {
                     handMilk = maid.getOffhandItem();
-                    handIsMilk = !handMilk.isEmpty() && handMilk.getItem() == milk;
+                    handIsMilk = !handMilk.isEmpty() && handMilk.getItem() == milk
+                            && MaidSupportPolicy.allow(handMilk, false, MaidSupportPolicy.Ctx.COUNTER);
                 }
                 if (handIsMilk) {
                     handMilk.shrink(1); // 消耗手上的牛奶
@@ -1932,6 +2267,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack stack = inv.getStackInSlot(i);
                     if (stack.isEmpty() || stack.getItem() != milk) {
+                        continue;
+                    }
+                    // 实测八百一十七：支援物品分类表门禁（主人牛奶·对策类）
+                    if (!MaidSupportPolicy.allow(stack, false, MaidSupportPolicy.Ctx.COUNTER)) {
                         continue;
                     }
                     // v1.2.2 实测五百九十七：副手举一下这桶牛奶（背包这条来源才举——手上的本来就看得见）
@@ -1945,10 +2284,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 蜂蜜（解中毒 + 饱食，不清增益——有增益时这是唯一安全选择）
             // v1.5.299：手持蜂蜜也认（主手→副手）
             ItemStack handHoney = maid.getMainHandItem();
-            boolean handIsHoney = !handHoney.isEmpty() && handHoney.getItem() == honey;
+            boolean handIsHoney = !handHoney.isEmpty() && handHoney.getItem() == honey
+                    && MaidSupportPolicy.allow(handHoney, false, MaidSupportPolicy.Ctx.COUNTER);
             if (!handIsHoney) {
                 handHoney = maid.getOffhandItem();
-                handIsHoney = !handHoney.isEmpty() && handHoney.getItem() == honey;
+                handIsHoney = !handHoney.isEmpty() && handHoney.getItem() == honey
+                        && MaidSupportPolicy.allow(handHoney, false, MaidSupportPolicy.Ctx.COUNTER);
             }
             if (handIsHoney) {
                 // v1.1.0 实测三十二修复（反馈："喂食蜂蜜瓶似乎没有效果"）：
@@ -1968,6 +2309,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.isEmpty() || stack.getItem() != honey) {
+                    continue;
+                }
+                // 实测八百一十七：支援物品分类表门禁（主人蜂蜜·对策类）
+                if (!MaidSupportPolicy.allow(stack, false, MaidSupportPolicy.Ctx.COUNTER)) {
                     continue;
                 }
                 // v1.1.0 实测三十二修复：同手持分支——旧版先 extract 再把 extract 出来的

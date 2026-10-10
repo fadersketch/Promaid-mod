@@ -1,6 +1,11 @@
 {
   "entries": [
     {
+      "text": "这里烫！我走开点！",
+      "file": "heat_away.ogg",
+      "mode": "exact"
+    },
+    {
       "text": "先用骑乘棒右击坐骑，再来右击我～",
       "file": "ride_baton_first.ogg",
       "mode": "exact"
@@ -308,6 +313,16 @@
     {
       "text": "姐妹挺住，我来帮你",
       "file": "aid_sister_help.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我来帮你",
+      "file": "aid_ally_help.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我知道这在对你有用！",
+      "file": "aid_undead_help.ogg",
       "mode": "contains"
     },
     {

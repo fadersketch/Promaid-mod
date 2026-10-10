@@ -372,7 +372,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 【为什么需要】收翅猛击时 `tickSmash` 会**主动** `setGliding(false)`
      * （收翅才吃得到猛击判定），于是"飞向敌人、贴近地面"那一刻滑翔位恰好是清的——
      * 只认滑翔位的"空中禁传送"在此失效：主人一远，自动传送就把她拽走，
-     * 这一轮扑击直接白费（用户反馈的原话："导致本次攻击被卡掉"）。
+     * 这一轮扑击直接白费（
      *
      * 状态表由 `forget()` 在行为收尾时整清，所以豁免是"有界"的：一轮打完、
      * 目标消失、或行为停止后立刻恢复正常传送。
@@ -512,7 +512,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 【为什么】旧版是"看到一拍齐就清冷却、看到一拍缺就播报"，而**我们自己的动作表现**
      * （{@code BombPose} / {@code FlightFireworkPose} 把副手那件借走十几 tick）恰好每隔
      * 十几秒就造一次这种抖动：缺 → 报一条 → 还回来 → 判定又齐 → 播报冷却被清零 →
-     * 下一轮再报一条……粉丝原话"这个系统消息不停"就是这个循环。
+     * 下一轮再报一条……就是这个循环。
      * 2 秒足够盖住任何一次"举一下"（单次 10 tick 起，连续接力最长也就 30 tick 上下），
      * 又不至于让真正的缺件提示迟到多久——她本来就在按普通战斗打，提示是补充说明。
      */
@@ -629,8 +629,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 【实测七百一十】自推鞘翅的推力窗同理：它只在 tick 里被驱动，链路一停就该摘掉
         //（**已给的速度同样不动**——保持动量自然滑翔那一档的语义，同 BOOST_ROCKET）。
         com.maidsmart.combat.MaidSelfPropelledWings.clear(maid);
-        // 【实测七百〇四：这一轮到此为止，两套随机作废、下一轮重抽】玩家反馈「打了那么多场都一直
-        //  在用环绕」——根因同扫帚那一侧：{@link CombatOrbit} / {@link CombatManeuver} 的状态原先
+        // 【实测七百〇四：这一轮到此为止，两套随机作废、下一轮重抽】
+        //
         //  只在换任务/下线（{@code forget}）时清，而"丢目标/这一轮收手"走的是本方法（它调的是
         //  pauseRound，**不清这两张表**）。于是 begin 的幂等语义变成"一次抽签用一整天"。
         //  本方法是空袭唯一的"这一轮结束"漏斗（pauseRound 是轮内短暂停，刻意不动这两张表），
@@ -655,8 +655,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         LivingEntity target = currentTarget(maid);
         // v1.2.2 实测六百〇二【轰炸改判为"附加链路"，不再占用原链路】：这里原本有一道
         // `if (MaidBombing.isBombing(maid)) return;`——轰炸相位在飞的那十几 tick 里，本行为
-        // 整段让位。反馈原话："这套链路可能因为动作占用而会影响起飞，导致反而拖累了战斗。
-        // 所以整个轰炸链路最终应该是被判定为一个额外附加链路，不影响原链路的行动和飞行。"
+        // 整段让位。反馈
+        //
         // 确实如此：起手那一刻正是"收翅猛击打完、马上要再起飞"的瞬间，让位等于把**起飞**
         // 整整压后 0.5~1 秒（相位走完 step0+placeGap+step1 才还回来），一轮里反复几次就是肉眼
         // 可见的"她怎么不起飞"。
@@ -794,8 +794,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (left > 0) {
             LAUNCH_LEFT.put(id, left - 1);
             // 【实测六百八十二：远战这一段也开火】旧版这一整段（远战 20 tick = 1 秒）一枪不放——
-            //  每一轮"落地 → 重新起飞"都要白丢 1 秒输出，正是玩家反馈的"女仆开枪的频率相比于正常的
-            //  枪械模式要低了很多"里的固定一截。玩家原话："而且似乎某些行为会阻止女仆开枪。"
+            //  每一轮"落地 → 重新起飞"都要白丢 1 秒输出，正是
+            //
             //  【顺序：开火在前、摆朝向在后】枪械开火（TLM 的 performGunAttack）会自己把她的身体拧向
             //  目标；下面 faceLaunchDirection 紧随其后把朝向摆回"背离/朝目标 + 抬头"。烟花的推力方向
             //  取的是她**当拍**的视线，每 tick 现算，所以这一口的推力方向一个字都没变
@@ -814,8 +814,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         //
         // 【旧版为什么"只会看着"】旧版这里拿 3D 距离与 launchRange()(=20) 比。
         // 敌人比她高 50 格时，**光是垂直分量就 ≥50 > 20**——她站在敌人正下方也永远进不了
-        // 起飞分支：既不跳、也不放烟花，只会原地仰头看（用户反馈原话："只会对着比自己高
-        // 50 格的敌人看着，但是不知道该怎么起飞"）。
+        // 起飞分支：既不跳、也不放烟花，只会原地仰头看（
+        //
         //
         // 【为什么改成水平】launchRange() 这句话的原意是"太远先跑过去，避免越炸越远"
         // （见常量注释），那本来就是**水平**概念；垂直方向本来就不该有限制——空袭是
@@ -881,15 +881,15 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 爬升相位（tickClimbToAltitude）与猛击段刻意不调用，理由见 tryCastSpell 的注释。
         tryCastSpell(maid, target, id, gameTime);
 
-        // 【实测七百〇四 → 实测七百〇六：近战也先拉开距离再俯冲】玩家原话：「其实近远程空袭的
-        //  女仆也是需要有一个拉开距离的」。近战空袭原先是"占好高度 → 直接压低机头俯冲"，
+        // 【实测七百〇四 → 实测七百〇六：近战也先拉开距离再俯冲】
+        //
         //  中间**没有**任何距离门槛：怪物贴在她正下方时她原地俯冲，一轮接一轮地贴着打
         //  （20 血的她近战反击下存活率差）。现在在俯冲之前加一段：**距离还没拉开到
         //  {@code airRaid.minStandoff} 时，先背离敌人平飞一小段**（借滑翔的自然位移拉开，
         //  不俯冲、不烧额外燃料）。
         //
-        //  【实测七百〇六：这一段曾把近战空袭整个打废——玩家原话「这一个版本的近战空袭基本上
-        //   就失效了……导致女仆基本上碰不到敌人」】三个缺陷叠在一起：
+        //  【实测七百〇六：这一段曾把近战空袭整个打废——
+        //
         //   (a) **判据用水平距离，而"进入俯冲"用 3D 距离**。俯冲的闸门是 `3D ≤ smashRange()`
         //       （见下面那句），而"拉开"的判据是 `水平 < minStandoff`。因为 `3D ≥ 水平`，所以
         //       **凡是想俯冲的那一 tick，水平必然也 < minStandoff = 6**——"拉开"判据在每一次
@@ -1307,7 +1307,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 恰好等于 1.5 时加成仍为 0，所以门槛必须比 1.5 大一点才拿得到加成。
         // v1.2.0 实测四百七十七【后门生效后，这道门可以撤掉】：
         // 四百七十三 那版是"等她真的自由落体攒过 1.5 格再出手"，能拿到加成但要多等
-        // 两三 tick（玩家反馈"空中时间太长掉 DPS"）。现在加成改由 forcedFallDistance
+        // 两三 tick（）。现在加成改由 forcedFallDistance
         // 按【本轮最高点】强制给（见 hitOne），不再依赖真实累计，所以恢复"够近就打"，
         // 出手更快。原版那道 `fallDistance > 1.5 && !isFallFlying()` 的门仍被满足——
         // 由 hitOne 在结算瞬间写入达标值。
@@ -1387,7 +1387,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 的口径一致，不占间隔）。
      *
      * ── 烟花这一路的力度倍数（v1.2.2 实测六百一十五）──
-     * 用户反馈「加强力度太小，加速效果不明显，还耗了一颗烟花没啥用」，所以俯冲段点的那一枚
+     * ，所以俯冲段点的那一枚
      * **走 {@link DiveBoostRocket}**：原版推力之外再补一份 {@code 视线 × 0.85×(倍数−1)}，
      * 把原版的不动点从"1.7 倍视线"抬到"1.7×倍数 倍视线"（默认 1.4；见那个类的推导与
      * 字节码实证）。**只有这一路**——起飞/爬升/盘旋照旧发原版烟花，倍数 1.0 时逐字节等价。
@@ -1693,7 +1693,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 或"本相位点着的这枚烟花的推力还没烧完"。两条都不成立才落回原链路
      * （近战俯冲猛击 / 远战盘旋开火）。
      *
-     * 【实测五百二十八：够高之后不能立刻走人——"等火箭的加速跑完"】用户原话：
+     * 【实测五百二十八：够高之后不能立刻走人——"等火箭的加速跑完"】用户
      * "在空中状态下女仆是悬空的，没有办法像地上一样用火箭进行一次加速飞到敌人上方……
      *  并不是一达到高度就立刻取消火箭的加速，而是等火箭的加速效果结束之后才走下一个链路。"
      *
@@ -1796,7 +1796,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *
      *  <p>【实测七百〇三：空中防叠罗汉——只偏**爬升**方位】多只女仆同时接同一个敌人时，
      *  这一段（背离敌人抬头爬升，近战 30 tick = 1.5 秒）原本飞的是**同一条直线**——
-     *  那就是玩家说的"叠罗汉"在近战空袭这边的形态。给每只女仆一个只跟 UUID 有关的
+     *  那就是在近战空袭这边的形态。给每只女仆一个只跟 UUID 有关的
      *  稳定偏置（±12°）之后，她们的爬升线天然叉开。
      *  【为什么只在这里偏】俯冲那一记的朝向由 {@link #faceTarget} 给（瞄准方向），偏一点点
      *  都会掉命中率——这个模组在 实测四百七十三 / 四百八十三 上专门修过两轮，不会为了好看
@@ -2122,8 +2122,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 【实测五百七十八：旧值 3.0 与期望高度 3.5 相消 ⇒ 触发点 = 目标脚下 +0.5 格，等于"必须
      * 贴地才补"】期望盘旋高度是"目标上方 3.5 格"（{@link #rangedHoldHeight()}），旧值 3.0
      * 意味着 `y < 目标高度 + 0.5` 才补推。对地面目标而言"贴到 0.5 格"就是**已经落地**，于是
-     * 这个分支永远走不到，直接掉到地上再走地面支点重新起飞（反馈原话："低于期望高度就补烟花
-     * 这一点根本就没有生效过，每次都是掉到地上再补"）——结果远程空袭反而比近战更容易挨打。
+     * 这个分支永远走不到，直接掉到地上再走地面支点重新起飞（反馈
+     *
      * 取 0.5 = "比期望高度带低半格就补"，这才是"低于期望高度就补"的原意。
      */
     private static double rangedBoostDrop() {
@@ -2291,8 +2291,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 期望盘旋高度（目标上方 rangedHoldHeight() 格）
         double holdY = target.getY() + rangedHoldHeight();
 
-        // 【实测七百〇六：高度地板】玩家原话：「远程空袭的时候，不管是处于哪一种飞行状态，
-        //  那么至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」
+        // 【实测七百〇六：高度地板】
+        //
         //  旧版只有"软回正"（按高度误差给俯仰）+ "掉高补推 5 秒冷却"——三段叠加让高度在带内
         //  持续锯齿、偶尔探到 8 格以下甚至只剩一两格。这里加一条**硬地板** `floorY`：
         //  ① 低于它就算"掉高"（不必等掉出 10 格带），补推的冷却一好就补；
@@ -2656,7 +2656,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     // ================= v1.2.0 实测五百七十二：位移类法术（提供高度 / 提供速度） =================
     //
-    // 需求：位移类法术用于 **飞行加速** 与 **平地起飞**（法术模组作者转达的玩家反馈）。
+    // 需求：位移类法术用于 **飞行加速** 与 **平地起飞**（法术模组作者转达的
     // 按"冲量方向"分成两类，行为逻辑不同（ISS 源码实证）：
     //  · 「提供高度」`AscensionSpell`：视线水平分量 + (0,5,0) → 向上初速；用于**起飞**与**补高**，
     //    施法前必须把她的俯仰摆到抬头、并清掉法术模组那份施法目标（否则它 forceLookAtTarget 会把朝向拧平）；
@@ -2860,8 +2860,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /**
      * v1.2.0 实测五百七十八【A 方案：位移法术接替烟花维持盘旋高度带】。
      *
-     * 需求口径（用户原话）："理论上烈焰冲锋就是为了替代原来烟花的作用的，所有烟花能干的事情
-     * 它应该都能干，飞行路线也应该保持一致"，以及"玩家使用烈焰冲锋的时候可以持续使用很长的
+     * 需求口径（用户
+     *
      * 时间"——所以位移法术在这里不是"没烟花时的备胎"，而是**第一顺位的续航手段**（不消耗
      * 燃料、也不占烟花冷却，能一直用）。与烟花做同一件事，就用同一套口径：
      *
@@ -2931,7 +2931,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double range = gun ? GunCompat.gunMaxRange() : rangedAttackRange();
         // 【实测六百八十二】再叠一道"有效开火距离"：枪械模组自己的射程（实测现场 48 格）比弓弩的
         // 24 大一倍，旧版于是会在 40 格开外一路点射——子弹是有飞行时间的实体，打一直在动的 boss
-        // 基本打不中（玩家原话："飞的太远后打枪的准度特别的低"）。超出这条就**不扣扳机**，
+        // 基本打不中（）。超出这条就**不扣扳机**，
         // 改为继续盘旋（盘旋的径向修正会把她拉回半径 10 的圈上）再打。0 = 关掉这条门。
         double fireCap = rangedFireRange();
         boolean cappedByFireRange = false;
@@ -3022,7 +3022,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // {@link #fireRanged} 的**所有门之前**推进，每 tick 恰好一次（幂等）。
         // v1.3.0(beta) 实测六百八十二：**冷却的递减也搬到 tickGunState 去了**（同一个理由）。
         // 旧版递减写在下面（也就是"射程门 + 视线门之后"），于是"她飞得太远 / 视线被挡"的那几拍
-        // 冷却**冻住不动**——落地枪械模式里 TLM 自己的冷却每 tick 都走，两边一比就是玩家反馈的
+        // 冷却**冻住不动**——落地枪械模式里 TLM 自己的冷却每 tick 都走，两边一比就是
         // "女仆开枪的频率相比于正常的枪械模式要低了很多"。现在这里只读、只开火。
         int cd = RANGED_GUN_CD.getOrDefault(id, 0);
         if (cd > 0) {
@@ -3118,7 +3118,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 【实测六百八十二：枪械冷却也在这里走一步】与上面 GunCommonUtil.tick 同一条理由——
         // 这里在 fireRanged 的**所有门之前**（射程 / 视线 / 冷却），而且是幂等的（同一个 gameTime
         // 只走一次）。旧版递减写在 tickGunFire 里，于是"她飞得太远 / 视线被挡"的那几拍冷却冻住不动，
-        // 开火频率比地面枪械模式低——玩家反馈的"女仆开枪的频率相比于正常的枪械模式要低了很多"。
+        // 开火频率比地面枪械模式低——。
         int cd = RANGED_GUN_CD.getOrDefault(id, 0);
         if (cd > 0) {
             RANGED_GUN_CD.put(id, cd - 1);
@@ -3263,9 +3263,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     /** 绕目标盘旋 + 高度保持：切向视线绕圈，俯仰由"与期望高度的偏差"决定
      *
-     *  <p>【实测六百九十三：半径与旋向都改成随机 + 一条硬上界】玩家原话：「可以把环绕型攻击方式
-     *  更改一下……敌人如果攻击的是第一只的话，会攻击到后面的，锁敌之后攻击敌人的飞行路径改成
-     *  随机吧，然后设一个锁敌之后离敌的最远距离。」旧版切向恒为 {@code (-uz, ux)}、径向恒朝
+     *  <p>【实测六百九十三：半径与旋向都改成随机 + 一条硬上界】
+     *
+     *
      *  {@link #orbitRadius()}：**所有**女仆同一个圆、同一个高度、同一个旋向，敌人一条射线就能
      *  串到对面那只。现在：
      *  <ul>
@@ -3299,8 +3299,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double base = Math.max(2.0, orbitRadius());
         double orbMax = Math.max(2.0, orbitMaxCfg());
         double orbLo = Math.min(orbMax, Math.max(2.0, base * 0.75));
-        // 【实测七百〇四：拉开距离——盘旋半径的硬下限】玩家原话：「其实近远程空袭的女仆也是
-        //  需要有一个拉开距离的」。旧版近端只是"盘旋半径 × 0.75"现算的：玩家把「离敌最远距离」
+        // 【实测七百〇四：拉开距离——盘旋半径的硬下限】
+        //
         //  （airRaid.orbitMax）调小时近端跟着一起塌，她可能绕到 3 格、正好进近战怪的攻击范围。
         //  现在近端取 max(区间近端, airRaid.minStandoff)：随机环绕只发生在这条线之外。
         orbLo = Math.max(orbLo, airMinStandoffCfg());
@@ -3449,7 +3449,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 【实测七百〇六】空袭的**离敌最低高度**（格）：配置 {@code airRaid.minAboveHeight}，默认 8.0。
      *
      * <p>它是远程空袭盘旋时的**硬地板**（见 {@link #faceOrbit} 与 {@link #tickRangedAir}）：
-     * 高度差低于它就把俯仰钉成最大抬头 + 把"掉高补推"的触发门槛提到它。玩家原话：
+     * 高度差低于它就把俯仰钉成最大抬头 + 把"掉高补推"的触发门槛提到它。
      * 「至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」
      * 配置没挂上时退回 8.0——与配置里的默认值对齐（本项目的老规矩：兜底值必须跟着默认值走）。
      * 0 = 关闭（退回旧行为）。

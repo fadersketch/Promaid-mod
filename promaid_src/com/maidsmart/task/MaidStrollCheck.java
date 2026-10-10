@@ -147,14 +147,14 @@ public final class MaidStrollCheck {
             // 倍率虽然乘在 0.7 的属性上，实际格/秒却不是线性的：慢到一定程度她会"走走停停"
             // （寻路每格都要重新判定），所以 0.2 以下的实测值几乎一样（都是"几乎不走"）。
             // 用户要的答案就在这几行里：「想走多慢就写多少」。
-            out.add(line("\u00a7e\u5b9e\u6d4b\u53c2\u8003\u00a7r\uff08\u5973\u4ec6\u5c5e\u6027 0.7 \u65f6\u3001"
-                    + "\u8d70\u4e00\u6bb5\u8def\u7684\u5e73\u5747\u901f\u5ea6\uff0c\u516d\u767e\u4e8c\u5341 \u5728\u4e13\u7528\u670d\u52a1\u5668\u4e0a\u91cf\u7684\uff1b"
+            out.add(line("\u00a7e\u53c2\u8003\u8868\u00a7r\uff08\u5973\u4ec6\u5c5e\u6027 0.7 \u65f6\u3001"
+                    + "\u8d70\u4e00\u6bb5\u8def\u7684\u5e73\u5747\u901f\u5ea6\uff1b"
                     + "\u73a9\u5bb6\u8d70\u8def " + PLAYER_WALK + "\u3001\u5954\u8dd1 " + PLAYER_SPRINT
                     + " \u683c/\u79d2\uff09\uff1a"));
             out.add(line("\u00a78  " + MEASURED_TABLE));
             out.add(line("\u00a78\u53e3\u8bc0\uff1a\u60f3\u300c\u50cf\u73a9\u5bb6\u4e00\u6837\u8d70\u8def\u300d\u2192 \u00a7f0.4~0.5"
                     + "\u00a78\uff1b\u60f3\u6162\u60a0\u60a0\u6563\u6b65\u2192 \u00a7f0.3 \u4e0a\u4e0b"
-                    + "\u00a78\uff1b\u518d\u4f4e\uff08\u22640.2\uff09\u5b9e\u6d4b\u51e0\u4e4e\u4e0d\u8d70"
+                    + "\u00a78\uff1b\u518d\u4f4e\uff08\u22640.2\uff09\u51e0\u4e4e\u4e0d\u8d70"
                     + "\u2014\u2014\u5979\u4f1a\u50cf\u5361\u4f4f\u4e00\u6837\u4e00\u6b65\u4e00\u987f\uff1b"
                     + "\u60f3\u66f4\u5feb\u2192 0.6 \u4ee5\u4e0a\uff08\u6bd4\u73a9\u5bb6\u8dd1\u6b65\u8fd8\u5feb\uff09"));
 
@@ -246,7 +246,7 @@ public final class MaidStrollCheck {
                     + " \u2192 \u5b9e\u9645\u751f\u6548\u4e3a \u00a7f" + now
                     + "\u00a7r\uff08\u8303\u56f4 " + lo + "~" + hi + "\uff1b\u5df2\u5199\u5165\u914d\u7f6e\u6587\u4ef6\uff09"));
             out.add(line("\u63a5\u4e0b\u6765\u53ef\u4ee5\uff1a/maid_smart stroll go <\u5973\u4ec6> \u2192 \u7b49 2~3 \u79d2 \u2192 "
-                    + "/maid_smart stroll check <\u5973\u4ec6> \u770b\u5b9e\u6d4b\u683c/\u79d2"));
+                    + "/maid_smart stroll check <\u5973\u4ec6> \u770b\u5b9e\u9645\u683c/\u79d2"));
         } catch (Throwable t) {
             out.add(fail("\u6539\u914d\u7f6e\u5931\u8d25\uff1a" + t));
         }

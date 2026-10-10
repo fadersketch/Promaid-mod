@@ -137,20 +137,22 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
                 return;
             }
             this.wanderCooldown = 40; // 2 秒换一个闲逛点
-            int r = 8;
-            int dx = maid.m_217043_().m_188503_(r * 2 + 1) - r;
-            int dz = maid.m_217043_().m_188503_(r * 2 + 1) - r;
-            net.minecraft.core.BlockPos base = maid.m_20183_();
-            net.minecraft.core.BlockPos spot = new net.minecraft.core.BlockPos(
-                    base.m_123341_() + dx, base.m_123342_(), base.m_123343_() + dz);
+            // 实测八百一十五【乱窜根治】：锚点从"她此刻位置"改为固定锚点（home=罗盘圈心 /
+            // 跟随=主人身边），否则每 2 秒换方向 = 无回复力随机游走，一路漂出圈
+            net.minecraft.core.BlockPos spot = com.maidsmart.follow.WorkAreaClamp.pickWanderSpot(
+                    maid, com.maidsmart.follow.WorkAreaClamp.wanderRadius(maid), maid.m_217043_());
+            if (spot == null) {
+                return;
+            }
             // 实测五百六十二：闲逛点同样受工作圈钳制（home 模式不逛出限制圈）
-            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, spot)) {
+            // 实测八百一十五：改用 allowsWander——跟随模式也限
+            if (!com.maidsmart.follow.WorkAreaClamp.allowsWander(maid, spot)) {
                 return; // 本轮不闲逛，下轮再选
             }
             maid.m_6274_().m_21879_(MemoryModuleType.f_26370_,
                     new net.minecraft.world.entity.ai.memory.WalkTarget(
                             new net.minecraft.world.entity.ai.behavior.BlockPosTracker(spot),
-                            0.7f, 1));
+                            (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 1)); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
         }
     }
 
@@ -199,7 +201,7 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
             }
             // 实测五百六十二：home 模式限制圈外的牲畜不进组（工作区域=工位锚点圈，
             // 追出圈的追踪走位会被原版 Await 清掉、收工还会被拉回——不如一开始不选）
-            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, a.m_20183_())) {
+            if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, a.m_20183_())) {
                 continue;
             }
             groups.computeIfAbsent(a.m_6095_(), k -> new ArrayList<>()).add(a);

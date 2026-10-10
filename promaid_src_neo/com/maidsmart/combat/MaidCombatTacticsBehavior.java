@@ -71,7 +71,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      * 冷却期整段推到 2.6 格以外——贴进 2.0 格就后退到 3.0（{@link #KITE_MELEE_RANGE}）、
      * 攻击完成后撤 14 tick 退到 3.5 格（{@link #RETREAT_TICKS}）、平时只接近到
      * {@link #MELEE_MELEE_RANGE}=2.6 就停。于是**该举盾的那段时间她恰好站在窗口外**，
-     * 盾几乎举不起来——玩家反馈的"智能举盾反而削弱了举盾频率"就是这一条。
+     * 盾几乎举不起来——就是这一条。
      */
     private static final double SHIELD_MELEE_RANGE = 8.0;
 
@@ -165,6 +165,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         if (!isTacticsEnabled(maid)) {
             return false;
         }
+        // 实测八百二十二【拆刷怪笼 > 战斗】：她正在拆刷怪笼时战术走位让位——走位归
+        // SPAWNER_BREAK（钉在刷怪笼前刨），战术的 moveTo 会被 NavGuard 掐掉，这里显式
+        // 置 false 免得它反复发起又反复被掐。够得着的怪仍由 NeutralThreatDriver 原地反击。
+        if (com.maidsmart.combat.MaidSpawnerTorchBehavior.isBreakingSpawner(maid)) {
+            return false;
+        }
         Optional<LivingEntity> target = maid.getBrain().getMemory(MemoryModuleType.ATTACK_TARGET);
         if (target.isEmpty() || !target.get().isAlive()) {
             return false;
@@ -251,7 +257,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             return d < SHIELD_RANGED_RANGE && SelfPreservationBehavior.hasSight(maid, t);
         }
         // 近战敌人：【实测七百九十二】套用**原版口径**——8 格内就举盾，不再要求
-        // "攻击冷却中"。玩家原话：「近战方面需要套用原版的机制」。原版
+        // "攻击冷却中"。。原版
         // MaidUseShieldTask.checkExtraStartConditions = canUseShield && 目标 8 格内，
         // 没有冷却这一问；旧版多加的冷却条件 + 2.6 格闸让近战举盾几乎不触发。
         // 举盾不影响移速（原版"举盾降速"只作用于 Player.getSpeed，女仆是 TamableAnimal），
@@ -373,6 +379,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.combat.MaidMaceSmashBehavior.isLeaping(maid)) {
             return;
         }
+        // 实测八百二十二【拆刷怪笼 > 战斗】：她正在拆刷怪笼 → 战术走位让位（走位归拆除，
+        // 原地反击不受影响）。放在最前，先于自保让位——拆除与自保互斥（自保时拆除标记
+        // 已摘），顺序无碍。
+        if (com.maidsmart.combat.MaidSpawnerTorchBehavior.isBreakingSpawner(maid)) {
+            return;
+        }
         // v1.5.202（边打边保命）：自保正在执行移动类保命动作（濒死垫高/逃跑、
         // 环境逃生导航）→ 本 tick 让位——不抢移动控制（走位/跳劈会与自保的
         // 垫高/逃跑互相覆盖）；瞬时保命动作（喝药/传送）不在集合内，战斗照常
@@ -468,8 +480,9 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         this.wasCooling = cooling;
         if (this.retreatTicks > 0) {
             this.retreatTicks--;
-            // v1.5.141：后撤 3.5 格（原 3.0，更明显躲开敌人攻击范围）+ 1.3 速
-            this.navigateAway(maid, target, 3.5, 1.3f);
+            // v1.5.141：后撤 3.5 格（原 3.0，更明显躲开敌人攻击范围）
+            // 实测八百二十八：速度 1.3 → 1.0（本 mod 不再给女仆额外速度加成）
+            this.navigateAway(maid, target, 3.5, 1.0f);
             return;
         }
         // v1.5.280：近战贴脸后退——敌人贴进 2 格内主动后退拉开（不再贴身互搏：
@@ -481,7 +494,8 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         // 后退拉开到 3 格后再蛇形接近/跳劈——斧的"跳劈→普攻→后退"节奏由此成立
         if (com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_MELEE_KITE.get()
                 && dist < KITE_MELEE_RANGE && !this.jumpAir) {
-            this.navigateAway(maid, target, KITE_BACK_DIST - dist, 1.15f);
+            // 实测八百二十八：速度 1.15 → 1.0（不再额外加速；贴脸拉开距离的走位保留）
+            this.navigateAway(maid, target, KITE_BACK_DIST - dist, 1.0f);
             return;
         }
         if (dist > MELEE_MELEE_RANGE) {
@@ -585,7 +599,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                 this.serpentTick = 8;
                 this.serpentSide = -this.serpentSide;
             }
-            this.navigateArc(maid, target, this.serpentSide * 1.2, 1.05f);
+            this.navigateArc(maid, target, this.serpentSide * 1.2, 1.0f);
         } else {
             // 贴脸绕圈：圆周侧移，12~20 tick 换向
             if (this.orbitSwapTick-- <= 0) {
@@ -807,10 +821,11 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         // ④绕圈半径 = ideal（弓≈9 格）——在理想射程圆周上横移放风筝，保持清晰距离。
         if (dist < ideal * 0.75) {
             // 太近（弓贴脸 = 废物）：后退拉开到理想射程外 2 格
-            this.navigateAway(maid, target, ideal + 2.0, 1.3f);
+            // 实测八百二十八：速度 1.3 → 1.0（不再额外加速；拉开的距离不变）
+            this.navigateAway(maid, target, ideal + 2.0, 1.0f);
         } else if (dist > ideal * 1.5) {
             // 太远：前进逼近
-            this.navigateTo(maid, target, 1.05f);
+            this.navigateTo(maid, target, 1.0f);
         } else {
             // 理想距离：横移绕圈放风筝（半径 = 理想射程，15~25 tick 换向）
             if (this.orbitSwapTick-- <= 0) {

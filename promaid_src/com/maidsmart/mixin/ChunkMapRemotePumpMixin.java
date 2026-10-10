@@ -66,5 +66,12 @@ public abstract class ChunkMapRemotePumpMixin {
             com.maidsmart.follow.MaidChunkLoadManager.visibilitySweep(f_140133_, f_140150_);
         } catch (Throwable ignored) {
         }
+        // 实测七百九十九【issue #36 传送后看不见】：传送大跳变的**延迟补包**在这里到点执行
+        // （同样是空队列零成本）。放这个注入点是刻意的——它本来就是"原版刚扫完一遍实体同步
+        // 之后"的那个时刻，补包发出去的生成包会带她此刻的真实坐标。
+        try {
+            com.maidsmart.follow.MaidTeleportRebuild.pump(f_140133_, f_140150_);
+        } catch (Throwable ignored) {
+        }
     }
 }

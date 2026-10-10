@@ -132,8 +132,14 @@ public final class BlueprintBlockData {
     static {
         // 木板/原木/树木
         add("oak_planks"); add("spruce_planks"); add("birch_planks"); add("dark_oak_planks");
+        add("jungle_planks"); add("acacia_planks"); add("mangrove_planks"); add("cherry_planks");
         add("oak_log"); add("spruce_log"); add("birch_log"); add("dark_oak_log");
-        add("oak_leaves"); add("spruce_leaves");
+        add("jungle_log"); add("acacia_log"); add("mangrove_log"); add("cherry_log");
+        // 实测八百三十一：树叶补齐（旧版只有橡木/云杉）——玩家要"樱花树"却因
+        // cherry_leaves 不在白名单被拒、随后整条设计链路都存不成蓝图，第一现场就在这里
+        add("oak_leaves"); add("spruce_leaves"); add("birch_leaves"); add("jungle_leaves");
+        add("acacia_leaves"); add("dark_oak_leaves"); add("mangrove_leaves"); add("cherry_leaves");
+        add("azalea_leaves"); add("flowering_azalea_leaves");
         // 石/砖
         add("stone"); add("stone_bricks"); add("cracked_stone_bricks"); add("mossy_stone_bricks");
         add("cobblestone"); add("mossy_cobblestone"); add("bricks");

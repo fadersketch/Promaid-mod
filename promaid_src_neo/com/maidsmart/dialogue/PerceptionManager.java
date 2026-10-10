@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 感知变化检测（v1.5.95，借鉴 maidsoulcore PerceptionEventDetector）。
@@ -39,8 +40,11 @@ public class PerceptionManager {
      * v1.5.193：敌袭判定缓存（女仆 UUID → {判定, 游戏tick}）——
      * dangerActive 被气泡镜像/主动对话/自主决策高频调用，0.5 秒 TTL 内不重复
      * 12 格实体扫描。与感知总开关无关（关掉感知播报，敌袭冻结仍生效）。
+     * 实测七百九十五：改用 ConcurrentHashMap——本表是 static，且 dangerActive 被
+     * 气泡镜像（ChatBubbleLimitMixin）/ 主动对话 / 自主决策多路调用；与本子系统其余
+     * 状态表口径一致，避免跨线程写坏普通 HashMap（旧版是 HashMap）。
      */
-    private static final Map<UUID, long[]> DANGER_CACHE = new HashMap<>();
+    private static final Map<UUID, long[]> DANGER_CACHE = new ConcurrentHashMap<>();
     /** 敌袭判定缓存 TTL（tick，10 = 0.5 秒） */
     private static final int DANGER_TTL_TICKS = 10;
 
@@ -61,6 +65,12 @@ public class PerceptionManager {
      */
     private final Map<UUID, Boolean> lookingState = new HashMap<>();
     private final Map<UUID, Integer> lookingTicks = new HashMap<>();
+    /**
+     * 实测八百二十五：「主人一直在看着我…」这条播报带语音（owner_looking.ogg），
+     * 玩家要求【每只女仆】各自 1800 秒（30 分钟）最多触发一次——独立于本类其余
+     * 事件的 30 秒同类全局限频。map：女仆 UUID → 上次播报的游戏 tick。
+     */
+    private final Map<UUID, Long> lookCooldowns = new HashMap<>();
     /** 主人持续注视阈值（秒）与滞回角度均从配置面板读取 */
 
     /** 快照：当前可感知的世界事实 */
@@ -117,6 +127,7 @@ public class PerceptionManager {
         this.lastSnapshots.keySet().removeIf(id -> !this.isAnyMaidNearby(server, id));
         this.lookingState.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
         this.lookingTicks.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
+        this.lookCooldowns.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
     }
 
     private boolean isAnyMaidNearby(MinecraftServer server, UUID id) {
@@ -280,9 +291,16 @@ public class PerceptionManager {
             if (nowLooking && !threatened) {
                 int t = this.lookingTicks.getOrDefault(id, 0) + 1;
                 this.lookingTicks.put(id, t);
-                // 持续注视达到阈值才播报（首次达到报一次）
-                if (t == com.maidsmart.config.MaidSmartConfig.PERCEPTION_LOOK_TICKS.get() * 20) {
-                    events.add(new String[]{"owner_look", "主人一直在看着我…"});
+                // 持续注视达到阈值才播报；实测八百二十五：再加【每只女仆 1800 秒】
+                // 独立限频——这条带语音（owner_looking.ogg），不能像别的事件那样
+                // 30 秒一次。注视一直持续时每满 1800 秒报一次，中途打断则重新计时。
+                if (t >= com.maidsmart.config.MaidSmartConfig.PERCEPTION_LOOK_TICKS.get() * 20) {
+                    Long lastLook = this.lookCooldowns.get(id);
+                    if (lastLook == null || tick - lastLook
+                            >= (long) com.maidsmart.config.MaidSmartConfig.PERCEPTION_LOOK_COOLDOWN.get() * 20) {
+                        this.lookCooldowns.put(id, tick);
+                        events.add(new String[]{"owner_look", "主人一直在看着我…"});
+                    }
                 }
             } else {
                 this.lookingTicks.put(id, 0); // v1.5.120：危险中注视不累计（解除后重新计时）
@@ -355,15 +373,19 @@ public class PerceptionManager {
      *  警示每 10 秒刷一条）。enemy_appear/enemy_approach/enemy_gone 共用一个
      *  300 秒敌袭限频，owner_hurt/owner_low/owner_look/weather 共用 30 秒。 */
     private void bubble(EntityMaid maid, String type, String text, long tick) {
-        boolean hostile = type.equals("enemy");
-        int cd = hostile
-                ? com.maidsmart.config.MaidSmartConfig.PERCEPTION_HOSTILE_SHOW_COOLDOWN.get()
-                : com.maidsmart.config.MaidSmartConfig.PERCEPTION_EVENT_COOLDOWN.get();
-        Long last = this.eventCooldowns.get(type);
-        if (last != null && tick - last < (long) cd * 20) {
-            return;
+        // 实测八百二十五：owner_look 已在 scan 里做【每只女仆 1800 秒】独立限频，
+        // 此处不再叠加同类事件的全局限频——否则多只女仆同时被注视时互相压制。
+        if (!"owner_look".equals(type)) {
+            boolean hostile = type.equals("enemy");
+            int cd = hostile
+                    ? com.maidsmart.config.MaidSmartConfig.PERCEPTION_HOSTILE_SHOW_COOLDOWN.get()
+                    : com.maidsmart.config.MaidSmartConfig.PERCEPTION_EVENT_COOLDOWN.get();
+            Long last = this.eventCooldowns.get(type);
+            if (last != null && tick - last < (long) cd * 20) {
+                return;
+            }
+            this.eventCooldowns.put(type, tick);
         }
-        this.eventCooldowns.put(type, tick);
         maid.getChatBubbleManager().addTextChatBubble(text);
     }
 }

@@ -46,15 +46,21 @@ public abstract class MaidGhostTetherMixin {
         }
         // 先取消**这一遍**，再重进一次（active 标记会让重进的那一遍不再被拦）——
         // 顺序不能颠倒：先重进再取消的话，万一渲染中途抛异常就会把她的几何提交两遍。
+        // 【实测八百三十四】护栏：重进的那一遍跑的是原版方法体，而原版是 push 后直接 pop、
+        // 没有 finally；一旦中途抛异常，它的 push 就留在栈上，几十毫秒后由原版 checkPoseStack
+        // 抛出 "Pose stack not empty" 把游戏崩掉（issue #37 的扫帚右击闪退就是这个形状）。
+        int guardDepth = com.maidsmart.client.MaidRenderGuard.depthOf(poseStack);
         ci.cancel();
         try {
             EntityMaidRenderer self = (EntityMaidRenderer) (Object) this;
             self.render(entity, entityYaw, partialTicks, poseStack,
                     com.maidsmart.client.MaidGhostRender.wrap(bufferIn, self, maid), packedLightIn);
-        } catch (Throwable ignored) {
-            // 幽灵化这一遍失败：这一帧就当她没画（下一帧照常试）。绝不能把异常抛进渲染线程。
+        } catch (Throwable t) {
+            // 幽灵化这一遍失败：这一帧就当她没画（下一帧照常试）；把姿态栈补回、并留一行痕
+            com.maidsmart.client.MaidRenderGuard.noteSwallowed("武装拴绳半透明重绘（女仆）", t);
         } finally {
             com.maidsmart.client.MaidGhostRender.end();
+            com.maidsmart.client.MaidRenderGuard.restore(poseStack, guardDepth);
         }
     }
 }

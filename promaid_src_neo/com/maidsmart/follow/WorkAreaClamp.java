@@ -35,6 +35,197 @@ public final class WorkAreaClamp {
     }
 
     /**
+     * 【实测八百一十五·罗盘优先】「干活不允许出圈」的选点闸——比 {@link #allows} 多认一条：
+     * **玩家用罗盘/中键画过圈时，即使她此刻不在 home 模式（跟随中），干活的选点也被钳在这个圈里**。
+     *
+     * <p>【为什么】
+     *
+     * 而 TLM 的圈只在 {@code isHomeModeEnable} 为真时才生效（{@code hasRestriction} 就是它）——
+     * 玩家用罗盘画好圈、但排班没开 / 她把 home 关了时，这个圈在 TLM 侧是**完全无效**的。
+     * 挖矿/伐木/宰杀/农活的选点因此会跟着主人满地图跑。
+     *
+     * <p>【口径】home 模式 → 与 {@link #allows} 完全一致（TLM 自己的圈）；非 home 但存在
+     * **玩家画的圈**（{@link com.maidsmart.schedule.PlayerCircle#isPlayerCircle}）→ 钳到该圈
+     * （圈心 = {@link #playerCircleCenter}，半径 = {@link #playerCircleRadius}）；两者都不是 → 放行。
+     *
+     * <p>【只管干活】本方法只用在"任务选点"（挖矿/伐木/宰杀的目标扫描）——空闲散步/跟随/战斗
+     * 仍走 {@link #allows}（放行），不会把跟着主人的女仆拴住。
+     */
+    public static boolean allowsWork(EntityMaid maid, BlockPos pos) {
+        try {
+            if (maid == null || pos == null) {
+                return true;
+            }
+            if (maid.hasRestriction()) {
+                return maid.isWithinRestriction(pos); // home：TLM 的圈说了算
+            }
+            if (!com.maidsmart.schedule.PlayerCircle.isPlayerCircle(maid)) {
+                return true; // 没有玩家画的圈 → 不干预（旧口径）
+            }
+            BlockPos c = playerCircleCenter(maid);
+            if (c == null) {
+                return true;
+            }
+            int r = playerCircleRadius(maid);
+            return c.distSqr(pos) <= (double) r * r;
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    /**
+     * 玩家画的圈心（**非 home 也读**）——{@code SchedulePos} 的最近锚点。
+     *
+     * <p>与 {@link #circleCenter} 的区别：那条要求 home 模式（因为它读的是 TLM 的限制圈心）；
+     * 这条专供"玩家画过圈但没开 home"时使用——圈心就是玩家用罗盘/中键写进
+     * {@code SchedulePos} 的那三个锚点里离她最近的一个。没配置锚点 → null。
+     */
+    public static BlockPos playerCircleCenter(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            var sp = maid.getSchedulePos();
+            if (sp == null || !sp.isConfigured()) {
+                return null;
+            }
+            BlockPos p = sp.getNearestPos(maid);
+            return p != null && !p.equals(BlockPos.ZERO) ? p : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 玩家画的圈的作业半径——取「排班活动半径」（罗盘只画点、不画半径；半径一直来自配置）。 */
+    public static int playerCircleRadius(EntityMaid maid) {
+        try {
+            if (maid != null && maid.hasRestriction()) {
+                int r = (int) maid.getRestrictRadius();
+                if (r > 0) {
+                    return r;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return Math.max(2, com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get());
+    }
+
+    /**
+     * 【实测八百一十五】干活闲逛的选点圈——**比 {@link #allows} 更严**：home 模式照旧读玩家画的圈，
+     * 非 home（跟随）模式改用「她自己此刻的位置」当圆心、半径 = 排班活动半径。
+     *
+     * <p>【为什么要有它】
+     *
+     * 宰杀在「没活可干」时的闲逛分支（每 2 秒换一个周围 8 格的随机点）。它选点过的是
+     * {@link #allows}，而这条在**跟随模式（非 home）下恒放行**——圈形同不存在，于是每 2 秒换一个
+     * 方向、越走越远。{@code WorkAreaClamp#allows} 保持原口径不动（它是"目标能不能到"的通用闸，
+     * 战斗追击等也依赖它放行跟随模式）；闲逛这种"没事找事走两步"才用本方法，跟随模式下也给它一个
+     * 临时圈，让找活的范围不再无限扩张。
+     *
+     * <p>【圆心与半径】home → {@link #circleCenter}（玩家画的圈心，罗盘/工位写的锚点）+ 半径
+     * {@code maid.getRestrictRadius()}；跟随 → **主人身边**（跟随语义就是待在他附近）+ 半径
+     * {@code config 排班活动半径}。锚点取不到 → 退回"她自己此刻位置"，绝不放行到无限。
+     * 开关 {@code misc.workStayInCircle}；关掉 = 与 {@link #allows} 完全一致。
+     */
+    public static boolean allowsWander(EntityMaid maid, BlockPos pos) {
+        try {
+            if (maid == null || pos == null) {
+                return true;
+            }
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_WORK_STAY_IN_CIRCLE.get()) {
+                return allows(maid, pos);
+            }
+            if (maid.hasRestriction()) {
+                return allows(maid, pos); // home：玩家画的圈说了算（与旧口径一字不差）
+            }
+            // 跟随：以【主人身边】为锚的临时圈（锚定不动的点，她才会在这一带转悠而不是一路漂走）
+            BlockPos anchor = wanderAnchor(maid);
+            if (anchor == null) {
+                return true;
+            }
+            int r = wanderRadius(maid);
+            return anchor.distSqr(pos) <= (double) r * r;
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    /**
+     * 【实测八百一十五】干活闲逛的**锚点**——闲逛选点必须围绕它取，不能围绕她自己。
+     *
+     * <p>【为什么不能用"她自己"】每 2 秒在"她此刻位置周围 8 格"取随机点，等于一场**没有回复力的
+     * 随机游走**：每步都可能朝同一方向多走一点，几十步下来就走出去几十格。这正是玩家看到的
+     * "不停地在多个地方以极高的速度移动、似乎是在找任务目标"。把取点锚定在一个**固定点**上，
+     * 她才是在这一点附近来回转，而不是一路漂走。
+     *
+     * <p>home → 玩家画的圈心（罗盘/工位锚点，{@link #circleCenter}）；跟随 → **主人**身边
+     * （跟随语义就是待在他附近），没主人时退回她自己。
+     */
+    public static BlockPos wanderAnchor(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            if (maid.hasRestriction()) {
+                BlockPos c = circleCenter(maid);
+                return c != null ? c : maid.blockPosition();
+            }
+            // 实测八百一十五【罗盘优先】：跟随中但玩家画过圈 → 以玩家画的圈心为锚（干活不出圈）
+            if (com.maidsmart.schedule.PlayerCircle.isPlayerCircle(maid)) {
+                BlockPos c = playerCircleCenter(maid);
+                if (c != null) {
+                    return c;
+                }
+            }
+            net.minecraft.world.entity.LivingEntity owner = maid.getOwner();
+            if (owner != null && owner.isAlive() && owner.level() == maid.level()) {
+                return owner.blockPosition();
+            }
+            return maid.blockPosition();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** 闲逛锚点对应的半径：home = 玩家画的圈半径；跟随/取不到 = 「排班活动半径」。 */
+    public static int wanderRadius(EntityMaid maid) {
+        try {
+            if (maid != null && maid.hasRestriction()) {
+                int r = (int) maid.getRestrictRadius();
+                if (r > 0) {
+                    return r;
+                }
+            }
+            // 实测八百一十五：跟随中但玩家画过圈 → 用同一条半径口径
+            if (com.maidsmart.schedule.PlayerCircle.isPlayerCircle(maid)) {
+                return playerCircleRadius(maid);
+            }
+        } catch (Throwable ignored) {
+        }
+        return Math.max(2, com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get());
+    }
+
+    /**
+     * 取一个"闲逛点"：围绕 {@link #wanderAnchor} 的半径 {@code radius} 内随机偏移，
+     * **y 用她当前所在层**（只约束水平范围，不把她送上屋顶/地下）。
+     *
+     * <p>返回 null = 本轮不逛（锚点取不到）。调用方仍应把落点过一次 {@link #allowsWander}
+     * 兜底（锚点半径与限制圈半径口径不同时也不越界）。
+     */
+    public static BlockPos pickWanderSpot(EntityMaid maid, int radius,
+                                          net.minecraft.util.RandomSource rng) {
+        BlockPos anchor = wanderAnchor(maid);
+        if (anchor == null) {
+            return null;
+        }
+        net.minecraft.util.RandomSource r = rng != null ? rng
+                : net.minecraft.util.RandomSource.create();
+        int dx = r.nextInt(radius * 2 + 1) - radius;
+        int dz = r.nextInt(radius * 2 + 1) - radius;
+        return new BlockPos(anchor.getX() + dx, maid.blockPosition().getY(), anchor.getZ() + dz);
+    }
+
+    /**
      * 限制圈心（home 模式且圈心有效时返回；否则 null）。
      * 圈心来自实体数据、永不为 null，未 restrictTo 过时是 BlockPos.ZERO——
      * 直接拿去当锚点会把女仆拴到世界原点，这里一并挡掉。
@@ -49,8 +240,8 @@ public final class WorkAreaClamp {
                 return c;
             }
             // 【v1.3.0(beta) 实测六百六十四：排班锚点兜底】圈心还是零 → 退回"她排班锚点里最近的
-            //  那一个"（只在玩家配过锚点时返回）。玩家反馈：「我刚刚用河童的罗盘画了一个圈，
-            //  但女仆却不照着那个飞」——圈心为零时夹取与盘旋双双失效，扫帚模式只剩跟主人；
+            //  那一个"（只在玩家配过锚点时返回）。
+            //
             //  而锚点就是河童的罗盘/排班表写进去的那三个点，读它等于直取"玩家画的那个圈"。
             return nearestAnchor(maid);
         } catch (Throwable t) {
@@ -84,8 +275,8 @@ public final class WorkAreaClamp {
      * 也一起判掉——两条牵引绳（空袭 {@code MaidFlightRecall} / 扫帚 {@code MaidBroomRecall}）
      * 用它回答"该把她拉回哪儿"。
      *
-     * <p>【为什么必须有这一条】玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，
-     * 还是会被传送回来。」守家的语义是"待在家里"，所以守家期间那两条绳的距离基准与落点都该是
+     * <p>【为什么必须有这一条】
+     *
      * **工作区圈心**，而不是主人：主人跑多远都不该把守家女仆拽走；而"她飞太远回不来"这个原始
      * 问题照旧解决——拉回来的是家。口径只留一处，别在两条绳里各写一遍。
      */
@@ -103,7 +294,7 @@ public final class WorkAreaClamp {
     /**
      * 一行话说清"她现在的圈是怎么回事"（诊断用，日志里搜「扫帚守家」）。
      *
-     * <p>【为什么要有它】玩家反馈「女仆绕着一个我根本就不知道的范围在飞行」，而"圈在哪儿"取决于
+     * <p>【为什么要有它】，而"圈在哪儿"取决于
      * 三件只在服务端才看得见的东西：**home 开关**、**当前活动档**（圈心按活动档从工位/休闲/睡眠
      * 三个锚点里取）、**半径**（TLM 配置，本模组只抬高下限到「排班活动半径」）。这一行把它们
      * 连同三个锚点一起打出来，一条日志就能判断"她绕的到底是不是你画的那个圈"。

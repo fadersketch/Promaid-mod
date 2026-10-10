@@ -22,9 +22,12 @@ import net.minecraftforge.registries.ForgeRegistries;
  *   她走动时自动搬移（旧位置若仍是光块才移除——玩家自己放的光块不会被误删）；
  * - 无光：移除她的光块；进服/退服清理路径齐全（不残留）。
  *
- * 【不影响插火把】插火把读世界真实方块光（m_45517_）——本光块与其他环境光源
- * （炉子/篝火/发光方块）完全同等待遇，插火把判定零改动：亮的地方不插 = 与其
- * "只在暗处插"的意图一致，且她不插火把的前提是光块区域已足够亮。
+ * 【不影响插火把】（实测八百五十一口径）光块是**真实**放进世界的方块光（照明效果与
+ * 炉子/篝火同源，玩家看得见），但**插火把的"够不够暗"判定不再直接读世界亮度**——被动插火把
+ * 改走 {@link #ownLightUpperBound}（她自己的贡献只按上界排除；上界以内的读数用
+ * {@link #realSourcesAround} 盘点真实光源定夺），防刷怪的去重改走 {@link #isOwnLightBlock}。
+ * 于是她举着火把照样会在环境暗的地方顺手补一根，而环境自己就亮的房间（炉子/灯笼/玩家放的
+ * 火把）依旧不插——兑现需求里那句「此亮度不影响插火把」。
  *
  * 总开关：misc.heldLightMaid（默认开）。
  */
@@ -216,6 +219,86 @@ public final class MaidHeldLight {
         } catch (Exception ignored) {
         }
         return 0;
+    }
+
+    /** 她自己的隐藏光块在某一格能留下的**光度上界**（0 = 没举光源 / 已超出她的照射范围）。只读、
+     *  零写入。扣"她自己那一份"这件事由调用方配合 {@link #realSourcesAround} 定夺——上界以内的
+     *  读数**可能**全是她自己照的，也可能只是把真实光源盖住了（实测八百五十一：旧版在这里直接
+     *  `raw <= 上界 → 按 0 算`，于是她刚插下的那根真火把也被当成"她自己照的"抹掉，她就在火把
+     *  旁边接着插）。 */
+    public static int ownLightUpperBound(EntityMaid maid, ServerLevel level, net.minecraft.core.BlockPos p) {
+        try {
+            Entry e = TRACKED.get(maid.m_20148_());
+            if (e == null || e.level() != level) {
+                return 0;
+            }
+            net.minecraft.world.level.block.state.BlockState st = level.m_8055_(e.pos());
+            if (st.m_60734_() != lightBlock()) {
+                return 0; // 她的光块已被换掉（罕见）→ 她自己没在发光
+            }
+            int own = st.m_61143_(LEVEL_PROP);
+            int d = Math.abs(p.m_123341_() - e.pos().m_123341_())
+                    + Math.abs(p.m_123342_() - e.pos().m_123342_())
+                    + Math.abs(p.m_123343_() - e.pos().m_123343_());
+            return Math.max(0, own - d);
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /** 一颗**真实**光源：世界里真会发光的方块（位置 + 自身发光值）。{@link #covers} 判"它在
+     *  **曼哈顿距离**口径下还能不能给某格留下 ≥ need 的方块光"——忽略遮挡的近似：隔着墙也可能
+     *  算"照到"，偏保守（宁可少插一根，也不挨着已有火把再插）。 */
+    public record RealSource(net.minecraft.core.BlockPos pos, int emission) {
+        /** 这颗光源还能给 p 留下 ≥ need 的光吗？（发光值 − 曼哈顿距离 ≥ need） */
+        public boolean covers(net.minecraft.core.BlockPos p, int need) {
+            int d = Math.abs(p.m_123341_() - pos.m_123341_())
+                    + Math.abs(p.m_123342_() - pos.m_123342_())
+                    + Math.abs(p.m_123343_() - pos.m_123343_());
+            return emission - d >= need;
+        }
+    }
+
+    /** 盘点 centre 周围 reach 格（三轴 ±reach）内的**真实**发光方块——**跳过 maid 自己那颗隐藏
+     *  光块**（她举着的临时照明不算"这里已经有灯了"），其余一律算数：玩家插的火把、别处女仆的光块、
+     *  炉子/萤石/岩浆…。只读；一次盘点供多个格子复用（调用方每轮只盘一次）。 */
+    public static java.util.List<RealSource> realSourcesAround(EntityMaid maid, ServerLevel level,
+            net.minecraft.core.BlockPos centre, int reach) {
+        java.util.List<RealSource> out = new java.util.ArrayList<>();
+        try {
+            for (int dx = -reach; dx <= reach; dx++) {
+                for (int dy = -reach; dy <= reach; dy++) {
+                    for (int dz = -reach; dz <= reach; dz++) {
+                        net.minecraft.core.BlockPos q = centre.m_7918_(dx, dy, dz);
+                        if (isOwnLightBlock(maid, level, q)) {
+                            continue; // 她自己脚底那颗：她走到哪亮到哪，不算"这里已经有灯"
+                        }
+                        int e = level.m_8055_(q).m_60791_(); // getLightEmission（与光照引擎同源）
+                        if (e > 0) {
+                            out.add(new RealSource(q, e));
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** 这一格是不是**她自己**那个隐藏光块？（实测八百四十七）
+     *  <p>【谁在用】防刷怪"这只笼点过没有"的去重（{@code stillNeedsTorch}）：她站在刷怪笼旁时
+     *  脚底那格会落进候选位，旧版把它当成"已经有够亮的东西守着它了" → 那只笼永远轮不到插火把。
+     *  只排除她自己那一个（玩家放的光块、别的女仆的光块照旧算数）。 */
+    public static boolean isOwnLightBlock(EntityMaid maid, ServerLevel level, net.minecraft.core.BlockPos p) {
+        try {
+            Entry e = TRACKED.get(maid.m_20148_());
+            if (e == null || e.level() != level || !e.pos().equals(p)) {
+                return false;
+            }
+            return level.m_8055_(p).m_60734_() == lightBlock();
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** 记录每个女仆首次点亮位置（探针日志：一次/女仆，验证"照亮"确已发生） */

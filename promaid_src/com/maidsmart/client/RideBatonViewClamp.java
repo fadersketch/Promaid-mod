@@ -42,8 +42,8 @@ public final class RideBatonViewClamp {
     /**
      * 【实测七百四十一·点1】手持骑乘指挥棒**左击** → 请求与女仆互换座位（主驾 ↔ 副驾）。
      *
-     * <p>玩家原话：「如果玩家处于副座，可以通过手持骑乘指挥棒进行左击，从而把自己交换到主座位。
-     * 再左击一下再换回去。」
+     * <p>
+     *
      *
      * <h2>为什么挂在 {@code InteractionKeyMappingTriggered} 上</h2>
      * 反编译 {@code Minecraft.startAttack()} 实证：左击键在**真正发起攻击之前**会先发这个事件

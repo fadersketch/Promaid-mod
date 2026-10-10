@@ -556,6 +556,12 @@ public final class MaidPlanting {
             return false;
         }
         try {
+            // 实测八百二十七：她正借副手那把镐拆刷怪笼（副手锁定中）→ 不要在这里换手——
+            // 本方法会把原主手物品塞进副手暂存，会顶掉借来的镐。等拆完再施肥（
+            // "所有的链路都必须在刷怪笼被破坏掉之后才行"）。没锁副手时本判据恒 false。
+            if (com.maidsmart.combat.MaidSpawnerTorchBehavior.isLockedOffhand(maid)) {
+                return false;
+            }
             net.neoforged.neoforge.items.IItemHandlerModifiable hands =
                     (net.neoforged.neoforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper();
             ItemStack main = maid.getMainHandItem();

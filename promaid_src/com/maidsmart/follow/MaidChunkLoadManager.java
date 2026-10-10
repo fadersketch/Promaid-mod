@@ -205,10 +205,10 @@ public final class MaidChunkLoadManager {
      *  读不到 persistentData，没有这份快照就无法在集合时跳过她们，导致白挂强载票 +
      *  静默收队（玩家视角="点了集合却石沉大海"）。
      *
-     * 【v1.3.0(beta) 实测六百九十九：登记表升格为落盘 + 加名字】玩家原话：「排班表无法
-     * 显示所有的女仆，如果一个玩家的女仆死亡，回到了玩家的重生点，但是玩家的重生点离玩家
-     * 当前位置又太远，那么排班表上就不会显示这个女仆的资料和信息。会造成缺失。此时如果
-     * 使用一键召回会显示无法召回。」——这张表从【会话内存】升格为【SavedData 落盘】
+     * 【v1.3.0(beta) 实测六百九十九：登记表升格为落盘 + 加名字】
+     *
+     *
+     *
      * （{@link MaidSeenStore}，存主世界）：重启/重进后，远处未加载的女仆依然有迹可循
      * ——排班表照常列她（「⚑ 未加载」行 + 最后出现位置），一键集合照常强载召回。
      * 名字也一并记下（列表行要用，不能等她加载出来再取）。 */
@@ -438,12 +438,14 @@ public final class MaidChunkLoadManager {
         ensureSeenLoaded(server);
         // v1.1.0 实测七十：登记全部在场有主女仆的最后出现位置（不受下方开关限制
         // ——这是"一键集合召回未加载区块女仆"的唯一线索）
-        // 实测六百九十：这一层同样必须走 EntitySnapshot——循环体里的救援
+        // 实测六百九十：这一层同样必须先攒快照再遍历——循环体里的救援
         // teleportCore 会把女仆跨维度搬走（从本维度实体表里删实体），老版直接遍历
         // lvl.m_8583_() 这个活视图就会把 fastutil 迭代器的槽位号读越界（同一颗雷）。
+        // 实测八百三十九：快照来源改 MaidRoster（只攒女仆、每游戏刻一份）——同样安全，
+        // 且零女仆时不再白拷整张实体表（采样报告见 MaidRoster 类注释）。
         for (ServerLevel lvl : server.m_129785_()) {
-            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
-                if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
+            for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, lvl)) {
+                if (!maid.m_6084_()) {
                     continue;
                 }
                 LivingEntity ow = maid.m_269323_();
@@ -509,8 +511,9 @@ public final class MaidChunkLoadManager {
         // 关掉她的排班为止；普通跟随女仆维持会话票（玩家在就加载，够用）。
         java.util.Map<UUID, TicketKey> wantedPersistent = new java.util.HashMap<>();
         for (ServerLevel level : server.m_129785_()) {
-            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
+            // 实测八百三十九：来源改 MaidRoster（只攒女仆、每游戏刻一份）——挂票只需女仆
+            for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, level)) {
+                if (!maid.m_6084_()) {
                     continue;
                 }
                 try {
@@ -631,7 +634,7 @@ public final class MaidChunkLoadManager {
      *   <li>服务端这边她**不 tick** —— 客户端眼里她就是"骑在扫帚上定在空中不动"；</li>
      *   <li>一旦那一档继续掉到 {@code HIDDEN}（区块卸载），原版 {@code ChunkMap.removeEntity}
      *       会给客户端发删包，而"新实体不补包"（实测五百九十六）又拦着我们自己补
-     *       —— 客户端永远没有她 = 玩家说的「建模被卡掉、变成幽灵状态」。</li>
+     *       —— 客户端永远没有她 = 。</li>
      * </ul>
      * 修法：每 tick 拿我们**自己持票表里的 UUID**（量很小）去 {@code level.getEntity(uuid)}
      * 问一句"她现在还在不在这个区块"，换了就当场撤旧票、挂新票。全量扫描（LAST_SEEN/
@@ -847,9 +850,9 @@ public final class MaidChunkLoadManager {
             //  跨维度与同维度分别走各自那条既有链路（都不与"乘客不单独拉"冲突）。
             //
             // 【实测七百二十六·点1：特殊载具（卓越前线载具 / 冰火传说龙）**一切自动传送都不生效**】
-            //  玩家原话：「对于卓越前线以及龙这两个特殊的载具……不会触发大部分传送，只有玩家
-            //  手动使用排班表进行的传送，可以将她们传送过来……相比于原版的坐骑女仆并不会去主动
-            //  产生传送。所有的传送方面的行为必须由玩家来。」所以这一档排在"连人带坐骑"之前：
+            //
+            //
+            //
             //  特殊载具上的她既不跨维跟随、也不连载具搬——自动链路一个字节都不碰，交还原地。
             //  （玩家手动排班表传送仍可用，走 summonOne/summonMaidTo：只传人 + 解除绑定。）
             if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
@@ -919,9 +922,12 @@ public final class MaidChunkLoadManager {
                 scheduled = com.maidsmart.schedule.ScheduleData.isOn(maid);
             } catch (Throwable ignored) {
             }
-            if (maid.isHomeModeEnable() || scheduled) {
+            // v1.5.393 实测八百零三：建造/指标石临时搭建中跨维度【自动跟随】同样不传——
+            // 不再借 home 压制 TLM 之后，这道自动跟随会把她从工地跨维度拽走（建造就地白费）。
+            if (maid.isHomeModeEnable() || scheduled
+                    || com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
                 throttledSkipLog(maid, "home-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 排班/在家模式中，跨维度不传（想召回先解除排班/在家模式）");
+                        + " 排班/在家/建造中，跨维度不传（想召回先解除排班/在家模式或等建造完）");
                 return;
             }
             LivingEntity owner = maid.m_269323_();
@@ -1004,10 +1010,10 @@ BlockPos stand = findStand(newLevel,
                 // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可被召回
                 //（召回后瞬移回工地继续建，见 isBuildingMaid 注释）
                 // v1.3.6 实测六百六十一：骑扫帚的女仆**不再按"骑乘中"豁免**——她永远是乘客，
-                // 旧口径会把她永远留在原地（玩家原话：「否则隔的太远女仆就找不回来了」）。
+                // 旧口径会把她永远留在原地（）。
                 // 她走连人带扫帚那条路（见 recallBroomRider）；其余豁免口径一字不改。
                 // 【实测七百一十六·点4】同理：骑坐骑的女仆也走"连人带坐骑"那条路——
-                // 她同样是乘客，不豁免（玩家原话："她们也可以被传送过来"）。
+                // 她同样是乘客，不豁免（）。
                 boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
                 boolean rideRider = com.maidsmart.combat.RideBindManager.isRideRider(md);
                 // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）：**一键集合是玩家手动
@@ -1015,8 +1021,8 @@ BlockPos stand = findStand(newLevel,
                 //  单独一个 flag 放行，落到下面 summonMaidTo 的 special 分支。
                 boolean specialRider = com.maidsmart.combat.RideBindManager.isSpecialMountRider(md);
                 // 【实测七百四十一·点4】她自己坐上模组载具（不是我们绑的）也**不算停放豁免**：
-                // 玩家原话「有的时候，女仆会自己坐到某个载具上，这个时候……女仆就会一直卡在车上
-                // 不动。……在排班表里面的召她过来最好可以规避掉骑乘模式。直接把女仆自己召唤过来。」
+                //
+                //
                 // ——她是乘客、旧判据会把她当"玩家明确停放"留下来；这一档单独放行，
                 // 落到下面 summonMaidTo 的"先请她下车再传人"那支。
                 boolean selfBoarded = com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(md);
@@ -1154,9 +1160,9 @@ BlockPos stand = findStand(newLevel,
                     // （强制 home 但可召回——她不再进这个"保持原位"分支，直接落到下面的召回）。
                     boolean homeKept = md.isHomeModeEnable() && !isBuildingMaid(md);
                     // 【实测七百九十·点2】solo（点名单召）只认 home 豁免：坐姿/骑乘/特殊载具/
-                    // 自坐载具在这一档全部放行——玩家原话「召她过来应该要少几个豁免（指名道姓地
-                    // 要她过来），比如可以把骑乘/坐下来女仆直接拽过来（但是只拽人不拽载具），
-                    // 只有 home 模式不会」。一键集合那条（solo=false）口径一个字不改。
+                    // 自坐载具在这一档全部放行——
+                    //
+                    //
                     if (homeKept || (!p.solo() && !broomRider && !rideRider && !specialRider
                             && (md.isMaidInSittingPose() || md.m_20159_()))) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
@@ -1421,21 +1427,21 @@ BlockPos stand = findStand(newLevel,
                 return 3;
             }
             // v1.3.6 实测六百六十一：骑扫帚的女仆**不再被"骑乘中"顶回去**——她本来就是乘客，
-            // 旧口径会让她永远召不回（玩家原话：「否则隔的太远女仆就找不回来了」）。
+            // 旧口径会让她永远召不回（）。
             // 走连人带扫帚那条路：能一起搬就一起搬，搬不动就"就地收工 → 传她 → 她自己骑上"。
             if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 return recallBroomRider(maid, player) ? 1 : 2;
             }
             // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）：**只传人、不传载具**，
-            //  且传送前先**解除绑定 + 清除标记**（玩家原话「不会连着载具一起传送。只会把人传送
-            //  过来。并且一旦进行传送了，那么就会立刻进行一次清除标记和解绑」）。
+            //  且传送前先**解除绑定 + 清除标记**（
+            //
             if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                 com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
                 return teleportCore(maid, player, true) ? 1 : 2;
             }
-            // 【实测七百四十一·点4】她**自己**坐上模组载具（不是我们绑的）：玩家原话「有的时候，
-            // 女仆会自己坐到某个载具上，这个时候……女仆就会一直卡在车上不动。……在排班表里面的
-            // 召她过来最好可以规避掉骑乘模式。直接把女仆自己召唤过来。」——这里就在传送前先请她
+            // 【实测七百四十一·点4】她**自己**坐上模组载具（不是我们绑的）：
+            //
+            //
             // 下来（只下鞍、不碰任何我们自己的标记），再走下面那条普通"传人"的链路。
             if (com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
                 com.maidsmart.combat.RideBindManager.dismountSelfBoarded(maid);
@@ -1445,7 +1451,7 @@ BlockPos stand = findStand(newLevel,
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
                 return recallRideRider(maid, player) ? 1 : 2;
             }
-            // 【实测七百九十·点2】「召她过来」从此**不再**按坐姿/普通骑乘顶回去：玩家原话
+            // 【实测七百九十·点2】「召她过来」从此**不再**按坐姿/普通骑乘顶回去：
             // 「召她过来应该要少几个豁免（指名道姓地要她过来），比如可以把骑乘/坐下来女仆
             // 直接拽过来（但是只拽人不拽载具），只有 home 模式不会」。
             // 上一行的 716 档（指挥棒绑的坐骑）仍然连人带坐骑搬——那是玩家自己绑的配对，
@@ -1460,8 +1466,8 @@ BlockPos stand = findStand(newLevel,
     /**
      * 【实测七百九十·点2】点名单召（「召她过来」）的完整阶梯：**只拽人、绝不搬走别人绑好的载具**。
      *
-     * <p>玩家原话：「召她过来应该要少几个豁免（指名道姓地要她过来），比如可以把骑乘/坐下来
-     * 女仆直接拽过来（但是只拽人不拽载具），只有 home 模式不会。」
+     * <p>
+     *
      *
      * <p>与 {@link #summonMaidTo}（一键集合同口径）的差别只有一处：**坐姿与普通载具乘客
      * 不再豁免**。优先级顺序与 {@code summonMaidTo} 逐条对齐，只有最后那一关换掉：
@@ -1602,7 +1608,7 @@ BlockPos stand = findStand(newLevel,
     /**
      * 【实测六百九十二】"把她送回**她的工作区**"那一档（守家时的空袭牵引绳）。
      *
-     * <p>玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+     * <p>
      * 守家的语义是"待在家里"，所以守家期间这条绳的距离基准与落点都换成她的工作区圈心
      * （口径 = {@code com.maidsmart.follow.WorkAreaClamp.homeAnchor}），主人走多远都不再是
      * 把守家女仆拽走的理由。落点算法与 {@link #recallFromFlight} 完全同一支（{@link #standSpotAt}），
@@ -1636,9 +1642,9 @@ BlockPos stand = findStand(newLevel,
     /**
      * v1.3.6 实测六百六十一【连人带扫帚的传送】：把骑着扫帚的女仆送到主人身边，**扫帚跟着一起走**。
      *
-     * <p>玩家原话：「这个东西应该也要有一个飞行牵引绳。如果隔的太远的话会连人带扫帚一起传送送回来。
-     * 但是如果在代码上碰到了什么硬骨头。我们在触发此传送的时候，就先将女仆从扫帚模式切换到空闲模式，
-     * 然后将扫帚和女仆传送过来，然后再切换成扫帚模式。」排班表那条同理：「如果能一起传送就一起传送。
+     * <p>
+     *
+     *
      * 不能一起传送，就用上面这个来。而不是直接反馈，没有办法传送。」
      *
      * <p>── 为什么不能"直接传送她" ──
@@ -1678,7 +1684,7 @@ BlockPos stand = findStand(newLevel,
     /**
      * 【实测六百九十二】"连人带扫帚送回**她的工作区**"那一档（守家时的扫帚牵引绳）。
      *
-     * <p>玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+     * <p>
      * 与 {@link #recallFromFlightTo} 同一取舍：守家的语义是"待在家里"，所以守家期间这条绳
      * 的距离基准与落点都换成她的工作区圈心。四步搬运（解开乘客关系 → 搬扫帚 → 搬她 →
      * 重新落座）与 {@link #recallBroomRider} **同一段代码**（{@link #broomRiderTo}），
@@ -1790,9 +1796,9 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * 【实测七百一十六·点4】"连人带坐骑一起传送"——玩家原话："这种骑上坐骑的女仆需要额外打一个
-     * 标记，她们也可以被传送过来，具体的操作可以直接照搬扫帚模式下也可以把女仆连人带扫帚一起
-     * 传送过来。"
+     * 【实测七百一十六·点4】"连人带坐骑一起传送"——
+     *
+     *
      *
      * <p>结构照搬 {@link #broomRiderTo}（四步在同一个 tick 内做完）：**解开乘客关系 → 搬坐骑 →
      * 搬她 → 重新落座**。原因与扫帚完全同一条：{@code Entity.teleportTo} 内部第一件事是
@@ -1979,6 +1985,30 @@ BlockPos stand = findStand(newLevel,
             // 起不来）都可能一包都不发，客户端就一直显示 TLM 默认的 20。这里登记下一 tick
             // 补一枪属性表（不重建实体，只补那一包）。见 MaidResyncCommand.scheduleAttributeResend。
             com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
+            // ===== 实测八百三十三：到达校验 + 主动登记客户端重建（治「说召回来了，其实没有」）=====
+            // ① 到达校验：原版 teleportTo 的返回值只代表"没被拒"，跨维度那条路还会造新实体；
+            //    这里按 UUID 在目标维度实测一次"她在不在、离落点多远"。不达标就如实返回 false，
+            //    调用方照实播报"没传到位"——旧版无条件 return true，于是"点了没反应却报成功"。
+            // ② 客户端重建：同维度远距传送走的是纯 moveTo（不重新追踪），客户端插值可能冻在
+            //    半路未加载区块里（实测七百九十九·issue #36：她能打怪能搭路、就是看不见）。
+            //    那条修法原本只靠"位移跳变 > 64 格"的自动嗅探；短距离召唤（20~60 格）嗅不到
+            //    → 玩家看到「已集合」却看不见她。这里**主动**登记一次延迟重建，与距离无关。
+            net.minecraft.world.entity.Entity arrived = entityAt(dest, maid.m_20148_());
+            EntityMaid live = arrived instanceof EntityMaid am ? am : null;
+            if (live == null) {
+                if (maid.m_9236_() == dest) {
+                    live = maid; // 同维度：取不到就量她自己的位置（UUID 索引在未可见区块里可能查不到）
+                } else {
+                    // 跨维度那条路造的是新实体：取不到就不能断言失败（原版已经登记了新实体）
+                    return true;
+                }
+            }
+            double dist = live.m_20238_(new net.minecraft.world.phys.Vec3(
+                    stand.m_123341_() + 0.5, stand.m_123342_(), stand.m_123343_() + 0.5));
+            if (dist > 64.0) {
+                return false; // 她还在老地方（原封不动）→ 传送没生效
+            }
+            com.maidsmart.follow.MaidTeleportRebuild.schedule(live);
             return true;
         } catch (Exception e) {
             return false;
@@ -2043,8 +2073,8 @@ BlockPos stand = findStand(newLevel,
             String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
             // v1.2.0【实测四百八十七】：飞行作战进行中不拉回——含下面 Y 轴"搭太高"分支。
             // 只认滑翔位是不够的：收翅猛击会主动清滑翔位，而"飞向敌人、贴近地面"正是
-            // 那一刻（用户反馈："飞向敌人离地面较近的时候…触发自动传送，导致本次攻击
-            // 被卡掉"）。isFlightAirborne 已并入"本轮攻击进行中"（起跳/爬升/收翅猛击/
+            // 那一刻（
+            //
             // 等待再放烟花），一轮打完即 restore，不会永久禁传。
             // 实测五百六十五（PR #10 移植）【滞空超时兜底】：让位必须有界——先把距离算
             // 出来：她确实该被拉回（水平超线或竖直搭太高）才启动计时；超过窗口（15 秒）
@@ -2088,9 +2118,11 @@ BlockPos stand = findStand(newLevel,
                 return;
             }
             // 守家/干活中不拉，但落日志（限频）——这正是"她不回来"的可见原因
-            if (maid.isHomeModeEnable()) {
+            // v1.5.393 实测八百零三：建造/指标石临时搭建中同样不拉——不再借 home 压制 TLM
+            // 跟随之后，这道同维远距拉回会对建造女仆重新生效（她会当场离开工地）。
+            if (maid.isHomeModeEnable() || com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
                 throttledSkipLog(maid, "sam-dim-home", name + " 同维度距离 " + blocks
-                        + " 格但守家中，不拉（想召回先解除排班/在家模式）");
+                        + " 格但守家/建造中，不拉（想召回先解除排班/在家模式或等建造完）");
                 return;
             }
             // v1.1.0 实测三百一十五（反馈："怀疑是老代码作祟"——基岩层传送问题复查）：
@@ -2099,8 +2131,8 @@ BlockPos stand = findStand(newLevel,
             // 基岩层（同维度）距主人远 → 被拉回主人身边。坐垫/骑乘 = 玩家明确停放，
             // 不拉（与救援/一键集合同口径）。
             // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）上的她**一切自动传送
-            //  都不生效**：同维远距拉回照旧让位（玩家原话「并不会去主动产生传送。所有的传送
-            //  方面的行为必须由玩家来」）。玩家手动排班表传送仍可用（走 summonOne/summonMaidTo）。
+            //  都不生效**：同维远距拉回照旧让位（
+            //
             if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                 throttledSkipLog(maid, "special-mount-samedim", name
                         + " 在特殊载具（卓越前线载具 / 冰火传说龙）上，自动拉回不生效"

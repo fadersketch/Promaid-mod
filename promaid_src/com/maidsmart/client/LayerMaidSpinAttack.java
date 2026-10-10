@@ -35,9 +35,14 @@ public class LayerMaidSpinAttack extends RenderLayer<Mob, BedrockModel<Mob>> {
         if (!MaidSpinAttackEffect.shouldRender(mob)) {
             return;
         }
+        // 【实测八百三十四】渲染护栏：特效每层自转都 push 一次，中途抛异常会把那次的 push 留下
+        int guardDepth = com.maidsmart.client.MaidRenderGuard.depthOf(poseStack);
         try {
             MaidSpinAttackEffect.render(poseStack, buffer, light, ageInTicks);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            com.maidsmart.client.MaidRenderGuard.noteSwallowed("激流特效图层（Bedrock）", t);
+        } finally {
+            com.maidsmart.client.MaidRenderGuard.restore(poseStack, guardDepth);
         }
     }
 }

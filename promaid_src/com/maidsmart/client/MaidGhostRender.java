@@ -21,9 +21,9 @@ import java.util.Map;
  * 跟她同乘或驾驶一把扫帚时，**把她的模型与扫帚本体一并画成半透明**，而且**只对"那位玩家的
  * 第一人称"生效**。
  *
- * 【玩家原话】六百七十三："在绑定飞行的时候能不能改一下渲染，有的时候还是会被女仆的模型挡到
- * 视野。而如果继续降低模型高度会导致玩家的高度太低容易被打中。渲染的话最好是改成半透明状态。
- * 而且仅限绑定玩家的第 1 视角会展示半透明状态。" ／ 六百七十四："半透明程度不够，默认应该为
+ * 【
+ *
+ *
  * 0.1，而且扫帚也应该是半透明的。"
  *
  * ── 为什么必须"换渲染类型"，只压 alpha 不够（javap 实证）──
@@ -143,7 +143,7 @@ public final class MaidGhostRender {
             return null;
         }
         if (mc.f_91066_.m_92176_() != CameraType.FIRST_PERSON) {
-            return null; // 第三人称照旧不透明（玩家原话："仅限绑定玩家的第 1 视角"）
+            return null; // 第三人称照旧不透明（）
         }
         return mc.f_91074_;
     }
@@ -256,7 +256,14 @@ public final class MaidGhostRender {
                         "net.minecraft.client.renderer.RenderStateShard$EmptyTextureStateShard");
                 Object tex = shard == null ? null : textureOf(shard);
                 if (tex instanceof ResourceLocation loc) {
-                    twin = RenderType.m_110467_(loc);
+                    RenderType candidate = RenderType.m_110467_(loc);
+                    // 【实测八百三十四】只在顶点格式（含图元模式）一致时才换：YSM 那类自带渲染
+                    // 类型的模型，格式与 itemEntityTranslucentCull 不同，换了会让模型写顶点时对不上
+                    // → 原版渲染中途抛异常 → 姿态栈脏 → 崩游戏（issue #37）。不一致就不换（那一档
+                    // 保持原样、不半透明，但绝不崩）。
+                    if (samePipeline(candidate, type)) {
+                        twin = candidate;
+                    }
                 }
             }
         } catch (Throwable ignored) {
@@ -266,6 +273,15 @@ public final class MaidGhostRender {
         }
         TWIN.put(type, twin);
         return twin == type ? null : twin;
+    }
+
+    /** 顶点格式与图元模式是否一致——不一致的渲染类型之间**不能**互换（换了会让顶点写不进去） */
+    private static boolean samePipeline(RenderType a, RenderType b) {
+        try {
+            return a.m_110508_() == b.m_110508_() && a.m_173186_() == b.m_173186_();
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /** 这一档的透明态是不是"已经开了混合"（TRANSLUCENT）——是的话类型不用换，只压 alpha */

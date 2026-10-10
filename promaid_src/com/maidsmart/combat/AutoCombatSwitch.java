@@ -450,8 +450,9 @@ public class AutoCombatSwitch {
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
             // 未预建 EntityMaid 桶的 section 被整段跳过，还原扫描扫不到该 section
             // 里的战斗女仆 → 战斗还原永不触发
-            for (net.minecraft.world.entity.Entity ent : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                if (!(ent instanceof EntityMaid maid) || !maid.m_6084_()
+            // 实测八百三十九：来源改 MaidRoster（只收女仆、按 20 tick 复用）；零女仆时零成本
+            for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(event.getServer(), level)) {
+                if (!maid.m_6084_()
                         || !maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
                     continue;
                 }

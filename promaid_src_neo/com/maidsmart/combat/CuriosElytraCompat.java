@@ -11,8 +11,8 @@ import java.util.function.Predicate;
 /**
  * v1.3.0(beta) 实测六百八十【女仆饰品栏（Curios）里的鞘翅】——软兼容层，**全反射、零硬依赖**。
  *
- * <p>玩家原话：「我现在了解到翘翅是可以放在饰品栏的，那么在饰品栏里面的鞘翅应该也可以作为启动
- * 我们的空袭的激活条件之一，并且等效消耗耐久。」
+ * <p>
+ *
  *
  * <p>【为什么必须走反射】Curios 不在本模组的编译期 classpath 上（本工程一贯原则：不给玩家加任何
  * 前置、不硬链接第三方——{@link GunCompat}、{@link MaidSpellCompat}、{@link SlashBladeCompat} 同款）。
@@ -188,8 +188,8 @@ public final class CuriosElytraCompat {
      * {@link MaidFlightKit#isElytraLike}，它认空栈为 false）——本类**不调** {@code ItemStack.isEmpty()}
      * 就是为了保持两树同源（那两棵树里这个名字不一样）。
      */
-    public static ItemStack findElytra(EntityMaid maid, Predicate<ItemStack> filter) {
-        return scan(maid, filter, null);
+    public static ItemStack findElytra(net.minecraft.world.entity.LivingEntity entity, Predicate<ItemStack> filter) {
+        return scan(entity, filter, null);
     }
 
     /**
@@ -200,11 +200,11 @@ public final class CuriosElytraCompat {
      *                    传进来本类才能保持两树逐字相同。传 null 直接放弃（返回 null），
      *                    **绝不写一个 null 进槽位**。
      */
-    public static ItemStack takeElytra(EntityMaid maid, Predicate<ItemStack> filter, ItemStack emptyMarker) {
+    public static ItemStack takeElytra(net.minecraft.world.entity.LivingEntity entity, Predicate<ItemStack> filter, ItemStack emptyMarker) {
         if (emptyMarker == null) {
             return null;
         }
-        return scan(maid, filter, emptyMarker);
+        return scan(entity, filter, emptyMarker);
     }
 
     /** 一行诊断：`饰品栏=有/空`；Curios 不在场时明说。 */
@@ -222,16 +222,38 @@ public final class CuriosElytraCompat {
     }
 
     /**
+     * v1.5.393 实测八百零四：**任意实体**（含玩家）的 Curios 饰品栏里有没有满足条件的物品。
+     *
+     * <p>「大运」饰品要能由玩家佩戴，而玩家的饰品栏同样是 Curios 的 {@code ICuriosItemHandler}。
+     * 反射链路与女仆那条完全一样（{@code CuriosApi.getCuriosInventory} 收的就是
+     * {@code LivingEntity}），所以把 {@link #scan} 的入参从 {@code EntityMaid} 放宽到
+     * {@code LivingEntity} 即可——女仆侧调用一字不改（她是 LivingEntity 的子类）。
+     *
+     * @return true = 该实体饰品栏里有这么一件；Curios 未装 / 反射失败一律 false（安全兜底）
+     */
+    public static boolean hasCurio(net.minecraft.world.entity.LivingEntity entity, Predicate<ItemStack> filter) {
+        if (!available()) {
+            return false;
+        }
+        try {
+            return scan(entity, filter, null) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
      * 扫她饰品栏的所有槽位；{@code emptyMarker != null} 时命中即取走。
      *
      * @return 命中的那一件（取走时就是刚被移出的那件本身）；没有 → null
      */
-    private static ItemStack scan(EntityMaid maid, Predicate<ItemStack> filter, ItemStack emptyMarker) {
-        if (maid == null || filter == null || !handlesForApi()) {
+    private static ItemStack scan(net.minecraft.world.entity.LivingEntity entity, Predicate<ItemStack> filter,
+                                  ItemStack emptyMarker) {
+        if (entity == null || filter == null || !handlesForApi()) {
             return null;
         }
         try {
-            Object handler = unwrap(mGetInventory.invoke(null, maid));
+            Object handler = unwrap(mGetInventory.invoke(null, entity));
             if (handler == null || !handlesForHandler(handler)) {
                 return null;
             }

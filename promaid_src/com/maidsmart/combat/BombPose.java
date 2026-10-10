@@ -55,6 +55,22 @@ import java.util.UUID;
  *    {@code ClientboundSetEquipmentPacket}，把"副手亮一下"从"应该会同步"变成"一定同步"。
  * ② **不再静默丢弃**：见第 5 条。
  * ③ **总开关改名**为"动作表现"（{@code combat.bombing.pose} 这条配置沿用，语义扩到全链路）。
+ *
+ * ── 实测七百九十九【issue #19 四修：展示件改为"只发给客户端"】──
+ * 上面第 3 条原来是**假的**：旧版把展示件用 {@code setItemInHand} 写进**真实副手槽**——
+ * 它确实是复制品，但货真价实、就在她的槽位里，于是任何"扫双手取材"的链路（搭路/挖矿/伐木/
+ * 自保/战斗放置/索引石/插火把/自动点灯）都可能把它当材料扣走；扣完这里又补一件——真料一次
+ * 不掉，而方块到期按方块 id 逐格还真物品（{@link com.maidsmart.task.PlacedBlockTracker#reclaimDrops}），
+ * 一进一出净 +1。前几版用"被借走的副手不算材料"（{@code offhandBorrowed}）去堵，但那是个
+ * **布尔闸**：展示 10 tick / 搭路 4 tick、以及"副手被别的链路搬进背包"（施肥换手等）这些时序
+ * 窗口里，只要有一拍闸门没问上、或那件复制品已经被搬出副手槽，账就漏了——这正是报告者那句
+ * "长期使用仍缓慢增加"。
+ *
+ * 现在改成**服务端槽位一个字都不动**：展示件只经 {@link #syncOffhand} 以一包
+ * {@code ClientboundSetEquipmentPacket} 发给正在追踪她的客户端，10 tick 后再发一包真实副手还原。
+ * 观感与旧版一模一样（客户端渲染读的就是这一包），但服务端副手槽里**始终是玩家的真东西**：
+ * 取材扣的就是真料、回收还的就是那一件 → 总账天然守恒；施肥换手/递物/盾牌分享这些"把副手搬
+ * 进背包"的链路不会再误搬一件复制品（旧版那会凭空 +1）；玩家开她的背包界面看到的也是真东西。
  */
 public final class BombPose {
 
@@ -94,9 +110,9 @@ public final class BombPose {
          * 玩家几乎看不见。这里记"上一次真正扣数的 gameTime"，一 tick 只扣一次。
          */
         long lastTick = Long.MIN_VALUE;
-        /** 原副手整栈快照 */
+        /** 实测七百九十九：展示件只发客户端，服务端副手槽从未被动过（旧版存的是被顶掉的原物快照） */
         final ItemStack original;
-        /** 我们放进副手的那件展示品（可能被换成新的一件） */
+        /** 我们发给客户端的展示品（归还时用它判断客户端是否还看着我们的展示） */
         ItemStack shown;
         /** 女仆弱引用（清表时还能还就还） */
         final WeakReference<EntityMaid> ref;
@@ -158,22 +174,17 @@ public final class BombPose {
             if (cur != null) {
                 cur.left = Math.max(1, ticks); // 已经在举着 → 续期 + 换成这一件（原物快照不动）
                 cur.shown = want;
-                maid.m_21008_(InteractionHand.OFF_HAND, want);
-                syncOffhand(maid);
+                syncOffhand(maid, want);
                 return;
             }
-            ItemStack original = maid.m_21206_().m_41777_(); // 副手整栈快照（含 NBT/数量）
-            maid.m_21008_(InteractionHand.OFF_HAND, want);
-            syncOffhand(maid);
-            // v1.2.2 实测五百九十九【"所有链路的副手都不换"的真凶就在这里】：
-            // 旧版新建 State 时**忘了把 ticks 写进 left**（字段默认 0）→ 下一 tick 判定
-            // `left - 1 <= 0` 立刻还原 → 那件东西只在副手上存在了 **1 tick**（16 毫秒），
-            // 玩家屏幕上根本看不到（实测：请求 40 tick，+2 tick 就已经是原物）。
-            // 注意 `cur != null` 那条分支一直是好的（那里显式写了 cur.left），所以"连续两次
-            // 展示"时看起来正常——这也是这个 bug 一直没被发现的原因。
-            State fresh = new State(original, want, maid);
+            // 实测七百九十九：**服务端副手槽一个字都不动**——只把展示件发给追踪她的客户端。
+            // 旧版这里是 `setItemInHand(OFF_HAND, want)`，等于把一件真物品放进她的槽位，
+            // 任何扫双手取材/搬手的链路都可能把它当材料扣走或搬进背包 → 净 +1（issue #19
+            // "长期缓慢增加"的第三条缝）。
+            State fresh = new State(want, want, maid);
             fresh.left = Math.max(1, ticks);
             ACTIVE.put(id, fresh);
+            syncOffhand(maid, want);
         } catch (Throwable ignored) {
         }
     }
@@ -249,48 +260,38 @@ public final class BombPose {
     }
 
     /**
-     * v1.2.4【搭路刷物品·issue #19】：副手此刻是不是被"动作表现"借去展示了——**取材方必须先
-     * 问这里，借走期间一律不许把副手那件当材料**。
+     * 实测七百九十九【issue #19 四修】：本类**不再借走服务端副手槽**（展示只发客户端，
+     * 见类注释），本判定只剩起飞烟花姿势 {@link FlightFireworkPose} 那一条——它仍会把烟花
+     * 写进真实副手槽。
      *
-     * 起因就是本类 {@link #show} 把展示件写进的是**真实副手槽**（复制品，但货真价实、能被
-     * {@code extractItem} 扣走），而类注释里"不进背包、不参与任何判定"这句在**扫双手取材**的
-     * 链路上并不成立：搭路节奏默认 4 tick、展示 10 tick，下一次取材时展示件还在副手上，
-     * 于是取材扣的是它、扣完这里又补一件 —— 真料永不减少，可方块到期回收是逐格还一件真物品
-     * （{@link com.maidsmart.task.PlacedBlockTracker#reclaimDrops}）。实测：给 1 个铁块，
-     * 铺了 128 格桥并全部回收 → 净多 127 个（GitHub issue #19 同源）。
+     * <p>旧版这里是"本类借走 或 烟花姿势借走"，那个**布尔闸**就是残余泄漏的来源：搭路 4 tick /
+     * 展示 10 tick、以及"副手被别的链路搬进背包"这些时序窗口里只要有一拍没问上，账就漏了。
+     * 本类退出这场博弈后，闸门只剩真正还需要它的一条链路；而且搭方块取材扫不到烟花火箭
+     * （不是 BlockItem），所以这条闸在 issue #19 的场景里天然不再参与。
      *
-     * 起飞烟花姿势（{@link FlightFireworkPose}）同样借副手，一并算进来；两边都归还干净后
-     * 本判定自然回到 false，取材恢复正常（副手挂方块是玩家的正常用法，不受影响）。
+     * @deprecated 仅剩烟花姿势仍借副手时返回 true（搭方块取材其实已用不到）。
      */
+    @Deprecated
     public static boolean offhandBorrowed(EntityMaid maid) {
         try {
-            return maid != null && (isShowing(maid) || FlightFireworkPose.isShowing(maid));
+            return maid != null && FlightFireworkPose.isShowing(maid);
         } catch (Throwable ignored) {
             return false;
         }
     }
 
     /**
-     * v1.2.2 实测六百〇九：**我们借走的那件副手物品**的只读查询（没借走就返回空栈）。
+     * 实测七百九十九：展示件不在服务端任何槽位里（我们压根没动副手），恒返回空栈。
      *
-     * 【为什么必须有】展示窗口里那件东西**不在任何槽位里**——它就是本类 {@code State.original}
-     * 那份快照（原栈已被 {@code setItemInHand} 顶掉）。于是"她身上有没有某件东西"的判定
-     * （{@code MaidFlightKit.hasFirework/hasFan}、{@code TwilightFanKit.hasFan}）只要还只看
-     * 槽位，就会在**玩家那件东西明明在她身上**的十几 tick 里得到 false。
+     * <p>旧版这里返回被顶掉的原物快照，供 {@code MaidFlightKit#hasFirework/hasFan} 把"借走的
+     * 那件"算作仍在她身上。现在原物**一直在副手槽里**，那些判定走槽位那一支本就看得见它，
+     * 不需要本方法兜底。
      *
-     * 实测现场（粉丝反馈"明明拿着孔雀羽扇却说缺飞行道具、系统消息不停"）：玩家把羽扇挂在
-     * 她副手，空袭每隔十几秒起手一次轰炸 → 副手被本类借走 → 就绪判定报「可以飞行的道具」；
-     * 还回去之后判定又齐了、把播报冷却清零 → 下一轮再报一条，永远不停。
-     * 判定口径修在 {@link com.maidsmart.combat.MaidFlightKit#borrowedOffhand}（那一处同时
-     * 覆盖 {@link FlightFireworkPose}），这里只提供"借走的是哪一件"。
+     * @deprecated 展示不再借走副手槽，恒返回空栈（保留仅因 {@code MaidFlightKit} 仍引用）。
      */
+    @Deprecated
     public static ItemStack savedOffhand(EntityMaid maid) {
-        try {
-            State st = maid == null ? null : ACTIVE.get(maid.m_20148_());
-            return st == null ? ItemStack.f_41583_ : st.original;
-        } catch (Throwable ignored) {
-            return ItemStack.f_41583_;
-        }
+        return ItemStack.f_41583_;
     }
 
     /**
@@ -324,41 +325,34 @@ public final class BombPose {
     }
 
     /**
-     * 把原副手物品写回去。
+     * 把客户端的副手显示还原成**服务端真实副手**。
      *
-     * v1.2.2 实测五百九十五【不覆盖玩家刚放进去的东西】：旧版无条件
-     * `setItemInHand(OFF_HAND, 原物)`——这十几 tick 的展示窗口里，玩家手动往她副手
-     * 放的东西会被这一写直接顶掉（那件物品就没了）。现在只有"副手还是我们那件展示品
-     * 或空着"才写回原位；玩家已经换了别的 → 原物走
-     * {@link com.maidsmart.tool.MaidGiveBack}（进背包、塞不下落地），两边都不丢。
+     * 实测七百九十九：本类不再改服务端槽位，所以"还原"= 把真实副手那一栈重新发给客户端。
+     * 玩家在这十几 tick 里往她副手放的东西服务端一直好好地在槽里（我们从没顶掉它），
+     * 这一包发出去客户端也就显示回真东西——不存在旧版"覆盖玩家刚放进去的东西"的问题，
+     * 也不需要 {@code MaidGiveBack} 兜底（旧版那条分支已随"不再借槽"一并作废）。
      */
     private static void restore(EntityMaid maid, State st) {
-        ItemStack now = maid.m_21206_();
-        boolean untouched = now.m_41619_()
-                || (!st.shown.m_41619_() && ItemStack.m_41728_(now, st.shown));
-        if (untouched) {
-            maid.m_21008_(InteractionHand.OFF_HAND, st.original);
-            syncOffhand(maid);
-        } else if (!st.original.m_41619_()) {
-            com.maidsmart.tool.MaidGiveBack.give(maid, st.original, "副手展示期间被换下的原物");
-        }
+        syncOffhand(maid, maid.m_21206_());
     }
 
     /**
-     * v1.2.2 实测五百九十七【不用等原版那 20 tick 一次的装备同步】。
+     * v1.2.2 实测五百九十七 + 实测七百九十九。
      *
-     * 原版把装备变化发给追踪者的链路是 {@code LivingEntity.m_21315_()（每 tick 检测）→
-     * m_21142_() → ServerChunkCache.broadcastAndSend(m_8445_)}（反编译实证）。也就是说
-     * **正常情况下**改完副手同 tick 就会同步；但展示只有 10 tick，中间任何一环被跳过
-     * （她那一 tick 的装备检测没跑到 / 追踪者刚加入还在首包流程里）就整段看不见——
-     * 而"副手亮一下"这件事的观感完全取决于它。所以这里主动补一包，成本是一个小包。
+     * 旧版这里是"改完服务端副手后补一包，把变化发给追踪者"。现在**不再改服务端副手**，
+     * 这一包本身就是全部实现：只把要展示的那一栈发给正在追踪她的客户端（不动服务端槽位）。
+     * 归还时传入 {@code maid.getOffhandItem()}（真实副手）即还原。
+     *
+     * {@code broadcastAndSend} 只发给"正在追踪该实体"的玩家，所以未加载/远处的人看到的仍是
+     * 服务端真实状态；而渲染女仆的手部模型读的正是这包装备数据——观感与旧版一模一样。
      */
-    private static void syncOffhand(EntityMaid maid) {
+    private static void syncOffhand(EntityMaid maid, ItemStack toShow) {
         try {
             if (maid.m_9236_() instanceof ServerLevel sl) {
+                ItemStack send = toShow == null ? ItemStack.f_41583_ : toShow.m_41777_();
                 sl.m_7726_().m_8445_(maid, new ClientboundSetEquipmentPacket(
                         maid.m_19879_(),
-                        List.of(Pair.of(EquipmentSlot.OFFHAND, maid.m_21206_().m_41777_()))));
+                        List.of(Pair.of(EquipmentSlot.OFFHAND, send))));
             }
         } catch (Throwable ignored) {
         }

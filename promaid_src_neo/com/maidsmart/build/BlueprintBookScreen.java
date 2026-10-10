@@ -46,6 +46,13 @@ public class BlueprintBookScreen extends Screen {
     private static final int VIEW_MAID_DETAIL = 4;
     /** v1.5.182：区块绑定女仆名单（设置工头） */
     private static final int VIEW_REGION_MAIDS = 5;
+    /** v1.5.396 实测八百三十五：DIY / 默认模式页（DIY ↔ 默认一键切换） */
+    private static final int VIEW_PRESET = 6;
+    /** 大目录入口数（详细介绍 / 建造 / 女仆管理 / 模组详细配置 / 女仆记忆 / DIY·默认模式） */
+    private static final int HOME_ENTRIES = 6;
+    /** 预设页的"DIY 会改动 N 项"：进页时算一次（planDiy 要读 500+ 个配置项，不能每帧算） */
+    private int presetPending = -1;
+
     /** 女仆管理上限 */
     /** 材料详情：2 列 × 8 行 = 16 种/页（规则），小行高 */
     private static final int MAT_COLS = 2;
@@ -624,6 +631,7 @@ public class BlueprintBookScreen extends Screen {
             case VIEW_MAID_DETAIL -> this.maidDetailViewButtons();
             case VIEW_REGION_MAIDS -> this.regionMaidsViewButtons();
             case VIEW_MEMORY -> this.memoryViewButtons();
+            case VIEW_PRESET -> this.presetViewButtons();
             default -> this.homeViewButtons();
         }
     }
@@ -702,27 +710,20 @@ public class BlueprintBookScreen extends Screen {
         int h = this.height;
         int buildCount = this.entries == null ? 0 : this.entries.size();
         int maidCount = this.maids == null ? 0 : this.maids.size();
-        // v1.5.252h：5 个入口 + 底部进度条防重叠——旧版 4 按钮（64/100/136/172
+        // v1.5.252h：入口数 + 底部进度条防重叠——旧版 4 按钮（64/100/136/172
         // 高 28 间距 36）加第 5 个会压住底部进度条（renderHome 文字 h-40）。
         // 行高按窗口高自适应压缩（照 PromaidConfigScreen 目录页模式），
         // 起始 y 上浮保证按钮组底 ≤ h-44（进度文字顶之上 4px）。
+        // v1.5.396 实测八百三十五：第 6 个入口（DIY / 默认模式）——行高从 28 起逐格压，
+        // 压到"从 y0=52 起 6 行仍不越过 h-44"为止（小窗口不会再压住底部）。
         int bw = 170;
         int rowH = 28;
-        if (h < 238) {
-            rowH = 24;
-        }
-        if (h < 214) {
-            rowH = 20;
-        }
-        if (h < 188) {
-            rowH = 17;
-        }
-        if (h < 180) {
-            rowH = 15;
+        while (rowH > 9 && HOME_ENTRIES * rowH - 3 + 52 > h - 44) {
+            rowH--;
         }
         int bh = Math.max(12, rowH - 3);
         int gap = rowH - bh;
-        int y0 = Math.max(52, Math.min(64, h - rowH * 5 - 44));
+        int y0 = Math.max(52, Math.min(64, h - rowH * HOME_ENTRIES - 44));
         // v1.5.252h：详细介绍放目录【最上面】（反馈"放最下面怪怪的"）
         this.addRenderableWidget(Button.builder(
                         Component.literal("\u00a76\u25c6 详细介绍"),
@@ -758,6 +759,104 @@ public class BlueprintBookScreen extends Screen {
                             this.rebuildButtons();
                         })
                 .bounds(cx - bw / 2, y0 + rowH * 4, bw, bh).build());
+        // v1.5.396 实测八百三十五：DIY / 默认模式（DIY ↔ 默认；改的是全模组配置）
+        this.addRenderableWidget(Button.builder(
+                        Component.literal("\u00a7c\u2691 DIY / 默认模式"),
+                        b -> {
+                            this.view = VIEW_PRESET;
+                            this.rebuildButtons();
+                        })
+                .bounds(cx - bw / 2, y0 + rowH * 5, bw, bh).build());
+    }
+
+    // ================= v1.5.396 实测八百三十五：DIY / 默认模式页 =================
+
+    /**
+     * 预设模式页：两个按钮 = 两套配置。
+     *
+     * <p>DIY = 关掉全部"介入女仆行为"的开关（像 TLM 原版），保留纯附加子系统与护栏；
+     * 默认 = 逐项恢复出厂推荐配置（AI 接口密钥与手工数据表保留）。两者都带二次确认，
+     * 因为一次会改动上百项配置。
+     */
+    private void presetViewButtons() {
+        int cx = this.width / 2;
+        int h = this.height;
+        int bw = Math.min(300, Math.max(170, this.width - 40));
+        int y0 = Math.max(92, h / 2 - 6);
+        this.presetPending = com.maidsmart.config.MaidConfigPreset.planDiy().size();
+        this.addRenderableWidget(Button.builder(
+                        Component.literal("\u00a7c\u2691 DIY 模式（关闭全部介入，像 TLM 原版）"),
+                        b -> this.confirmAction(
+                                "切到 DIY 模式？",
+                                "\u00a7e会关闭全部「介入 TLM 女仆行为」的开关：战斗自保与单兵战术、主动参战与援护、"
+                                        + "自动换装、飞行与扫帚、骑乘、武装拴绳、搭路、拆刷怪笼、巡逻、"
+                                        + "排班接管、跟随收紧、移速上限与压档、拾取、传送与拉回、女仆复活，"
+                                        + "以及挖矿伐木建造里那些加强档（连锁采掘、不掉耐久、补种、清叶…）。\n\n"
+                                        + "\u00a77保留：AI 记忆与对话、感知与情绪、语音、手册、压缩盒、指标石与投影、"
+                                        + "冷却 HUD 与工作位置标记；几处安全护栏（不拆箱子、不搭在主人身上、"
+                                        + "卡住自愈、传送后重建）也保留。\n\n"
+                                        + "\u00a77立即生效、随时可切回「默认模式」。想用哪项加强，之后到"
+                                        + "「模组详细配置」里单独打开。\n\n"
+                                        + "\u00a77大模式都有自己的「总开关」，就在它自己板块的第一条——"
+                                        + "扫帚＝「移动与行为 → 扫帚模式」，空袭＝「战斗与自保 → 空袭数值」"
+                                        + "（叫「空袭·总开关（飞行作战）」）。",
+                                "\u00a7c确认切到 DIY",
+                                () -> this.presetApply(true)))
+                .bounds(cx - bw / 2, y0, bw, 20).build());
+        this.addRenderableWidget(Button.builder(
+                        Component.literal("\u00a7a\u2714 默认模式（恢复出厂推荐配置）"),
+                        b -> this.confirmAction(
+                                "恢复默认模式？",
+                                "\u00a7e会把全部配置一次性恢复为出厂默认值（含你手动改过的开关与数值），"
+                                        + "包括挖矿伐木的速度、各功能半径、战斗参数等。\n\n"
+                                        + "\u00a77保留：AI 接口密钥与端点（你的钥匙不会被清掉），"
+                                        + "以及你自己维护的数据表（矿表、木材表、危险方块表、白名单等）。\n\n"
+                                        + "\u00a77立即生效。",
+                                "\u00a7a确认恢复默认",
+                                () -> this.presetApply(false)))
+                .bounds(cx - bw / 2, y0 + 26, bw, 20).build());
+        // 返回大目录（左上角小按钮，与其它子页一致）
+        this.addRenderableWidget(Button.builder(Component.literal("← 大目录"),
+                        b -> {
+                            this.view = VIEW_HOME;
+                            this.rebuildButtons();
+                        })
+                .bounds(8, TOP_BTN_Y, 80, TOP_BTN_H).build());
+    }
+
+    /** 执行预设切换（客户端改配置；返回后刷新本页与聊天回执） */
+    private void presetApply(boolean diy) {
+        int changed = diy
+                ? com.maidsmart.config.MaidConfigPreset.applyDiy()
+                : com.maidsmart.config.MaidConfigPreset.applyFactoryDefault();
+        this.rebuildButtons();
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null && mc.player != null) {
+            if (diy) {
+                mc.player.displayClientMessage(Component.literal(
+                        "\u00a7a[Promaid] 已应用 DIY 模式（改动 " + changed + " 项）：本模组不再介入女仆行为——"
+                                + "要哪项加强，到「模组详细配置」对应板块里单独打开"), false);
+            } else {
+                mc.player.displayClientMessage(Component.literal(
+                        "\u00a7a[Promaid] 已恢复默认模式（改动 " + changed + " 项）：按出厂推荐配置运行"), false);
+            }
+        }
+    }
+
+    /** 预设模式页渲染 */
+    private void renderPreset(net.minecraft.client.gui.GuiGraphics graphics) {
+        boolean diy = com.maidsmart.config.MaidConfigPreset.isDiy();
+        int pending = Math.max(0, this.presetPending);
+        this.drawCentered(graphics, "\u00a7e\u2691 DIY / 默认模式", 20, 0xFFFFFF);
+        this.drawCentered(graphics, "\u00a77给本模组换一套设定：DIY = 不介入女仆行为（像 TLM 原版）；"
+                + "默认 = 出厂推荐配置", 36, 0x888888);
+        this.drawCentered(graphics, diy ? "\u00a7b当前模式：DIY 模式" : "\u00a7b当前模式：默认模式",
+                52, 0x55FFFF);
+        this.drawCentered(graphics, diy
+                        ? "\u00a77已应用 DIY：全模组不再介入女仆行为，各板块开关都为关"
+                        : "\u00a77当前为默认模式：本模组按出厂推荐配置运行（全部功能可用）",
+                64, 0x999999);
+        this.drawCentered(graphics, "\u00a7cDIY 模式会改动 " + pending + " 项配置", 78, 0xFF8888);
     }
 
     // ================= 建造面板 =================
@@ -1861,6 +1960,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
             case VIEW_MAID_DETAIL -> this.renderMaidDetail(graphics);
             case VIEW_REGION_MAIDS -> this.renderRegionMaids(graphics);
             case VIEW_MEMORY -> this.renderMemory(graphics);
+            case VIEW_PRESET -> this.renderPreset(graphics);
             default -> this.renderHome(graphics);
         }
         super.render(graphics, mouseX, mouseY, partialTick);

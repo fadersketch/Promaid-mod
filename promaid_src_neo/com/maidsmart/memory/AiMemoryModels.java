@@ -128,6 +128,34 @@ public final class AiMemoryModels {
         }
     }
 
+    /**
+     * 结构化画像条目（移植自 maidsoulcore v3 {@code UserProfile$ProfileItem}）。
+     *
+     * <p>旧版画像是一块**拼接文本**（{@code Profile.profileText}），同类信息反复追加、无法去重、
+     * 也无法按置信度取舍。这里把每条事实拆成条目：{@code category}（preference/boundary/trait/
+     * relation/promise）+ {@code key}（简短英文，同类同 key 视为同一条）+ {@code confidence}（1-5，
+     * 主人反复提及则上调）+ 证据段落 hash。注入时按置信度降序、每类限量，比一坨文本干净得多。
+     */
+    public record ProfileItem(String category, String key, String content, int confidence,
+                              String evidenceHash, long updatedAt) {
+
+        public static ProfileItem create(String category, String key, String content,
+                                         int confidence, String evidenceHash, long now) {
+            return new ProfileItem(
+                    category == null || category.isBlank() ? "preference" : category,
+                    key == null ? "" : key,
+                    clip(content, 200),
+                    Math.max(1, Math.min(5, confidence)),
+                    evidenceHash == null ? "" : evidenceHash,
+                    now);
+        }
+
+        /** 同类同 key 的合并键。 */
+        public String mergeKey() {
+            return category + "|" + key;
+        }
+    }
+
     /** 元数据（提取位置/每日回顾标记） */
     public record Meta(long lastExtractedTime, int lastDailyDay) {
         public static Meta empty() {

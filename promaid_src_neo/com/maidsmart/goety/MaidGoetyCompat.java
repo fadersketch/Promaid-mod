@@ -421,8 +421,8 @@ public final class MaidGoetyCompat {
      * {@code guardingRange()*2} 就 {@code owned.setTarget(null)} 直接清掉。两条叠加的结果是
      * **它的 getTarget() 恒为 null** ⇒ {@code InternalSummonMoveGoal} / 五个
      * {@code InternalSummonAttackGoal}（砸地/岩浆弹/火焰弹/冲锋/震地）全部 {@code canUse()=false}
-     * ——只剩 {@code Summoned.WanderGoal}（priority 5，不看目标）在走 ⇒ 玩家原话「只会移动，
-     * 但仍然不会进行攻击」。它自己的技能冷却、装填、视线判据全是好的，**只是没人给它目标**。
+     * ——只剩 {@code Summoned.WanderGoal}（priority 5，不看目标）在走 ⇒
+     *
      *
      * <h2>这道闸为什么能开</h2>
      * 上面两条的判据里都有 {@code !isPrioritizing()} / {@code isPrioritizing()}——

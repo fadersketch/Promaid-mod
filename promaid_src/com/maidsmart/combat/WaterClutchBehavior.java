@@ -37,12 +37,12 @@ import net.minecraftforge.registries.ForgeRegistries;
  *
  * 触发条件（全部满足才放水）：
  * - 背包有【水桶】或【细雪桶】（v1.1.0 落地雪；水桶在下界不作钥匙——水会蒸发）——都没有不触发
- * - 正在下落（垂直速度 < 0）
- * - 未落地（onGround == false）
- * - 下方即将触地（脚下 4 格内是实心地面）
+ * - 正在下落（垂直速度 < 0）且未落地（onGround == false）
+ * - 坠落高度 ≥ 触发高度（默认 4 格）——只是【最小高度闸】，防小跳/走路误放
+ * - 落在落点帧上：脚下 1~2 格内有地面（与重锤落地帧/空袭同一判据，实测八百五十三）
  * - 脚下不是水（已经在水里不需要）
  *
- * 流程：有水桶（触发钥匙，不消耗）→ 放水缓冲 → 20 tick 后收回（水方块移除，
+ * 流程：有水桶（触发钥匙，不消耗）→ 在落点帧放水缓冲 → 保持时长（默认 5 tick）后收回（水方块移除，
  * 水桶始终留在背包数量不变——玩家落地水也是"放下一瞬间并收回"）。
  *
  * 注册为 core 行为（优先级 240，低于自保 250）：任何 activity 都运行，
@@ -75,7 +75,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
      * 最后一段若仍达标就再放一次接住"）。空袭里这个重置就变成了无限循环：
      * 保持期一到 → 标志清零 → 下一 tick 条件再次满足 → 又放一次 → 再清零……而
      * **细雪不是实心方块**（实体沉进雪里、`onGround` 一直不成立），于是她"落了地"
-     * 仍在触发，雪花不停铺、行为槽一直被占 → **女仆无法起飞**（用户反馈的 bug）。
+     * 仍在触发，雪花不停铺、行为槽一直被占 → **女仆无法起飞**（
      *
      * 【修法】给空袭分支单独加一个 2 秒冷却（与通用分支解耦，不动它的"收水后再放"语义）：
      * 触发时记 `gameTime + FLIGHT_CLUTCH_CD`，冷却内不再触发。2 秒也足够跨过
@@ -89,7 +89,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
      * `isInWater() → travelInWater(...)`——只要她还在水里，滑翔分支整个被顶掉：
      * 烟花推力几乎全被水阻尼吃掉，而且水里 `onGround()` 恒为 false，
      * 空袭"落脚再起飞"的支点判定也进不去。她于是站在自己刚放的水里"看着敌人不动"
-     * （用户反馈："落地水放出的水会阻拦女仆飞行"）。细雪不是流体、没这一层，
+     * （）。细雪不是流体、没这一层，
      * 所以过去只有落地水挡飞行。
      *
      * 【怎么用】这类缓冲只负责"接住这一下"：她一旦不再下坠（落进水里/踩到地面，
@@ -188,8 +188,8 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         // 实测四百九十四【空袭落地缓冲——与重锤同款的"特殊落地水"】：
         // 1.20.1 树没有重锤猛击（原版还没有重锤），所以这里没有"跃起让位"那一段；
         // 但空袭落地水/雪照样必须一直能接住——空袭（近战空袭/远程空袭）常态是十几格
-        // 高空盘旋与收翅俯冲，落地没接住就是十几点伤害甚至摔死（用户反馈："落地水/雪
-        // 需要改正为和重锤状态下一样的特殊落地水，一直防止女仆摔死"）。
+        // 高空盘旋与收翅俯冲，落地没接住就是十几点伤害甚至摔死（
+        //
         //
         // 【为什么不能只靠下面的通用逻辑】通用逻辑按 `fallDistance >= 阈值` 触发，而
         // 滑翔中 `LivingEntity.travel` 每 tick 把 fallDistance 钳在 ~1.0（本模组多处
@@ -223,9 +223,13 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             }
             return; // 空袭期间不放通用落地水（保住 fallDistance 给收翅猛击）
         }
-        // 2. 触发判定：有钥匙桶（水/细雪）+ 真实坠落 + 未落地 + 距地面足够高。
-        //    v1.1.0：水桶只在非下界作钥匙（下界放水瞬间蒸发）；细雪桶任何维度都可
-        //    （下界也能用）；两者都有时优先水（行为更直观）
+        // 2. 通用触发判定（实测八百五十三：与重锤落地帧/空袭同款落点帧）。
+        //    旧版只看 `fallDistance >= 触发高度` + "下探窗口内有地面"：快落时单 tick
+        //    位移超过那个窗口，地面要么还在窗口外、要么这一 tick 已经触地（fallDistance
+        //    被原版清零），窗口一次都采不到 → 全程不放水（"触发不灵敏"的根因）。现在
+        //    时机改问落点帧（未落地 + 正在下坠 + 脚下 1~2 格内有地面）——触地那一 tick
+        //    必然成立；落差阈值降级成【最小坠落高度闸】（防小跳/走路误放）。
+        //    v1.1.0：水桶只在非下界作钥匙；细雪桶任何维度都可；两者都有时优先水。
         boolean waterKey = com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
                 && !this.isNether(level)
                 && this.hasItem(maid, "minecraft:water_bucket");
@@ -234,31 +238,25 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         if (!waterKey && !snowKey) {
             return;
         }
-        // v1.5.25g：用【累计下落距离 fallDistance】判定（原版每 tick 下落累加、落地归零），
-        // 不再用速度——旧版要等速度 < -1.1（约 3 格坠落）才触发，短距离坠落速度
-        // 达不到就永远不触发 → 摔死（"成功率不到 50%"根因）。fallDistance ≥ 3 就
-        // 触发，任何高度坠落（3 格以上）都会在落水窗口内激活；被击退的轻微离地
-        // （fallDistance 只有零点几）不会误触发。
-        // v1.5.88：触发高度从配置面板读取（combat.waterFallDistance）
-        // v1.2.0：水/雪触发高度各自独立——本轮实际会用哪种缓冲，就按哪种的阈值判
         boolean useSnow = snowKey && !waterKey; // 两者都有桶时优先用水（与下方 placeFluid 同口径）
-        double fallThreshold = useSnow
+        double minFall = useSnow
                 ? (double) com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_FALL_DISTANCE.get()
                 : (double) com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get();
-        if (maid.f_19789_ < (float) fallThreshold) {
-            return; // 累计下落不足（不是高空坠落）
-        }
-        if (this.clutchedThisFall) {
-            return; // 本次坠落已用过落地水（防高塔坠落途中反复放水）
+        if (maid.f_19789_ < (float) minFall // 最小坠落高度闸（不足 = 小跳/走路，不误放）
+                || maid.m_20096_() // 已落地
+                || maid.m_20184_().f_82480_ >= 0.0 // 不再下坠
+                || !this.isNearGround(level, maid) // 落点帧：脚下 1~2 格内有地面
+                || this.clutchedThisFall // 本次坠落已放过
+                || gameTime < this.flightClutchCd) { // 2 秒闸（与空袭/重锤同一道）
+            return;
         }
         BlockPos land = this.findLandingPos(level, maid, useSnow);
         if (land == null) {
             return;
         }
         this.clutchedThisFall = true;
-        // v1.1.0 实测十三【诊断日志】：实测"细雪桶全没了且落地雪没生效"——
-        // 全日志无任何 clutch 触发记录。加触发日志（放桶/放水各一条）定位是
-        // "没触发"还是"触发了但没生效"。latest.log 搜 "clutch"。
+        this.flightClutchCd = gameTime + FLIGHT_CLUTCH_CD;
+        // 触发日志（实测十三加的定位手段）：放桶/放水各一条，latest.log 搜 "clutch"。
         com.mojang.logging.LogUtils.getLogger().info(
                 "clutch trigger: maid={} snow={} fallDist={} hasWater={} hasSnow={} land={}",
                 maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),

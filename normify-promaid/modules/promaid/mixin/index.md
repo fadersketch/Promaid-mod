@@ -14,7 +14,7 @@ description:
       forking TLM.
 source:
   - {path: promaid_src_neo/mixins.promaid.json, line: 1}
-revision: 491ba927ffa91889b679f800817dd48763aabd62
+revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: d9462eb923e4e0b97baed99d14c9780890512e9113f1d574f04f08bdd7372522
 state: active

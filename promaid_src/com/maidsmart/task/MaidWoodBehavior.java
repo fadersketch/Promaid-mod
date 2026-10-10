@@ -884,7 +884,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 BlockPos chained = this.chainQueue.poll();
                 // 实测五百六十二：连锁队列的木材同样受工作圈钳制
                 if (chained != null && this.isWood(level, chained)
-                        && com.maidsmart.follow.WorkAreaClamp.allows(maid, chained)) {
+                        && com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, chained)) {
                     this.targetPos = chained;
                     TARGET_SINCE.put(maid.m_19879_(), gameTime);
                     WOODING.add(maid.m_20148_());
@@ -1732,6 +1732,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * v1.5.113（C1）：两档接近速度——矿远（>8 格）1.5× 快走赶路，矿近（≤3 格）
      * 0.8× 慢走（准备搭高/挖掘，防冲过头漂移）；中间距离用基础速度（wood.moveSpeed）。
      * v1.1.0 实测四十八：基础速度 0.6→0.3（反馈伐木移速过快像狂奔）。
+     * 实测八百二十八：远处赶路加成 1.25× → 1.0×（，
+     * 要求本 mod 不再给女仆额外速度加成）。近处 0.8× 的减速保留（防冲过头）。
      */
     private float approachSpeed(EntityMaid maid, BlockPos t) {
         if (t == null) {
@@ -1740,7 +1742,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         double d = maid.m_20275_(t.m_123341_() + 0.5, t.m_123342_() + 0.5, t.m_123343_() + 0.5);
         float base = (float) (double) com.maidsmart.config.MaidSmartConfig.WOOD_MOVE_SPEED.get();
         if (d > 8.0) {
-            return base * 1.25f; // 远处赶路加成 1.5→1.25（随基础速度一起减）
+            return base; // 实测八百二十八：不再 ×1.25 加速
         }
         if (d < 3.0) {
             return base * 0.8f;
@@ -2350,7 +2352,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 实测五百六十二：home 模式下女仆在限制圈外（被推/被打飞）时，锚点落在圈心
         // 而不是脚下——她自然走回工作区域，而不是原地开新框把圈外越砍越远
         BlockPos anchorPos = maid.m_20183_();
-        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, anchorPos)) {
+        if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, anchorPos)) {
             BlockPos cc = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
             if (cc != null) {
                 anchorPos = cc;
@@ -2635,7 +2637,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
             // 实测五百六十二：home 模式限制圈外的木材不进候选（工作区域=工位锚点圈，
             // 与 TLM 原生 MaidMoveToBlockTask 同口径）；圈外木材曾靠锚点滑动越追越远
-            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, p)) {
+            if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, p)) {
                 continue;
             }
             // v1.1.0：不把自己 10 秒内搭的方块当木材（搭路材料几乎必是原木——
@@ -2711,7 +2713,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 continue; // 已被挖掉
             }
             // 实测五百六十二：缓存轮同口径——限制圈外的木材不选（home 工作区域）
-            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, p)) {
+            if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, p)) {
                 continue;
             }
             // v1.1.0：缓存轮同样跳过自己 10 秒内搭的方块（不当木材砍，与全量扫描同口径）

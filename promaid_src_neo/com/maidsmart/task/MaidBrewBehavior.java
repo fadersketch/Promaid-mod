@@ -372,17 +372,21 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             return;
         }
         this.wanderCooldown = 40; // 2 秒换一个闲逛点
-        int r = 8;
-        int dx = maid.getRandom().nextInt(r * 2 + 1) - r;
-        int dz = maid.getRandom().nextInt(r * 2 + 1) - r;
-        BlockPos base = maid.blockPosition();
-        BlockPos spot = new BlockPos(base.getX() + dx, base.getY(), base.getZ() + dz);
-        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, spot)) {
+        // 实测八百一十五【乱窜根治】：取点锚点从"她此刻位置"改为固定锚点（同 MaidCookBehavior）
+        BlockPos spot = com.maidsmart.follow.WorkAreaClamp.pickWanderSpot(
+                maid, com.maidsmart.follow.WorkAreaClamp.wanderRadius(maid), maid.getRandom());
+        if (spot == null) {
+            return;
+        }
+        // 实测八百一十五：闲逛选点用 allowsWander（同 MaidCookBehavior.wander——跟随模式下
+        // 也给临时圈，防"每 2 秒换个方向满地图窜找台子"）
+        if (!com.maidsmart.follow.WorkAreaClamp.allowsWander(maid, spot)) {
             return; // 本轮不闲逛（下轮再选），绝不逛出工作圈
         }
         try {
             maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
-                    new WalkTarget(new BlockPosTracker(spot), 0.7f, 1));
+                    new WalkTarget(new BlockPosTracker(spot),
+                            (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 1)); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
         } catch (Throwable ignored) {
         }
     }

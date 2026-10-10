@@ -27,9 +27,9 @@ import java.util.function.Predicate;
  * 搭建（搭路去远处的矿/树）到期时女仆早走远了，方块全部掉地上。
  *
  * 新机制：
- * 1. 【绑定搭建者】：登记时记录放置女仆的 UUID；到期销毁时【跨维度】找到该女仆
- *    （同维度直接进背包；异维度也塞——IItemHandler 与位置无关），强制回收进她
- *    背包；背包满才走落地流程（剩余掉落物 popResource）。
+ * 1. 【绑定搭建者】：登记时记录放置女仆的 UUID；到期销毁时【不分远近】回收进她
+ *    背包（同维度即可；她已在别的维度、或她已死亡这两件意外就地落地）；背包满才走
+ *    落地流程（剩余掉落物 popResource）。
  * 2. 【魂符收回暂停计时】：女仆不在任何维度的实体列表（被魂符收回/区块卸载）时，
  *    她名下的方块【暂停倒计时】（每 tick 记录剩余寿命，重载后从剩余时间继续）；
  *    女仆回到世界后计时恢复。
@@ -143,8 +143,44 @@ public final class PlacedBlockTracker {
     }
 
     /**
+     * 实测八百二十八【女仆死亡清理】：把某只女仆【名下的全部垫脚方块】立即销毁并
+     * 落地成掉落物。旧版女仆一死，她名下的方块在 {@link #expirePlaced} 里因
+     * {@code owner == null}（findMaid 过滤 isAlive）而永久暂停计时——
+     * "女仆突然死亡，垫的方块再也回收不了，一直留在原地"。
+     *
+     * <p>为什么不塞回她背包：她本人已经死了，塞背包等于凭空把方块送进一个死人的
+     * 存档，且掉落物本就该留在原地让玩家捡。所以这里统一 owner=null（destroyAndReclaim
+     * 的落地分支：直接 popResource）。
+     *
+     * <p>玩家替换过的方块照旧不碰（destroyAndReclaim 内部 blockId 比对）。
+     * 全部实例（挖矿/伐木/搭路/战斗搭高）一并清理——她死时这四张表可能都挂着。
+     */
+    public static void reclaimAllFor(net.minecraft.server.MinecraftServer server, java.util.UUID maidUuid) {
+        if (server == null || maidUuid == null) {
+            return;
+        }
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            for (ServerLevel level : server.m_129785_()) {
+                Map<BlockPos, Mark> marks = t.placed.get(level.m_46472_());
+                if (marks == null || marks.isEmpty()) {
+                    continue;
+                }
+                Iterator<Map.Entry<BlockPos, Mark>> it = marks.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<BlockPos, Mark> e = it.next();
+                    if (!maidUuid.equals(e.getValue().maidUuid())) {
+                        continue;
+                    }
+                    it.remove();
+                    destroyAndReclaim(level, e.getKey(), e.getValue(), null);
+                }
+            }
+        }
+    }
+
+    /**
      * 每 tick 到期扫描。女仆站在上面 → 刷新剩余寿命；绑定女仆不在线 → 暂停倒计时；
-     * 到期 → 销毁并强制回收进绑定女仆背包（跨维度；背包满落地）。
+     * 到期 → 销毁并回收进绑定女仆背包（同维度不分远近；跨维度/背包满落地）。
      */
     public void expirePlaced(net.minecraft.server.MinecraftServer server, long gameTime,
                              Predicate<BlockPos> stoodOnCheck) {
@@ -187,7 +223,11 @@ public final class PlacedBlockTracker {
                     continue;
                 }
                 if (owner == null) {
-                    // 绑定女仆不在线（魂符收回/区块卸载）→ 暂停倒计时（remainTicks 不减）
+                    // 绑定女仆不在线（魂符收回/区块卸载）→ 暂停倒计时（remainTicks 不减），
+                    // 等她回到世界再从剩余时间继续。
+                    // 【女仆死亡】不走这里——死亡由 ProMaidExtension 的 LivingDeathEvent
+                    // 直接调 reclaimAllFor()，把该女仆名下所有方块立即销毁并落地成掉落物
+                    //（见实测八百二十八），不会残留到"再也回收不了"。
                     continue;
                 }
                 long remain = mark.remainTicks() - 1;
@@ -195,16 +235,13 @@ public final class PlacedBlockTracker {
                     e.setValue(new Mark(remain, mark.blockId(), mark.maidUuid()));
                     continue;
                 }
-                // 到期：销毁 + 强制回收进绑定女仆背包（跨维度；背包满落地）
+                // 到期：同维度内【不分远近】一律回收进绑定女仆背包（搭路跟随主人、远征
+                // 搭建全程无损失，离得远也照收）；只有意外才落地——女仆死亡（走
+                // reclaimAllFor，到不了这里）与跨维度，魂符收回/区块卸载不算意外。开关关掉一律落地。
                 it.remove();
-                // v1.2.3-dbg 探针：这块到期时主人站在哪（查完删掉）
-                try {
-                    net.minecraft.world.entity.LivingEntity __m = owner == null ? null : owner.m_269323_();
-                    if (__m != null) {
-                    }
-                } catch (Throwable ignored) {
-                }
-                destroyAndReclaim(level, pos, mark, owner);
+                boolean toMaid = owner.m_9236_() == level
+                        && com.maidsmart.config.MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get();
+                destroyAndReclaim(level, pos, mark, toMaid ? owner : null);
             }
         }
     }
@@ -313,8 +350,8 @@ public final class PlacedBlockTracker {
     }
 
     /**
-     * 销毁一个到期方块并回收：绑定女仆在线 → 掉落物强制塞她背包（跨维度；
-     * 背包满/塞不下 → 落地）；女仆 null（清场时已离线）→ 落地。
+     * 销毁一个到期方块并回收：owner 非 null → 掉落物全塞她背包（跨维度也能塞，
+     * 由调用方按"同维度"决定传不传；背包满/塞不下 → 落地）；owner null → 落地。
      * 玩家替换过的方块不误破坏（blockId 比对，同旧口径）。
      */
     private static void destroyAndReclaim(ServerLevel level, BlockPos pos, Mark mark,

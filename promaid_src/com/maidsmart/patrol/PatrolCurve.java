@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * v1.3.8【巡逻航迹】曲线引擎：向心（centripetal）Catmull-Rom 样条 + 弧长重采样 + 纯追踪取点。
  *
- * <p>── 为什么是 Catmull-Rom（玩家原话）──
+ * <p>── 为什么是 Catmull-Rom（
  * 「Replay mod 里可以在某个位置放置摄像头标记，让视频的摄像头随着标记之间连接的曲线
  * 平滑移动。我觉得可以套用一下相关机制。」——ReplayMod 那套相机的本质就是一条**穿过所有
  * 标记**的插值样条：Catmull-Rom 恰好保证曲线**精确经过**每个控制点（不像 B 样条会被拉偏），

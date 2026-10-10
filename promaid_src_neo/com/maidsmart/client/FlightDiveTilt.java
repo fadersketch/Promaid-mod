@@ -45,7 +45,7 @@ import net.minecraft.world.entity.LivingEntity;
  * ── 触发口径 ──
  * `MaidFlightKit.isFlightVisual(maid) && !onGround()`（= 飞行任务 **或** 正在滑翔）——与鞘翅图层
  * 的展翅口径完全一致（`LayerMaidElytra` 同款）。**实测六百一十一 从"只看飞行任务"放宽**：
- * 用户反馈"飞行跟随……动作没有换成空袭飞行的动作"，而飞行跟随的女仆并不是飞行任务 →
+ * ，而飞行跟随的女仆并不是飞行任务 →
  * 她滑翔时这一段前倾一点没跟上；空袭那边一字不变（它本来就满足 isFlightTask）。
  * **刻意不认 `isFallFlying()` 这一条**：收翅猛击那段 `tickSmash`
  * 会主动 `setGliding(false)`（收翅才吃得到猛击判定），只认滑翔位的话"飞向敌人"最需要

@@ -20,7 +20,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
  * - scanblock <id> [r]     按方块 ID 扫描（坐标+距离）
  * - scanentity [type] [r]  按类型扫描实体（hostile/passive/player/all + 血量/距离）
  *
- * 用途：玩家说"帮我在这里建个小屋"时，LLM 先调本工具拿到场地报告与地形，
+ * 用途：时，LLM 先调本工具拿到场地报告与地形，
  * 再调用 smart_build/smart_design —— 生成蓝图的坐标/材料更贴合实际，减少
  * 超时重试（蓝图太复杂/材料对不上 → 反复工具轮次 → 超 16 次工具上限）。
  */

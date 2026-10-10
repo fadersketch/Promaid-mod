@@ -107,7 +107,7 @@ public final class BombPlacement {
             }
             EndCrystal ec = new EndCrystal(level, base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
             // 原版"拿末地水晶物品放在黑曜石上"就是 setShowBottom(false)（EndCrystalItem 反编译实证），
-            // 不是末地柱子上那种带底座的形态——按玩家反馈改成普通放置的样子。
+            // 不是末地柱子上那种带底座的形态——按
             ec.setShowBottom(false);
             if (!level.addFreshEntity(ec)) {
                 MaidBombing.log("末地水晶生成失败 → 放弃轰炸");
@@ -120,7 +120,7 @@ public final class BombPlacement {
             maid.swing(InteractionHand.MAIN_HAND);
             BombConfig.pose(maid, ph.display, MaidBombing.BOMB_POSE_TICKS);
         } else if (ph.kind == MaidBombing.Kind.ANCHOR) {
-            // ── v1.2.2 实测五百九十二：这一段的动作照需求原话走 ──
+            // ── v1.2.2 实测五百九十二：这一段的动作照需求
             // "攻击→副手换成重生锚，放置重生锚（摆臂）→副手换成萤石，拿一颗萤石充能（摆臂动画）
             //  →继续切换回飞行。0.5 秒后再挥一次手臂。正好对上重生锚自爆"
             // step 0 已经放好重生锚（副手举的是它，见 stepBlock）；这里换萤石、充能、摆臂，

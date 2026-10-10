@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * v1.3.0(beta)（1.20.1）实测七百六十八【被女仆骑着的仆从·它自己的 AI 不许被骑手关掉】。
  *
- * <h2>玩家原话</h2>
+ * <h2>
  * 「如果女仆采用的是远程攻击的方式，下界合金巨兽的锁敌范围明显跟不上女仆的锁敌。导致拉开了
  * 很长一段距离之后下界合金巨兽直接不会攻击了。」
  *

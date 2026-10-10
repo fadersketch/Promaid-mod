@@ -142,15 +142,26 @@ public final class BuiltinHouses {
         s(x, y, z, "minecraft:wall_torch", "{facing:\"" + facing + "\",lit:\"true\"}");
     }
 
-    /** 床（head 在 (x,z)，foot 朝 facing 反方向一格）；facing 为头朝向 */
+    /**
+     * 床：{@code (x,z)} 是**床头**（睡觉/掉落都以 head 为准），床脚落在床头的
+     * {@code facing 反方向}一格。
+     *
+     * <p>【v1.3.0 实测八百一十五：旧版四向全反了】原版的配对不变量是
+     * <b>{@code head == foot.relative(facing)}</b>（{@code BedBlock.getNeighbourDirection}
+     * / {@code setPlacedBy} 字节码实证，蓝图数据也一致：{@code foot(4,6,7,facing=west)}
+     * 的床头在 {@code (-1,0,0)} 即 west 方向）。旧版把床脚放在了 {@code facing 正方向}
+     * （正好反过来）→ 两格互不认账，邻居更新时 {@code updateShape} 各自找不到配对半扇，
+     * 双双变成空气 = **建好的床整张消失**。现在按不变量放：床脚在床头的 facing 反方向。
+     */
     private static void bed(int x, int y, int z, String facing, String color) {
         String f = facing;
+        // 床脚 = 床头.relative(facing.getOpposite())：north→+z、south→-z、east→-x、west→+x
         int fx = 0, fz = 0;
         switch (facing) {
-            case "north" -> fz = -1;
-            case "south" -> fz = 1;
-            case "east" -> fx = 1;
-            case "west" -> fx = -1;
+            case "north" -> fz = 1;
+            case "south" -> fz = -1;
+            case "east" -> fx = -1;
+            case "west" -> fx = 1;
             default -> {
             }
         }

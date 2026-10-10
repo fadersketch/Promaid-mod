@@ -57,7 +57,7 @@ public final class PatrolFlight {
      * <p>三件同时成立：
      * <ol>
      *   <li><b>任务 = 扫帚模式</b>——与 {@code MaidBroomKit.isBroomTask} 同一判据（不另写一份）；</li>
-     *   <li><b>home 模式开着</b>——玩家原话"只对 home 模式下的扫帚模式下女仆进行操作"。
+     *   <li><b>home 模式开着</b>——。
      *       判据直接复用 {@code WorkAreaClamp.homeAnchor}（= home + 圈心有效，连"排班锚点兜底"
      *       那一层一起），所以"她确实在守家"这件事的判定与本模组别处完全同口径；</li>
      *   <li><b>绑了一条闭环航迹</b>——{@link PatrolChartData#readMaid} 非 null 且

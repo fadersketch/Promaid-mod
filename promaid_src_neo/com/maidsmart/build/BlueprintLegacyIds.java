@@ -208,7 +208,14 @@ public final class BlueprintLegacyIds {
             case 25:
                 return "minecraft:note_block";
             case 26:
-                return (meta & 8) != 0 ? null : "minecraft:red_bed"; // 上半跳过（床自动补全）
+                // v1.3.0 实测八百一十五【床只剩半张、挖了不掉】：旧版"跳过上半（床头）"、
+                // 只留下床脚，而且连 part/facing 都没带 —— 落地的床脚是默认态（facing=north），
+                // 既没配对的床头、也没有正确的朝向，于是挖了什么都不掉。
+                // 现在保留【床脚】（foot 的 facing 在 1.12/1.13 语义一致 = 脚→头方向），
+                // 带上 part/facing；床头由放置侧 ensureBedHalf 按 facing 补全。
+                return (meta & 8) == 0
+                        ? "minecraft:red_bed{part:\"foot\",facing:\"" + LEGACY_FACINGS[meta & 3] + "\"}"
+                        : null; // 床头跳过（放置床脚时补全）
             case 27:
                 return "minecraft:powered_rail";
             case 28:
@@ -727,6 +734,13 @@ public final class BlueprintLegacyIds {
                 int d = data & 7;
                 st.putString("facing", new String[]{"west", "north", "east", "south"}[d & 3]);
             }
+            case 26 -> { // 床（脚）：&3 朝向（0=south,1=west,2=north,3=east，与 1.13 语义一致，见 LEGACY_FACINGS）
+                // v1.3.0 实测八百一十五：床必须带 part/facing——否则落地是"无朝向的孤零床脚"，
+                // 既无配对床头、挖了也不掉（原版掉落表只在 part=head 时给物品）。
+                // 床头由放置侧 ensureBedHalf 按 facing 补全。
+                st.putString("part", "foot");
+                st.putString("facing", LEGACY_FACINGS[data & 3]);
+            }
             default -> {
             }
         }
@@ -769,7 +783,7 @@ public final class BlueprintLegacyIds {
             case 23: return "minecraft:dispenser"; // v1.5.39：现代红石住宅缺失映射补全
             case 24: return "minecraft:sandstone";
             case 25: return "minecraft:note_block";
-            case 26: return null; // bed（双格方块，跳过）
+            case 26: return (data & 8) != 0 ? null : "minecraft:red_bed"; // v1.3.0 实测八百一十五：床头跳过，床脚保留（part/facing 见 applyLegacyData）
             case 29: return "minecraft:sticky_piston";
             case 30: return "minecraft:cobweb";
             case 31: return new String[]{"minecraft:dead_bush", "minecraft:tall_grass", "minecraft:fern"}[Math.min(2, data)];

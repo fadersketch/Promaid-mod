@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/schedule/ScheduleManager.java, line: 1, end_line: 387}
   - {path: promaid_src_neo/com/maidsmart/schedule/ScheduleData.java, line: 1, end_line: 275}
   - {path: promaid_src_neo/com/maidsmart/schedule/ScheduleBookScreen.java, line: 1, end_line: 1167}
-revision: 491ba927ffa91889b679f800817dd48763aabd62
+revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: d7935fff2efcbf71a43015f4e635ba0c02e6e4de87fe56675389c39ddfc1fc70
 state: active

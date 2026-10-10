@@ -108,8 +108,8 @@ public final class MaidFreeFlightController {
     }
 
     /**
-     * 【有创造飞行能力就禁用搭路（需求方口径）】需求方原话："既然引入了创造飞行这个概念，那么它
-     * 无疑是搭方块的上位替代，有创造飞行能力，那就禁用搭路。"
+     * 【有创造飞行能力就禁用搭路（需求方口径）】
+     *
      *
      * <p>与 {@link #isControlling} 的区别就是"能力"与"正在飞"。这里问的是"她此刻**具备**飞行能力"
      * （总开关开 + 没被单独关掉 + 资格物品/效果其一），**不含**"此刻是否在空中"——落地待命档同样不搭。
@@ -189,7 +189,7 @@ public final class MaidFreeFlightController {
     private static final double WORK_NEAR_OWNER_Y = 8.0;
 
     /**
-     * 【"本来要走路过去的活"也交给仿创造飞行】需求方口径（原话）："本来就走过去应该交给创造。"
+     * 【"本来要走路过去的活"也交给仿创造飞行】需求方口径（
      *
      * <p>调用点：{@code FreeFlightWalkGuardMixin}（{@code PathNavigation.moveTo(DDDD)Z} 的 HEAD，
      * = 挖矿 / 伐木 / 农活这类**直连寻路**）。返回 true = 这一发地面寻路被接管。

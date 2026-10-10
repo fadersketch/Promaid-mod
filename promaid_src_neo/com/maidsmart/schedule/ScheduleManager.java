@@ -186,11 +186,20 @@ public final class ScheduleManager {
         // （玩家在 TLM GUI 配过 home 的保留原锚点不动；锚定后走位/越界拉回全部激活）。
         var maidSchedulePos = maid.getSchedulePos();
         if (maidSchedulePos != null && !maidSchedulePos.isConfigured()) {
-            maidSchedulePos.setHomeModeEnable(maid, maid.blockPosition());
-            maidSchedulePos.setConfigured(true);
-            com.maidsmart.tool.PromaidLog.log("排班", who + " 排班启用：自动锚定 home（"
-                    + maid.blockPosition().getX() + "," + maid.blockPosition().getY()
-                    + "," + maid.blockPosition().getZ() + "），homeMode=true");
+            // 实测八百一十五【罗盘优先】：玩家亲手画的圈不许被"拿当前位置自动锚定"顶掉——
+            // 旧版只要 !isConfigured 就无条件锚定，罗盘清过之后（configured=false）再开排班
+            // 就会拿她当时站的地方当圈心，玩家画的圈等于作废（）。
+            if (!com.maidsmart.schedule.PlayerCircle.mayAutoAnchor(maid)) {
+                diag(maid, "player-circle", who + " 玩家画过圈（罗盘/中键）——排班不自动锚定，"
+                        + "沿用玩家画的圈", level);
+            } else {
+                maidSchedulePos.setHomeModeEnable(maid, maid.blockPosition());
+                maidSchedulePos.setConfigured(true);
+                com.maidsmart.schedule.PlayerCircle.markAutoAnchor(maid);
+                com.maidsmart.tool.PromaidLog.log("排班", who + " 排班启用：自动锚定 home（"
+                        + maid.blockPosition().getX() + "," + maid.blockPosition().getY()
+                        + "," + maid.blockPosition().getZ() + "），homeMode=true");
+            }
         }
         long nowTick = level.getGameTime();
         long grace = ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getLong(ScheduleData.GRACE_TAG);

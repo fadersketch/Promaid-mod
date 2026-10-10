@@ -140,7 +140,7 @@ public final class BombMarkClient {
 
     /* ---------------- 画 ---------------- */
 
-    /** 亮粉（v1.2.2 实测五百八十九：玩家反馈"太不明显、看不出是友方的"→ 填充加重 + 加棱线 + 加浮字） */
+    /** 亮粉（v1.2.2 实测五百八十九：→ 填充加重 + 加棱线 + 加浮字） */
     private static final float PINK_R = 1.0f;
     private static final float PINK_G = 0.47f;
     private static final float PINK_B = 0.80f;

@@ -28,6 +28,8 @@
     "SchedulePullbackMixin",
     "SchedulePosTickMixin",
     "ScheduleRangeMixin",
+    "KappaCompassPlayerCircleMixin",
+    "MaidWalkSpeedCapMixin",
     "CombatWorkRangeMixin",
     "FarmSweepMixin",
     "FarmMoveTillMixin",
@@ -42,9 +44,11 @@
     "MaidCakeFavorMixin",
     "MaidTaskScheduleGuardMixin",
     "BuildActivityForceMixin",
+    "BuildHomeInertMixin",
     "MaidChatLanguageMixin",
     "MaidPlayerDamageMixin",
     "TaskAttackWeaponMixin",
+    "MaidCanAttackDefenseMixin",
     "PotionAnimTrackMixin",
     "MaidChatLlmGateMixin",
     "MixinTntBuildGuard",
@@ -73,6 +77,8 @@
     "MaidContainerRemoteOpenMixin",
     "ChunkMapTrackRemoteMixin",
     "ChunkMapRemotePumpMixin",
+    "EntityMoveToMarkMixin",
+    "ServerEntityRebuildMixin",
     "MaidGoetyMoveSuppressMixin"
   ],
   "client": [
@@ -92,7 +98,10 @@
     "MaidConfigFreeFlightMixin",
     "MaidConfigGoetyMixin",
     "MaidFreeFlightAnimInvoker",
-    "MaidFreeFlightAnimMixin"
+    "MaidFreeFlightAnimMixin",
+    "GuiGraphicsI18nMixin",
+    "FontI18nMixin",
+    "ChatComponentI18nMixin"
   ],
   "injectors": {
     "defaultRequire": 1

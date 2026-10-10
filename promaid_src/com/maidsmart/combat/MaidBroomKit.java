@@ -21,7 +21,7 @@ import net.minecraft.world.phys.Vec3;
  * 也不需要烟花）。所以判定要另写一份，但**远程武器与弹药那两条口径一字不改地复用**
  * {@link MaidFlightKit}——本模组反复强调的红线：同一个口径只能有一处实现。
  *
- * ── 与空袭的关系（用户原话："检查判定稍微改一改就行"）──
+ * ── 与空袭的关系（用户）──
  * <pre>
  *   空袭：  hasElytra && hasWeaponForFlightTask && hasFlightPropellant && rangedAmmoOk
  *   扫帚：  hasBroom  && hasRangedWeapon                            && rangedAmmoOk
@@ -179,8 +179,8 @@ public final class MaidBroomKit {
      *
      * <p>与 {@link #isModeActive} 的**唯一**差别：**弹药不算**。旧版把弹药也算进"未激活"，于是
      * 冲锋枪 / 狙击枪打空弹匣的那一拍就当场上 {@code dismount} —— 她是扫帚的乘客，下鞍 = 从空中
-     * 掉下去。玩家原话：「扫帚模式如果女仆持有的是冲锋枪或者狙击枪，这两类枪械很容易飞着飞着就
-     * 突然从扫帚上掉下来。」实测日志逐行实证（2026-09-27 01:38:09，她正骑在扫帚上开火）：
+     * 掉下去。
+     *
      * <pre>
      *   [远程开火] …主手=tacz:modern_kinetic_gun 距敌 14.93 格 开镜=true TLM档=true 弹=无
      *   [扫帚模式] …下扫帚（理由=缺远程武器/弹药，这把是世界里那把，原地留着）
@@ -207,8 +207,8 @@ public final class MaidBroomKit {
     /**
      * 【实测七百〇九】起飞判定里**除扫帚之外的那两件**：远程武器 + 弹药。
      *
-     * <p>玩家原话：「扫帚的启动链路还是比较落后，目前也只判了远程武器，没有判弹药。
-     * 应该改成跟远程空袭一样的起飞判定。」
+     * <p>
+     *
      *
      * <p>【它补的是哪条路】"她身上没有扫帚 → 去找一把"那一档（{@link com.maidsmart.combat.MaidBroomDrive#seekBroom}）
      * 原先**什么都不判**：只要附近有扫帚/掉落的扫帚，她就走过去骑上并立刻起飞

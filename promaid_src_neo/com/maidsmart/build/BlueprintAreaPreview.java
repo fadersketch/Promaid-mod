@@ -68,6 +68,10 @@ public final class BlueprintAreaPreview {
         return blueprintId + "#" + Math.floorMod(quarters, 4);
     }
 
+    /** 【实测七百九十七】"投影总开关=关"这条日志的边沿哨兵（见 onRender 里那段注释）。
+     *  只在开→关的那一帧记一条，避免每帧写盘。客户端单线程渲染，无需同步。 */
+    private static boolean projectionOffLogged = false;
+
     /** v1.5.290：每个区块的橙影投影键（"bp#q"，r[10] 蓝图 id + r[14] 朝向） */
     private static final java.util.List<String> REGION_PROJ_KEYS = new java.util.ArrayList<>();
     /** v1.1.0 实测二百零四：最近一次实际提交的幽灵盒数（变化才落日志） */
@@ -351,13 +355,19 @@ public final class BlueprintAreaPreview {
         if (event.getStage() != net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
             return;
         }
-        // 画质：遥控到此时的值——红框渲染不检查这个开关，只橙影/金影检查
+        // 画质：遥控到此时的值——红框渲染不检查这个开关，只橙影/金影检查。
+        // 【实测七百九十七】原来这里是**每帧**记一条（BUILD_PROJECTION=false 时）：既有磁盘写
+        // 又刷 latest.log。开关摆上配置面板后玩家会长期关着它，而"每帧写日志"本身就是卡顿源
+        // ——弱机反而雪上加霜。改成**边沿触发**：只在"从开到关"的那一帧记一条，状态不变就不记。
         if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
-            com.maidsmart.tool.PromaidLog.log("投影",
-                    "render: 画面里 已注册=" + registered
-                    + " 红框数=" + REGION_BOXES.size()
-                    + " 金色预览=" + active
-                    + " BUILD_PROJECTION=false——点选投影总开关，框与幽灵都不渲染");
+            if (!projectionOffLogged) {
+                projectionOffLogged = true;
+                com.maidsmart.tool.PromaidLog.log("投影",
+                        "render: 投影总开关=关（红框/金框线框保留，幽灵方块与点云请求停用）"
+                        + " 红框数=" + REGION_BOXES.size() + " 金色预览=" + active);
+            }
+        } else {
+            projectionOffLogged = false;
         }
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
         if (mc.player == null || mc.level == null) {

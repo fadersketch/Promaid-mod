@@ -26,12 +26,14 @@ public final class GuideChaptersBasics {
                         + "[[@COMBAT:AUTO_COMBAT|主动参战]] · [[@COMBAT:AID|贴身辅助]] · "
                         + "[[@COMBAT:PLAYER_DAMAGE|玩家伤害策略]] · "
                         + "[[@COMBAT:AIR_RAID|空袭数值]] · "
-                        + "[[@COMBAT:SELF_PRESERVE|空袭与飞行作战]]",
+                        + "[[@COMBAT:AIR_RAID|空袭与飞行作战]] · [[@COMBAT:MANEUVER|接敌机动]]",
                 "\u00a7e④ 生存与复活\u00a7r：[[@SURVIVAL:FALL_GUARD|落地缓冲]] · "
                         + "[[@SURVIVAL:REVIVE|死亡与复活]] · "
                         + "[[@SURVIVAL:ESCAPE|传送与逃生]] · [[@SURVIVAL:SAFETY|女仆安全与区块]]",
                 "\u00a7e⑤ 移动与行为\u00a7r：[[@MOVE:FOLLOW|移动与跟随]] · [[@MOVE:IDLE|空闲与流畅]] · "
-                        + "[[@MOVE:BRIDGE|搭路]] · [[@MOVE:FLIGHT_FOLLOW|飞行跟随]]",
+                        + "[[@MOVE:BRIDGE|搭路]] · [[@MOVE:FLIGHT_FOLLOW|飞行跟随]] · "
+                        + "[[@MOVE:BROOM|扫帚模式]] · [[@MOVE:TETHER|武装拴绳]] · "
+                        + "[[@MOVE:RIDE|骑乘指挥棒]] · [[@MOVE:DA_YUN|饰品「大运」]]",
                 "\u00a7e⑥ 语音与显示\u00a7r：[[@UI:VOICE|语音与 TTS]] · [[@UI:HUD|显示与提示]]",
                 "\u00a7e⑦ 系统与杂项\u00a7r：[[@SYSTEM:UTILITY|交互与杂项]] · [[@SYSTEM:LOG|运行日志]] · "
                         + "[[@SYSTEM:COMPRESSION_BOX|压缩盒]]",
@@ -54,76 +56,77 @@ public final class GuideChaptersBasics {
 
     static GuideContent.Chapter intro() {
         return new GuideContent.Chapter("这是什么？",
-                "\u00a7ePromaid（女仆 AI 智能增强包）\u00a7r是「车万女仆 Touhou Little Maid」的附属模组，"
-                        + "让女仆变得更聪明、更能干。两个版本\u00a7e功能对齐、玩法一致\u00a7r："
-                        + "\u00a7e1.20.1 + Forge 47.4.x\u00a7r 与 \u00a71.21.1 + NeoForge 21.1.250\u00a7r"
-                        + "（都实测 TLM 1.5.3；1.21.1 多一块重锤相关内容，其余功能一致）。",
-                "它给女仆新增了\u00a7e建造、挖矿、烧制、酿造\u00a7r任务，\u00a7e投喂治疗、自保逃生、单兵战术\u00a7r等战斗能力，"
-                        + "\u00a7eAI 记忆、主动对话、感知、情绪\u00a7r等智能系统，以及十几个可被 LLM 对话直接调用的\u00a7eAI 工具\u00a7r。",
-                "\u00a7ev1.1.0 起新增功能速览\u00a7r（相对 v1.0.4）：\u00a7e排班调度\u00a7r（日程表按游戏内时间自动切任务/作息，"
-                        + "排班中大范围活动\u00a7e\u00a7e、\u00a7e自主战斗切换与还原\u00a7e（威胁自动参战、解除后还原原任务，"
-                        + "模组武器必用专属模式）、\u00a7e搭路\u00a7e（默认关，开启后与主人隔沟/隔空时铺方块贴近，"
-                        + "挖矿伐木垫块也会踩上去）、\u00a7e空闲散步\u00a7e（不会站桩发呆）、\u00a7e宠物免疫\u00a7e"
-                        + "（玩家宠物字样/主人的宠物：女仆不伤害不仇恨，含 AOE）、\u00a7e烧制通用化\u00a7e（熔炉喂任何可烧制物、"
-                        + "高炉/烟熏炉兼容、多女仆多炉分配）、\u00a7e跨维度/远距拉回\u00a7e（同维度 48 格 3D + Y 轴 16 格双门槛、"
-                        + "主人旁安全落点才传送；搭路中不会被打断）、\u00a7e排班表单独传送按键\u00a7e（只召一只到你身边）、"
-                        + "\u00a7e建造投影线框\u00a7e（幽灵方块以线框+近处填充渲染，区块外/穿透地形都能看到建筑轮廓）、"
-                        + "\u00a7e宰杀任务\u00a7e（检测周围牲畜数量，某一种超过阈值自动宰杀，没活时四处闲逛）、"
-                                + "\u00a7e耕地标记制\u00a7e（只锄「曾经是耕地」的地块，超平坦不再连锁扩散）。",
-                "\u00a7ev1.2.0 起新增功能速览\u00a7r：\u00a7e空袭与飞行作战\u00a7r"
-                        + "（鞘翅+武器+烟花三件套齐了就自己飞起来打怪：近战空袭贴脸扑击、远程空袭天上盘旋射击；"
-                        + "索敌改为「以自身为圆心、半径 50 格」并持续瞄准，不再飞高丢目标——见「空袭与飞行作战」章）、"
-                        + "\u00a7e投喂认模组食物\u00a7r（不再限定原版 21 种，带食物属性的都认，"
-                        + "可勾选面板逐项开关——见「贴身辅助」章）、"
-                        + "\u00a7e三叉戟按任务分类\u00a7r（攻击模式下走近战、投掷任务下走远程，不再原地转圈）、"
-                        + "\u00a7e排班表挪到「生产与工作」\u00a7r（配置面板分类调整）。",
-                "\u00a7ev1.2.2 起新增功能速览\u00a7r：\u00a7e空袭轰炸\u00a7r"
-                        + "（近战空袭打完那一记、远程空袭开火之后，顺手放炸弹：末地水晶 / 重生锚 / 床 / 投掷 TNT"
-                        + "——见「空袭与飞行作战」章⑩）、"
-                        + "\u00a7e飞行跟随\u00a7r（主人自己飞走了，她背上鞘翅追过来，\u00a77默认关\u00a7r——见「被动技能」章）、"
-                        + "\u00a7e压缩盒\u00a7r（5 格 × 每格 114514 的收纳道具，放进她背包 = 她背包的延伸——见「压缩盒」章）、"
-                        + "\u00a7e空袭 34 项数值全部可调\u00a7r（「战斗与自保 → 空袭数值」）、"
-                        + "\u00a7e副手动作表现\u00a7r（干活时手上那一件会举一下，全链路，默认开）、"
-                        + "\u00a7e落地水/落地雪与粉火\u00a7r等一批表现与稳定性修复。",
-                "\u00a7ev1.2.3 起新增功能速览\u00a7r：\u00a7e战斗模式分类表\u00a7r"
-                        + "（逐任务点名「近战 / 远程 / 不参与」，配套可关掉的「模组任务优先让位」"
-                        + "——见「战斗与自保」章）、"
-                        + "\u00a7e散步速度终于调得动\u00a7r（默认 0.7 → 0.4、可低到 0.05；"
-                        + "\u00a7e/maid_smart stroll check|go|speed\u00a7r 可现场量速——见「排班表」章）、"
-                        + "\u00a7e压缩盒禁入口径\u00a7r（附魔书 / 附魔武器 / 压缩盒都放不进去，界面里鼠标也选不中它）、"
-                        + "\u00a7e索敌口径\u00a7r（隔着方块的怪不再算威胁；战斗中工作范围临时扩圈）、"
-                        + "以及\u00a7e「收放魂符后血量上限掉回 20 / 拖装备被吞」这个严重 bug 的修复\u00a7r"
-                        + "（详见「战斗与自保」章【收放魂符】那一条）。",
-                "\u00a7ev1.2.4 起新增功能速览\u00a7r（本版）：\u00a7e激流三叉戟当「飞行推进剂」\u00a7r"
-                        + "（起飞 / 空袭的盘旋抬升与俯冲下扎 / 飞行跟随四条链路都能烧——推进力度照玩家"
-                        + "在水里那一记、并按附魔等级放大，背包里有烟花时仍优先烧烟花）、"
-                        + "\u00a7e精妙背包 / 旅行者背包适配\u00a7r（她自己的背包满了，东西就装进身上那件"
-                        + "额外容器；反过来取料时也先去那里面找）、"
-                        + "\u00a7e骑乘或坐下时不再搭方块\u00a7r、"
-                        + "\u00a7e烧制 / 酿造没有目标时不再把自己冻在原地\u00a7r、"
-                        + "\u00a7e远程空袭「拿着枪一枪不放」的修复\u00a7r（并新增「远程开火」诊断行，"
-                        + "为什么不开火一眼可查）、"
-                        + "\u00a7e「我卡住了，快喘不过气了」不再当口头禅\u00a7r（v1.2.4：只有"
-                        + "真吃到超过 4 点窒息伤害才说——头挤进方块但没掉血就不吭声，挪位置/顶出照旧；"
-                        + "运行日志分类「窒息」可查每次说与不说）、"
-                        + "\u00a7e驻守（home）模式下的农场不再「到处乱转」\u00a7r（我们给驻守女仆写的"
-                        + "随机巡逻会覆盖原版农场自己的寻路——农场现在完全交回原版：闲着就站着/"
-                        + "自己散步，作物成熟了才走过去收，见「农场与杂项功能」章）、"
-                        + "\u00a7e打完怪「驻守」不再变成「跟随」\u00a7r（战后还原真的会把战斗前的"
-                        + "驻守模式还原回去；没记录过就完全不动她的设置——见「战斗与自保」章）、"
-                        + "\u00a7e右键蛋糕崩服的修复（1.21.1）\u00a7r，以及"
-                        + "\u00a7e压缩盒禁入口径写死\u00a7r（带附魔的物品一律放不进盒子，"
-                        + "「禁入带附魔的物品」开关与「禁入清单」两个配置项已删除——见「压缩盒」章）。",
-                "\u00a7ev1.3.0 起新增功能速览\u00a7r（本版）：\u00a7e巡逻航图\u00a7r"
-                         + "（新道具，无序合成：纸 + 指南针 + 墨囊——给「扫帚模式 + 在家模式」的女仆"
-                         + "\u00a7e画一条闭环轨道\u00a7r，让她沿你画的线一圈圈飞，替代原本「绕工作范围盘旋」的守家行为；"
-                         + "一本航图装 16 条轨道，手持航图按鼠标中键打点，「连接」不再设门禁——\u00a7e见「巡逻航图」章\u00a7r）、"
-                         + "\u00a7e武装拴绳（二号位）\u00a7r（粉丝点单的「武装直升机」玩法：她飞她开火，你挂在她身下开火——"
-                         + "见「武装拴绳」章）、"
-                         + "\u00a7e骑乘指挥棒\u00a7r（让女仆骑坐骑 / 载具 / 龙跟着你走——见「骑乘指挥棒」章）、"
-                         + "\u00a7e卓越前线载具\u00a7r（她能开车、能从车上打，四种飞行载具各接各的路）、"
-                         + "\u00a7e超越维度（BeyondDimensions）存储联动\u00a7r"
-                         + "（产物回收 / 溢出入库 / 自动补货 / 缓存冲刷，选项全在「模组详细配置」的超越维度那一段里）。",
+                "\u00a7ePromaid\uff08\u5973\u4ec6 AI \u667a\u80fd\u589e\u5f3a\u5305\uff09\u00a7r\u662f\u300c\u8f66\u4e07\u5973\u4ec6 Touhou Little Maid\u300d\u7684\u9644\u5c5e\u6a21\u7ec4\uff0c\u8ba9\u5973\u4ec6\u53d8\u5f97\u66f4\u806a\u660e\u3001\u66f4\u80fd\u5e72\u3002\u00a7eForge \u7248\u00a7r \u4e0e \u00a71NeoForge \u7248\u00a7r\u00a7e\u529f\u80fd\u5bf9\u9f50\u3001\u73a9\u6cd5\u4e00\u81f4\u00a7r\uff1a\u90fd\u9002\u914d TLM\uff0cNeoForge \u7248\u591a\u4e00\u5757\u91cd\u9524\u76f8\u5173\u5185\u5bb9\uff0c\u5176\u4f59\u529f\u80fd\u4e00\u81f4\u3002",
+                "\u5b83\u7ed9\u5973\u4ec6\u5e26\u6765\u00a7e\u5efa\u9020\u3001\u6316\u77ff\u3001\u70e7\u5236\u3001\u917f\u9020\u00a7r\u4efb\u52a1\uff0c\u00a7e\u6295\u5582\u6cbb\u7597\u3001\u81ea\u4fdd\u9003\u751f\u3001\u5355\u5175\u6218\u672f\u00a7r\u7b49\u6218\u6597\u80fd\u529b\uff0c\u00a7eAI \u8bb0\u5fc6\u3001\u4e3b\u52a8\u5bf9\u8bdd\u3001\u611f\u77e5\u3001\u60c5\u7eea\u00a7r\u7b49\u667a\u80fd\u7cfb\u7edf\uff0c\u4ee5\u53ca\u5341\u51e0\u4e2a\u53ef\u88ab LLM \u5bf9\u8bdd\u76f4\u63a5\u8c03\u7528\u7684\u00a7eAI \u5de5\u5177\u00a7r\u3002",
+                "\u00a7e\u529f\u80fd\u901f\u89c8\u00a7r\uff08\u6bcf\u6761\u4e00\u884c\uff0c\u8be6\u7ec6\u73a9\u6cd5\u89c1\u5bf9"
+                + "\u5e94\u7ae0\u8282\uff09\uff1a",
+                "\u00a7e\u6392\u73ed\u8c03\u5ea6\u00a7r\uff1a\u6309\u6e38\u620f\u5185\u65f6\u95f4\u81ea\u52a8\u5207\u6362\u4efb"
+                + "\u52a1\u4e0e\u4f5c\u606f\u3002\n\u00a7e\u81ea\u4e3b\u6218\u6597\u4e0e\u8fd8\u539f\u00a7r\uff1a\u6709\u5a01\u80c1"
+                + "\u81ea\u52a8\u53c2\u6218\uff0c\u89e3\u9664\u540e\u8fd8\u539f\u539f\u4efb\u52a1\uff08\u6a21\u7ec4\u6b66\u5668"
+                + "\u8d70\u4e13\u5c5e\u6a21\u5f0f\uff09\u3002\n\u00a7e\u6392\u73ed\u5927\u8303\u56f4\u6d3b\u52a8\u00a7r\uff1a\u6392"
+                + "\u73ed\u4e2d\u7684\u5973\u4ec6\u6d3b\u52a8\u8303\u56f4\u66f4\u5927\uff0c\u8986\u76d6\u6574\u7247\u5de5\u4f5c"
+                + "\u533a\u3002\n\u00a7e\u7a7a\u95f2\u6563\u6b65\u00a7r\uff1a\u6ca1\u4e8b\u5e72\u65f6\u56db\u5904\u8d70\u8d70\uff0c"
+                + "\u4e0d\u7ad9\u6869\u53d1\u5446\u3002\n\u00a7e\u5bb0\u6740\u4efb\u52a1\u00a7r\uff1a\u67d0\u7c7b\u7272\u755c\u8d85"
+                + "\u8fc7\u9608\u503c\u81ea\u52a8\u5bb0\u6740\uff0c\u6ca1\u6d3b\u65f6\u56db\u5904\u95f2\u901b\u3002\n\u00a7e\u8015"
+                + "\u5730\u6807\u8bb0\u5236\u00a7r\uff1a\u53ea\u9504\u88ab\u6807\u8fc7\u8015\u5730\u8bb0\u53f7\u7684\u5730\u5757"
+                + "\uff0c\u8d85\u5e73\u5766\u4e0d\u8fde\u9501\u6269\u6563\u3002\n\u00a7e\u8de8\u7ef4\u5ea6 / \u8fdc\u8ddd\u62c9"
+                + "\u56de\u00a7r\uff1a\u4e3b\u4eba\u8d70\u8fdc\u6216\u6362\u7ef4\u5ea6\u65f6\u628a\u5979\u5b89\u5168\u62c9\u56de"
+                + "\uff08\u642d\u8def\u4e2d\u4e0d\u6253\u65ad\uff09\u3002\n\u00a7e\u6392\u73ed\u8868\u5355\u72ec\u4f20\u9001\u00a7r"
+                + "\uff1a\u4e00\u4e2a\u6309\u952e\u53ea\u628a\u70b9\u540d\u7684\u90a3\u53ea\u53ec\u5230\u4f60\u8eab\u8fb9\u3002\n"
+                + "\u00a7e\u5efa\u9020\u6295\u5f71\u7ebf\u6846\u00a7r\uff1a\u7528\u5e7d\u7075\u65b9\u5757\u753b\u51fa\u5efa\u7b51"
+                + "\u8f6e\u5ed3\uff0c\u9694\u5730\u5f62\u3001\u8de8\u533a\u5757\u90fd\u80fd\u770b\u89c1\u3002",
+                "\u00a7e\u642d\u8def\u00a7r\uff08\u9ed8\u8ba4\u5173\uff09\uff1a\u4e0e\u4e3b\u4eba\u9694\u6c9f\u9694\u7a7a\u65f6"
+                + "\u94fa\u65b9\u5757\u8d34\u8fd1\uff0c\u6316\u77ff\u4f10\u6728\u57ab\u5757\u4e5f\u4f1a\u8e29\u4e0a\u53bb\u3002\n"
+                + "\u00a7e\u70e7\u5236\u901a\u7528\u5316\u00a7r\uff1a\u7194\u7089\u5582\u4efb\u4f55\u53ef\u70e7\u5236\u7269\uff0c"
+                + "\u9ad8\u7089 / \u70df\u718f\u7089\u517c\u5bb9\uff0c\u591a\u5973\u4ec6\u591a\u7089\u5404\u5360\u4e00\u4e2a\u3002"
+                + "\n\u00a7e\u6295\u5582\u8ba4\u6a21\u7ec4\u98df\u7269\u00a7r\uff1a\u5e26\u98df\u7269\u5c5e\u6027\u7684\u90fd\u8ba4"
+                + "\uff0c\u53ef\u5728\u9762\u677f\u9010\u9879\u5f00\u5173\u3002\n\u00a7e\u5ba0\u7269\u514d\u75ab\u00a7r\uff1a\u73a9"
+                + "\u5bb6\u5ba0\u7269\u4e0e\u4e3b\u4eba\u7684\u5ba0\u7269\uff0c\u5973\u4ec6\u4e0d\u4f24\u5bb3\u4e5f\u4e0d\u4ec7"
+                + "\u6068\uff08\u542b AOE\uff09\u3002\n\u00a7e\u6563\u6b65\u901f\u5ea6\u53ef\u8c03\u00a7r\uff1a\u9ed8\u8ba4 0.4"
+                + "\u3001\u53ef\u4f4e\u5230 0.05\uff0c/maid_smart stroll \u53ef\u73b0\u573a\u91cf\u901f\u3002\n\u00a7e\u9a91\u4e58 "
+                + "/ \u5750\u4e0b\u4e0d\u642d\u65b9\u5757\u00a7r\uff1a\u8fd9\u4e24\u79cd\u5f62\u6001\u4e0b\u632a\u4e0d\u52a8\uff0c"
+                + "\u4e0d\u518d\u7559\u65b9\u5757\u6b8b\u6e23\u3002\n\u00a7e\u70e7\u5236\u917f\u9020\u4e0d\u51bb\u539f\u5730\u00a7r"
+                + "\uff1a\u6ca1\u6709\u76ee\u6807\u65f6\u5979\u4e0d\u4f1a\u50f5\u5728\u539f\u5730\u5e72\u7b49\u3002",
+                "\u00a7e\u7a7a\u88ad\u4e0e\u98de\u884c\u4f5c\u6218\u00a7r\uff1a\u9798\u7fc5 + \u6b66\u5668 + \u70df\u82b1\u9f50"
+                + "\u4e86\u81ea\u52a8\u98de\u8d77\u6765\u6253\uff0c\u8fd1\u6218\u8d34\u8138\u3001\u8fdc\u7a0b\u76d8\u65cb\u3002\n"
+                + "\u00a7e\u7a7a\u88ad\u8f70\u70b8\u00a7r\uff1a\u4e24\u79cd\u7a7a\u88ad\u6253\u5b8c\u4e00\u8bb0\u987a\u624b\u6254"
+                + "\u70b8\u5f39\uff08\u672b\u5730\u6c34\u6676 / \u91cd\u751f\u951a / \u5e8a / TNT\uff09\u3002\n\u00a7e\u98de\u884c"
+                + "\u8ddf\u968f\u00a7r\uff08\u9ed8\u8ba4\u5173\uff09\uff1a\u4e3b\u4eba\u81ea\u5df1\u98de\u8d70\u4e86\uff0c\u5979"
+                + "\u80cc\u4e0a\u9798\u7fc5\u8ffd\u8fc7\u6765\u3002\n\u00a7e\u8fdc\u7a0b\u7a7a\u88ad\u5f00\u706b\u00a7r\uff1a\u8fdc"
+                + "\u7a0b\u7a7a\u88ad\u4f1a\u6b63\u5e38\u5f00\u706b\uff0c\u5e76\u914d\u300c\u8fdc\u7a0b\u5f00\u706b\u300d\u8bca"
+                + "\u65ad\u884c\u67e5\u539f\u56e0\u3002\n\u00a7e\u7a7a\u88ad\u6570\u503c\u5168\u53ef\u8c03\u00a7r\uff1a34 \u9879"
+                + "\u6570\u503c\u90fd\u5728\u300c\u6218\u6597\u4e0e\u81ea\u4fdd \u2192 \u7a7a\u88ad\u6570\u503c\u300d\u91cc\u3002\n"
+                + "\u00a7e\u6fc0\u6d41\u4e09\u53c9\u621f\u63a8\u8fdb\u5242\u00a7r\uff1a\u4e3b\u624b\u6fc0\u6d41\u4e09\u53c9\u621f"
+                + "\u80fd\u5f53\u98de\u884c\u63a8\u8fdb\u5668\uff08\u8d77\u98de / \u76d8\u65cb / \u4fef\u51b2 / \u8ddf\u968f\uff09"
+                + "\u3002\n\u00a7e\u4e09\u53c9\u621f\u6309\u4efb\u52a1\u5206\u7c7b\u00a7r\uff1a\u653b\u51fb\u6a21\u5f0f\u8d70\u8fd1"
+                + "\u6218\uff0c\u6295\u63b7\u4efb\u52a1\u8d70\u8fdc\u7a0b\u3002\n\u00a7e\u6218\u6597\u6a21\u5f0f\u5206\u7c7b\u8868"
+                + "\u00a7r\uff1a\u9010\u4efb\u52a1\u70b9\u540d\u8fd1\u6218 / \u8fdc\u7a0b / \u4e0d\u53c2\u4e0e\uff0c\u53ef\u5173"
+                + "\u6389\u300c\u6a21\u7ec4\u4efb\u52a1\u4f18\u5148\u8ba9\u4f4d\u300d\u3002\n\u00a7e\u7d22\u654c\u53e3\u5f84\u00a7r"
+                + "\uff1a\u9694\u7740\u65b9\u5757\u7684\u602a\u4e0d\u7b97\u5a01\u80c1\uff1b\u6218\u6597\u4e2d\u5de5\u4f5c\u8303"
+                + "\u56f4\u4e34\u65f6\u6269\u5708\u8ffd\u654c\u3002\n\u00a7e\u9a7b\u5b88\u519c\u573a\u4e0d\u4e71\u8f6c\u00a7r\uff1a"
+                + "home \u6a21\u5f0f\u4e0b\u7684\u519c\u573a\u5b8c\u5168\u4ea4\u56de\u539f\u7248\uff0c\u95f2\u65f6\u7ad9\u7740"
+                + "\u6216\u81ea\u5df1\u6563\u6b65\u3002\n\u00a7e\u6218\u540e\u9a7b\u5b88\u8fd8\u539f\u00a7r\uff1a\u6253\u5b8c\u602a"
+                + "\u9a7b\u5b88\u4e0d\u4f1a\u53d8\u6210\u8ddf\u968f\uff0c\u6309\u6218\u6597\u524d\u8bb0\u5f55\u8fd8\u539f\u3002\n"
+                + "\u00a7e\u7a92\u606f\u63d0\u793a\u95e8\u69db\u00a7r\uff1a\u53ea\u5728\u771f\u5403\u5230\u8d85\u8fc7 4 \u70b9"
+                + "\u7a92\u606f\u4f24\u5bb3\u65f6\u624d\u8bf4\uff0c\u8fd0\u884c\u65e5\u5fd7\u5206\u7c7b\u300c\u7a92\u606f\u300d"
+                + "\u3002",
+                "\u00a7e\u538b\u7f29\u76d2\u00a7r\uff1a5 \u683c \u00d7 \u6bcf\u683c 114514 \u7684\u6536\u7eb3\u9053\u5177\uff0c"
+                + "\u653e\u8fdb\u5979\u80cc\u5305\u5c31\u662f\u5979\u80cc\u5305\u7684\u5ef6\u4f38\u3002\n\u00a7e\u538b\u7f29\u76d2"
+                + "\u7981\u5165\u53e3\u5f84\u00a7r\uff1a\u9644\u9b54\u4e66 / \u9644\u9b54\u6b66\u5668 / \u538b\u7f29\u76d2\u672c"
+                + "\u8eab\u90fd\u653e\u4e0d\u8fdb\u53bb\uff0c\u754c\u9762\u91cc\u9f20\u6807\u4e5f\u9009\u4e0d\u4e2d\u3002\n\u00a7e"
+                + "\u7cbe\u5999\u80cc\u5305\u9002\u914d\u00a7r\uff1a\u5979\u80cc\u5305\u6ee1\u4e86\u88c5\u8fdb\u8eab\u4e0a\u7684"
+                + "\u989d\u5916\u5bb9\u5668\uff0c\u53d6\u6599\u65f6\u4e5f\u5148\u53bb\u90a3\u91cc\u627e\u3002\n\u00a7e\u526f\u624b"
+                + "\u52a8\u4f5c\u8868\u73b0\u00a7r\uff08\u9ed8\u8ba4\u5f00\uff09\uff1a\u5e72\u6d3b\u65f6\u526f\u624b\u90a3\u4ef6"
+                + "\u4f1a\u4e3e\u4e00\u4e0b\uff0c\u5168\u94fe\u8def\u3002",
+                "\u00a7e\u5de1\u903b\u822a\u56fe\u00a7r\uff1a\u7ed9\u300c\u626b\u63cf + \u5728\u5bb6\u300d\u7684\u5973\u4ec6"
+                + "\u753b\u4e00\u6761\u95ed\u73af\u8f68\u9053\uff0c\u4e00\u672c\u88c5 16 \u6761\u3002\n\u00a7e\u6b66\u88c5\u62f4"
+                + "\u7ef3\uff08\u4e8c\u53f7\u4f4d\uff09\u00a7r\uff1a\u5979\u98de\u5979\u5f00\u706b\uff0c\u4f60\u6302\u5728\u5979"
+                + "\u8eab\u4e0b\u5f00\u706b\u2014\u2014\u300c\u6b66\u88c5\u76f4\u5347\u673a\u300d\u73a9\u6cd5\u3002\n\u00a7e\u9a91"
+                + "\u4e58\u6307\u6325\u68d2\u00a7r\uff1a\u8ba9\u5973\u4ec6\u9a91\u5750\u9a91 / \u8f7d\u5177 / \u9f99\u8ddf\u7740"
+                + "\u4f60\u8d70\u3002\n\u00a7e\u5353\u8d8a\u524d\u7ebf\u8f7d\u5177\u00a7r\uff1a\u5979\u80fd\u5f00\u8f66\u3001\u80fd"
+                + "\u5728\u8f66\u4e0a\u5f00\u706b\uff0c\u56db\u79cd\u98de\u884c\u8f7d\u5177\u5404\u63a5\u5404\u7684\u8def\u3002\n"
+                + "\u00a7e\u8d85\u8d8a\u7ef4\u5ea6\u5b58\u50a8\u8054\u52a8\u00a7r\uff1a\u4ea7\u7269\u56de\u6536 / \u6ea2\u51fa"
+                + "\u5165\u5e93 / \u81ea\u52a8\u8865\u8d27 / \u7f13\u5b58\u51b2\u5237\u3002",
                 "\u00a7e不想读长文？看这三章就够上手\u00a7r："
                         + "「准备篇：配置 LLM」（要 AI 功能必读）、"
                         + "「建造系统教程」（核心玩法，含完整例子）、"
@@ -135,12 +138,16 @@ public final class GuideChaptersBasics {
                         + "LLM 现场生成蓝图、AI 设计器。",
                 "\u00a7e快速上手 5 步：\u00a7r",
                 "第 1 步\u00a7e拿手册\u00a7r：进游戏系统会送你一本《Promaid 手册》"
-                        + "（丢了用 /give @p maid_smart:blueprint_book，或用工作台\u00a7e书 + 纸\u00a7r无序合成）；",
+                        + "（丢了用 /give @p maid_smart:blueprint_book）；",
+                "\u00a7e手册合成\u00a7r（工作台，无序）："
+                        + "[[#shapeless;minecraft:book;minecraft:paper;>maid_smart:blueprint_book;@书 + 纸]]",
                 "第 2 步\u00a7e配 LLM\u00a7r：想用 AI 功能（对话/记忆/工具/自主决策），先去「准备篇：配置 LLM」章"
                         + "把 AI 站点配好——这是最重要的一步；",
                 "第 3 步\u00a7e切任务\u00a7r：右键女仆打开她的任务页，切到「建筑/挖矿/烧制/酿造」等任务；",
-                "第 4 步\u00a7e开手册\u00a7r：手持手册右键，里面有\u00a7e详细介绍（本指南）、建造、女仆管理、"
-                        + "模组详细配置、女仆记忆\u00a7r五个入口；",
+                "\u7b2c 4 \u6b65\u00a7e\u5f00\u624b\u518c\u00a7r\uff1a\u624b\u6301\u624b\u518c\u53f3\u952e\uff0c\u91cc\u9762"
+                + "\u6709\u00a7e\u8be6\u7ec6\u4ecb\u7ecd\uff08\u672c\u6307\u5357\uff09\u3001\u5efa\u9020\u3001\u5973\u4ec6\u7ba1"
+                + "\u7406\u3001\u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e\u3001\u5973\u4ec6\u8bb0\u5fc6\u3001\u2691 DIY / \u9ed8\u8ba4"
+                + "\u6a21\u5f0f\u00a7r\u516d\u4e2a\u5165\u53e3\uff1b",
                 "第 5 步\u00a7e调参数\u00a7r：所有可调参数都在「模组详细配置」面板里，改完点\u00a7a保存并返回\u00a7r立即生效"
                         + "（不用重启游戏）。");
     }
@@ -162,31 +169,36 @@ public final class GuideChaptersBasics {
                 "API 地址填 https://api.deepseek.com（OpenAI 兼容），密钥填你在 DeepSeek 平台申请的 key，"
                         + "模型填 deepseek-chat；保存后对女仆说「你好」测试。",
                 "\u00a7eAI 记忆的 API\u00a7r：默认跟随原版（TLM）配置，无需单独设置。",
-                "\u00a7e输出语言\u00a7r：在「模组详细配置 → AI 与对话 → 对话与自主 → 输出语言」选「中文」——"
-                        + "不管客户端语言是什么都稳定说中文（v1.5.303 起是选项选择，不用手填代码）。",
+                "\u00a7e\u8f93\u51fa\u8bed\u8a00\u00a7r\uff1a\u5728\u300c\u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e \u2192 AI \u4e0e\u5bf9\u8bdd \u2192 \u5bf9\u8bdd\u4e0e\u81ea\u4e3b \u2192 \u8f93\u51fa\u8bed\u8a00\u300d\u9009\u300c\u4e2d\u6587\u300d\u2014\u2014\u4e0d\u7ba1\u5ba2\u6237\u7aef\u8bed\u8a00\u662f\u4ec0\u4e48\u90fd\u7a33\u5b9a\u8bf4\u4e2d\u6587\u3002",
                 "\u00a7e常见问题\u00a7r：配好了但女仆不理你？① 检查 AI 聊天开关有没有真开；② 检查密钥/地址是否填错"
                         + "（最新日志搜 chat 相关报错）；③ 人设没写时女仆不会主动说话，先手动跟她搭话。");
     }
 
     static GuideContent.Chapter bookGuide() {
         return new GuideContent.Chapter("手册使用指南",
-                "《Promaid 手册》是这个模组的总入口，\u00a7e手持右键打开\u00a7r。打开后看到五个入口：",
+                "《Promaid 手册》是这个模组的总入口，\u00a7e手持右键打开\u00a7r。打开后看到六个入口：",
                 "① \u00a7e详细介绍\u00a7r——就是你现在读的本指南（按章节翻页阅读）；",
                 "② \u00a7e建造\u00a7r——蓝图总目录（内置授权蓝图 + 你放入/导入/生成的外部图纸），点建筑看材料详情；",
                 "③ \u00a7e女仆管理\u00a7r——有效建造区块列表 + 建造状态女仆名单；",
                 "④ \u00a7e\u2699 模组详细配置\u00a7r——所有可调参数的面板（详见「模组详细配置面板导航」章）；",
-                "⑤ \u00a7e女仆记忆\u00a7r——查看/管理女仆记得的内容。",
-                "\u00a7e点链接直达配置\u00a7r（实测四百二十四）：详细介绍里\u00a7b青色带下划线\u00a7r的文字都是"
-                        + "\u00a7e可点击链接\u00a7r——点它直接打开「模组详细配置」的对应分类页，并\u00a7e高亮目标参数行\u00a7r；"
-                        + "每章正文末尾也自动附一行「\u2699 配置入口」链接。想看全部入口见「功能总览 · 一键跳转配置」章。"
-                        + "\u00a7e手册内已不再有任何开关\u00a7r——所有开关/参数都只在「模组详细配置」面板里调。",
-                "\u00a7e页面间的跳转链路\u00a7r（v1.5.290/298 起全通）：",
+                "⑤ \u00a7e女仆记忆\u00a7r——查看/管理女仆记得的内容；",
+                "⑥ \u00a7e\u2691 DIY / 默认模式\u00a7r——一键给\u00a7e整个模组\u00a7r换一套设定（见下一段）。",
+                "§eDIY / 默认模式（首页第 6 个入口）§r：点一下给§e整个模组§r换设定——§eDIY 模式§r = 把一切「介入女仆行为」的开关§e一次全关§r，像 TLM 原版一样什么都不插手，之后你只挑想要的加强项打开；§e默认模式§r = 恢复本模组的§e出厂推荐配置§r。两个档都§e立即生效、随时可切回§r（切换前会弹一次确认，并写明这次会改动多少项；AI 密钥与端点、矿表/木材表这类手工名单不会被清掉）。当前是哪个模式，该页顶部与配置面板里都能看到。",
+                "\u00a7e\u70b9\u94fe\u63a5\u76f4\u8fbe\u914d\u7f6e\u00a7r\uff1a\u8be6\u7ec6\u4ecb\u7ecd\u91cc\u00a7b\u9752\u8272"
+                + "\u5e26\u4e0b\u5212\u7ebf\u00a7r\u7684\u6587\u5b57\u90fd\u662f\u00a7e\u53ef\u70b9\u51fb\u94fe\u63a5\u00a7r\u2014"
+                + "\u2014\u70b9\u5b83\u76f4\u63a5\u6253\u5f00\u300c\u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e\u300d\u7684\u5bf9\u5e94"
+                + "\u5206\u7c7b\u9875\uff0c\u5e76\u00a7e\u9ad8\u4eae\u76ee\u6807\u53c2\u6570\u884c\u00a7r\uff1b\u6bcf\u7ae0\u6b63"
+                + "\u6587\u672b\u5c3e\u4e5f\u81ea\u52a8\u9644\u4e00\u884c\u300c\u2699 \u914d\u7f6e\u5165\u53e3\u300d\u94fe\u63a5"
+                + "\u3002\u60f3\u770b\u5168\u90e8\u5165\u53e3\u89c1\u300c\u529f\u80fd\u603b\u89c8 \u00b7 \u4e00\u952e\u8df3\u8f6c"
+                + "\u914d\u7f6e\u300d\u7ae0\u3002\u00a7e\u624b\u518c\u5185\u6ca1\u6709\u4efb\u4f55\u5f00\u5173\u00a7r\u2014\u2014"
+                + "\u6240\u6709\u5f00\u5173/\u53c2\u6570\u90fd\u53ea\u5728\u300c\u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e\u300d\u9762"
+                + "\u677f\u91cc\u8c03\u3002",
+                "\u00a7e\u9875\u9762\u95f4\u7684\u8df3\u8f6c\u94fe\u8def\u00a7r\uff1a",
                 "区块名单页（区块内右击手册 → 建造详情 → 名单）\u2192「♀ 女仆管理」按钮\u2192 女仆管理页"
                         + "\u2192 点女仆行\u2192 女仆详情页（绑定/解绑区块）。",
                 "\u00a7e小技巧 1\u00a7r：站在\u00a7e建造区块内\u00a7r再右击手册，直接进入\u00a7e该区块的建造详情页\u00a7r"
                         + "（材料缺口、暂停/继续/速度/取消按钮）；区块外右击则进大目录。",
-                "\u00a7e小技巧 2\u00a7r：世界里的区块有\u00a7e红色边框 + 悬浮标签\u00a7r（名字 + 「创建于 x, y, z」坐标），"
-                        + "标签是透显的——任何角度、隔着方块都能看到（v1.5.297 起）。",
+                "\u00a7e\u5c0f\u6280\u5de7 2\u00a7r\uff1a\u4e16\u754c\u91cc\u7684\u533a\u5757\u6709\u00a7e\u7ea2\u8272\u8fb9\u6846 + \u60ac\u6d6e\u6807\u7b7e\u00a7r\uff08\u540d\u5b57 + \u300c\u521b\u5efa\u4e8e x, y, z\u300d\u5750\u6807\uff09\uff0c\u6807\u7b7e\u662f\u900f\u663e\u7684\u2014\u2014\u4efb\u4f55\u89d2\u5ea6\u3001\u9694\u7740\u65b9\u5757\u90fd\u80fd\u770b\u5230\u3002",
                 "\u00a7e【举例】查看「猎人小屋」区块的进度：\u00a7r",
                 "走到猎人小屋区块内 → 右击手册 → 直接进入该区块详情页 → 看材料表/进度条/控制按钮；"
                         + "想换别的区块，点「← 返回目录」→ 女仆管理 → 点区块行看坐标。",
@@ -208,16 +220,11 @@ public final class GuideChaptersBasics {
                         + "按 \u00a7bZ 键\u00a7e整体顺时针旋转建筑 90°\u00a7r——占地宽深互换、楼梯/门等朝向跟着转、投影实时刷新"
                         + "（默认键位 Z；想改键点详情页右下角「\u00a79转向键位\u00a7r」直达原版按键设置）。"
                         + "选好位置与朝向后\u00a7e再次打开手册点「建造此图纸」确认\u00a7r——女仆搭建会\u00a7e直接摧毁\u00a7r区块内的树/建筑等障碍物。",
-                "\u00a7e建造期间的工地投影\u00a7r：确认后金色框换成\u00a7e红色区域框\u00a7r钉在工地（顶部显示区块名与创建坐标），"
-                        + "原地的\u00a7e橙色幽灵方块\u00a7r就是建筑最终形态——\u00a7e关掉手册就能看到\u00a7r"
-                        + "（v1.1.0 实测一百八十九/二百零一：站在\u00a7e红色区块外\u00a7r也能看清轮廓，"
-                        + "距离越远越淡，不再是「走出区块就消失」的老观感），"
-                        + "建到哪填实到哪；取消或建完自动消失。配置「蓝图投影」开关只控制两种幽灵方块，红框始终显示。",
+                "\u00a7e\u5efa\u9020\u671f\u95f4\u7684\u5de5\u5730\u6295\u5f71\u00a7r\uff1a\u786e\u8ba4\u540e\u91d1\u8272\u6846\u6362\u6210\u00a7e\u7ea2\u8272\u533a\u57df\u6846\u00a7r\u9489\u5728\u5de5\u5730\uff08\u9876\u90e8\u663e\u793a\u533a\u5757\u540d\u4e0e\u521b\u5efa\u5750\u6807\uff09\uff0c\u539f\u5730\u7684\u00a7e\u6a59\u8272\u5e7d\u7075\u65b9\u5757\u00a7r\u5c31\u662f\u5efa\u7b51\u6700\u7ec8\u5f62\u6001\u2014\u2014\u00a7e\u5173\u6389\u624b\u518c\u5c31\u80fd\u770b\u5230\u00a7r\uff0c\u7ad9\u5728\u00a7e\u7ea2\u8272\u533a\u5757\u5916\u00a7r\u4e5f\u80fd\u770b\u6e05\u8f6e\u5ed3\uff0c\u8ddd\u79bb\u8d8a\u8fdc\u8d8a\u6de1\uff1b\u5efa\u5230\u54ea\u586b\u5b9e\u5230\u54ea\uff1b\u53d6\u6d88\u6216\u5efa\u5b8c\u81ea\u52a8\u6d88\u5931\u3002\u914d\u7f6e\u300c\u84dd\u56fe\u6295\u5f71\u300d\u5f00\u5173\u53ea\u63a7\u5236\u4e24\u79cd\u5e7d\u7075\u65b9\u5757\uff0c\u7ea2\u6846\u59cb\u7ec8\u663e\u793a\u3002",
                 "\u00a7e第 4 步：绑定女仆\u00a7r",
                 "手册 → 女仆管理 → 点女仆行进详情页 → 点「绑定到选中区块」。也可以多只女仆绑同一个区块一起建。",
                 "\u00a7e第 5 步：看进度\u00a7r",
-                "区块内右击手册 → 区块详情页：材料表、进度条（百分比 + 速度 + 预计完成时间）；"
-                        + "进度条只在区块详细页显示（v1.5.302），女仆管理页保持干净。",
+                "\u533a\u5757\u5185\u53f3\u51fb\u624b\u518c \u2192 \u533a\u5757\u8be6\u60c5\u9875\uff1a\u6750\u6599\u8868\u3001\u8fdb\u5ea6\u6761\uff08\u767e\u5206\u6bd4 + \u901f\u5ea6 + \u9884\u8ba1\u5b8c\u6210\u65f6\u95f4\uff09\uff1b\u8fdb\u5ea6\u6761\u53ea\u5728\u533a\u5757\u8be6\u7ec6\u9875\u663e\u793a\uff0c\u5973\u4ec6\u7ba1\u7406\u9875\u4fdd\u6301\u5e72\u51c0\u3002",
                 "\u00a7e第 6 步：缺料补料\u00a7r",
                 "女仆缺料会暂停并气泡/系统消息告诉你缺什么（如「缺石砖 ×64」）——你背包有料她会\u00a7e自动取\u00a7r，"
                         + "你没有就去准备，补上后自动续建，已建部分不会重搭。",
@@ -238,39 +245,16 @@ public final class GuideChaptersBasics {
                 "· \u00a7e红石__国风刷铁机——黑金楼\u00a7r——村民刷铁塔，产铁锭；",
                 "· \u00a7e红石__优雅的村民交易所\u00a7r——村民交易屋（治疗僵尸村民→转职→交换）；",
                 "· \u00a7e红石__彩虹信标 / 心形下界传送门\u00a7r——装饰用红石结构（彩虹渐变信标、心形传送门）；",
-                "· \u00a7c甘蔗牧场（已失效）\u00a7r——蓝图名即标注：版本问题漏斗收不到隔泥巴的甘蔗掉落物（v1.5.300），"
-                        + "能收割但收不了货，不建议建。",
+                "\u00b7 \u00a7c\u7518\u8517\u7267\u573a\uff08\u5df2\u5931\u6548\uff09\u00a7r\u2014\u2014\u84dd\u56fe\u540d\u5373\u6807\u6ce8\uff1a\u6f0f\u6597\u6536\u4e0d\u5230\u9694\u6ce5\u5df4\u7684\u7518\u8517\u6389\u843d\u7269\uff0c\u80fd\u6536\u5272\u4f46\u6536\u4e0d\u4e86\u8d27\uff0c\u4e0d\u5efa\u8bae\u5efa\u3002",
                 "小知识：蓝图要求橡木木板时，你背包里\u00a7e任意木板\u00a7r都算数（材料等价族）；"
                         + "如果连材料等价物都找不到，会尝试使用\u00a7e玩家自定义的替代方块\u00a7r来替换建筑中需要搭建的方块"
                         + "（「模组详细配置 → 生产与工作 → 建造 → 替代品名单」里添加，如缺石砖时用圆石顶上）；"
                         + "「模组详细配置 → 生产与工作 → 建造」还可调速度档位（x1/x1.5/x3，默认 ×1）、极速模式（放置冷却归零）、"
                         + "全局放置配额、图纸流体保留（auto/always/never）、缺料同类宽松（off/machine/always）等。",
                 "\u00a7e指标石（即兴临时搭建）\u00a7r另有§e独立章节§r——见手册目录「指标石（即兴临时搭建）」，那里有合成、三步用法与全部规矩。",
-                "\u00a7e【图纸里的水/岩浆怎么办】\u00a7r（v1.2.2 实测五百八十五 / 五百九十八）：默认"
-                        + "\u00a7e机器图纸保留、普通建筑剥离\u00a7r——「像不像机器」看两处：文件名里的机器关键词"
-                        + "（村民 / 分类机 / 打包机 / 仓库 / 南瓜 / 甘蔗 / 铁砧 / 轰炸机），或者图纸本身像机器："
-                        + "\u00a7e红石/物流件 ≥3 种\u00a7r（活塞 / 观察者 / 漏斗 / 投掷器…），"
-                        + "\u00a7e或者「红石件 + 结构件」各 ≥1 种 / 结构件 ≥2 种\u00a7r"
-                        + "（岩浆块 / 冰 / 蓝冰 / 灵魂沙 / 气泡柱 / 铁砧 / 石匠台 / 堆肥桶这类——"
-                        + "史莱姆农场、刷冰机这种\u00a7e纯物理结构型机器几乎没有红石件\u00a7r，光数红石件会把它们误判成普通建筑）。"
-                        + "\u00a7e剥离时不再静默\u00a7r：运行日志与"
-                        + "「建造此图纸」的提示里都会写明剥掉了多少格水/岩浆\u00a7e以及判据算出来是什么\u00a7r"
-                        + "（例如「红石/物流件 0 种 / 结构件 0 种」），并告诉你两种改成保留的办法"
-                        + "（改文件名，或把「模组详细配置 → 生产与工作 → 建造 → 图纸流体保留」设成 \u00a7ealways\u00a7r；"
-                        + "\u00a7enever\u00a7r = 一律剥离）。",
-                "\u00a7e【缺一个颜色就整台卡住？】\u00a7r（v1.2.2 实测五百八十六）：缺料时材料匹配默认"
-                        + "\u00a7e建筑严格、机器放宽\u00a7r（档位在「建造 → 缺料同类宽松」）——机器蓝图里"
-                        + "\u00a7e任意告示牌↔任意告示牌、任意树叶↔任意树叶、任意羊毛/地毯↔同类型、"
-                        + "任意染色玻璃/玻璃板↔同类型\u00a7r（它们只是挡水/标记/遮光的功能件）；房子这类"
-                        + "图纸保持严格（配色/树种不会被动）。想要全严格选 \u00a7eoff\u00a7r，想全都放宽选 \u00a7ealways\u00a7r。"
-                        + "\u00a7e五百九十八起「像不像机器」两个配置项判据统一\u00a7r（流体保留与缺料宽松用同一把尺子，"
-                        + "不会再出现「水留下了、材料却不放宽」的矛盾）；\u00a7e判成非机器因而没放宽时，"
-                        + "运行日志会写明原因与内容判据\u00a7r（说清楚是哪种件数不够，不让你猜）。",
-                "\u00a7e【图纸里有些方块建不出来？】\u00a7r（v1.2.2 实测五百九十八）图纸里"
-                        + "\u00a7e「游戏里没有对应物品」的方块会跳过\u00a7r（火 / 传送门 / 活塞头 / 移动的活塞这类不可获取方块），"
-                        + "跳过了几格会写在运行日志里（旧版静默）；而\u00a7e墙上的火把/告示牌/横幅这类"
-                        + "「独立方块但没有同名物品」的不会跳过\u00a7r——它们由前身物品（红石火把 / 告示牌）建出来，"
-                        + "缺料提示也照物品名念（不会出现搜不到的「红石墙火把」）。",
+                "\u00a7e\u3010\u56fe\u7eb8\u91cc\u7684\u6c34/\u5ca9\u6d46\u600e\u4e48\u529e\u3011\u00a7r\uff1a\u9ed8\u8ba4\u00a7e\u673a\u5668\u56fe\u7eb8\u4fdd\u7559\u3001\u666e\u901a\u5efa\u7b51\u5265\u79bb\u00a7r\u2014\u2014\u300c\u50cf\u4e0d\u50cf\u673a\u5668\u300d\u770b\u4e24\u5904\uff1a\u6587\u4ef6\u540d\u91cc\u7684\u673a\u5668\u5173\u952e\u8bcd\uff08\u6751\u6c11 / \u5206\u7c7b\u673a / \u6253\u5305\u673a / \u4ed3\u5e93 / \u5357\u74dc / \u7518\u8517 / \u94c1\u7827 / \u8f70\u70b8\u673a\uff09\uff0c\u6216\u8005\u56fe\u7eb8\u672c\u8eab\u50cf\u673a\u5668\uff1a\u00a7e\u7ea2\u77f3/\u7269\u6d41\u4ef6 \u22653 \u79cd\u00a7r\uff08\u6d3b\u585e / \u89c2\u5bdf\u8005 / \u6f0f\u6597 / \u6295\u63b7\u5668\u2026\uff09\uff0c\u00a7e\u6216\u8005\u300c\u7ea2\u77f3\u4ef6 + \u7ed3\u6784\u4ef6\u300d\u5404 \u22651 \u79cd / \u7ed3\u6784\u4ef6 \u22652 \u79cd\u00a7r\uff08\u5ca9\u6d46\u5757 / \u51b0 / \u84dd\u51b0 / \u7075\u9b42\u6c99 / \u6c14\u6ce1\u67f1 / \u94c1\u7827 / \u77f3\u5320\u53f0 / \u5806\u80a5\u6876\u8fd9\u7c7b\u2014\u2014\u53f2\u83b1\u59c6\u519c\u573a\u3001\u5237\u51b0\u673a\u8fd9\u79cd\u00a7e\u7eaf\u7269\u7406\u7ed3\u6784\u578b\u673a\u5668\u51e0\u4e4e\u6ca1\u6709\u7ea2\u77f3\u4ef6\u00a7r\uff0c\u5149\u6570\u7ea2\u77f3\u4ef6\u4f1a\u628a\u5b83\u4eec\u8bef\u5224\u6210\u666e\u901a\u5efa\u7b51\uff09\u3002\u00a7e\u5265\u79bb\u65f6\u4f1a\u5199\u660e\u00a7r\uff1a\u8fd0\u884c\u65e5\u5fd7\u4e0e\u300c\u5efa\u9020\u6b64\u56fe\u7eb8\u300d\u7684\u63d0\u793a\u91cc\u90fd\u4f1a\u5199\u660e\u5265\u6389\u4e86\u591a\u5c11\u683c\u6c34/\u5ca9\u6d46\u00a7e\u4ee5\u53ca\u5b83\u7b97\u51fa\u6765\u662f\u4ec0\u4e48\u00a7r\uff08\u4f8b\u5982\u300c\u7ea2\u77f3/\u7269\u6d41\u4ef6 0 \u79cd / \u7ed3\u6784\u4ef6 0 \u79cd\u300d\uff09\uff0c\u5e76\u544a\u8bc9\u4f60\u4e24\u79cd\u6539\u6210\u4fdd\u7559\u7684\u529e\u6cd5\uff08\u6539\u6587\u4ef6\u540d\uff0c\u6216\u628a\u300c\u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e \u2192 \u751f\u4ea7\u4e0e\u5de5\u4f5c \u2192 \u5efa\u9020 \u2192 \u56fe\u7eb8\u6d41\u4f53\u4fdd\u7559\u300d\u8bbe\u6210 \u00a7ealways\u00a7r\uff1b\u00a7enever\u00a7r = \u4e00\u5f8b\u5265\u79bb\uff09\u3002",
+                "\u00a7e\u3010\u7f3a\u4e00\u4e2a\u989c\u8272\u5c31\u6574\u53f0\u5361\u4f4f\uff1f\u3011\u00a7r\uff1a\u7f3a\u6599\u65f6\u6750\u6599\u5339\u914d\u9ed8\u8ba4\u00a7e\u5efa\u7b51\u4e25\u683c\u3001\u673a\u5668\u653e\u5bbd\u00a7r\uff08\u6863\u4f4d\u5728\u300c\u5efa\u9020 \u2192 \u7f3a\u6599\u540c\u7c7b\u5bbd\u677e\u300d\uff09\u2014\u2014\u673a\u5668\u84dd\u56fe\u91cc\u00a7e\u4efb\u610f\u544a\u793a\u724c\u2194\u4efb\u610f\u544a\u793a\u724c\u3001\u4efb\u610f\u6811\u53f6\u2194\u4efb\u610f\u6811\u53f6\u3001\u4efb\u610f\u7f8a\u6bdb/\u5730\u6bef\u2194\u540c\u7c7b\u578b\u3001\u4efb\u610f\u67d3\u8272\u73bb\u7483/\u73bb\u7483\u677f\u2194\u540c\u7c7b\u578b\u00a7r\uff08\u5b83\u4eec\u53ea\u662f\u6321\u6c34/\u6807\u8bb0/\u906e\u5149\u7684\u529f\u80fd\u4ef6\uff09\uff1b\u623f\u5b50\u8fd9\u7c7b\u56fe\u7eb8\u4fdd\u6301\u4e25\u683c\uff08\u914d\u8272/\u6811\u79cd\u4e0d\u4f1a\u88ab\u52a8\uff09\u3002\u60f3\u8981\u5168\u4e25\u683c\u9009 \u00a7eoff\u00a7r\uff0c\u60f3\u5168\u90fd\u653e\u5bbd\u9009 \u00a7ealways\u00a7r\u3002\u00a7e\u300c\u50cf\u4e0d\u50cf\u673a\u5668\u300d\u4e24\u4e2a\u914d\u7f6e\u9879\u53e3\u5f84\u7edf\u4e00\u00a7r\uff08\u6d41\u4f53\u4fdd\u7559\u4e0e\u7f3a\u6599\u5bbd\u677e\u7528\u540c\u4e00\u628a\u5c3a\u5b50\uff0c\u4e0d\u4f1a\u51fa\u73b0\u300c\u6c34\u7559\u4e0b\u4e86\u3001\u6750\u6599\u5374\u4e0d\u653e\u5bbd\u300d\u7684\u77db\u76fe\uff09\uff1b\u00a7e\u5224\u6210\u975e\u673a\u5668\u56e0\u800c\u6ca1\u653e\u5bbd\u65f6\uff0c\u8fd0\u884c\u65e5\u5fd7\u4f1a\u5199\u660e\u539f\u56e0\u4e0e\u5185\u5bb9\u5224\u5b9a\u00a7r\uff08\u8bf4\u6e05\u695a\u662f\u54ea\u79cd\u4ef6\u6570\u4e0d\u591f\uff0c\u4e0d\u8ba9\u4f60\u731c\uff09\u3002",
+                "\u00a7e\u3010\u56fe\u7eb8\u91cc\u6709\u4e9b\u65b9\u5757\u5efa\u4e0d\u51fa\u6765\uff1f\u3011\u00a7r\u56fe\u7eb8\u91cc\u00a7e\u300c\u6e38\u620f\u91cc\u6ca1\u6709\u5bf9\u5e94\u7269\u54c1\u300d\u7684\u65b9\u5757\u4f1a\u8df3\u8fc7\u00a7r\uff08\u706b / \u4f20\u9001\u95e8 / \u6d3b\u585e\u5934 / \u79fb\u52a8\u7684\u6d3b\u585e\u8fd9\u7c7b\u4e0d\u53ef\u83b7\u53d6\u65b9\u5757\uff09\uff0c\u8df3\u8fc7\u4e86\u51e0\u683c\u4f1a\u5199\u5728\u8fd0\u884c\u65e5\u5fd7\u91cc\uff1b\u800c\u00a7e\u5899\u4e0a\u7684\u706b\u628a/\u544a\u793a\u724c/\u6a2a\u5e45\u8fd9\u7c7b\u300c\u72ec\u7acb\u65b9\u5757\u4f46\u6ca1\u6709\u540c\u540d\u7269\u54c1\u300d\u7684\u4e0d\u4f1a\u8df3\u8fc7\u00a7r\u2014\u2014\u5b83\u4eec\u7531\u524d\u8eab\u7269\u54c1\uff08\u7ea2\u77f3\u706b\u628a / \u544a\u793a\u724c\uff09\u5efa\u51fa\u6765\uff0c\u7f3a\u6599\u63d0\u793a\u4e5f\u7167\u7269\u54c1\u540d\u5ff5\uff08\u4e0d\u4f1a\u51fa\u73b0\u641c\u4e0d\u5230\u7684\u300c\u7ea2\u77f3\u5899\u706b\u628a\u300d\uff09\u3002",
                 "\u00a7e【材料放箱子里就行】\u00a7r缺料时女仆会去\u00a7e建造区块内（含外扩 4 格）\u00a7r的"
                         + "箱子 / 木桶 / 潜影箱里找缺少的那种材料：走过去 → 开箱（盖子会动）→ 拿走一部分 → 关箱回工地继续盖。"
                         + "末影箱不会被翻；区块外的箱子她不去（不想让她为材料跑远）。开建前算材料也把箱子里的算进去，"
@@ -281,8 +265,9 @@ public final class GuideChaptersBasics {
         return new GuideContent.Chapter("指标石（即兴临时搭建）",
                 "\u00a7e指标石\u00a7r 是即兴搭建用的§e临时蓝图制作器§r——想临时搭一座桥、一堵墙、一段路，"
                         + "又懒得做蓝图时用它：\u00a7e指哪锁哪，剩下的交给女仆填过去\u00a7r。",
-                "\u00a7e合成\u00a7r：\u00a79 块平滑石头 3×3 摆满\u00a7r（工作台九格全填平滑石头 → 出 1 个指标石）。"
-                        + "\u00a77平滑石头＝圆石烧一遍\u00a7r。",
+                "\u00a7e合成\u00a7r（工作台）："
+                        + "[[#shaped;SSS;SSS;SSS;S=minecraft:smooth_stone;>maid_smart:index_stone;@9 块平滑石头 3×3 摆满]]"
+                        + "\n\u00a77平滑石头＝圆石烧一遍\u00a7r。",
                 "\u00a7e三步用法\u00a7r",
                 "① \u00a7e选方块\u00a7r：手持指标石，你视线指到的方块会显示\u00a7a绿色框\u00a7r（跟着指针走）→ "
                         + "\u00a7e右键\u00a7r把它锁定成\u00a7c红色框\u00a7r。\u00a7e可以锁很远的方块\u00a7r（512 格长射线），但不能锁空气；",
@@ -293,15 +278,8 @@ public final class GuideChaptersBasics {
                 "\u00a7e材料从哪来\u00a7r：\u00a7e不固定\u00a7r——先从她背包拿，不够从\u00a7e你的背包\u00a7r拉；"
                         + "选的是背包里\u00a7e数量最多、有碰撞体积的方块\u00a7r（沙 / 砾石 / TNT / 仙人掌等会被自动排除）；"
                         + "\u00a7e创造模式视为无限材料\u00a7r。",
-                "\u00a7e瞄不到锁定方块了怎么办\u00a7r（v1.2.2 实测五百八十四）：\u00a7e潜行 + 右键 = 强制解锁\u00a7r"
-                        + "——锁定格被水/地形挡住、或走远超出 512 格长射线时，原来会卡在「必须先右击那一格」上；"
-                        + "另外\u00a7e对着自己的女仆右键一次\u00a7r也会刷新状态，重进世界同样自愈（锁定状态在进世界与"
-                        + "换维度时都会跟服务端重新对齐）。",
-                "\u00a7e几条规矩\u00a7r：\u00a7e必须先锁方块、再绑女仆\u00a7r（先绑会提示不行）；"
-                        + "一个玩家同时只能有\u00a7e一个锁定 + 一个绑定\u00a7r；这次搭建完成前不能开下一个"
-                        + "（完成或取消后\u00a7e自动还原她的原任务与作息\u00a7r）；想换目标方块，"
-                        + "必须\u00a7e先右击那个锁定方块解除锁定\u00a7r（右击别处不会换）；"
-                        + "中途被收回 / 死亡 / 材料不够会\u00a7e明确报告搭了多少块\u00a7r再收尾，不会卡死。",
+                "\u00a7e\u7784\u4e0d\u5230\u9501\u5b9a\u65b9\u5757\u4e86\u600e\u4e48\u529e\u00a7r\uff1a\u00a7e\u6f5c\u884c + \u53f3\u952e = \u5f3a\u5236\u89e3\u9501\u00a7r\u2014\u2014\u9501\u5b9a\u683c\u88ab\u6c34/\u5730\u5f62\u6321\u4f4f\u3001\u6216\u8d70\u8fdc\u8d85\u51fa 512 \u683c\u957f\u5c04\u7ebf\u65f6\uff0c\u90fd\u80fd\u8fd9\u6837\u89e3\u9501\uff1b\u53e6\u5916\u00a7e\u5bf9\u7740\u81ea\u5df1\u7684\u5973\u4ec6\u53f3\u952e\u4e00\u6b21\u00a7r\u4e5f\u4f1a\u5237\u65b0\u72b6\u6001\uff0c\u91cd\u8fdb\u4e16\u754c\u540c\u6837\u81ea\u6108\uff08\u9501\u5b9a\u72b6\u6001\u5728\u8fdb\u4e16\u754c\u4e0e\u6362\u7ef4\u5ea6\u65f6\u90fd\u4f1a\u8ddf\u670d\u52a1\u7aef\u91cd\u65b0\u5bf9\u9f50\uff09\u3002",
+                "\u00a7e\u51e0\u6761\u89c4\u77e9\u00a7r\uff1a\u00a7e\u5fc5\u987b\u5148\u9501\u65b9\u5757\u3001\u518d\u7ed1\u5973\u4ec6\u00a7r\uff08\u5148\u7ed1\u4f1a\u63d0\u793a\u4e0d\u884c\uff09\uff1b\u4e00\u4e2a\u73a9\u5bb6\u540c\u65f6\u53ea\u80fd\u6709\u00a7e\u4e00\u4e2a\u9501\u5b9a + \u4e00\u4e2a\u7ed1\u5b9a\u00a7r\uff1b\u8fd9\u6b21\u642d\u5efa\u5b8c\u6210\u524d\u4e0d\u80fd\u5f00\u4e0b\u4e00\u4e2a\uff08\u5b8c\u6210\u6216\u53d6\u6d88\u540e\u00a7e\u81ea\u52a8\u8fd8\u539f\u5979\u7684\u539f\u4efb\u52a1\u4e0e\u4f5c\u606f\u00a7r\uff09\uff1b\u60f3\u6362\u76ee\u6807\u65b9\u5757\uff0c\u5fc5\u987b\u00a7e\u5148\u53f3\u51fb\u90a3\u4e2a\u9501\u5b9a\u65b9\u5757\u89e3\u9664\u9501\u5b9a\u00a7r\uff08\u53f3\u51fb\u522b\u5904\u4e0d\u4f1a\u6362\uff09\uff1b\u00a7e\u9a91\u4e58\u4e2d\u6216\u5b88\u5bb6\u6a21\u5f0f\u7684\u5973\u4ec6\u4e0d\u63a5\u7ed1\u5b9a\u00a7r\uff08\u00a7e\u5750\u7740\u7684\u5973\u4ec6\u53ef\u4ee5\u7ed1\u00a7r\u2014\u2014\u5979\u5750\u7740\u65bd\u5de5\u4e0e\u84dd\u56fe\u5efa\u9020\u540c\u6b3e\uff0c\u4e0d\u53d7\u5f71\u54cd\uff09\uff1b\u4e2d\u9014\u88ab\u6536\u56de / \u6b7b\u4ea1 / \u6750\u6599\u4e0d\u591f\u4f1a\u00a7e\u660e\u786e\u62a5\u544a\u642d\u4e86\u591a\u5c11\u5757\u00a7r\u518d\u6536\u5c3e\uff0c\u4e0d\u4f1a\u5361\u6b7b\u3002",
                 "\u00a7e顺带提醒\u00a7r：她填的是\u00a7e真实方块\u00a7r（真的从背包消耗），不是投影；"
                         + "总开关在「模组详细配置 → 生产与工作 → 建造 → 指标石」，关掉后指标石退化为普通物品。");
     }
@@ -315,8 +293,8 @@ public final class GuideChaptersBasics {
                         + "调色板上的色），\u00a7e锁扣仍是金色\u00a7r——箱子上唯一的对比点，全粉会显得太空；"
                         + "另外它\u00a7e常驻附魔光效\u00a7r（跟排班表／手册同款的做法）：装了多少东西一眼看不出来，"
                         + "有个记号更容易在背包里认出来。",
-                "\u00a7e合成\u00a7r：工作台里\u00a7e中间放粉色染料、上下左右（第 2/4/6/8 格）放钻石、"
-                        + "四个角放樱花木板\u00a7r——成品 1 个压缩盒。",
+                "\u00a7e合成\u00a7r（工作台）："
+                        + "[[#shaped;PDP;DYD;PDP;P=minecraft:cherry_planks;D=minecraft:diamond;Y=minecraft:pink_dye;>maid_smart:compression_box;@中间粉染料 + 上下左右钻石 + 四角樱花木板]]",
                 "\u00a7e怎么用\u00a7r：\u00a7e拿在手上右键\u00a7r打开它的界面（5 个格子 + 你自己的背包）。"
                         + "操作跟\u00a7e往箱子里存东西一样\u00a7r——鼠标上会挂着一叠：",
                 "\u00a7e  · 左键点你自己的背包格 = 拿起那一叠\u00a7r（挂在鼠标上）；再\u00a7e左键点盒子格 = 放下\u00a7r"
@@ -336,53 +314,25 @@ public final class GuideChaptersBasics {
                         + "盒子里那 5 格的数量是格子下面那行大字（原版右下角的小字放不下六位数），"
                         + "\u00a7e耐久条照画\u00a7r。\u00a7e鼠标停在格子上\u00a7r会显示名字/数量/耐久；"
                         + "按住 Shift 还会说明这一下会发生什么。",
-                "\u00a7e  · \u00a7e压缩盒不能装进压缩盒\u00a7r：想把自己存进自己、或把另一个盒子存进来，"
-                        + "都会被拒（界面上那一格会显示红字、服务端也拦）。这是修掉的一个 bug——"
-                        + "以前装进去会把盒子卡住、里面的东西再也取不出来。"
-                        + "六百二十 起还多了一条：\u00a7e在这个界面里鼠标选不中压缩盒\u00a7r——"
-                        + "点它既不拿起、也不和手上的东西交换，只回你一句「压缩盒不能装进压缩盒」"
-                        + "（以前能拿起挂在鼠标上，之后的每一次点击都会被服务端挡掉，看着像界面坏了）。",
-                "\u00a7e  · \u00a7e带附魔的东西也放不进\u00a7r（六百二十；六百四十五 起\u00a7e口径写死\u00a7r）：附魔书、附魔武器/工具/盔甲……"
-                        + "一律不让进盒子，界面里也会当场告诉你为什么。理由有两个：①盒子只有 5 格，"
-                        + "而附魔物品\u00a7e不可堆叠\u00a7r（不同附魔组合互相不是同一件东西，一格只能放一种组合），"
-                        + "很快就满——这个盒子的定位是「\u00a7e大批材料的压缩仓\u00a7r」而不是装备库；"
-                        + "②附魔类正是以前「存进去会消失」的那一类（原因见下面那条）。"
-                        + "\u00a7e这一条没有开关\u00a7r（六百四十五 起写死）：原来那两个配置项"
-                        + "（\u00a7e禁入带附魔的物品\u00a7r开关与\u00a7e禁入清单\u00a7r）已经删除——"
-                        + "关掉开关之后上面两个理由一个字都没变，只是把已经堵上的坑重新打开；"
-                        + "而自定义清单要求手写完整注册名、效果又只是「让女仆看不见某样东西」，"
-                        + "玩家真想挡的东西本来就写死了。",
+                "\u00a7e  \u00b7 \u00a7e\u538b\u7f29\u76d2\u4e0d\u80fd\u88c5\u8fdb\u538b\u7f29\u76d2\u00a7r\uff1a\u60f3\u628a\u81ea\u5df1\u5b58\u8fdb\u81ea\u5df1\u3001\u6216\u628a\u53e6\u4e00\u4e2a\u76d2\u5b50\u5b58\u8fdb\u6765\uff0c\u90fd\u4f1a\u88ab\u62d2\uff08\u754c\u9762\u4e0a\u90a3\u4e00\u683c\u4f1a\u663e\u793a\u7ea2\u5b57\u3001\u670d\u52a1\u7aef\u4e5f\u62e6\uff09\u3002\u00a7e\u5728\u8fd9\u4e2a\u754c\u9762\u91cc\u9f20\u6807\u9009\u4e0d\u4e2d\u538b\u7f29\u76d2\u00a7r\u2014\u2014\u70b9\u5b83\u65e2\u4e0d\u62ff\u8d77\u3001\u4e5f\u4e0d\u548c\u624b\u4e0a\u7684\u4e1c\u897f\u4ea4\u6362\uff0c\u53ea\u56de\u4f60\u4e00\u53e5\u300c\u538b\u7f29\u76d2\u4e0d\u80fd\u88c5\u8fdb\u538b\u7f29\u76d2\u300d\u3002",
+                "\u00a7e  \u00b7 \u00a7e\u5e26\u9644\u9b54\u7684\u4e1c\u897f\u4e5f\u653e\u4e0d\u8fdb\u00a7r\uff1a\u9644\u9b54\u4e66\u3001\u9644\u9b54\u6b66\u5668/\u5de5\u5177/\u76d4\u7532\u2026\u2026\u4e00\u5f8b\u4e0d\u8ba9\u8fdb\u76d2\u5b50\uff0c\u754c\u9762\u91cc\u4e5f\u4f1a\u5f53\u573a\u544a\u8bc9\u4f60\u4e3a\u4ec0\u4e48\u3002\u7406\u7531\u6709\u4e24\u4e2a\uff1a\u2460\u76d2\u5b50\u53ea\u6709 5 \u683c\uff0c\u800c\u9644\u9b54\u7269\u54c1\u00a7e\u4e0d\u53ef\u5806\u53e0\u00a7r\uff08\u4e0d\u540c\u9644\u9b54\u7ec4\u5408\u4e92\u76f8\u4e0d\u662f\u540c\u4e00\u4ef6\u4e1c\u897f\uff0c\u4e00\u683c\u53ea\u80fd\u653e\u4e00\u79cd\u7ec4\u5408\uff09\uff0c\u5f88\u5feb\u5c31\u6ee1\u2014\u2014\u8fd9\u4e2a\u76d2\u5b50\u7684\u5b9a\u4f4d\u662f\u300c\u00a7e\u5927\u6279\u6750\u6599\u7684\u538b\u7f29\u4ed3\u00a7r\u300d\u800c\u4e0d\u662f\u88c5\u5907\u5e93\uff1b\u2461\u9644\u9b54\u7c7b\u6700\u5bb9\u6613\u51fa\u73b0\u5b58\u50a8\u5f02\u5e38\u3002\u00a7e\u8fd9\u4e00\u6761\u6ca1\u6709\u5f00\u5173\u00a7r\uff1a\u5e26\u9644\u9b54\u7684\u7269\u54c1\u4e00\u5f8b\u6321\u5728\u5916\u9762\u3002",
                 "\u00a7e女仆那一侧的口径\u00a7r（这一档最需要说清楚的地方）：",
-                "\u00a7e  · 她一次最多从盒子里拿 64 个\u00a7r，大堆留在盒子里。这不是小气——"
-                        + "原版的存档／网络把物品数量写成 1 个字节（1.20.1 侧实测：114514 整堆放进她的"
-                        + "背包格会被\u00a7e截断成 82\u00a7r = 凭空蒸发），所以她的「视野」必须封顶"
-                        + "（想看她到底能看见什么：\u00a7e/maid_smart box <女仆>\u00a7r 会把"
-                        + "「看得见多少 / 实际多少」逐格打出来）；",
-                "\u00a7e  · 不可堆叠的东西（药水、工具、盔甲、马鞍……）她一次只看得见 1 个\u00a7r："
-                        + "这类物品的原版堆叠上限就是 1，交给她一个「2 个的附魔书」这种\u00a7e非法堆\u00a7r"
-                        + "会被原版只收下 1 个、剩下的丢掉——这正是以前「附魔物品存进盒子会消失」的原因"
-                        + "（也正是六百四十五 起干脆把带附魔的一律挡在外面的理由之一）；",
+                "\u00a7e  \u00b7 \u5979\u4e00\u6b21\u6700\u591a\u4ece\u76d2\u5b50\u91cc\u62ff 64 \u4e2a\u00a7r\uff0c\u5927\u5806\u7559\u5728\u76d2\u5b50\u91cc\u3002\u8fd9\u4e0d\u662f\u5c0f\u6c14\u2014\u2014\u539f\u7248\u7684\u5b58\u6863\uff0f\u7f51\u7edc\u628a\u7269\u54c1\u6570\u91cf\u5199\u6210 1 \u4e2a\u5b57\u8282\uff08\u6574\u5806 114514 \u4e2a\u653e\u8fdb\u5979\u7684\u80cc\u5305\u683c\u4f1a\u88ab\u00a7e\u622a\u65ad\u6210 82\u00a7r = \u51ed\u7a7a\u84b8\u53d1\uff09\uff0c\u6240\u4ee5\u5979\u7684\u300c\u89c6\u91ce\u300d\u5fc5\u987b\u5c01\u9876\uff08\u60f3\u770b\u5979\u5230\u5e95\u80fd\u770b\u89c1\u4ec0\u4e48\uff1a\u00a7e/maid_smart box <\u5973\u4ec6>\u00a7r \u4f1a\u628a\u300c\u770b\u5f97\u89c1\u591a\u5c11 / \u5b9e\u9645\u591a\u5c11\u300d\u9010\u683c\u6253\u51fa\u6765\uff09\uff1b",
+                "\u00a7e  \u00b7 \u4e0d\u53ef\u5806\u53e0\u7684\u4e1c\u897f\uff08\u836f\u6c34\u3001\u5de5\u5177\u3001\u76d4\u7532\u3001\u9a6c\u978d\u2026\u2026\uff09\u5979\u4e00\u6b21\u53ea\u770b\u5f97\u89c1 1 \u4e2a\u00a7r\uff1a\u8fd9\u7c7b\u7269\u54c1\u7684\u539f\u7248\u5806\u53e0\u4e0a\u9650\u5c31\u662f 1\uff0c\u4ea4\u7ed9\u5979\u4e00\u4e2a\u300c2 \u4e2a\u7684\u9644\u9b54\u4e66\u300d\u8fd9\u79cd\u00a7e\u975e\u6cd5\u5806\u00a7r\u4f1a\u88ab\u539f\u7248\u53ea\u6536\u4e0b 1 \u4e2a\u3001\u5269\u4e0b\u7684\u4e22\u6389\u2014\u2014\u6240\u4ee5\u5979\u6536\u8fdb\u76d2\u5b50\u65f6\u4f1a\u4e00\u5f8b\u6321\u4e0b\u5e26\u9644\u9b54\u7684\u7269\u54c1\uff0c\u907f\u514d\u8fd9\u7c7b\u635f\u8017\uff1b",
                 "\u00a7e  · 往里存则不封顶\u00a7r：她捡到的东西会\u00a7e并进\u00a7r盒子里已有的那一堆"
                         + "（一直堆到每格上限），盒子里也不套盒子；",
-                "\u00a7e  · \u00a7e她会吃盒子里的饭\u00a7r：饭、弹药、TNT、建材……盒子里的东西她能正常取用"
-                        + "（以前她只认弹药/TNT 这类，食物放进去她不吃——现在饿了会自己去盒子里拿）；",
+                "\u00a7e  \u00b7 \u00a7e\u5979\u4f1a\u5403\u76d2\u5b50\u91cc\u7684\u996d\u00a7r\uff1a\u996d\u3001\u5f39\u836f\u3001TNT\u3001\u5efa\u6750\u2026\u2026\u76d2\u5b50\u91cc\u7684\u4e1c\u897f\u5979\u80fd\u6b63\u5e38\u53d6\u7528\uff08\u997f\u4e86\u4f1a\u81ea\u5df1\u53bb\u76d2\u5b50\u91cc\u62ff\uff09\uff1b",
                 "\u00a7e  · 放多个盒子也行\u00a7r：背包里每个压缩盒各贡献 5 格（顺序按她在背包里的格子顺序）。",
                 "\u00a7e两条边界\u00a7r：① \u00a7e它不接原版漏斗\u00a7r（漏斗那套按「一格最多 64」算，"
                         + "碰到一格 11 万个的堆会把目标格改写成 64 = 销毁物品；本模组宁可少一个接口也不丢东西）；"
                         + "② \u00a7e它现在不能放置成方块\u00a7r——拿在手上右键就是开界面（潜影箱要放下才能开，"
-                        + "这一个反过来更方便）；方块形态留待以后。",
+                        + "这一个反过来更方便）。",
                 "\u00a7e可调的只有两条\u00a7r，在「模组详细配置 → 系统与杂项 → 压缩盒」："
                         + "\u00a7e女仆背包延伸\u00a7r（默认开，关掉她就看不见盒子里面的东西）与"
                         + "\u00a7e每格上限\u00a7r（默认 114514，范围 64~1000000）。"
                         + "\u00a7e禁入规则\u00a7r（压缩盒本身 + 带附魔的物品）在这一页有一条"
-                        + "「只读」的说明行，\u00a7e不提供开关\u00a7r——六百四十五 起写死。",
-                "\u00a7e游戏内自检\u00a7r：\u00a7e/maid_smart box check [女仆]\u00a7r 会把整套判定逐条跑一遍"
-                        + "并打印\u00a7e[PASS]/[FAIL]\u00a7r——「盒子不许装盒子」（含自己那一格、另一个盒子、"
-                        + "以及\u00a7e对照\u00a7r：同一个动作存普通物品必须成功）、"
-                        + "\u00a7e禁入判据\u00a7r（附魔物品与压缩盒的拒绝 + 石头必须放行 + 那两个配置项确实已经删掉）、"
-                        + "\u00a7e鼠标选不中压缩盒\u00a7r（拿起与交换两条路）、"
-                        + "\u00a7e不可堆叠物品交给她/原版的堆是否合法\u00a7r、"
-                        + "\u00a7e箱子式鼠标取放全流程\u00a7r（拿起/放下/搬回来/快速移动/收手不丢）、"
-                        + "以及\u00a7e「她吃饭那条判据扫不扫得到盒子里的食物」\u00a7r都在里面。");
+                        + "「只读」的说明行，\u00a7e不提供开关\u00a7r——写死。",
+                "\u00a7e\u6e38\u620f\u5185\u81ea\u68c0\u00a7r\uff1a\u00a7e/maid_smart box check [\u5973\u4ec6]\u00a7r \u4f1a\u628a\u6574\u5957\u5224\u5b9a\u9010\u6761\u8dd1\u4e00\u904d\u5e76\u6253\u5370\u00a7e[PASS]/[FAIL]\u00a7r\u2014\u2014\u300c\u76d2\u5b50\u4e0d\u8bb8\u88c5\u76d2\u5b50\u300d\uff08\u542b\u81ea\u5df1\u90a3\u4e00\u683c\u3001\u53e6\u4e00\u4e2a\u76d2\u5b50\u3001\u4ee5\u53ca\u00a7e\u5bf9\u7167\u00a7r\uff1a\u540c\u4e00\u4e2a\u52a8\u4f5c\u5b58\u666e\u901a\u7269\u54c1\u5fc5\u987b\u6210\u529f\uff09\u3001\u00a7e\u7981\u5165\u53e3\u5f84\u00a7r\uff08\u9644\u9b54\u7269\u54c1\u4e0e\u538b\u7f29\u76d2\u7684\u62d2\u7edd + \u77f3\u5934\u5fc5\u987b\u653e\u884c\uff09\u3001\u00a7e\u9f20\u6807\u9009\u4e0d\u4e2d\u538b\u7f29\u76d2\u00a7r\uff08\u62ff\u8d77\u4e0e\u4ea4\u6362\u4e24\u6761\u8def\uff09\u3001\u00a7e\u4e0d\u53ef\u5806\u53e0\u7269\u54c1\u4ea4\u7ed9\u5979/\u539f\u7248\u7684\u5806\u662f\u5426\u5408\u6cd5\u00a7r\u3001\u00a7e\u7bb1\u5b50\u5f0f\u9f20\u6807\u53d6\u653e\u5168\u6d41\u7a0b\u00a7r\uff08\u62ff\u8d77/\u653e\u4e0b/\u642c\u56de\u6765/\u5feb\u901f\u79fb\u52a8/\u6536\u624b\u4e0d\u4e22\uff09\u3001\u4ee5\u53ca\u00a7e\u300c\u5979\u5403\u996d\u90a3\u6761\u5224\u5b9a\u626b\u4e0d\u626b\u5f97\u5230\u76d2\u5b50\u91cc\u7684\u98df\u7269\u300d\u00a7r\u90fd\u5728\u91cc\u9762\u3002");
     }
 }
+                                                    

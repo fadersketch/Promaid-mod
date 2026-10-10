@@ -26,7 +26,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  * （三件齐备时 MaidFlightKit.equip 会穿上）= "激活即显示"，与玩家穿戴鞘翅一致。
  *
  * ── v1.2.2 实测六百一十一【判据加上"正在滑翔"】──
- * 用户反馈："飞行跟随……动作没有换成空袭飞行的动作。"飞行跟随的女仆**不是飞行任务**
+ * 飞行跟随的女仆**不是飞行任务**
  * （她在跟主人，任务可能是空闲/搭路），旧判据只看 `isFlightTask` → 她滑翔时背上一片空白。
  * 现在改成 `MaidFlightKit.isFlightVisual(maid)`（= `isFlightTask || isGliding`）：空袭那边一字不变（它本来就在滑翔），
  * 跟着飞的她与"玩家给她鞘翅、她自己滑起来"的情况也一并认——滑翔位是**同步过的共享标志位 7**，
@@ -83,7 +83,7 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             return;
         }
         // 【实测七百一十一】闸门从「飞行任务 或 正在滑翔」放宽为「胸甲槽穿着可渲染的鞘翅」——
-        // 玩家原话「同时在所有模式下渲染」。于是她站着挖矿/走路时背上也有一对**折叠**的翅膀
+        // 。于是她站着挖矿/走路时背上也有一对**折叠**的翅膀
         // （张合仍由滑翔位决定，见下方 forceSpread），与原版玩家"穿着鞘翅背上就有翅膀"同款。
         // 开关关闭时退回旧判据（只在飞行任务/滑翔时画）。
         if (maid.m_20145_() || (!MaidWingSkins.enabled() && !MaidFlightKit.isFlightVisual(maid))) {
@@ -110,6 +110,8 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         if (!maid.getConfigManager().isShowBackItem()) {
             return;
         }
+        // 【实测八百三十四】渲染护栏：本层吞异常，若原版模型渲染中途抛异常会把它的 push 留在栈上
+        int guardDepth = com.maidsmart.client.MaidRenderGuard.depthOf(poseStack);
         poseStack.m_85836_();
         try {
             poseStack.m_252880_(0.0f, 0.0f, 0.125f);
@@ -151,9 +153,11 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
                     RenderType.m_110431_(MaidWingSkins.textureFor(chest, maid)), false, chest.m_41790_());
             this.elytraModel.m_7695_(poseStack, vc, light, OverlayTexture.f_118083_,
                     1.0f, 1.0f, 1.0f, 1.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            com.maidsmart.client.MaidRenderGuard.noteSwallowed("鞘翅图层（Bedrock）", t);
         } finally {
             poseStack.m_85849_();
+            com.maidsmart.client.MaidRenderGuard.restore(poseStack, guardDepth);
         }
     }
 }

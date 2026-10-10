@@ -354,6 +354,21 @@ public final class BlueprintCatalog {
         return result;
     }
 
+    /** 实测八百三十一：最近一次 {@link #parseJson} 失败的原因（成功/未调用时为 null）。
+     *  供 smart_build / smart_design 把「为什么不成」如实报给 LLM 与玩家——
+     *  旧版只有一句「蓝图格式不对 / 未知蓝图」，玩家和模型都无从下手。 */
+    private static volatile String LAST_JSON_ERROR = null;
+
+    /** 实测八百三十一：JSON 蓝图的**物理**兜底范围（绝对值，格）。策略上限（白名单、块数）
+     *  交给各自入口：见 parseJson 注释。512 足够任何一栋正常建筑，又拦住手滑写出的
+     *  天文坐标（结构文件本身也可达 ±数百）。 */
+    static final int JSON_SANITY_BOUND = 512;
+
+    /** 最近一次 JSON 蓝图解析失败的原因（成功时为 null）——见 {@link #parseJson}。 */
+    public static String lastJsonError() {
+        return LAST_JSON_ERROR;
+    }
+
     private static String getJsonString(JsonObject obj, String key) {
         try {
             JsonElement el = obj.get(key);
@@ -366,7 +381,27 @@ public final class BlueprintCatalog {
         return null;
     }
 
+    /**
+     * 解析 JSON 蓝图 → 步骤列表（失败返回 null，原因见 {@link #lastJsonError()}）。
+     *
+     * <p>【实测八百三十一·图纸存不成蓝图的老坑】这里以前把「主 LLM 现场 JSON」的三条**策略**
+     * 上限（±maxRange / y≤maxHeight / 白名单）当成了解析器的门槛，而 parseJson 是所有 JSON
+     * 蓝图的**唯一**入口：smart_build 现场 JSON、smart_design 子 Agent 自绘蓝图、落盘后
+     * scanExternalBlueprints 重新加载 JSON 文件、玩家自己往 config/maid_smart/blueprints/
+     * 放的 JSON——全都过它。于是：
+     * <ul>
+     *   <li>smart_design 的宽松校验（v1.5.197 特意放宽到 designMaxBlocks）**根本轮不到执行**——
+     *       parseJson 先返回 null，玩家看到的是「建筑师返回的蓝图格式不对」；</li>
+     *   <li>落盘后的 JSON 文件重新加载时同样被 null → 「存下来了但手册里看不到 / 建不了」；</li>
+     *   <li>20 格高的树（y&gt;8）、±12 外的庭院、白名单外的 cherry_leaves 全被误杀。</li>
+     * </ul>
+     * 现在 parseJson 只做【结构 + 物理兜底】，策略上限交回各自入口：
+     * smart_build 现场 JSON → {@code BlueprintLib.validate()}（白名单 + 小上限，防模型单次
+     * 喷巨量参数）；smart_design 自绘蓝图 → {@code SmartDesignTool.looseValidate()}
+     * （只限 designMaxBlocks）；JSON 蓝图文件 → structureMaxBlocks（与 .nbt/.schem 同一条上限）。
+     */
     public static List<String> parseJson(String json) {
+        LAST_JSON_ERROR = null;
         try {
             JsonObject root = JsonParser.parseString(json).getAsJsonObject();
             JsonArray blocks = root.getAsJsonArray("blocks");
@@ -375,6 +410,7 @@ public final class BlueprintCatalog {
             // 尺寸上限由调用方各自校验（smart_build 现场 JSON 仍走 validate() 限 200，
             // smart_design 走 looseValidate() 限 designMaxBlocks）。此处只做空/物理上限兜底。
             if (blocks == null || blocks.size() == 0 || blocks.size() > BlueprintLib.structureMaxBlocks()) {
+                LAST_JSON_ERROR = "blocks 为空或块数超过物理上限 " + BlueprintLib.structureMaxBlocks();
                 return null;
             }
             List<String> steps = new ArrayList<>();
@@ -384,10 +420,18 @@ public final class BlueprintCatalog {
                 int y = obj.get("y").getAsInt();
                 int z = obj.get("z").getAsInt();
                 String block = obj.get("block").getAsString();
-                if (Math.abs(x) > BlueprintLib.maxRange() || Math.abs(z) > BlueprintLib.maxRange() || y < 0 || y > BlueprintLib.maxHeight()) {
+                // 实测八百三十一：只留物理兜底（不再是 ±maxRange / y≤maxHeight 那三条小上限）
+                if (y < 0 || Math.abs(x) > JSON_SANITY_BOUND || Math.abs(z) > JSON_SANITY_BOUND
+                        || y > JSON_SANITY_BOUND) {
+                    LAST_JSON_ERROR = "坐标越界（x/y/z 绝对值需 ≤ " + JSON_SANITY_BOUND + "），这一格是 "
+                            + x + "," + y + "," + z;
                     return null;
                 }
-                if (!BlueprintBlockData.WHITELIST.contains(block)) {
+                // 实测八百三十一：白名单不再在这里强制（它只用来约束"主 LLM 现场 JSON"，
+                // 见 BlueprintLib.validate）。这里只挡黑名单——水/岩浆/命令方块/传送门/屏障等，
+                // 与结构文件走的是同一条安全底线。
+                if (BlueprintBlockData.FORBIDDEN.contains(block)) {
+                    LAST_JSON_ERROR = "方块被禁用（水/岩浆/命令方块/传送门等不可由蓝图放置）：" + block;
                     return null;
                 }
                 // v1.5.311：JSON 蓝图支持可选 state / nbt（SNBT 字符串）——LLM 可以
@@ -409,6 +453,10 @@ public final class BlueprintCatalog {
             }
             return steps;
         } catch (Exception e) {
+            // 实测八百三十一：把真正的解析错误留下来（旧版一律 return null，只剩
+            // "格式不对" 四个字，玩家与模型都无从下手）
+            LAST_JSON_ERROR = "JSON 解析失败：" + e.getClass().getSimpleName()
+                    + (e.getMessage() == null ? "" : ("（" + e.getMessage() + "）"));
             return null;
         }
     }

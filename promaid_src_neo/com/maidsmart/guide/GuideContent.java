@@ -6,13 +6,14 @@ package com.maidsmart.guide;
  * 与 Promaid 手册（BlueprintBookScreen）的「建筑页面」同构：
  * 章节目录（分页按钮列表）→ 点章节 → 正文分页阅读（< 上一页 / 下一页 >）。
  *
- * v1.5.304 重写原则（反馈："重新整改 + 更详细 + 实操例子，手把手保姆式教学；
- * 更新日志直接沿袭之前的日志更新就可以了"）：
+ * v1.5.304 重写原则（反馈："重新整改 + 更详细 + 实操例子，手把手保姆式教学"）：
  * - 每章：先一句话讲清"这是什么"，再给分步操作，关键步骤附【举例】；
  * - 事实全部对齐当前版本（v1.5.303）：投喂直接喂（不再塞背包）、手持食物可喂、
  *   被动技能独立成栏、红石机器只剩自动熔炉组、门落地修复、阈值 4-20 真实生效、
- *   区块坐标显示、名单页跳转、进度条位置、输出语言选项选择等；
- * - 更新日志章节保持原样（读 assets/promaid/guide/changelog.txt）。
+ *   区块坐标显示、名单页跳转、进度条位置、输出语言选项选择等。
+ *
+ * 【实测八百四十四】手册不再有「更新日志」章：开发者决定撤掉游戏内更新日志（连资源文件一起删），
+ * 以后的版本更新内容写在桌面 `Promaid文本` 目录里，release 说明从那里取素材（见 WORKFLOW §6.1）。
  */
 public final class GuideContent {
     private GuideContent() {
@@ -22,28 +23,14 @@ public final class GuideContent {
     public static final class Chapter {
         public final String title;
         public final String[] paras;
-        /** true = 更新日志（按行分页渲染，不从 paras 取） */
-        public final boolean changelog;
 
         public Chapter(String title, String... paras) {
             this.title = title;
             this.paras = paras;
-            this.changelog = false;
-        }
-
-        Chapter(String title, boolean changelog) {
-            this.title = title;
-            this.paras = new String[0];
-            this.changelog = changelog;
         }
     }
 
-    /** 更新日志章节（内容从资源文件按行读取） */
-    public static Chapter changelogChapter() {
-        return new Chapter("更新日志", true);
-    }
-
-    /** 全部章节（更新日志放最后） */
+    /** 全部章节 */
     public static Chapter[] chapters() {
         return new Chapter[]{
                 GuideChaptersBasics.foreword(),
@@ -70,11 +57,14 @@ public final class GuideContent {
                 //  女仆画闭环轨道用的；配置入口也落在「移动与行为 → 扫帚模式」那一页里）。
                 GuideChaptersFlight.patrolGuide(),
                 // 【实测六百七十五】武装拴绳：从六百六十七 起一直只有更新日志提过它，
-                //  手册正文没有章节——玩家反馈"最近新添加的这些功能…都没有详细介绍的相关面板"。
+                //  手册正文没有章节——。
                 //  位置紧跟扫帚模式（与配置面板里「扫帚模式 → 武装拴绳（二号位）」的相邻顺序一致）。
                 GuideChaptersCombat.tetherGuide(),
                 // v1.3.0(beta) 实测七百一十四：骑乘指挥棒（原版生物骑乘）——与武装拴绳相邻
                 GuideChaptersCombat.rideGuide(),
+                // v1.5.393 实测八百零四：饰品「大运」——与"飞行三件套"/骑乘指挥棒相邻
+                //  （它就是一件"飞行的时候怎么动"的道具，配置入口也落在「移动与行为」那一族里）
+                GuideChaptersCombat.daYunGuide(),
                 GuideChaptersCombat.aidGuide(),
                 GuideChaptersCombat.tacticsGuide(),
                 GuideChaptersCombat.weaponEquipGuide(),
@@ -88,7 +78,6 @@ public final class GuideContent {
                 GuideChaptersSystem.potionRules(),
                 GuideChaptersSystem.buildInternals(),
                 GuideChaptersSystem.costRules(),
-                changelogChapter(),
         };
     }
 
@@ -164,8 +153,8 @@ public final class GuideContent {
     private static final String[][] CFG_LINK_RULES = {
             {"建造", "WORK:BUILD"},
             {"挖矿", "WORK:MINE"},
-            {"空袭", "COMBAT:AIR_RAID"},
-            {"飞行作战", "COMBAT:AUTO_COMBAT"},
+            {"空袭", "COMBAT:AIR_RAID:空袭·总开关（飞行作战）"},
+            {"飞行作战", "COMBAT:AIR_RAID"},
             {"伐木", "WORK:WOOD"},
             {"烧制", "WORK:COOK_BREW"},
             {"农场", "WORK:FARM"},
@@ -196,6 +185,9 @@ public final class GuideContent {
             //  注意顺序：本表按顺序取**第一个**命中的关键词，所以这条要放在不会误伤的后面
             //  （它的标题里不含"扫帚/战斗"等词，放在这里也安全）。
             {"武装拴绳", "MOVE:TETHER:武装拴绳·总开关"},
+            // v1.5.398 实测八百一十三：「饰品「大运」」章此前**没有**配置入口（八百零四 加这章时
+            //  漏了），补上——它的参数页在「移动与行为 → 饰品「大运」」。
+            {"大运", "MOVE:DA_YUN"},
     };
 
     /** 实测四百二十四：取该章的配置跳转目标；null = 不附加链接。 */

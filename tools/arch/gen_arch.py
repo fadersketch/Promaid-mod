@@ -155,7 +155,7 @@ APIS = {
   ("rpc","PromaidConfigScreen.openAt(...)","从手册章节跳转到指定配置行。","Jumps from a guide chapter to a config row."),
 ],
 "promaid.guide": [
-  ("rpc","GuideContent.chapters()","36 章注册表。","The 36-chapter registry."),
+  ("rpc","GuideContent.chapters()","35 章注册表。","The 35-chapter registry."),
   ("rpc","GuideScreen.buildLines(...)","按像素宽度换行分页。","Pixel-width wrapping and paging."),
 ],
 }

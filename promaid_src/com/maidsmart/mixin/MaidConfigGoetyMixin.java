@@ -2,13 +2,12 @@ package com.maidsmart.mixin;
 
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.AbstractMaidContainerGui;
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.config.MaidConfigContainerGui;
-import com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.goety.MaidGoetyAuto;
 import com.maidsmart.goety.MaidGoetyNetworking;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,26 +15,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * 实测七百四十五·点1【飞行聚晶 · 1.20.1 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 →
- * 「飞行聚晶：开/关」，与仿创造飞行那一行同一格式、同一列。
+ * 「飞行聚晶：开/关」。
  *
- * <p>玩家原话：「聚晶必须要使用指令这些 OP 权限才可以使用吗？常规生存不能使用？」——
- * 七百一十八 那一版只有 OP 命令，普通玩家开不了。这一行就是"主人自己就能开"的入口
- * （与 {@code MaidConfigFreeFlightMixin} 完全同构，只是把开关换成 Goety 自动档）。
+ * <p>——
+ * 七百一十八 那一版只有 OP 命令，普通玩家开不了。这一行就是"主人自己就能开"的入口。
  *
- * <p>【布局】MaidConfigButton 实测 **164×13**（javap：ctor 里 {@code sipush 164 / bipush 13}），
- * 而 TLM 原生开关列从 **y=52** 起。三行必须排在 y=52 之上：本行取 **y=36**
- * （"AI 记忆"y=8、"创造飞行"y=26 形成行距，13 高 ⇒ 36+13=49 &lt; 52，互不遮挡）。
- * 注意 1.20.1 树的创造飞行那一行在 y=26（1.21.1 树已挪到 22），所以本行也取 36 与之对齐。
+ * <p>【实测八百零五：位置全交给 {@link com.maidsmart.client.MaidConfigRowLayout}】原实现把按钮
+ * 按屏幕绝对坐标 {@code (screenWidth-174, 36)} 摆，窗口一窄就压住 TLM 自己的开关
+ * （）。现在与「AI 记忆」「创造飞行」一起，
+ * 由 {@code MaidConfigRowLayout} 按面板相对坐标统一排在面板左侧外边距里——
+ * 整列在面板之外，不遮任何 TLM 控件，彼此也不重叠。详见那个类的注释。
  *
- * <p>【无 refmap 注意】{@code addRenderableWidget} 是继承自 Screen 的 protected 方法——无 refmap
- * 时 {@code @Shadow} 定位不到（会崩），照记忆开关/创造飞行的做法改反射调用、查 SRG 名
+ * <p>【无 refmap 注意】{@code addRenderableWidget} 是继承自 Screen 的 protected 方法——
+ * 无 refmap 时 {@code @Shadow} 定位不到（会崩），照记忆开关的做法改反射调用、查 SRG 名
  * {@code m_142416_}（本树 {@code MaidConfigMemoryMixin} 的实测教训：生产环境跑的是 SRG 类）。
  */
 @Mixin(MaidConfigContainerGui.class)
 public abstract class MaidConfigGoetyMixin {
 
     /** 我们这一行按钮（renderAddition 每帧同步文本用） */
-    private MaidConfigButton promaid$goetyBtn = null;
+    private Button promaid$goetyBtn = null;
     /** 防连点：600ms 内重复点击忽略（双击会把"关"变回"开"） */
     private static long PROMAID$GOETY_LAST_CLICK = 0;
 
@@ -47,15 +46,14 @@ public abstract class MaidConfigGoetyMixin {
             if (maid == null) {
                 return;
             }
-            int w = ((Screen) (Object) this).f_96543_;
+            Screen screen = (Screen) (Object) this;
             String uid = maid.m_20148_().toString();
             // 界面打开时先问一次真实状态（persistentData 只在服务端，客户端缓存可能是空的）
             MaidGoetyNetworking.CHANNEL.sendToServer(
                     new MaidGoetyNetworking.TogglePacket(uid, (byte) 0, false));
-            MaidConfigButton btn = new MaidConfigButton(w - 174, 36,
-                    Component.m_237113_("飞行聚晶"),
-                    Component.m_237113_(promaid$goetyLabel(uid)),
-                    b -> {
+            Button btn = com.maidsmart.client.MaidConfigRowLayout.toggle(this, screen.f_96543_,
+                    screen.f_96544_, 2, com.maidsmart.client.MaidConfigRowLayout.LABELS[2],
+                    promaid$value(uid), () -> {
                         long now = System.currentTimeMillis();
                         if (now - PROMAID$GOETY_LAST_CLICK < 600) {
                             return;
@@ -63,12 +61,11 @@ public abstract class MaidConfigGoetyMixin {
                         PROMAID$GOETY_LAST_CLICK = now;
                         Boolean cur = MaidGoetyAuto.cachedClient(uid);
                         boolean next = !(cur != null && cur);
-                        b.setValue(Component.m_237113_(next ? "\u00a7a开" : "\u00a77关"));
                         MaidGoetyNetworking.CHANNEL.sendToServer(
                                 new MaidGoetyNetworking.TogglePacket(uid, (byte) 1, next));
                     });
             this.promaid$goetyBtn = btn;
-            promaid$addRenderable((Screen) (Object) this, btn);
+            promaid$addRenderable(screen, btn);
         } catch (Throwable ignored) {
         }
     }
@@ -78,7 +75,7 @@ public abstract class MaidConfigGoetyMixin {
     private void promaid$syncGoetyLabel(GuiGraphics graphics, int mouseX, int mouseY,
                                         float partialTick, CallbackInfo ci) {
         try {
-            MaidConfigButton btn = this.promaid$goetyBtn;
+            Button btn = this.promaid$goetyBtn;
             if (btn == null) {
                 return;
             }
@@ -86,22 +83,23 @@ public abstract class MaidConfigGoetyMixin {
             if (maid == null) {
                 return;
             }
-            btn.setValue(Component.m_237113_(promaid$goetyLabel(maid.m_20148_().toString())));
+            btn.m_93666_(com.maidsmart.client.MaidConfigRowLayout.text(
+                    com.maidsmart.client.MaidConfigRowLayout.LABELS[2],
+                    promaid$value(maid.m_20148_().toString())));
         } catch (Throwable ignored) {
         }
     }
 
-    /** 按钮文本：客户端缓存优先；未知 = 关（服务端 S2C 到了会纠正） */
-    private static String promaid$goetyLabel(String uid) {
+    /** 按钮值文本：客户端缓存优先；未知 = 关（服务端 S2C 到了会纠正） */
+    private static String promaid$value(String uid) {
         Boolean cur = MaidGoetyAuto.cachedClient(uid);
-        return (cur != null && cur) ? "\u00a7a开" : "\u00a77关";
+        return (cur != null && cur) ? "\u00a7a\u5f00" : "\u00a77\u5173";
     }
 
     /**
      * 反射调用 Screen.addRenderableWidget（继承方法，无 refmap 时 @Shadow 定位不到）。
      *
-     * <p>【1.20.1 用 SRG 字段名】本树手工编译、生产环境跑的是 SRG 类，所以查的是
-     * {@code m_142416_}（本树 {@code MaidConfigMemoryMixin} 的实测教训）。
+     * 【1.20.1 用 SRG 字段名】本树手工编译、生产环境跑的是 SRG 类，所以查的是 {@code m_142416_}。
      */
     private static void promaid$addRenderable(Screen screen,
                                               net.minecraft.client.gui.components.events.GuiEventListener widget) {

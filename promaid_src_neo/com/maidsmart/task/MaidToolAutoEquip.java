@@ -775,6 +775,12 @@ public final class MaidToolAutoEquip {
             if (!MaidWorkTags.isCombatTask(maid)) {
                 return;
             }
+            // 实测八百二十七【拆刷怪笼期间副手锁定】：她正借副手那把镐拆笼（副手锁定中）→
+            // 别往副手塞盾牌，直到刷怪笼被拆掉（）。
+            // 没有借副手（主手拆 / 没镐）时本判据恒 false，原行为一字不动。
+            if (com.maidsmart.combat.MaidSpawnerTorchBehavior.isLockedOffhand(maid)) {
+                return;
+            }
             IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
             ItemStack cur = hands.getStackInSlot(1);
             if (!cur.isEmpty() && !(cur.getItem() instanceof net.minecraft.world.item.ShieldItem)) {

@@ -59,7 +59,8 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
             + "schematics/ folder; anything the player already has there is available, including\n"
             + "elaborate builds downloaded online. For external structure blueprints you may pass\n"
             + "rotation 0/90/180/270 (clockwise) — the same file can be built rotated; omit for default 0.\n"
-            + "Rules for JSON blueprints: building blocks only (whitelist), 1-200 blocks, x/z +-12, y 0-8.\n"
+            + "Rules for JSON blueprints: building blocks only (whitelist), within the block / range / "
+            + "height limits stated at the end of this description.\n"
             + "Material style suggestions (pick ONE consistent style per build):\n"
             + "- rustic cabin: oak_log + oak_planks\n"
             + "- castle: stone_bricks + cobblestone + dark_oak_planks accents\n"
@@ -88,7 +89,18 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
 
     @Override
     public String summary(EntityMaid maid) {
-        return TOOL_DESC;
+        // 实测八百三十一：把**当前配置**的实时上限附在后面（旧版说明写死 "1-200 / ±12 / 0-8"，
+        // 玩家把上限调大后模型还在按老数字设计）；并明确两条规矩——JSON 只能进参数、不许写进
+        // 聊天（就是模型把 JSON 当聊天内容发出来了）；
+        // 大 / 自定义建筑走 smart_design。
+        return TOOL_DESC + "\n"
+                + "Current limits of this inline-JSON path: " + BlueprintLib.maxBlocks() + " blocks, x/z ±"
+                + BlueprintLib.maxRange() + ", y 0.." + BlueprintLib.maxHeight()
+                + " (configurable in the mod config panel).\n"
+                + "NEVER paste blueprint JSON into your chat reply — pass it ONLY as the blueprint argument.\n"
+                + "For a LARGE or fully custom building — or anything taller than " + BlueprintLib.maxHeight()
+                + " blocks, or using blocks outside the whitelist — use smart_design instead: it has no "
+                + "whitelist and no size limit.";
     }
 
     @Override
@@ -134,6 +146,18 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
             // 不是内置/外部蓝图 → 尝试 JSON 蓝图
             steps = BlueprintLib.parseJson(blueprint);
             if (steps == null) {
+                // 实测八百三十一：JSON 走的是【现场 JSON】这条小上限路径（白名单 + ±maxRange +
+                // y≤maxHeight + maxBlocks）。大 / 自定义建筑应走 smart_design。旧版一律回
+                // "未知蓝图：<整份 JSON>"——模型既不知道错在哪，还可能把这串 JSON 当蓝图标名
+                // 转述给玩家（玩家看到聊天框里一堆方块与坐标）。现在把真实原因与下一步说清楚。
+                String why = BlueprintLib.lastJsonError();
+                if (why != null && !why.isEmpty()) {
+                    return callback.addToolResult("JSON 蓝图无效：" + why
+                            + "。若要设计大型 / 自定义建筑（不限白名单与尺寸，20 格高的树也行），"
+                            + "请改用 smart_design 工具（description=你想建的东西）。"
+                            + "另外：蓝图 JSON 只能作为本工具的 blueprint 参数，**不要把它写进聊天回复**。",
+                            toolId);
+                }
                 return callback.addToolResult("未知蓝图：" + blueprint + "。可用蓝图：\n" + BlueprintLib.buildCatalog(), toolId);
             }
             fromJson = true;

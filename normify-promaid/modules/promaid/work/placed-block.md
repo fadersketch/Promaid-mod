@@ -13,7 +13,7 @@ description:
       self-preservation.
 source:
   - {path: promaid_src_neo/com/maidsmart/task/PlacedBlockTracker.java, line: 1, end_line: 437}
-revision: 491ba927ffa91889b679f800817dd48763aabd62
+revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 9afa3e6e315e2c910f71406982f2a3c4ea1bbb1ff6eb22e78e415fadc27d161e
 state: active

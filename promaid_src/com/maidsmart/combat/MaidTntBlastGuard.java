@@ -225,7 +225,12 @@ public final class MaidTntBlastGuard {
     private static Tracked tracked(Entity e) {
         try {
             long now = e.m_9236_() == null ? 0L : e.m_9236_().m_46467_();
-            if (now - lastSweep >= SWEEP_INTERVAL) {
+            // 实测八百二十七补【整数溢出，与 MaidSpawnerTorchBehavior.digToolCacheAt 同一坑】：
+            // lastSweep 的初值与复位值都是 Long.MIN_VALUE，而 now - Long.MIN_VALUE 会溢出成
+            // 一个大负数、恒定 < SWEEP_INTERVAL —— 这条惰性清理**从来没执行过**（过期条目一直
+            // 堆在 TRACKED 里，表只增不减）。归属判定本身还会查 expireAt，所以炸错不了，
+            // 但表会白涨。初值必须显式判（口径同 MaidBuildBehavior v1.5.328 / MaidChunkLoadManager）。
+            if (lastSweep == Long.MIN_VALUE || now - lastSweep >= SWEEP_INTERVAL) {
                 lastSweep = now;
                 Iterator<Map.Entry<Integer, Tracked>> it = TRACKED.entrySet().iterator();
                 while (it.hasNext()) {

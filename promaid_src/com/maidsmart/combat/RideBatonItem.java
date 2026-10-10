@@ -30,8 +30,11 @@ public class RideBatonItem extends Item {
 
     @Override
     public void m_7373_(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.m_237113_("item.maid_smart.ride_baton.desc1"));
-        tooltip.add(Component.m_237113_("item.maid_smart.ride_baton.desc2"));
-        tooltip.add(Component.m_237113_("item.maid_smart.ride_baton.desc3"));
+        // m_237115_ = Component.translatable（拿键去查语言文件）；m_237113_ 是 literal，
+        // 会把键原样当文字画出来（这里曾写错成 literal，1.20.1 上悬停直接显示
+        // 「item.maid_smart.ride_baton.desc1」）。
+        tooltip.add(Component.m_237115_("item.maid_smart.ride_baton.desc1"));
+        tooltip.add(Component.m_237115_("item.maid_smart.ride_baton.desc2"));
+        tooltip.add(Component.m_237115_("item.maid_smart.ride_baton.desc3"));
     }
 }

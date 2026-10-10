@@ -37,6 +37,11 @@ public final class MaidWeaponGuard {
     /** 1 秒轮询全部已加载女仆（女仆数量少，开销可忽略） */
     public static void tick(MinecraftServer server) {
         try {
+            // 实测八百三十九：零女仆直接返回——循环体整段只处理女仆，可以整体跳过
+            //（名册按 20 tick 复用，这个闸是 O(1)，不再自己扫实体表）
+            if (!com.maidsmart.tool.MaidRoster.any(server)) {
+                return;
+            }
             for (ServerLevel level : server.getAllLevels()) {
                 for (EntityMaid maid : level.getEntities(
                         net.minecraft.world.level.entity.EntityTypeTest.forClass(EntityMaid.class),

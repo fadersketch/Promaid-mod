@@ -110,7 +110,7 @@ public final class BombThrow {
                 if (sl < 1.0E-6) {
                     continue;
                 }
-                // 只改方向、不改速度大小（需求原话）
+                // 只改方向、不改速度大小（需求
                 h.tnt.setDeltaMovement(new Vec3(sx / sl * h.speed, sy / sl * h.speed, sz / sl * h.speed));
             } catch (Throwable ignored) {
             }

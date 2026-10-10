@@ -179,23 +179,26 @@ public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
                     + "{\"name\": \"蓝图名\", \"blocks\": [{\"x\":0,\"y\":0,\"z\":0,\"block\":\"minecraft:oak_planks\"}, ...]}\n"
                     + "## Rules\n"
                     + "- Coordinate system: x/z horizontal (0,0 = front-center), y vertical from 0 (ground).\n"
-                    + "- Use ONLY these blocks (whitelist): oak/spruce/birch/dark_oak planks & logs, "
-                    + "oak/spruce leaves, stone, stone_bricks, cracked/mossy_stone_bricks, cobblestone, "
-                    + "mossy_cobblestone, bricks, smooth_stone, polished_andesite/granite/diorite, glass, "
-                    + "glass_pane, white_stained_glass, oak/spruce/dark_oak door, oak/spruce/stone_brick stairs, "
-                    + "oak/spruce/stone_brick slab, oak/spruce fence, oak_fence_gate, torch, lantern, sea_lantern, "
-                    + "glowstone, white/red/blue/green/yellow wool, white/red carpet, chest, crafting_table, "
+                    + "- Use any NORMAL building block. Preferred: oak/spruce/birch/jungle/acacia/dark_oak/"
+                    + "mangrove/cherry planks & logs, their leaves (oak/spruce/birch/jungle/acacia/dark_oak/"
+                    + "mangrove/cherry_leaves, azalea_leaves), stone, stone_bricks, cracked/mossy_stone_bricks, "
+                    + "cobblestone, mossy_cobblestone, bricks, smooth_stone, polished_andesite/granite/diorite, "
+                    + "glass, glass_pane, white_stained_glass, planks/iron doors, stairs, slabs, fences, "
+                    + "torch, lantern, sea_lantern, glowstone, wool, carpet, chest, crafting_table, "
                     + "furnace, bookshelf, grass_block, dirt, gravel, sand, flower_pot, poppy, dandelion, "
-                    + "azure_bluet, oak_planks_sign.\n"
+                    + "azure_bluet, signs. Do NOT use water/lava/command_block/barrier/portal blocks.\n"
                     + "- Design REALISTIC buildings: walls with corners, a roof, an entrance (door), windows "
-                    + "with glass, interior lighting. Support every block (nothing floating).\n"
+                    + "with glass, interior lighting. Support every block (nothing floating). Trees: a trunk "
+                    + "of logs plus a leaf canopy; a 20-block-tall tree is fine.\n"
                     // v1.5.197：设计大小无限制——不引导"简单/缩小"，块数上限仅由配置面板
-                    // build.designMaxBlocks（默认 500，可调 100~20000）兜底，防单次输出截断。
-                    // 建造材料由玩家确认后准备，不因材料限制设计。
-                    + "- Size is NOT limited by materials or simplicity: design as large and detailed as the "
-                    + "player asks (hard cap: at most " + maxBlocks + " blocks total; x/z within +-"
-                    + com.maidsmart.config.MaidSmartConfig.BUILD_MAX_RANGE.get()
-                    + "; y between 0 and " + com.maidsmart.config.MaidSmartConfig.BUILD_MAX_HEIGHT.get() + ").\n"
+                    // build.designMaxBlocks 兜底，防单次输出截断。建造材料由玩家确认后准备，
+                    // 不因材料限制设计。
+                    // 实测八百三十一：**尺寸也彻底放开**——旧版这里还写着 x/z ≤ ±maxRange、y ≤ maxHeight
+                    // （默认 12/8），20 格高的树直接被拒；而真正卡死它的是 parseJson 里同一套上限，
+                    // 现已移除（parseJson 只留物理兜底，见 BlueprintCatalog.parseJson）。
+                    + "- Size is NOT limited by materials, width or height: design as large and detailed as "
+                    + "the player asks (the only hard cap is at most " + maxBlocks + " blocks total). "
+                    + "y grows upward from 0 with no height ceiling; x/z have no small square limit.\n"
                     + "- 'name' should be a short Chinese name (e.g. 中式庭院).\n"
                     // v1.5.196：给建筑师提供"本地预置模板"优先选型——AI 现场生成 300-800 块 JSON
                     // 极容易超过 TLM 16 次工具轮次/响应长度上限而超时。本地模板离线即得、材料简单、
@@ -246,7 +249,12 @@ public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
                     this.finish(json);
                     return;
                 }
-                this.finish("设计失败——建筑师返回的蓝图格式不对。请换个描述再试一次。");
+                // 实测八百三十一：把 parseJson 记下的**真实原因**一并报出来（旧的
+                // "格式不对" 让玩家和模型都不知道改哪儿）
+                String why = BlueprintLib.lastJsonError();
+                this.finish("设计失败——建筑师返回的蓝图没法保存成蓝图"
+                        + (why == null || why.isEmpty() ? "（不是合法 JSON）" : "：" + why)
+                        + "。请换个描述再试一次。");
                 return;
             }
             String name = BlueprintLib.parseJsonName(json);
@@ -293,36 +301,20 @@ public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
         }
 
         /**
-         * v1.5.197：自绘蓝图宽松校验——只查块数上限（designMaxBlocks，配置可调）与坐标范围
-         * （±maxRange / y 0~maxHeight，与建筑师提示词一致）。不做白名单强制（提示词已约束），
-         * 不再用 BlueprintLib.validate（其 maxBlocks=200 上限会拒绝大蓝图）。
+         * v1.5.197 / 实测八百三十一：自绘蓝图宽松校验——**只查块数上限**（designMaxBlocks，配置可调）
+         * 与"有没有方块"。不做白名单强制（提示词已约束），也不查 ±maxRange / y≤maxHeight
+         * ——那三条是 smart_build 现场 JSON 的上限；自绘蓝图尺寸无限制（20 格高的树、±12 外的
+         * 庭院都应放行）。物理兜底（坐标绝对值 ≤ 512、黑名单方块）在 {@code parseJson} 里，
+         * 所以这里不再重复坐标检查，只把失败原因报清楚。
          */
         private static String looseValidate(List<String> steps) {
             int maxBlocks = com.maidsmart.config.MaidSmartConfig.BUILD_DESIGN_MAX_BLOCKS.get();
-            int maxRange = com.maidsmart.config.MaidSmartConfig.BUILD_MAX_RANGE.get();
-            int maxHeight = com.maidsmart.config.MaidSmartConfig.BUILD_MAX_HEIGHT.get();
             if (steps == null || steps.isEmpty()) {
                 return "蓝图无效：没有可放置的方块";
             }
             if (steps.size() > maxBlocks) {
-                return "蓝图无效：块数 " + steps.size() + " 超过上限 " + maxBlocks + "（可在配置面板 build.designMaxBlocks 调大）";
-            }
-            for (String step : steps) {
-                // v1.5.311：走 parseStep——state SNBT 含逗号，旧版 split(",") 误报格式错误
-                String[] parts = BlueprintLib.parseStep(step);
-                if (parts == null || parts.length < 4) {
-                    return "蓝图无效：步骤格式错误";
-                }
-                try {
-                    int x = Integer.parseInt(parts[0]);
-                    int y = Integer.parseInt(parts[1]);
-                    int z = Integer.parseInt(parts[2]);
-                    if (Math.abs(x) > maxRange || Math.abs(z) > maxRange || y < 0 || y > maxHeight) {
-                        return "蓝图无效：坐标超出范围（平面 ±" + maxRange + "，高度 0~" + maxHeight + "）";
-                    }
-                } catch (NumberFormatException e) {
-                    return "蓝图无效：坐标不是数字";
-                }
+                return "蓝图无效：块数 " + steps.size() + " 超过上限 " + maxBlocks
+                        + "（可在配置面板 build.designMaxBlocks 调大）";
             }
             return null;
         }

@@ -832,7 +832,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 BlockPos chained = this.chainQueue.poll();
                 // 实测五百六十二：连锁队列的矿同样受工作圈钳制
                 if (chained != null && this.isOre(level, chained)
-                        && com.maidsmart.follow.WorkAreaClamp.allows(maid, chained)) {
+                        && com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, chained)) {
                     this.targetPos = chained;
                     TARGET_SINCE.put(maid.getId(), gameTime);
                     MINING.add(maid.getUUID());
@@ -1540,6 +1540,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /**
      * v1.5.113（C1）：两档接近速度——矿远（>8 格）1.5× 快走赶路，矿近（≤3 格）
      * 0.8× 慢走（准备搭高/挖掘，防冲过头漂移）；中间距离用基础速度（mine.moveSpeed）。
+     * 实测八百二十八：远处赶路加成 1.5× → 1.0×（，
+     * 要求本 mod 不再给女仆额外速度加成）。近处 0.8× 的减速保留（防冲过头）。
      */
     private float approachSpeed(EntityMaid maid, BlockPos t) {
         if (t == null) {
@@ -1548,7 +1550,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         double d = maid.distanceToSqr(t.getX() + 0.5, t.getY() + 0.5, t.getZ() + 0.5);
         float base = (float) (double) com.maidsmart.config.MaidSmartConfig.MINE_MOVE_SPEED.get();
         if (d > 8.0) {
-            return base * 1.5f;
+            return base; // 实测八百二十八：不再 ×1.5 加速
         }
         if (d < 3.0) {
             return base * 0.8f;
@@ -2237,7 +2239,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 实测五百六十二：home 模式下女仆在限制圈外（被推/被打飞）时，锚点落在圈心
         // 而不是脚下——她自然走回工作区域，而不是原地开新框把圈外越挖越远
         BlockPos anchorPos = maid.blockPosition();
-        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, anchorPos)) {
+        if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, anchorPos)) {
             BlockPos cc = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
             if (cc != null) {
                 anchorPos = cc;
@@ -2516,7 +2518,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             }
             // 实测五百六十二：home 模式限制圈外的矿不进候选（工作区域=工位锚点圈，
             // 与 TLM 原生 MaidMoveToBlockTask 同口径）；圈外矿曾靠锚点滑动越追越远
-            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, p)) {
+            if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, p)) {
                 continue;
             }
             // v1.1.0：不把自己 10 秒内搭的方块当矿（搭路材料恰好在矿表里会循环拆了再搭）
@@ -2589,7 +2591,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 continue; // 已被挖掉
             }
             // 实测五百六十二：缓存轮同口径——限制圈外的矿不选（home 工作区域）
-            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, p)) {
+            if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, p)) {
                 continue;
             }
             // v1.1.0：缓存轮同样跳过自己 10 秒内搭的方块（不当矿挖，与全量扫描同口径）
@@ -2641,8 +2643,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
 
     /**
      * 【v1.3.9.5 眼前的先挖】伸手可及（&lt;= mine.reach）的矿给固定减分——她原地就能挖掉，
-     * 比"跑过去挖一块高价矿"更划算。玩家原话：「经常找不到矿（我说的是我在前面开路矿石暴露在外时）
-     * 只有在我把她抓到矿面前她才挖。」以前选矿只按"距离² + 深度惩罚 - 价值加成"打总分，眼前这块
+     * 比"跑过去挖一块高价矿"更划算。
+     *
      * 便宜的煤矿会被十几格外的钻石压掉 → 她眼里没有"就在手边"这个概念。现在伸手可及的矿
      * 一定排在候选最前（400 的量级压得住煤到钻石的差价），眼前的清完再谈远处的高价矿。
      */
@@ -2682,8 +2684,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 || hasClearRay(level, sx, sy, sz, cx, target.getY(), cz, target)) {
             return true;
         }
-        // 【v1.3.9.5 露头的矿也要看得见】玩家原话：「经常找不到矿（我在前面开路矿石暴露在外时）
-        // ……只有在我把她抓到矿面前她才挖。」旧口径只有三条射线（矿格中心/顶面/底面），
+        // 【v1.3.9.5 露头的矿也要看得见】
+        //
         // 玩家在下挖的坑道里走得靠前一点，射线擦着坑壁/台阶边缘就整条被否掉——可那块矿的
         // **某个面明明就露在空气里**。补一条"看暴露面"的判据：六个面里哪一面贴着空气/流体
         // （= 露头），就把射线打到那一面**外侧格的中心**；打得到就说明这一面看得见 → 矿可见。

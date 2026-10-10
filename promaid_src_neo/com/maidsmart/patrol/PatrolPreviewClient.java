@@ -16,20 +16,20 @@ import java.util.Map;
 /**
  * v1.3.9【巡逻航图】航迹预览（纯客户端世界渲染）。
  *
- * <p>── 玩家原话（这一版的两条约束）──
+ * <p>──
  * 「玩家只有在手持航图的时候可以看到这个轨道，不手持的时候看不到。」
  * 「标记成功之后，玩家根本就看不到这个标记长什么样子。能不能采用 replay mod 同款的渲染，
  * 把这个标记渲染出来呢？」
  *
  * <p>⇒ ① 可见性判据 = **主手或副手拿着巡逻航图**（第一句就查），不拿着一条线都不画；
  * ② 每个标记画成**菱形核 + 地面光环 + 竖针**（v1.3.9.2 改版，原来只是一个立方体轮廓——
- * 玩家原话「仅仅是锁一个方块吗？这样一点都不好」），并给首/尾**异色**：
+ * ），并给首/尾**异色**：
  * <b>首点青绿、末点品红、中间淡紫</b>——首尾本来就是"连接"要接上的两个点，颜色分开才看得清。
  * ③ 曲线画的是**抬升后**那条（见 {@link PatrolAdapt}）：有方块挡着的地方会拱起一道缓坡，
  * 所以你看到的线就是她实际会飞的线。
  *
  * <p>── v1.3.9.2：为什么全都改成"面片"而不是线 ──
- * 玩家原话：「这个标记的线太细了。看着不明显。以及菱形的大小太小。」而 {@code RenderType.lines()}
+ * 而 {@code RenderType.lines()}
  * 的线宽是 GL 的 {@code glLineWidth}——现代驱动普遍把它钳到 1px，调不了。所以标记与"选中那条
  * 曲线"改用 {@link #ribbon 面向相机的细长四边形}（宽度是真实世界尺寸），走
  * {@code RenderType.debugQuads()}（javap 实证：POSITION_COLOR + QUADS + 半透明 + 不剔除 + 正常
@@ -40,12 +40,12 @@ import java.util.Map;
  *   <li>这本航图里**全部**轨道（不只选中那条）：选中/正在标记那条亮天蓝（粗带），
  *       别的暗石板蓝（细线，只作背景）；</li>
  *   <li>净空走廊（旧版沿整条轨道在 ±净空 各画一条半透明琥珀虚线）<b>v1.3.9.5 已删</b>——
- *       玩家原话「为什么轨道下面会渲染出影子呢？这不对吧。」：下半截那条就在轨道正下方，
+ *       ：下半截那条就在轨道正下方，
  *       看着正是这条轨道的"影子"；净空值在轨道说明里本来就有，不在地面上再画一份；</li>
  *   <li>正在标记时，从**最后一个标记**到你**当前位置**画一条牵引线（"橡皮筋"），
  *       让你知道下一个点会落在哪、跟上一个点怎么连。</li>
- *   <li>【v1.3.9.3】每个菱形**头上写一行字**：「轨道N 第M点」——玩家原话「每个悬浮的菱形那边
- *       显示的时候都写一下自己是哪个轨道的几号标记」。<b>v1.3.9.7 起改用建造模式同款的世界空间
+ *   <li>【v1.3.9.3】每个菱形**头上写一行字**：「轨道N 第M点」——
+ *
  *       广告牌字</b>（TLM {@code RenderHelper.renderFloatingText}，见下）。</li>
  * </ul>
  *
@@ -63,9 +63,9 @@ public final class PatrolPreviewClient {
     /**
      * 【v1.3.9.7 标记文字——照搬建造模式那条路】
      *
-     * <p>玩家原话：「每个菱形节点在它自己上面渲染出自己属于哪号轨道的第几个节点。具体的渲染方式
-     * 就跟建造模式下，创建区块，在区块上面显示自己是位于哪个坐标进行创建的，这个区块建造的名字
-     * 是什么一样。」
+     * <p>
+     *
+     *
      *
      * <p>建造模式区块上那行「（建造中）」+「创建于 x, y, z」是 {@code BlueprintAreaPreview}
      * 调 <b>TLM 的 {@code RenderHelper.renderFloatingText(pose, 文本, 世界X, 世界Y, 世界Z, 颜色,
@@ -84,7 +84,7 @@ public final class PatrolPreviewClient {
     private static final double LABEL_MAX_DIST = 128.0;
     private static final int LABEL_MAX = 64;
     /**
-     * 【v1.3.9.8 字号缩小】玩家原话：「渲染出的轨道+序号字体过大（这个好像是两个版本都有的问题）」。
+     * 【v1.3.9.8 字号缩小】。
      *
      * <p>建造模式用的是 0.15 / 0.12 —— 那是给**一整片区块**（几十格宽）用的；我们的菱形只有
      * 约 1 格半径，同样字号时字比菱形还大。这里**整体减半**：首行 0.075、次行 0.06
@@ -151,7 +151,7 @@ public final class PatrolPreviewClient {
         if (mc.level == null || mc.player == null) {
             return;
         }
-        // 【可见性：手持航图才画】——玩家原话见类注释
+        // 【可见性：手持航图才画】——
         net.minecraft.world.item.ItemStack main = mc.player.getMainHandItem();
         net.minecraft.world.item.ItemStack off = mc.player.getOffhandItem();
         boolean holding = PatrolChartKit.isChart(main) || PatrolChartKit.isChart(off);
@@ -176,7 +176,7 @@ public final class PatrolPreviewClient {
                 pose.translate(-cam.x, -cam.y, -cam.z);
                 MultiBufferSource.BufferSource buffers = mc.renderBuffers().bufferSource();
                 VertexConsumer vc = buffers.getBuffer(RenderType.lines());
-                // 【v1.3.9.2 粗线】玩家原话：「这个标记的线太细了。看着不明显。」
+                // 【v1.3.9.2 粗线】
                 // lines() 的线宽是 GL 的 glLineWidth，现代驱动普遍钳成 1px，改不了；所以标记
                 // 与"选中那条曲线"改用 **面向相机的细长四边形**（ribbon，真·世界宽度）。
                 // RenderType 用 debugQuads()：POSITION_COLOR + QUADS + 半透明 + 不剔除 + 正常
@@ -193,7 +193,7 @@ public final class PatrolPreviewClient {
                     List<Vec3> poly = polyFor(r, mc.level);
                     if (poly.size() >= 2) {
                         // 曲线本体：选中/正在标记那条画**一条**粗带；其它轨道画细线（只作背景）。
-                        // 【v1.3.9.5 去掉"影子"】玩家原话：「为什么轨道下面会渲染出影子呢？这不对吧。」
+                        // 【v1.3.9.5 去掉"影子"】
                         // 两个来源一起删：
                         //   ① 净空走廊——旧版沿整条轨道在 ±净空（默认 1.5 格）各画一条半透明琥珀
                         //      虚线，下半截就在轨道正下方，看上去正是"这条轨道的影子"；净空值在
@@ -228,7 +228,7 @@ public final class PatrolPreviewClient {
                         }
                         float a = bright ? 1.0f : 0.72f;
                         float pulse = 0.86f + 0.14f * (float) Math.sin((gt + i * 7L) * 0.18);
-                        // 尺寸：v1.3.9.2 起明显放大（原来 0.24~0.30 太小，玩家反馈"菱形大小太小"）
+                        // 尺寸：v1.3.9.2 起明显放大（原来 0.24~0.30 太小，）
                         double h = (first || last ? 0.58 : 0.48) * pulse;
                         marker(vc, quad, mat, cam, p, h, c[0], c[1], c[2], a, bright, first, last, gt, i);
                         // 【v1.3.9.7】文字标签：「轨道N · 第M点」+ 坐标——只收近处的，最后统一画。
@@ -302,7 +302,7 @@ public final class PatrolPreviewClient {
 
     /**
      * 【v1.3.9.7】次行文本：坐标——完全照建造模式的「创建于 x, y, z」那行（整数、逗号分隔）。
-     * 玩家原话是"显示出自己是位于哪个坐标进行创建的"，所以这里给的是**这个标记自己的**世界
+     * ，所以这里给的是**这个标记自己的**世界
      * 整数坐标（菱形就钉在这个格子顶上）。
      */
     private static String labelCoord(int pointNo, Vec3 p) {

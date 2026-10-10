@@ -1,0 +1,20 @@
+{
+  "bgm_da_yun_1": {
+    "sounds": [
+      {
+        "name": "maid_smart:bgm_da_yun_1",
+        "stream": false,
+        "attenuation_distance": 200
+      }
+    ]
+  },
+  "bgm_da_yun_2": {
+    "sounds": [
+      {
+        "name": "maid_smart:bgm_da_yun_2",
+        "stream": false,
+        "attenuation_distance": 200
+      }
+    ]
+  }
+}

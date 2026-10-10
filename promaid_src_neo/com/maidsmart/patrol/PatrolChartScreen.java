@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * v1.3.9【巡逻航图】界面（1.21.1）——两页：轨道列表 → 轨道管理。
  *
- * <p>── 玩家原话（这一版的设计，逐字）──
+ * <p>──
  * 「手持这个航图，右击进入大界面。如果玩家是第1次进入，那么此界面仅存在最上方一个按钮，叫做创建一个
  * 轨道。创建完轨道之后，下面就会多一个轨道的管理选项。玩家也可以为这个轨道进行重命名。随后点击这个
  * 新创建轨道的管理界面。玩家可以选择将哪个女仆绑定到这个轨道上。（跟建造模式的女仆管理同款……）以及
@@ -30,9 +30,9 @@ import java.util.List;
  *       （返回 / 改名 / 开始标记 / 连接 / 标记管理 / 删除）+ 女仆名单（每行「绑定 / 解绑」，
  *       跟建造模式同款）。</li>
  *   <li><b>标记管理</b>（{@link #VIEW_MARKS}，v1.3.9.2）：把这条轨道上的**每一个标记**按顺序
- *       列出来（序号 + 坐标），可逐条删、删最后一个、清空。玩家原话：「点击标记管理之后，玩家会
- *       跳转到另一个页面，可以显示当前这个轨道保存了哪些标记。然后删除最后一个标记这个按钮放在
- *       这个位置。」</li>
+ *       列出来（序号 + 坐标），可逐条删、删最后一个、清空。
+ *
+ *
  * </ol>
  *
  * <p>── 为什么所有改动都发服务端 ──
@@ -47,7 +47,7 @@ public class PatrolChartScreen extends Screen {
 
     private static final int VIEW_LIST = 0;
     private static final int VIEW_MANAGE = 1;
-    /** v1.3.9.2：「标记管理」——单开一页列这条轨道上的全部标记（玩家原话：跳到另一个页面显示） */
+    /** v1.3.9.2：「标记管理」——单开一页列这条轨道上的全部标记（ */
     private static final int VIEW_MARKS = 2;
     private static final int ROW_H = 22;
 
@@ -277,7 +277,7 @@ public class PatrolChartScreen extends Screen {
 
     private void listButtons() {
         int cx = this.width / 2;
-        // 【最上方那个按钮】空书时界面里只有它——玩家原话：「此界面仅存在最上方一个按钮，叫做创建一个轨道」
+        // 【最上方那个按钮】空书时界面里只有它——
         addButton("§a＋ 创建一个轨道", cx - 70, 30, 140, 20, b -> {
             sendOp("create", "", "");
             hint("已新建一条轨道——点它的「管理」进去，先「开始标记」再拿中键打点");
@@ -347,7 +347,7 @@ public class PatrolChartScreen extends Screen {
                 send(new PatrolNetworking.StartMarkingPacket(offHand, r.id(), true));
                 PatrolPreviewClient.setMarking(true, r.id());
                 hint("开始标记：退出界面后按 §e鼠标中键§7 记一个标记（空中/地面都行）");
-                this.onClose(); // 玩家原话："开始标记之后玩家会暂时退出那个界面"
+                this.onClose(); //
             } else {
                 send(new PatrolNetworking.StartMarkingPacket(offHand, r.id(), false));
                 PatrolPreviewClient.setMarking(false, "");
@@ -398,8 +398,8 @@ public class PatrolChartScreen extends Screen {
                             hint("先回列表页新建/选一条轨道");
                             return;
                         }
-                        // 【v1.3.9.3】绑定也不再有门槛（玩家原话：「连接方面就不要再加入门禁了，
-                        // 强制连接，后果由玩家自己负责。原来那些门禁可以作为一个提醒」）——没闭环也照绑，
+                        // 【v1.3.9.3】绑定也不再有门槛（
+                        //
                         // 服务端会回一句 ⚠。客户端这里不再拦。
                         send(new PatrolNetworking.BindMaidPacket(offHand, uuid, r.id()));
                         hint("已让 " + row[1] + " 巡逻「" + r.displayName() + "」");
@@ -416,7 +416,7 @@ public class PatrolChartScreen extends Screen {
             maidPage = Math.min(pages - 1, maidPage + 1);
             rebuild();
         });
-        // 【v1.3.9.2】标记维护收进单独一页（玩家原话：「点击标记管理之后，玩家会跳转到另一个页面」）
+        // 【v1.3.9.2】标记维护收进单独一页（）
         addButton("§b标记管理 §7(" + (r == null ? 0 : r.size()) + ")", cx + 24, py, 146, 18, b -> {
             if (r == null) {
                 hint("没有可管理的轨道");
@@ -465,7 +465,7 @@ public class PatrolChartScreen extends Screen {
             markPage = Math.min(pages - 1, markPage + 1);
             rebuild();
         });
-        // 玩家原话：「然后删除最后一个标记这个按钮放在这个位置」
+        //
         addButton("§e删除最后一个标记", cx - 30, py, 110, 18, b -> deleteLast());
         addButton("§c清空全部标记", cx + 84, py, 92, 18, b -> clearPoints());
     }

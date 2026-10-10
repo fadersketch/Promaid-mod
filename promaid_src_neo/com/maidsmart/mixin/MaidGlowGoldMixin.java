@@ -15,8 +15,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 发光标记 —— 渲染管线与"光灵箭射中的敌人"完全同一条（{@code LevelRenderer} 里
  * {@code shouldEntityAppearGlowing} → {@code OutlineBufferSource} 描边 + 穿墙可见）。
  * 唯一的差别就是**描边颜色**：原版取的是 {@code entity.getTeamColor()}（没有队伍 = 白），
- * 这里把它改成金色。玩家原话："对被武装拴绳选中的女仆加一层标记效果。效果同光灵箭射中敌人时的
- * 渲染，但是将光边改为金色。正式起飞时解除该标记效果。"
+ * 这里把它改成金色。
+ *
  *
  * ── 为什么动的是 getTeamColor ──
  * 反编译实证（1.21.1 与 1.20.1 同构）：{@code LevelRenderer} 里那一行是

@@ -29,7 +29,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Entity.class)
 public abstract class EntitySetDeltaMovementMixin {
 
-    @Inject(method = "setDeltaMovement", at = @At("HEAD"), cancellable = true)
+    // v1.5.394 实测八百零五：**必须写全描述符**——{@code Entity} 上 setDeltaMovement 有两个
+    // 重载（{@code (Vec3)V} 与 {@code (DDD)V}），不写描述符的 "setDeltaMovement" 有歧义。
+    // 今天恰好挑中了带 Vec3 的那个（handler 形参就是 Vec3），但那是运气；将来 Mojang 调换声明
+    // 顺序就可能挑错 → 启动期 InvalidInjectionException → Bootstrap 崩。
+    @Inject(method = "setDeltaMovement(Lnet/minecraft/world/phys/Vec3;)V",
+            at = @At("HEAD"), cancellable = true)
     private void promaid$friendlyWindImmune(Vec3 vec, CallbackInfo ci) {
         try {
             if (FriendlyWindGuard.shouldBlockTick((Entity) (Object) this, vec)) {

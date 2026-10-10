@@ -41,6 +41,16 @@ public final class AiMemoryExtractor {
     /** v1.5.131：提取失败诊断日志（服务器日志可见真实原因：401/超时/站点禁用） */
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
+    /** 实测八百二十九c：待总结对话的"在飞"批次（UUID → 轮），成功后从续写队列摘除。 */
+    private static final java.util.Map<UUID, List<AiMemoryContinuityStore.Turn>> INFLIGHT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 实测八百二十九c：崩溃恢复补发的限频（UUID → 上次尝试毫秒）。 */
+    private static final java.util.Map<String, Long> LAST_RECOVERY =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 实测八百二十九c：摘要计数（每 N 次刷一次记忆快照）。 */
+    private static final java.util.Map<String, Integer> SUMMARY_COUNT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     private AiMemoryExtractor() {
     }
 
@@ -108,6 +118,10 @@ public final class AiMemoryExtractor {
                 ? com.maidsmart.soul.SoulBindingService.storeFor(maid, sLevel)
                 : AiMemoryStore.of(id, memoryRoot(server));
         long last = store.meta().lastExtractedTime();
+        // 实测八百二十九c：崩溃恢复——上次没总结完的对话（关服/崩溃遗留）优先补发一次
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_CONTINUITY_ENABLE.get()) {
+            recoverPending(maid, server, os, model, store, maid.level().getGameTime());
+        }
         List<LLMMessage> fresh = new ArrayList<>();
         for (LLMMessage msg : cm.getHistory().getDeque()) {
             if (msg.gameTime() > last && isChatMessage(msg)) {
@@ -142,6 +156,8 @@ public final class AiMemoryExtractor {
         String prompt = buildPrompt(batch, maxChars);
         String summaryPrompt = buildSummaryPrompt(batch, maxChars);
         String factsPrompt = buildFactsPrompt(batch, maxChars);
+        // 实测八百二十九c：发请求前把这批对话挂进续写队列（关服/崩溃后仍能补发）
+        continuityEnqueue(store, id, batch, gameTime);
         sendExtraction(maid, server, os, model, prompt, summaryPrompt, factsPrompt,
                 store, newestTime, gameTime);
     }
@@ -215,6 +231,10 @@ public final class AiMemoryExtractor {
         if (includeSummary) {
             sb.append("SUMMARY: 一句话摘要（这段对话发生了什么）\n");
             sb.append("IMPORTANCE: 1-5（这段对话整体重要度）\n");
+            // 实测八百二十九c：记忆快照——女仆第一人称的一段"心里话"（≤200字），
+            // 每 N 次摘要才真正落盘（memory.snapshotEveryN）；没有深刻经历写 none。
+            sb.append("SNAPSHOT: 用女仆第一人称、不超过200字写下最近最深刻的一件事的心里话"
+                    + "（如\"我一直记得那天主人……\"）；没有值得一直记住的事写 none\n");
         }
         sb.append("TAGS: tag1,tag2（英文小写，如 relationship,preference,world）\n");
         if (includeFacts) {
@@ -324,7 +344,7 @@ public final class AiMemoryExtractor {
                                 return;
                             }
                             if (isSummaryAgent) {
-                                handleSummary(store, content, gameTime);
+                                handleSummary(store, content, gameTime, id);
                             } else {
                                 handleFacts(store, content, gameTime);
                             }
@@ -388,6 +408,7 @@ public final class AiMemoryExtractor {
         if (remaining[0] == 0) {
             store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
             EXTRACTING.remove(id);
+            continuityComplete(store, id); // 实测八百二十九c：成功 → 从续写队列摘除
         }
     }
 
@@ -395,6 +416,148 @@ public final class AiMemoryExtractor {
     private static void fail(AiMemoryStore store, long newestTime, UUID id) {
         store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
         EXTRACTING.remove(id);
+        continuityDrop(id); // 实测八百二十九c：失败 → 留在续写队列，下次补发
+    }
+
+    // ---------- 实测八百二十九c：续写队列 / 快照 / 崩溃恢复 ----------
+
+    /** 把这一批对话转成续写队列的轮，并挂进"在飞"表。 */
+    private static void continuityEnqueue(AiMemoryStore store, UUID id, List<LLMMessage> batch, long gameTime) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.MEMORY_CONTINUITY_ENABLE.get()) {
+                return;
+            }
+            List<AiMemoryContinuityStore.Turn> turns = new ArrayList<>(batch.size());
+            for (LLMMessage m : batch) {
+                turns.add(new AiMemoryContinuityStore.Turn(
+                        m.role() == Role.USER ? "user" : "maid", m.message(), m.gameTime()));
+            }
+            store.continuity().enqueue(turns);
+            INFLIGHT.put(id, turns);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 成功：从续写队列摘除本批。 */
+    private static void continuityComplete(AiMemoryStore store, UUID id) {
+        try {
+            List<AiMemoryContinuityStore.Turn> turns = INFLIGHT.remove(id);
+            if (turns != null) {
+                store.continuity().complete(turns);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 失败：只清"在飞"表，续写队列里的待办保留供恢复。 */
+    private static void continuityDrop(UUID id) {
+        INFLIGHT.remove(id);
+    }
+
+    /**
+     * 崩溃/关服恢复：续写队列里还有没总结完的对话 → 重发一次（限频 60 秒，避免失败时刷请求）。
+     * 成功写回后从队列摘除。
+     */
+    private static void recoverPending(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
+                                       String model, AiMemoryStore store, long gameTime) {
+        UUID id = maid.getUUID();
+        if (EXTRACTING.containsKey(id) || INFLIGHT.containsKey(id)) {
+            return;
+        }
+        List<AiMemoryContinuityStore.Turn> pending = store.continuity().nextBatch();
+        if (pending.isEmpty()) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long lastTry = LAST_RECOVERY.get(id.toString());
+        if (lastTry != null && now - lastTry < 60000L) {
+            return;
+        }
+        LAST_RECOVERY.put(id.toString(), now);
+        String prompt = buildRecoveryPrompt(pending,
+                com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_MESSAGE_CHARS.get());
+        try {
+            ChatCompletion req = ChatCompletion.create().model(model).userChat(prompt);
+            if (site.hasThinkingField()) {
+                req = req.disableThinking();
+            }
+            HttpRequest.Builder builder = buildRequest(site, req);
+            LLMSite.LLM_HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
+                    .whenComplete((resp, err) -> server.execute(() -> {
+                        String content = responseContent(resp, err);
+                        if (content == null) {
+                            return; // 下次再试（pending 留着）
+                        }
+                        try {
+                            handleExtraction(store, content, latestTick(pending), gameTime, id);
+                            store.continuity().complete(pending);
+                            LOGGER.info("AiMemoryExtractor: 补发未总结对话 {} 条 maid={}",
+                                    pending.size(), id);
+                        } catch (Exception ignored) {
+                        }
+                    }));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static long latestTick(List<AiMemoryContinuityStore.Turn> turns) {
+        long t = 0;
+        for (AiMemoryContinuityStore.Turn turn : turns) {
+            t = Math.max(t, turn.tick());
+        }
+        return t;
+    }
+
+    /** 恢复用提示词（与主提示同格式，标注"上次未能总结"）。 */
+    private static String buildRecoveryPrompt(List<AiMemoryContinuityStore.Turn> turns, int maxChars) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("你是车万女仆的长期记忆提取器。以下是【上次未能总结】的 ").append(turns.size())
+                .append(" 条与主人的对话记录（服务器中断前遗留）。\n");
+        sb.append("提取值得长期记住的信息，严格按以下格式逐行输出（没有就写 NONE）：\n\n");
+        sb.append("SUMMARY: 一句话摘要（这段对话发生了什么）\n");
+        sb.append("IMPORTANCE: 1-5（这段对话整体重要度）\n");
+        sb.append("TAGS: tag1,tag2（英文小写）\n");
+        sb.append("FACT: category|key|confidence|content（每行一条）\n");
+        sb.append("EVENT: salience|attention|open|content（每行一条）\n\n");
+        sb.append("对话记录：\n");
+        for (AiMemoryContinuityStore.Turn t : turns) {
+            sb.append("[").append("user".equals(t.role()) ? "用户" : "女仆").append("] ")
+                    .append(AiMemoryModels.clip(t.text(), maxChars).replace('\n', ' ')).append('\n');
+        }
+        return sb.toString();
+    }
+
+    /** 解析 SNAPSHOT 行（无则空串）。 */
+    private static String parseSnapshot(String content) {
+        if (content == null) {
+            return "";
+        }
+        for (String raw : content.split("\n")) {
+            String line = raw.trim();
+            if (line.startsWith("SNAPSHOT:")) {
+                return line.substring("SNAPSHOT:".length()).trim();
+            }
+        }
+        return "";
+    }
+
+    /** 每 N 次摘要刷一次记忆快照：优先用模型给的 SNAPSHOT，没给就用摘要兜底。 */
+    private static void maybeUpdateSnapshot(AiMemoryStore store, String content, String summary, UUID id) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_SNAPSHOT_ENABLE.get()) {
+            return;
+        }
+        int n = SUMMARY_COUNT.merge(id.toString(), 1, Integer::sum);
+        int every = Math.max(1, com.maidsmart.config.MaidSmartConfig.MEMORY_SNAPSHOT_EVERY_N.get());
+        if (n % every != 0) {
+            return;
+        }
+        String snap = parseSnapshot(content);
+        if (snap.isBlank() || snap.equalsIgnoreCase("none")) {
+            snap = summary == null ? "" : summary;
+        }
+        if (!snap.isBlank() && !snap.equalsIgnoreCase("none")) {
+            store.saveSnapshot(snap);
+        }
     }
 
     // ---------- 解析与写入 ----------
@@ -472,6 +635,7 @@ public final class AiMemoryExtractor {
             writeParagraph(store, AiMemoryType.SUMMARY, ex.summary(),
                     mergeTags(ex.tags(), "summary"), ex.importance() * 2, now, gameTime);
         }
+        maybeUpdateSnapshot(store, content, ex.summary(), id); // 实测八百二十九c：单 agent 路也刷快照
         for (String fact : ex.facts()) {
             writeFact(store, fact, now, gameTime);
         }
@@ -484,14 +648,15 @@ public final class AiMemoryExtractor {
         EXTRACTING.remove(id);
     }
 
-    /** v1.1.0：双 agent·摘要写入（SUMMARY/IMPORTANCE/TAGS） */
-    private static void handleSummary(AiMemoryStore store, String content, long gameTime) {
+    /** v1.1.0：双 agent·摘要写入（SUMMARY/IMPORTANCE/TAGS + 实测八百二十九c 的 SNAPSHOT 快照） */
+    private static void handleSummary(AiMemoryStore store, String content, long gameTime, UUID id) {
         SummaryParts s = parseSummaryParts(content);
         long now = System.currentTimeMillis();
         if (!s.summary().isBlank() && !s.summary().equalsIgnoreCase("none")) {
             writeParagraph(store, AiMemoryType.SUMMARY, s.summary(),
                     mergeTags(s.tags(), "summary"), s.importance() * 2, now, gameTime);
         }
+        maybeUpdateSnapshot(store, content, s.summary(), id);
     }
 
     /** v1.1.0：双 agent·事实/事件写入（FACT/EVENT + TAGS；upsert/prune 在此） */
@@ -559,6 +724,9 @@ public final class AiMemoryExtractor {
         // 画像聚合（personId = owner）
         store.upsertProfile(AiMemoryModels.Profile.create("owner",
                 "（" + categoryLabel(category) + "）" + content, p.hash(), now));
+        // 实测八百二十九c：结构化画像条目（同类同 key 去重合并，带置信度）
+        store.upsertProfileItem(AiMemoryModels.ProfileItem.create(
+                category, key, content, (int) Math.round(confidence), p.hash(), now));
         // relation 类 FACT 进关系三元组
         if (category.equals("relation") || category.equals("promise")) {
             store.upsertRelation(AiMemoryModels.Relation.create("主人", key, content,
@@ -612,6 +780,14 @@ public final class AiMemoryExtractor {
         }
         if (content.isEmpty() || content.equalsIgnoreCase("none")) {
             return;
+        }
+        // 实测八百二十九c：世界事件策略——过滤原版背景噪音（路遇/刷怪），抬升危险/承诺类重要度
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_EVENT_POLICY.get()) {
+            String tagStr = String.join(",", tags) + (open ? ",open:1" : "");
+            if (!AiMemoryEventPolicy.shouldPersist(content, salience, tagStr)) {
+                return;
+            }
+            salience = AiMemoryEventPolicy.escalateSalience(content, salience);
         }
         List<String> tagList = new ArrayList<>(tags);
         tagList.add("extracted");

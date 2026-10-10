@@ -92,7 +92,7 @@ public class MaidFlightCombatTask implements IAttackTask {
      *
      * 【演进】实测五百零八 先把**垂直**半径从 TLM 默认的 4 格提到 50 格（水平仍沿用
      * `searchRadius`，默认 16），修掉了"凋灵飞高就锁不上"。但实测下来**水平 16 格仍然太小**
-     * （用户反馈："索敌范围还是太小"）——空袭是立体作战，敌人在斜上方 20~40 格时
+     * （）——空袭是立体作战，敌人在斜上方 20~40 格时
      * 水平距离早就出界了。
      *
      * 【现在】三个轴统一取 {@link #FLIGHT_SEARCH_RADIUS} = 50 格：

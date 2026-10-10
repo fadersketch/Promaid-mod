@@ -61,6 +61,10 @@ public abstract class MaidPickupPriorityMixin {
     @Inject(method = "getItems(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Ljava/util/List;",
             at = @At("RETURN"), cancellable = true)
     private void promaid$reorderPickupItems(EntityMaid maid, CallbackInfoReturnable<List<Entity>> cir) {
+        // 实测八百三十五：价值重排自己的开关（DIY 预设会关掉它——那才是 TLM 原版顺序）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_PICKUP_VALUE_REORDER.get()) {
+            return;
+        }
         List<Entity> list = cir.getReturnValue();
         if (list == null || list.size() <= 1) {
             return;

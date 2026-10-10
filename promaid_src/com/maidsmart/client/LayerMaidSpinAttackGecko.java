@@ -63,14 +63,18 @@ public class LayerMaidSpinAttackGecko extends com.github.tartaricacid.touhoulitt
         if (!MaidSpinAttackEffect.shouldRender(mob)) {
             return;
         }
+        // 【实测八百三十四】渲染护栏：激流特效是"每次自转一次 push"，中途抛异常会连推两次
+        int guardDepth = com.maidsmart.client.MaidRenderGuard.depthOf(poseStack);
         poseStack.m_85836_();
         try {
             // 骨骼空间（格、Y 朝上、X 已镜像）→ 原版模型空间（Y 朝下、X 镜像）
             poseStack.m_85841_(-1.0f, -1.0f, 1.0f);
             MaidSpinAttackEffect.render(poseStack, buffer, light, ageInTicks);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            com.maidsmart.client.MaidRenderGuard.noteSwallowed("激流特效图层（Gecko/YSM）", t);
         } finally {
             poseStack.m_85849_();
+            com.maidsmart.client.MaidRenderGuard.restore(poseStack, guardDepth);
         }
     }
 }

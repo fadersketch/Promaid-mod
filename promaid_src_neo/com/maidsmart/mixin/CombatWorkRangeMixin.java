@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 实测六百一十九【战斗时临时扩圈】（用户反馈：战斗时超出工作范围被传送回来、来回循环）。
+ * 实测六百一十九【战斗时临时扩圈】（
  *
  * 只挂一个读数：{@code EntityMaid.getRestrictRadius}（javap 实证是读同步数据
  * RESTRICT_RADIUS 的纯 getter）。TLM 里"工作范围"的**全部**判据都读它

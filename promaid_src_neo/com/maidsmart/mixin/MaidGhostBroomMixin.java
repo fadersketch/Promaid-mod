@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * v1.3.0 实测六百七十四【半透明二期·扫帚本体】：**扫帚**也一起半透明——只对"骑着它的那位玩家的
- * 第一人称"。玩家原话："半透明程度不够，默认应该为0.1，而且扫帚也应该是半透明的。"
+ * 第一人称"。
  *
  * ── 为什么拦这个类、这个方法 ──
  * TLM 的扫帚渲染器 {@code EntityBroomRender extends LivingEntityRenderer<EntityBroom, BroomModel>}
@@ -49,14 +49,19 @@ public abstract class MaidGhostBroomMixin {
         }
         // 先取消**这一遍**，再用包好的 buffer 重进一次（顺序不能颠倒：反过来一旦中途抛异常，
         // 扫帚的几何会被提交两遍）。重进的那一遍由 MaidGhostRender 内部标记挡住，原方法体只跑一次。
+        // 【实测八百三十四】护栏：重进跑的是原版方法体（push 后直接 pop、无 finally），中途抛异常
+        // 会把它的 push 留在姿态栈上 → 原版 checkPoseStack 抛 "Pose stack not empty" 崩游戏。
+        int guardDepth = com.maidsmart.client.MaidRenderGuard.depthOf(poseStack);
         ci.cancel();
         try {
             ((LivingEntityRenderer<EntityBroom, ?>) (Object) this).render(broom, entityYaw, partialTicks,
                     poseStack, com.maidsmart.client.MaidGhostRender.wrapBroom(bufferIn), packedLightIn);
-        } catch (Throwable ignored) {
-            // 幽灵化这一遍失败：这一帧就当它没画（下一帧照常试）。绝不把异常抛进渲染线程。
+        } catch (Throwable t) {
+            // 幽灵化这一遍失败：这一帧就当它没画（下一帧照常试）；把姿态栈补回、并留一行痕
+            com.maidsmart.client.MaidRenderGuard.noteSwallowed("武装拴绳半透明重绘（扫帚）", t);
         } finally {
             com.maidsmart.client.MaidGhostRender.end();
+            com.maidsmart.client.MaidRenderGuard.restore(poseStack, guardDepth);
         }
     }
 }

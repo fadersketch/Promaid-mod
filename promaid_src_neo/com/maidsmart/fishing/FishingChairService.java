@@ -419,18 +419,19 @@ public final class FishingChairService {
     public static void sweep(MinecraftServer server) {
         try {
             // 全维度收集存活女仆（跨维度判定任务）
+            // 实测八百三十九：改走 MaidRoster（只攒女仆、按 20 tick 复用，且已是存活快照）
             Map<String, EntityMaid> allMaids = new HashMap<>();
-            for (ServerLevel level : server.getAllLevels()) {
-                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                    if (e instanceof EntityMaid m && m.isAlive()) {
-                        allMaids.put(m.getUUID().toString(), m);
-                    }
+            for (EntityMaid m : com.maidsmart.tool.MaidRoster.all(server)) {
+                if (m.isAlive()) {
+                    allMaids.put(m.getUUID().toString(), m);
                 }
             }
             for (ServerLevel level : server.getAllLevels()) {
+                // 实测八百三十九：只要"这维度有哪些坐垫"，不再拷整张实体表
                 List<EntityChair> chairs = new ArrayList<>();
-                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                    if (e instanceof EntityChair c && isAutoChair(c)) {
+                for (EntityChair c : level.getEntities(
+                        net.minecraft.world.level.entity.EntityTypeTest.forClass(EntityChair.class), m -> true)) {
+                    if (isAutoChair(c)) {
                         chairs.add(c);
                     }
                 }

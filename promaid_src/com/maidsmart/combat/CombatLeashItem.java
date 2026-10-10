@@ -30,7 +30,9 @@ public class CombatLeashItem extends Item {
     /** 用法提示（悬停物品时显示，两行） */
     @Override
     public void m_7373_(ItemStack stack, Level level, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.m_237113_("item.maid_smart.combat_leash.desc1"));
-        tooltip.add(Component.m_237113_("item.maid_smart.combat_leash.desc2"));
+        // m_237115_ = Component.translatable（拿键去查语言文件）；m_237113_ 是 literal，
+        // 会把键原样当文字画出来（这里曾写错成 literal）。与 RideBatonItem 同款改法。
+        tooltip.add(Component.m_237115_("item.maid_smart.combat_leash.desc1"));
+        tooltip.add(Component.m_237115_("item.maid_smart.combat_leash.desc2"));
     }
 }

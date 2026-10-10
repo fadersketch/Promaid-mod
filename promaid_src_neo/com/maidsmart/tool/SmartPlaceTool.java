@@ -158,7 +158,7 @@ public class SmartPlaceTool implements ITool<SmartPlaceTool.Result> {
                 continue;
             }
             // 实测五百三十六：目标格被主人碰撞箱占着就不放
-            // （防把主人/自己痊住：玩家说"把这里填上"时人可能正站在那）
+            // （防把主人/自己痊住：时人可能正站在那）
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, p)) {
                 fail++;
                 continue;

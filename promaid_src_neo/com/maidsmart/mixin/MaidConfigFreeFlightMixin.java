@@ -2,13 +2,12 @@ package com.maidsmart.mixin;
 
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.AbstractMaidContainerGui;
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.config.MaidConfigContainerGui;
-import com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.flight.MaidFreeFlightFlags;
 import com.maidsmart.flight.MaidFreeFlightNetworking;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,26 +15,34 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * 实测六百七十八【仿创造飞行 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 →
- * 「创造飞行：开/关」，与 TLM 自己的「显示背包 / 能否开门」同一格式、同一列。
+ * 「创造飞行：开/关」。
  *
- * 【为什么能这么做（关键调研结论）】TLM 的女仆配置界面确实是**硬编码**的（8 行
- * `MaidConfigButton`，没有注册表可插），但 `AbstractMaidContainerGui.initAdditionWidgets()`
- * 是 protected 的扩展点、`MaidConfigButton` 是公开控件——所以第三方可以**追加自己的一行**，
- * 不需要改 TLM 本体。我们仓库里「AI 记忆」开关用的就是这套（见 MaidConfigMemoryMixin），
- * 这里照搬：按钮位置右对齐、放在原生开关列（y=52 起）之上，不遮挡任何 TLM 控件。
+ * <p>【为什么能这么做（关键调研结论）】TLM 的女仆配置界面确实是**硬编码**的（8 行
+ * {@code MaidConfigButton}，没有注册表可插），但 {@code AbstractMaidContainerGui.initAdditionWidgets()}
+ * 是 protected 的扩展点、按钮是公开控件——所以第三方可以**追加自己的一行**，
+ * 不需要改 TLM 本体。
  *
- * 【为什么不用 TLM 的 TaskData 存这个开关】TLM 的 `TaskDataRegister.writeSyncData` 会把编码结果
- * 强转 CompoundTag，一点开关就 ClassCastException 崩服（AiMemoryManager 的实测教训）——
- * 我们存 per-maid persistentData + 磁盘备份，客户端靠 S2C 缓存显示。
+ * <p>【实测八百零五：位置全交给 {@link com.maidsmart.client.MaidConfigRowLayout}】原实现把按钮
+ * 按屏幕绝对坐标 {@code (screenWidth-174, 22)} 摆，窗口一窄就压住 TLM 自己的开关
+ * （）。现在与「AI 记忆」「飞行聚晶」一起，
+ * 由 {@code MaidConfigRowLayout} 按**面板相对坐标**统一排在面板左侧外边距里——
+ * 整列在面板之外，不遮任何 TLM 控件，彼此也不重叠。详见那个类的注释。
  *
- * 【无 refmap 注意】`addRenderableWidget` 是继承自 Screen 的 protected 方法——无 refmap 时
- * `@Shadow` 定位不到（会崩），照记忆开关的做法改反射调用。
+ * <p>【为什么不用 TLM 的 TaskData 存这个开关】TLM 的 {@code TaskDataRegister.writeSyncData}
+ * 会把编码结果强转 CompoundTag，一点开关就 ClassCastException 崩服
+ * （AiMemoryManager 的实测教训）——我们存 per-maid persistentData + 磁盘备份，
+ * 客户端靠 S2C 缓存显示。
+ *
+ * <p>【无 refmap 注意】{@code addRenderableWidget} 是继承自 Screen 的 protected 方法——
+ * 无 refmap 时 {@code @Shadow} 定位不到（会崩），照记忆开关的做法改反射调用。
+ * 本树（NeoForge 1.21.1）运行时是 **Mojmap 名**（{@code addRenderableWidget}），
+ * 与 Forge 1.20.1 的 SRG {@code m_142416_} 不同。
  */
 @Mixin(MaidConfigContainerGui.class)
 public abstract class MaidConfigFreeFlightMixin {
 
     /** 我们这一行按钮（renderAddition 每帧同步文本用） */
-    private MaidConfigButton promaid$freeFlightBtn = null;
+    private Button promaid$freeFlightBtn = null;
     /** 防连点：600ms 内重复点击忽略（双击会把"关"变回"开"） */
     private static long PROMAID$LAST_CLICK = 0;
 
@@ -47,15 +54,14 @@ public abstract class MaidConfigFreeFlightMixin {
             if (maid == null) {
                 return;
             }
-            int w = ((Screen) (Object) this).width;
+            Screen screen = (Screen) (Object) this;
             String uid = maid.getUUID().toString();
             // 界面打开时先问一次真实状态（persistentData 只在服务端，客户端缓存可能是空的）
             net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                     new MaidFreeFlightNetworking.TogglePacket(uid, (byte) 0, false));
-            MaidConfigButton btn = new MaidConfigButton(w - 174, 22,
-                    Component.literal("创造飞行"),
-                    Component.literal(promaid$label(uid)),
-                    b -> {
+            Button btn = com.maidsmart.client.MaidConfigRowLayout.toggle(this, screen.width,
+                    screen.height, 1, com.maidsmart.client.MaidConfigRowLayout.LABELS[1],
+                    promaid$value(uid), () -> {
                         long now = System.currentTimeMillis();
                         if (now - PROMAID$LAST_CLICK < 600) {
                             return;
@@ -63,12 +69,11 @@ public abstract class MaidConfigFreeFlightMixin {
                         PROMAID$LAST_CLICK = now;
                         Boolean cur = MaidFreeFlightFlags.cachedClient(uid);
                         boolean next = !(cur != null ? cur : MaidFreeFlightFlags.globalOn());
-                        b.setValue(Component.literal(next ? "\u00a7a开" : "\u00a77关"));
                         net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                                 new MaidFreeFlightNetworking.TogglePacket(uid, (byte) 1, next));
                     });
             this.promaid$freeFlightBtn = btn;
-            promaid$addRenderable((Screen) (Object) this, btn);
+            promaid$addRenderable(screen, btn);
         } catch (Throwable ignored) {
         }
     }
@@ -78,7 +83,7 @@ public abstract class MaidConfigFreeFlightMixin {
     private void promaid$syncFreeFlightLabel(GuiGraphics graphics, int mouseX, int mouseY,
                                              float partialTick, CallbackInfo ci) {
         try {
-            MaidConfigButton btn = this.promaid$freeFlightBtn;
+            Button btn = this.promaid$freeFlightBtn;
             if (btn == null) {
                 return;
             }
@@ -86,18 +91,21 @@ public abstract class MaidConfigFreeFlightMixin {
             if (maid == null) {
                 return;
             }
-            btn.setValue(Component.literal(promaid$label(maid.getUUID().toString())));
+            btn.setMessage(com.maidsmart.client.MaidConfigRowLayout.text(
+                    com.maidsmart.client.MaidConfigRowLayout.LABELS[1],
+                    promaid$value(maid.getUUID().toString())));
         } catch (Throwable ignored) {
         }
     }
 
-    /** 按钮文本：未设置 = 跟随全局（全局关就是关）；显式值优先 */
-    private static String promaid$label(String uid) {
+    /** 按钮值文本：未设置 = 跟随全局（全局关就是关）；显式值优先 */
+    private static String promaid$value(String uid) {
         Boolean cur = MaidFreeFlightFlags.cachedClient(uid);
         if (cur == null) {
-            return MaidFreeFlightFlags.globalOn() ? "\u00a7a开\u00a77(跟随全局)" : "\u00a77关\u00a78(跟随全局)";
+            return MaidFreeFlightFlags.globalOn() ? "\u00a7a\u5f00\u00a77(\u8ddf\u968f\u5168\u5c40)"
+                                                  : "\u00a77\u5173\u00a78(\u8ddf\u968f\u5168\u5c40)";
         }
-        return cur ? "\u00a7a开" : "\u00a77关";
+        return cur ? "\u00a7a\u5f00" : "\u00a77\u5173";
     }
 
     /** 反射调用 Screen.addRenderableWidget（继承方法，无 refmap 时 @Shadow 定位不到） */

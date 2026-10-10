@@ -43,6 +43,21 @@ public final class MaidAutoResurrect {
 
     private static final String DATA_NAME = "maid_smart_auto_resurrect";
 
+    /**
+     * 【实测七百九十九】#33 未决墓碑清理的等待上限（2 分钟）。区块拉成 FULL 是同步的，
+     * 但"从磁盘读出来的实体"要等下一拍的 {@code PersistentEntitySectionManager.tick()}
+     * 才灌进可见实体表——正常一两拍就好；给到 2 分钟是兜底（维度正在卸载、IOWorker 卡住
+     * 这类极端情况），到点就放弃这一条并在日志里说清楚，不做无限期保载。
+     */
+    private static final long CLEANUP_TIMEOUT_TICKS = 20L * 120L;
+
+    /** 【实测七百九十九】墓碑删除结果：删掉了，或确证已不存在 —— 可以继续复活 */
+    private static final int TOMBSTONE_GONE = 1;
+    /** 【实测七百九十九】那格区块的实体还在异步载入（loadingInbox 未抽干）—— 这一拍删不掉，下一拍再试 */
+    private static final int TOMBSTONE_LOADING = 0;
+    /** 【实测七百九十九】登记表里根本没有这条（旧存档没记 id / 已被玩家取走）—— 没有可重试的目标 */
+    private static final int TOMBSTONE_NO_TARGET = -1;
+
     /** 待复活快照：女仆 UUID → 死亡时的完整 NBT + 主人 UUID + 到期游戏刻 + 墓碑 UUID */
     private static final class Pending {
         final CompoundTag maidNbt;
@@ -51,6 +66,12 @@ public final class MaidAutoResurrect {
         UUID tombstoneId;
         /** 实测四百二十一：显示名——HUD 倒计时按名字列出（旧存档无此字段时回退"女仆"） */
         final String maidName;
+        /**
+         * 【实测七百九十九】首次"墓碑还没删掉、正在等异步实体载入"的 gameTime（0 = 还没开始）。
+         * 只用来给这段等待封顶（{@link #CLEANUP_TIMEOUT_TICKS}），不落盘：重启后重头计时，
+         * 顶多多载一块碑的区块两分钟，无副作用。
+         */
+        long cleanupSince;
 
         Pending(CompoundTag maidNbt, UUID ownerId, long dueTick, UUID tombstoneId, String maidName) {
             this.maidNbt = maidNbt;
@@ -233,9 +254,30 @@ public final class MaidAutoResurrect {
                 continue; // 主人不在线——墓碑保留，等她回来再复活
             }
             try {
-                // 1. 让墓碑消失（走 TLM remove 钩子清理 MaidWorldData 记录）
-                removeTombstone(server, p);
-                // 2. 在主人重生点复活
+                // 【实测七百九十九·#33 根因】先删墓碑再复活，而删除可能"这一拍删不掉"——
+                // 墓碑所在区块的实体是**异步**从磁盘读出来的（见 discardTombstoneViaRegistry
+                // 的注释），getChunk 回来的当拍 getEntity 必然为空。这时要**继续等**，
+                // 不能当成删成功直接往下走：旧版根本不看删除结果，一复活就把待复活登记摘掉，
+                // 下一拍再也不会来删——墓碑连同全套物品永久留下
+                // （玩家下界那十几块碑就是这么攒出来的）。
+                int tomb = removeTombstone(server, p);
+                if (tomb == TOMBSTONE_LOADING) {
+                    // 还没删掉（区块实体在异步载入）→ 先不复活，下一拍重试。等多久封顶由
+                    // CLEANUP_TIMEOUT_TICKS 决定，超时就放弃等待、照常复活（宁可留一块碑，
+                    // 也不能为了删碑把她一直吊着不复活）。
+                    if (p.cleanupSince == 0L) {
+                        p.cleanupSince = now;
+                    }
+                    if (now - p.cleanupSince < CLEANUP_TIMEOUT_TICKS) {
+                        p.dueTick = now + 10L; // 半秒后重试（那时 loadingInbox 早该抽干了）
+                        continue; // 静默重试（每 10 tick 一次，不刷日志）
+                    }
+                    com.maidsmart.tool.PromaidLog.log("自动复活",
+                            p.maidName + " 的墓碑等待异步载入超时（已等 "
+                                    + (CLEANUP_TIMEOUT_TICKS / 20L)
+                                    + " 秒）→ 放弃本次等待，照常复活；那块墓碑可能残留在原地");
+                }
+                // 复用原 UUID——记忆/灵魂目录按 UUID 索引，换 UUID 会丢记忆
                 if (resurrect(server, owner, p, maidId)) {
                     data.remove(maidId);
                 } else {
@@ -248,46 +290,70 @@ public final class MaidAutoResurrect {
         }
     }
 
-    /** 删除墓碑实体（所有维度找同名 UUID） */
-    private static void removeTombstone(MinecraftServer server, Pending p) {
+    /**
+     * 删除墓碑实体（所有维度找同名 UUID）——先扫全维度已加载实体表，都没有再回退到
+     * TLM 登记表定位（见 {@link #discardTombstoneViaRegistry}）。
+     *
+     * @return {@link #TOMBSTONE_GONE}（删了/确证不在，可继续复活）、
+     *         {@link #TOMBSTONE_LOADING}（还删不掉——区块实体在异步载入，调用方应推迟复活）、
+     *         {@link #TOMBSTONE_NO_TARGET}（登记表里没这条，没有可重试的目标）。
+     *         【实测七百九十九】旧版是 void：把"没删掉"和"删掉了"混成一种结果，
+     *         调用方于是照常复活并摘掉登记，墓碑从此无人过问。
+     */
+    private static int removeTombstone(MinecraftServer server, Pending p) {
         if (p.tombstoneId == null) {
-            return;
+            return TOMBSTONE_NO_TARGET; // 没记墓碑 id（旧存档）——没有要删的东西
         }
         for (ServerLevel lvl : server.m_129785_()) {
             net.minecraft.world.entity.Entity e = lvl.m_8791_(p.tombstoneId);
             if (e instanceof EntityTombstone ts) {
                 ts.m_146870_(); // discard → TLM remove 钩子清 MaidWorldData
-                return;
+                return TOMBSTONE_GONE;
             }
         }
         // ★ 实测七百五十【墓碑所在区块没加载 → getEntity 永远找不到它】——
         //   旧版只扫已加载实体表，于是「她在别的世界死亡、玩家也走了、墓碑那块区块没加载」
         //   这一串走下来墓碑从没被删（连同全套物品+胶片留着，且复活又恢复了同一套背包）。
         //   这里退回 TLM 自己的登记表（记着维度+坐标）定位、同步载入后删。
-        if (discardTombstoneViaRegistry(server, p)) {
-            return;
+        int viaRegistry = discardTombstoneViaRegistry(server, p);
+        if (viaRegistry == TOMBSTONE_NO_TARGET) {
+            com.maidsmart.tool.PromaidLog.log("自动复活",
+                    "墓碑既不在实体表、也不在 TLM 登记表里（可能已被玩家取走/世界损坏）——本次跳过删除");
         }
-        com.maidsmart.tool.PromaidLog.log("自动复活",
-                "墓碑既不在实体表、也不在 TLM 登记表里（可能已被玩家取走/世界损坏）——本次跳过删除");
+        return viaRegistry;
     }
 
     /**
      * 按 TLM 墓碑登记表定位并删除（同 1.21.1 版口径；两树同一条 实测七百五十）。
-     * 玩家原话：「墓碑所在区块没有加载所以躲掉了一次清除吧」。
+     * 。
      *
-     * <p>【实测七百六十三·点1：为什么"强制加载之后同 tick 就查得到"，不需要任何顺延】
-     * 两版这条链读透了：{@code ServerChunkCache#getChunkFutureMainThread} 在 {@code load=true}
-     * 时按 {@code ChunkLevel.byStatus(status)} 取等级 → 对 {@code ChunkStatus.FULL} 就是 <b>33</b>
-     * → {@code addTicket(UNKNOWN, pos, 33)} → 阻塞到 FULL 完成；而
-     * {@code ChunkLevel.fullStatus(33)=FULL} → {@code Visibility.fromFullChunkStatus(FULL)=TRACKED}
-     * → {@code isAccessible()=true} → {@code addEntityWithoutEvent} 当场 {@code startTracking}
-     * 把它放进**可见**实体表。所以 {@code m_8791_(uuid)}（读可见表）在我们这一句 {@code m_6325_}
-     * 之后**同 tick** 就能取到，<b>不需要任何玩家在附近</b>；"载完还取不到"只可能是它真的不在了
-     * ——晚几秒再试不会变，顺延没有意义（本轮修复中一度写过 6×5 秒顺延，查清这条链后当场撤掉，没有进过任何构建）。
+     * <p>【实测七百九十九：更正 实测七百六十三·点1 的一段错误推断】旧注释断言「33 级 ticket
+     * 让该格实体当场 TRACKED，所以 {@code m_6325_} 之后同 tick 就能取到，顺延没有意义」——
+     * 这个结论是**错的**，也是 #33 一直修不掉的根因。真实链路（字节码实证）：
+     * <ul>
+     *   <li>{@code getChunkFutureMainThread} 在 {@code load=true} 时按
+     *       {@code ChunkLevel.byStatus(FULL)} = 33 加 ticket，阻塞到**区块** FULL——这只保证
+     *       区块本体就绪；</li>
+     *   <li>实体是**另一条异步链**：区块可见性转非 HIDDEN 时
+     *       {@code PersistentEntitySectionManager.updateChunkStatus} → {@code ensureChunkQueuedForLoad}
+     *       → {@code requestChunkLoad} 向 {@code IOWorker} 要那格实体，结果进
+     *       {@code loadingInbox}（一个 {@code Queue}）；</li>
+     *   <li>{@code loadingInbox} **只在** {@code PersistentEntitySectionManager.tick()} 里的
+     *       {@code processPendingLoads()} 被抽干，该方法由 {@code ServerLevel.tick} 调用，
+     *       <b>不在 {@code m_6325_} 的调用栈上</b>；{@code m_143319_(long)}（areEntitiesLoaded）
+     *       读的 {@code chunkLoadStatuses} 也只有 {@code processPendingLoads} 会写成 LOADED；</li>
+     *   <li>所以「这句 m_6325_ 之后同 tick 的 {@code m_8791_}」**必然为空**，与"她还在不在"
+     *       毫无关系。旧版把这个空读成"她真的不在了"，把登记表唯一那条指针删了——墓碑从此
+     *       无人过问（反馈日志原文「墓碑登记表有记录但实体已不存在 → 已清掉这条登记」）。</li>
+     * </ul>
      *
-     * @return 真的删掉了（或确认它已不存在）返回 true；连位置都查不到返回 false
+     * <p>【现在的口径】区分两种"取不到"：{@code m_143319_} 为 false = 还在异步载入，
+     * 返回 {@link #TOMBSTONE_LOADING} 让调用方**推迟复活、下一拍再删**（保留登记表指针）；
+     * 为 true 才敢断定她真的不在了，这时才清脏登记。
+     *
+     * @return {@link #TOMBSTONE_GONE} / {@link #TOMBSTONE_LOADING} / {@link #TOMBSTONE_NO_TARGET}
      */
-    private static boolean discardTombstoneViaRegistry(MinecraftServer server, Pending p) {
+    private static int discardTombstoneViaRegistry(MinecraftServer server, Pending p) {
         try {
             ServerLevel any = server.m_129880_(Level.f_46428_);
             com.github.tartaricacid.touhoulittlemaid.world.data.MaidWorldData data =
@@ -295,7 +361,7 @@ public final class MaidAutoResurrect {
             java.util.List<com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo> list =
                     data == null ? null : data.getTombstones(p.ownerId);
             if (list == null || list.isEmpty()) {
-                return false;
+                return TOMBSTONE_NO_TARGET;
             }
             com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo hit = null;
             for (com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo info : list) {
@@ -305,7 +371,7 @@ public final class MaidAutoResurrect {
                 }
             }
             if (hit == null) {
-                return false;
+                return TOMBSTONE_NO_TARGET;
             }
             net.minecraft.core.BlockPos pos = hit.getChunkPos();
             boolean matchedLevel = false;
@@ -322,17 +388,26 @@ public final class MaidAutoResurrect {
                             "墓碑所在区块原未加载，已按登记表（" + hit.getDimension() + " "
                                     + pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_()
                                     + "）同步载入后删除");
-                    return true;
+                    return TOMBSTONE_GONE;
                 }
-                // 区块载进来了、她确实不在了 → 清掉脏登记
+                // 【实测七百九十九】取不到 ≠ 她真的不在了：区块本体虽已 FULL，但这格的
+                // 磁盘实体还在 loadingInbox 里排队（见方法头注释）。m_143319_(long) 为 false
+                // = 还没灌进实体表 → 绝不能动登记表，留到下一拍再试；为 true 才敢断定
+                // 她真的不在了，这时才清那条脏登记。
+                if (!lvl.m_143319_(net.minecraft.world.level.ChunkPos.m_45589_(
+                        pos.m_123341_() >> 4, pos.m_123343_() >> 4))) {
+                    return TOMBSTONE_LOADING;
+                }
+                // 区块载进来了、实体也读出来了，她还是不在 → 真的不在了，清掉脏登记
                 try {
                     list.removeIf(i -> p.tombstoneId.equals(i.getEntityId()));
                     data.m_77762_();
                 } catch (Throwable ignored) {
                 }
                 com.maidsmart.tool.PromaidLog.log("自动复活",
-                        "墓碑登记表有记录但实体已不存在 → 已清掉这条登记（" + hit.getDimension() + "）");
-                return true;
+                        "墓碑登记表有记录但实体已不存在（该格实体已确证载入）→ 已清掉这条登记（"
+                                + hit.getDimension() + "）");
+                return TOMBSTONE_GONE;
             }
             if (!matchedLevel) {
                 // 【实测七百六十三·点1】登记表那条记的维度在本服务器上没有对应维度 —— 这时连
@@ -342,6 +417,7 @@ public final class MaidAutoResurrect {
                         "墓碑登记表记的维度（" + hit.getDimension() + "）在本服务器上没有对应维度"
                                 + "→ 无法定位那格区块，这块墓碑不会被删除；坐标 "
                                 + pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_());
+                return TOMBSTONE_NO_TARGET; // 维度不存在 = 没有可重试的目标
             }
         } catch (Throwable t) {
             // 【实测七百六十三·点1】把这条也点出来：加载/读取过程中真的抛了异常（区块读不出来、
@@ -349,7 +425,7 @@ public final class MaidAutoResurrect {
             // 情形，值得留一行。本方法每次复活只走一次，不会刷屏。
             com.maidsmart.tool.PromaidLog.log("自动复活", "按登记表删除墓碑时出错：" + t);
         }
-        return false;
+        return TOMBSTONE_NO_TARGET;
     }
 
     /** 在主人重生点复活女仆（与 TLM 魂符释放同构：new + load + 落点 + addFreshEntity） */
@@ -367,9 +443,9 @@ public final class MaidAutoResurrect {
             // 的实体不在实体表里（区块可见性默认 HIDDEN，不可达就不 startTracking），
             // 要等区块异步载完才"现身"；而 5 秒持票对账可能在载完之前扫不到她、把
             // ensureTicketNow 刚挂的票撤掉 → 区块放弃加载 → 她【永远】不进实体表：
-            // 排班表不显示她、getEntity 找不到她、一键集合召不回（玩家原话：「重生点
-            // 离玩家当前位置又太远，那么排班表上就不会显示这个女仆……一键召回会显示
-            // 无法召回」）。同步加载这格区块后，addFreshEntity 当场入表，票也稳了；
+            // 排班表不显示她、getEntity 找不到她、一键集合召不回（
+            //
+            //
             // respawnLanding 的落点计算从此也看得到真实地形。
             dest.m_6325_(respawn.m_123341_() >> 4, respawn.m_123343_() >> 4);
             // v1.2.0【复活原地摔死根因修复】：落点改用原版等效站位——床/重生锚走
@@ -459,7 +535,7 @@ public final class MaidAutoResurrect {
 
     // ================== 实测六百九十九：待复活查询接口（排班表/一键召回用） ==================
     //
-    // 玩家原话：「排班表无法显示所有的女仆……此时如果使用一键召回会显示无法召回。」
+    //
     // 死亡→复活的 60 秒窗口里她不是实体——排班表查不到、召回找不到、播报只会说
     // "没能等到"。这组只读接口让排班表照常列她（「✚ 复活中」行），
     // 召回/集合的播报从"失败"变成"她什么时候回来"。

@@ -14,7 +14,7 @@ description:
       point.
 source:
   - {path: promaid_src_neo/com/maidsmart/ProMaidExtension.java, line: 593, end_line: 779}
-revision: 491ba927ffa91889b679f800817dd48763aabd62
+revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 328415dd1df24e2cfa1edd46113be2eb2979c2862aecf35a79ad5b6772f20c10
 state: active

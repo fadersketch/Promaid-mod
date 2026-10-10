@@ -86,7 +86,7 @@ public final class PatrolNetworking {
     /* ==================== C2S：书操作（新建/删除/改名/选中） ==================== */
 
     /**
-     * v1.3.9【巡逻航图 · 书架操作】玩家原话：「一个航图里面可以保存多个轨道。」
+     * v1.3.9【巡逻航图 · 书架操作】
      *
      * <p>动作：{@code create}（新建一条空轨道并选中）/ {@code delete}（删一条）/
      * {@code rename}（改名）/ {@code select}（切换当前编辑的那条）/
@@ -156,8 +156,16 @@ public final class PatrolNetworking {
                             return;
                         }
                         PatrolChartData.writeBook(stack, book);
+                        // 【实测七百九十八】删轨道 = 连她脑子里那份深拷一起作废（
+                        // 女仆还在沿它飞）。① 记进全服"已删除账本"（她不在已加载区块也能在下次被读到
+                        // 时自行作废）；② 当场把已加载、绑着这条的立刻解绑，她马上回默认状态。
+                        int cut = PatrolRevocation.revokeAndUnbind(player.getServer(), gone.id());
                         player.sendSystemMessage(Component.literal("§e已删除轨道「"
-                                + gone.displayName() + "」"));
+                                + gone.displayName() + "」"
+                                + (cut > 0
+                                   ? "§7（同时解除了 " + cut + " 只女仆对它的绑定，她们回到默认状态）"
+                                   : "§7（绑定着它的女仆也会一并作废——不在场 / 未加载的，"
+                                     + "等她下次被读到时自动解除）")));
                     }
                     case "rename" -> {
                         PatrolRoute r = book.byId(p.id);
@@ -291,7 +299,7 @@ public final class PatrolNetworking {
     /* ==================== C2S：女仆绑定 / 解绑（界面里点） ==================== */
 
     /**
-     * v1.3.9【界面内绑定/解绑】——玩家原话：「绑定完的女仆如何解绑？」「跟建造模式的女仆管理同款，
+     * v1.3.9【界面内绑定/解绑】——「跟建造模式的女仆管理同款，
      * 可以将女仆绑到某个区块。」
      *
      * <p>旧版解绑只能"潜行 + 右键女仆"，那个手势既不显眼、又踩了两个坑（服务端两条交互入口
@@ -449,8 +457,8 @@ public final class PatrolNetworking {
     /**
      * 这位玩家**自己的、活着的**女仆（按"离玩家近→远"排）。
      *
-     * <p>【v1.3.9：从 64 格放宽到整个维度】玩家原话：「跟建造模式的女仆管理同款，可以将女仆绑到
-     * 某个区块。」手册那套女仆管理扫的就是**全维度**自己的女仆——巡逻这边一开始只扫 64 格，
+     * <p>【v1.3.9：从 64 格放宽到整个维度】
+     *
      * 结果"她在家门口、我站在航图边上"就绑不上。轨道是写在**她身上**的，人在哪都不影响，
      * 所以这里跟手册同口径：全维度、只筛"自己的 + 活着"。
      */
@@ -504,7 +512,7 @@ public final class PatrolNetworking {
             PatrolBook book = PatrolChartData.readBook(stack);
             PatrolRoute sel = book.selected();
             // 【v1.3.9.2 界面只报几何】净空已不是门槛，界面里也就不再显示"有方块挡路"这类提示
-            // （玩家原话："它就一直在显示有方块阻挡"）。净空只在点「连接」那一下回一句黄字提醒，
+            // （）。净空只在点「连接」那一下回一句黄字提醒，
             // 以及 /maid_smart broom_patrol status 里查。
             PatrolGeometry.Report rep = PatrolValidation.geometryOnly(sel);
             PacketDistributor.sendToPlayer(player, new OpenPatrolPacket(
@@ -549,8 +557,8 @@ public final class PatrolNetworking {
             // 这里顺手写回一次，玩家下次打开就不用再迁（幂等）。
             PatrolBook book = PatrolChartData.readBook(stack);
             PatrolChartData.writeBook(stack, book);
-            // 【v1.3.9】右键回到界面 = 标记这一段结束（玩家原话："再次通过右击可以回到刚才那个界面，
-            // 点击连接"）。先发书、再发"标记已关"——客户端要靠"进来之前还在标记"来决定开在管理页。
+            // 【v1.3.9】右键回到界面 = 标记这一段结束（
+            //
             boolean wasMarking = PatrolMarking.active(player);
             String markId = PatrolMarking.routeId(player);
             sendBook(player, stack, offHand, true);
@@ -635,7 +643,7 @@ public final class PatrolNetworking {
     /* ==================== C2S：开始 / 结束标记 ==================== */
 
     /**
-     * v1.3.9【开始标记 / 结束标记】——玩家原话：
+     * v1.3.9【开始标记 / 结束标记】——
      * 「在这个轨道上面，可以点击按钮"开始标记"。开始标记之后玩家会暂时退出那个界面，系统也会提示玩家，
      * 这个时候可以开始进行标记了，点击鼠标中键进行标记。注意，如果你没有点击这个开始标记这个方式，
      * 那么你使用中键是没有任何用处的。」
@@ -766,7 +774,7 @@ public final class PatrolNetworking {
     /* ==================== C2S：打点（仅标记态） ==================== */
 
     /**
-     * v1.3.9【中键打点】——玩家原话：
+     * v1.3.9【中键打点】——
      * 「应该改成直接拿着此物品进行中键的时候就算标记一个标记。」+「如果你没有点击这个开始标记
      * 这个方式，那么你使用中键是没有任何用处的。」
      *
@@ -868,10 +876,10 @@ public final class PatrolNetworking {
     /* ==================== C2S：连接（闭环 + 障碍校验） ==================== */
 
     /**
-     * 「连接」按钮：把首尾接成闭环。玩家原话——「必须要保证没有障碍物。否则就会提示连接失败。」
+     * 「连接」按钮：把首尾接成闭环。
      *
-     * <p>【v1.3.9.3：强制连接，门禁降级为提醒】玩家原话：「连接方面就不要再加入门禁了，强制连接，
-     * 后果由玩家自己负责。原来那些门禁可以作为一个提醒，触犯了以后就提醒一下。」⇒ 这一步**永远**
+     * <p>【v1.3.9.3：强制连接，门禁降级为提醒】
+     *
      * 把 {@code closed} 置真；点数不够 / 坡度太陡 / 自交 / 半径超限都只是事后念一句 ⚠（见 handle）。
      * 净空（挡路方块）从 v1.3.9.2 起就只提示了，飞的时候 {@link PatrolAdapt} 抬一抬、
      * {@code MaidBroomDrive.steerTo} 脱困与危险绕行再兜一道。
@@ -928,8 +936,8 @@ public final class PatrolNetworking {
                     sendBook(player, stack, p.offHand, false);
                     return;
                 }
-                // 【v1.3.9.3：连接强制，不再有门槛】玩家原话：「连接方面就不要再加入门禁了，
-                // 强制连接，后果由玩家自己负责。原来那些门禁可以作为一个提醒，触犯了以后就提醒一下。」
+                // 【v1.3.9.3：连接强制，不再有门槛】
+                //
                 // ⇒ 标记不够 / 坡度太陡 / 自交 / 半径超限 一律**照连不误**：原来的每一项判据在下面
                 //   逐条念成 ⚠ 提醒。能不能飞由她自己兜底（PatrolAdapt 抬升 + steerTo 脱困/绕行）。
                 if (!route.viable()) {
@@ -942,8 +950,8 @@ public final class PatrolNetworking {
                 route.setClosed(true);
                 // 【v1.3.9.3「连接时让线避开方块」】就地把整条线烘一遍：每个标记该往哪挪算出来
                 // 存进 lift（不改 points——玩家打的记号还在原地）。三维避让：先抬、抬不动往
-                // 四边挪、四面堵着才往下沉（玩家原话「如果上面被全部封死了，那也可以尝试往左往右
-                // 或者往下」）。见 PatrolAdapt.refine / nudge。
+                // 四边挪、四面堵着才往下沉（
+                //
                 double lifted = PatrolAdapt.refine(player.level(), route, PatrolAdapt.MAX_LIFT);
                 PatrolGeometry.Report rep = PatrolValidation.geometryOnly(route);
                 PatrolChartData.writeBook(stack, book);

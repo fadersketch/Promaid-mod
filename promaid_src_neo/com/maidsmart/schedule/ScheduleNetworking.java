@@ -67,6 +67,8 @@ public final class ScheduleNetworking {
         //（排班表挡着右键不到她；她骑上扫帚后右键又变成"上/下扫帚"——两条路都断了，
         // 只能让服务端开）
         r.playToServer(SchedulePacketsMaid.OpenMaidConfigPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.OpenMaidConfigPacket::encode, SchedulePacketsMaid.OpenMaidConfigPacket::decode), SchedulePacketsMaid.OpenMaidConfigPacket::handle);
+        // 实测八百二十八：排班表快捷页「站立 / 坐下」键（骑乘时服务端拒绝）。
+        r.playToServer(SchedulePacketsMaid.MaidSitTogglePacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.MaidSitTogglePacket::encode, SchedulePacketsMaid.MaidSitTogglePacket::decode), SchedulePacketsMaid.MaidSitTogglePacket::handle);
     }
 
     /** 服务端：把女仆当前真实状态（任务/模式/排班开关）推给其主人——排班段应用
@@ -116,8 +118,8 @@ public final class ScheduleNetworking {
                 String taskUid = m.getTask() == null ? "touhou_little_maid:idle"
                         : m.getTask().getUid().toString();
                 int mode = m.getSchedule() == null ? 2 : m.getSchedule().ordinal();
-                // v1.3.3【字段 6 停用：血量百分比 → 列表行改版】：玩家反馈"列表行最好显示女仆的
-                // 基本状态（当前什么模式 / 在不在家 / 有没有排班），把血量百分比去掉"。列表行现在
+                // v1.3.3【字段 6 停用：血量百分比 → 列表行改版】：
+                //
                 // 显示【任务名 + 工作模式 + 排班 + 在家】（任务名由客户端按 UID 查翻译键，见
                 // ScheduleBookScreen 的 taskCn），血量百分比没有任何消费方了。
                 // 【为什么保留字段位而不删】协议形状不变（客户端仍按 0..8 读下标），少一处
@@ -156,9 +158,9 @@ public final class ScheduleNetworking {
             }
         }
         // ==================== 实测六百九十九：她不在实体表里也照常入列 ====================
-        // 玩家原话：「排班表无法显示所有的女仆，如果一个玩家的女仆死亡，回到了玩家的
-        // 重生点，但是玩家的重生点离玩家当前位置又太远，那么排班表上就不会显示这个女仆
-        // 的资料和信息。会造成缺失。此时如果使用一键召回会显示无法召回。」
+        //
+        //
+        //
         // 两类"实体表里没有她"的女仆，现在从服务端的两本账里补进列表：
         // ① 已阵亡、等待自动复活的（MaidAutoResurrect 登记表）→ 任务列显示「✚ 复活中」；
         // ② 不在已加载区块的（MaidChunkLoadManager 最后出现位置登记，跨重启落盘）

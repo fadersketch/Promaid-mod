@@ -109,7 +109,8 @@ if (++throttle < 80) {
             // 目标与女仆同一高度层（脚部方块），寻路器自动落地
             BlockPos target = new BlockPos(center.getX() + dx,
                     maid.blockPosition().getY(), center.getZ() + dz);
-            brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(target, 0.7f, 2));
+            brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(target,
+                    (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 2)); // 实测八百一十六：漫游速度走「散步速度倍率」（默认 0.4）
         } catch (Exception ignored) {
         }
     }

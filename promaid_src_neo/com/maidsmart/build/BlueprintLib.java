@@ -188,6 +188,9 @@ public final class BlueprintLib {
                 palette.add(stateTag);
             }
             net.minecraft.nbt.ListTag blocks = tag.getList("blocks", 10);
+            // v1.3.0 实测八百一十五：床的配对半扇判定——先收集计划里所有「床脚」
+            // （原始坐标，旋转前后的配对关系不变），供下面逐格判"这格床头多余吗"。
+            java.util.Set<Long> bedFeet = BlueprintStructureCodec.bedFootKeys(blocks, palette);
             List<String> steps = new ArrayList<>();
             // v1.2.2 实测五百九十八（issue #12）：跳过的"没有对应物品"格数（调用方写日志用）
             BlueprintStructureCodec.noItemCells = 0;
@@ -225,8 +228,19 @@ public final class BlueprintLib {
                 if (FORBIDDEN.contains(blockName) && !fluidKept) {
                     continue;
                 }
-                // 二次半块（门上半/床头）跳过——放置主半块时 MC 自动补全
+                // 二次半块 = 门的上半扇：跳过，放置下半扇时由 ensureDoorUpper 补全
+                // （一件门物品只对应两格，两扇都进计划会吞两份料）
                 if (BlueprintStructureCodec.isSecondaryHalf(stateTag)) {
+                    continue;
+                }
+                // v1.3.0 实测八百一十五【床只剩半张、挖了不掉】：旧版这里把 part=head 也当
+                // "二次半块"跳过（以为 MC 会自动补全），但床没有补全代码——只有 foot 落地、
+                // 而原版床掉落表只在 part=head 时才给物品（掉落表/字节码实证）→ 玩家看到
+                // "床只剩半张、挖了也不掉"。现在按【配对半扇在不在计划里】判：
+                // foot 一律保留（与玩家摆放同序），head 只在配对 foot 缺席时才保留；
+                // 放置侧 ensureBedHalf 会为留下的那一格补全另一半。旋转是等距变换、
+                // 配对关系不变，所以这里用【原始坐标】判。
+                if (BlueprintStructureCodec.isRedundantBedHalf(stateTag, x, y, z, bedFeet)) {
                     continue;
                 }
                 net.minecraft.world.level.block.Block block =
@@ -241,7 +255,7 @@ public final class BlueprintLib {
                 // issue #12 的现场（反馈者观察到"过滤没拦住"）；材料侧已在实测五百八十三
                 // 修好（itemForBlock 做 wall_ 归一）。现在这里统一走**同一个** itemForBlock()：
                 // 判据与材料链完全一致，真正没有物品形式的方块（火/传送门…）才跳过，
-                // 跳过的格数由调用方写进日志（旧版静默——反馈原话"失败完全静默"）。
+                // 跳过的格数由调用方写进日志（旧版静默——反馈）。
                 boolean fluidBlock = "minecraft:water".equals(blockName) || "minecraft:lava".equals(blockName);
                 if (block == null || (fluidBlock && !fluidKept) || itemForBlock(blockName) == null) {
                     BlueprintStructureCodec.noItemCells++;
@@ -336,10 +350,20 @@ public final class BlueprintLib {
     /** 解析 JSON 蓝图中的 name 字段（可选）；解析失败返回 null —— 实现见 BlueprintCatalog.parseJsonName（v1.2.4 拆分）。 */
     public static String parseJsonName(String json) { return BlueprintCatalog.parseJsonName(json); }
 
-    /** 校验步骤列表（块数/范围/白名单），非法返回错误信息，合法返回 null */
+    /** 实测八百三十一：最近一次 {@link #parseJson} 失败的原因（成功/未调用时为 null）。
+     *  工具层据此把"为什么不成"如实report——不再只有"格式不对/未知蓝图"。 */
+    public static String lastJsonError() { return BlueprintCatalog.lastJsonError(); }
+
+    /** 校验步骤列表（块数/范围/白名单），非法返回错误信息，合法返回 null。
+     *  【实测八百三十一】这是 **smart_build 现场 JSON** 专用的策略上限（防模型单次喷巨量参数）：
+     *  白名单 + maxBlocks/maxRange/maxHeight。smart_design 自绘蓝图与 JSON 文件不走这里
+     *  （见 SmartDesignTool.looseValidate / BlueprintCatalog.parseJson）。报错文案里的数字
+     *  一律取自配置——旧版写死 "1~200 / ±12 / 0~8"，玩家把上限调大后提示还在骗人。 */
     public static String validate(List<String> steps) {
         if (steps == null || steps.size() > maxBlocks()) {
-            return "蓝图无效：块数必须为 1~200";
+            return "蓝图无效：块数必须为 1~" + maxBlocks()
+                    + "（更大的建筑请改用 smart_design 交给建筑师子 Agent 设计，或把结构文件放进"
+                    + " config/maid_smart/blueprints/）";
         }
         for (String step : steps) {
             // v1.5.311：走 parseStep——步骤可能带 |stateSnbt|beSnbt（SNBT 内含逗号），
@@ -353,10 +377,14 @@ public final class BlueprintLib {
                 int y = Integer.parseInt(parts[1]);
                 int z = Integer.parseInt(parts[2]);
                 if (Math.abs(x) > maxRange() || Math.abs(z) > maxRange() || y < 0 || y > maxHeight()) {
-                    return "蓝图无效：坐标超出范围（平面 ±12，高度 0~8）";
+                    return "蓝图无效：坐标超出范围（平面 ±" + maxRange() + "，高度 0~" + maxHeight()
+                            + "）。这是 smart_build 现场 JSON 的上限（防模型单次喷巨量参数），"
+                            + "大型/超高建筑请用 smart_design 让建筑师子 Agent 设计";
                 }
                 if (!WHITELIST.contains(parts[3])) {
-                    return "蓝图无效：方块不在建筑白名单内: " + parts[3];
+                    return "蓝图无效：方块不在建筑白名单内: " + parts[3]
+                            + "（白名单只约束 smart_build 现场 JSON；想用任意正常建筑方块——"
+                            + "比如樱花木/樱花树叶——请用 smart_design 设计）";
                 }
             } catch (NumberFormatException e) {
                 return "蓝图无效：坐标不是数字";

@@ -28,6 +28,25 @@ public class AiMemoryContext extends AbstractMaidContext {
         super("ai_memory", "AI Memory");
     }
 
+    /** 实测八百二十九c：每女仆一个召回闸门（移植自 maidsoulcore MemoryRecallGate）。 */
+    private static final java.util.Map<String, AiMemoryRecallGate> GATES =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static AiMemoryRecallGate gateFor(EntityMaid maid) {
+        return GATES.computeIfAbsent(maid.getUUID().toString(), k -> new AiMemoryRecallGate(
+                com.maidsmart.config.MaidSmartConfig.MEMORY_RECALL_GATE.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_RECALL_MIN_INTERVAL.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_RECALL_MIN_MESSAGES.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_RECALL_CACHE_TTL.get()));
+    }
+
+    /** 女仆卸载时清闸门缓存（由 AiMemoryManager.onEntityLeaveLevel 调用）。 */
+    public static void forget(java.util.UUID maidUuid) {
+        if (maidUuid != null) {
+            GATES.remove(maidUuid.toString());
+        }
+    }
+
     @Override
     public String getValue(EntityMaid maid) {
         if (!AiMemoryManager.isEnabled(maid)) {
@@ -53,8 +72,24 @@ public class AiMemoryContext extends AbstractMaidContext {
             }
         }
         List<AiMemoryModels.Paragraph> paragraphs = store.paragraphs();
-        if (paragraphs.isEmpty() && store.relations().isEmpty() && store.profiles().isEmpty() && sb.isEmpty()) {
+        if (paragraphs.isEmpty() && store.relations().isEmpty() && store.profiles().isEmpty()
+                && store.profileItems().isEmpty() && sb.isEmpty()) {
             return "";
+        }
+        // 实测八百二十九c：召回闸门——用"段落数"当作"有没有新信息"的信号，无新信息且在
+        // 最小间隔/缓存期内 → 只注入核心分区（跳过 相关记忆/今日回顾/记忆日记 这些动态大块），
+        // 省 token 省 CPU；显式回忆线索（记得/上次/之前）在本入口拿不到
+        // QueryMemoryTool 那侧强制放行。
+        boolean full = true;
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_RECALL_GATE.get()) {
+            long nowMs = System.currentTimeMillis();
+            long count = paragraphs.size();
+            AiMemoryRecallGate gate = gateFor(maid);
+            AiMemoryRecallGate.Decision d = gate.evaluate("", nowMs, count);
+            full = d.allow();
+            if (full) {
+                gate.markCompleted("", nowMs, count);
+            }
         }
         // 1. 关系三元组（v1.5.95：单独段，高置信度在前——主人的关系是对话最重要参考；
         //    v1.5.96：可配置开关 memory.relationInject）
@@ -112,7 +147,9 @@ public class AiMemoryContext extends AbstractMaidContext {
                 .comparingInt(AiMemoryModels.Paragraph::salience).reversed()
                 .thenComparing(AiMemoryModels.Paragraph::lastAccessed, Comparator.reverseOrder()));
         int n = com.maidsmart.config.MaidSmartConfig.MEMORY_PROMPT_TOP_N.get();
-        appendSection(sb, "相关记忆", ext, n, p -> "（重要度" + p.salience() + "）" + p.content());
+        if (full) {
+            appendSection(sb, "相关记忆", ext, n, p -> "（重要度" + p.salience() + "）" + p.content());
+        }
         // 4. 今日回顾（最近 2 条 daily 摘要）
         List<AiMemoryModels.Paragraph> daily = new ArrayList<>();
         for (AiMemoryModels.Paragraph p : paragraphs) {
@@ -124,7 +161,9 @@ public class AiMemoryContext extends AbstractMaidContext {
             }
         }
         daily.sort(Comparator.comparingLong(AiMemoryModels.Paragraph::createdAt).reversed());
-        appendSection(sb, "今日回顾", daily, 2, p -> p.content());
+        if (full) {
+            appendSection(sb, "今日回顾", daily, 2, p -> p.content());
+        }
         // 4b. 记忆日记（多级记忆索引的「日」级日记式摘要，最近 2 条；移植自
         //     Sphantosis——LLM 第一人称日记，跨度压缩过的整段时间线记忆）
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
@@ -132,9 +171,11 @@ public class AiMemoryContext extends AbstractMaidContext {
                     new ArrayList<>(store.index().byLevel(AiMemoryIndexStore.LEVEL_DAY));
             if (!diaries.isEmpty()) {
                 diaries.sort(Comparator.comparingLong(AiMemoryIndexStore.IndexRecord::endTick).reversed());
-                appendSection(sb, "记忆日记", diaries, 2,
-                        r -> "【第" + r.startDay() + "~" + r.endDay() + "天】"
-                                + AiMemoryModels.clip(r.content(), 150));
+                if (full) {
+                    appendSection(sb, "记忆日记", diaries, 2,
+                            r -> "【第" + r.startDay() + "~" + r.endDay() + "天】"
+                                    + AiMemoryModels.clip(r.content(), 150));
+                }
             }
         }
         // 5. 工作笔记（v1.5.95：跨对话任务状态，注入让 LLM 记得"当前在做什么"；
@@ -164,10 +205,30 @@ public class AiMemoryContext extends AbstractMaidContext {
             open.sort(Comparator.comparingLong(AiMemoryModels.Paragraph::createdAt).reversed());
             appendSection(sb, "她记挂着的事", open, 2, AiMemoryModels.Paragraph::content);
         }
-        // 6. 主人画像（top 3，按 updatedAt 降序——v1.5.95：画像内部已含置信度证据）
-        List<AiMemoryModels.Profile> profiles = store.profiles();
-        profiles.sort(Comparator.comparingLong(AiMemoryModels.Profile::updatedAt).reversed());
-        appendSection(sb, "主人画像", profiles, 3, p -> p.profileText());
+        // 5c. 记忆快照（实测八百二十九c：女仆第一人称"心里话"，常驻注入——提供情绪连续性）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_SNAPSHOT_ENABLE.get()) {
+            String snap = store.snapshotText();
+            if (!snap.isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append("；");
+                }
+                sb.append("她心里的记忆：").append(snap);
+            }
+        }
+        // 6. 主人画像——实测八百二十九c：优先用结构化画像条目（按置信度降序、每类限量），
+        //    没有条目时回退旧的拼接文本。
+        List<AiMemoryModels.ProfileItem> items = com.maidsmart.config.MaidSmartConfig.MEMORY_PROFILE_ITEMS.get()
+                ? store.profileItems() : new ArrayList<>();
+        if (!items.isEmpty()) {
+            items.sort(Comparator.comparingInt(AiMemoryModels.ProfileItem::confidence).reversed()
+                    .thenComparing(AiMemoryModels.ProfileItem::updatedAt, Comparator.reverseOrder()));
+            appendSection(sb, "主人画像", items, 5,
+                    it -> "（" + it.category() + "）" + it.content() + "（置信度" + it.confidence() + "）");
+        } else {
+            List<AiMemoryModels.Profile> profiles = store.profiles();
+            profiles.sort(Comparator.comparingLong(AiMemoryModels.Profile::updatedAt).reversed());
+            appendSection(sb, "主人画像", profiles, 3, p -> p.profileText());
+        }
         // v1.5.190：截断修正——旧版 setLength(maxChars) 后再追加提示后缀，实际超限；
         // 改为预留后缀长度，提示语永远完整可见（核心记忆优先已在前，尾部丢弃）
         int maxChars = com.maidsmart.config.MaidSmartConfig.MEMORY_PROJECTION_CHARS.get();

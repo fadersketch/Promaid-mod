@@ -174,6 +174,79 @@ public class AiMemoryManager {
         }
     }
 
+    // ---------- 实测八百二十九c：向量索引后台构建（可选，默认关） ----------
+
+    /** 向量化后台线程（单线程、守护线程；不阻塞服务器 tick）。 */
+    private static final java.util.concurrent.ExecutorService EMBED_WORKER =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "promaid-memory-embed");
+                t.setDaemon(true);
+                return t;
+            });
+    /** 索引扫描限频（毫秒）。 */
+    private static long lastEmbedSweep = 0L;
+
+    private static AiMemoryEmbeddingClient embedClient() {
+        return new AiMemoryEmbeddingClient(
+                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_URL.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_KEY.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_MODEL.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_DIM.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_TIMEOUT_MS.get(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_BATCH.get());
+    }
+
+    /**
+     * 把本 store 里还没索引的段落丢给后台线程算向量。默认关（memory.vectorEnable=false）；
+     * 打开且端点可用时，每分钟最多扫一次、每次最多 32 条。失败静默——语义检索是锦上添花，
+     * 绝不能因为它影响游戏运行。
+     */
+    static void maybeBuildVectors(AiMemoryStore store) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.MEMORY_VECTOR_ENABLE.get()) {
+                return;
+            }
+            AiMemoryEmbeddingClient client = embedClient();
+            if (!client.usable()) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastEmbedSweep < 60000L) {
+                return;
+            }
+            lastEmbedSweep = now;
+            java.util.Set<String> indexed = store.vector().indexedIds();
+            List<AiMemoryModels.Paragraph> missing = new ArrayList<>();
+            for (AiMemoryModels.Paragraph p : store.paragraphs()) {
+                if (!indexed.contains(p.hash())) {
+                    missing.add(p);
+                }
+                if (missing.size() >= 32) {
+                    break;
+                }
+            }
+            if (missing.isEmpty()) {
+                return;
+            }
+            EMBED_WORKER.submit(() -> {
+                try {
+                    List<String> texts = new ArrayList<>(missing.size());
+                    for (AiMemoryModels.Paragraph p : missing) {
+                        texts.add(p.content());
+                    }
+                    AiMemoryEmbeddingClient.Result r = client.embed(texts);
+                    if (r.ok()) {
+                        for (int i = 0; i < missing.size() && i < r.vectors().size(); i++) {
+                            store.vector().put(missing.get(i).hash(), r.vectors().get(i));
+                        }
+                    }
+                } catch (Throwable ignored) {
+                }
+            });
+        } catch (Throwable ignored) {
+        }
+    }
+
     // ---------- 事件源 ----------
 
     @SubscribeEvent
@@ -301,6 +374,8 @@ public class AiMemoryManager {
                     // v1.5.379：索引生成收敛到真实睡眠收尾（onSleepFinished），
                     // 熬夜过夜（时间自然跨日但没人睡觉）不再触发归档
                     AiMemoryArchiver.tick(maid, level);
+                    // 实测八百二十九c：向量索引后台构建（默认关；memory.vectorEnable 开 + 配好端点才跑）
+                    maybeBuildVectors(com.maidsmart.soul.SoulBindingService.storeFor(maid, level));
                 });
             }
         }
@@ -325,6 +400,7 @@ public class AiMemoryManager {
         } catch (Exception ignored) {
         }
         java.util.UUID maidUuid = maid.m_20148_();
+        AiMemoryContext.forget(maidUuid); // 实测八百二十九c：清召回闸门缓存
         com.maidsmart.dialogue.PerceptionManager.forget(maidUuid);
         com.maidsmart.dialogue.ReplyFeedbackTracker.forgetMaid(maidUuid);
         com.maidsmart.dialogue.ProactiveDialogueManager.forgetMaid(maidUuid);

@@ -89,8 +89,42 @@ public final class PatrolChartData {
 
     /* ==================== 女仆侧 ==================== */
 
-    /** 读女仆身上绑的那一份（没绑 → null，调用方据此判定"她没在巡逻"） */
+    /**
+     * 读女仆身上绑的那一份（没绑 → null，调用方据此判定"她没在巡逻"）。
+     *
+     * <p>【实测七百九十八：轨道被删 = 这一份作废】绑定是**深拷**（见类注释），所以玩家在航图里
+     * 删掉一条轨道时，她身上这份副本不会自己消失——她会照旧沿那条"已经不存在的轨道"一圈圈飞
+     * （
+     * {@link PatrolRevocation} 的"已删除账本"，就当**没绑**返回 null，她立刻回到默认状态
+     * （扫帚=守家盘旋 / 直升机=悬停 / 陆地载具=跟主人）。
+     */
     public static PatrolRoute readMaid(EntityMaid maid) {
+        PatrolRoute r = readMaidRaw(maid);
+        if (r == null) {
+            return null;
+        }
+        // 被删掉的轨道对女仆不再生效（客户端恒 false：撤销是服务端权威的事）。
+        // 【自愈】读到一条已作废的绑定时**顺手把它从她身上抹掉**——这样"未加载区块里那批
+        // 女仆"的陈旧副本也会在她第一次被读到的那一拍真正消失（而不是永远挂在 NBT 里
+        // 只当作看不见）。unbind 后就回到上面那行的 null 分支，之后每拍的代价只有一次
+        // "有没有 TAG_ROOT" 的判断。
+        if (PatrolRevocation.revokedFor(maid, r.id())) {
+            unbind(maid);
+            PatrolFlight.forget(maid);
+            com.maidsmart.tool.PromaidLog.log("扫帚巡逻",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 绑定的轨道「" + r.displayName()
+                            + "」已被玩家删除 → 清除她身上那份副本，她回到默认状态");
+            return null;
+        }
+        return r;
+    }
+
+    /**
+     * 读女仆身上绑的那一份，**不看"是否已删除"**——只给 {@link PatrolRevocation} 解绑时
+     * 比对 id 用（它要读得出那份即将作废的绑定，才谈得上解绑），其余一切调用点都用
+     * {@link #readMaid}。
+     */
+    public static PatrolRoute readMaidRaw(EntityMaid maid) {
         try {
             if (maid == null) {
                 return null;

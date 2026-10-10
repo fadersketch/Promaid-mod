@@ -21,6 +21,10 @@ public abstract class ScheduleRangeMixin {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;get()Ljava/lang/Object;"))
     private Object maidsmart$scheduleActivityRange(ForgeConfigSpec.IntValue tlmRange) {
+        // 实测八百三十五：本项可以整条关掉（DIY 预设会关）——关掉就完全用 TLM 自己那三个半径
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_RANGE_FLOOR.get()) {
+            return tlmRange.get();
+        }
         return Math.max(com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get(),
                 tlmRange.get());
     }

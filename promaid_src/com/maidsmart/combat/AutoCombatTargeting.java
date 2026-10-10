@@ -196,6 +196,13 @@ public final class AutoCombatTargeting {
         if (!maid.m_6084_() || maid.m_6162_()) {
             return 0; // 死亡/幼年不参战
         }
+        // 实测八百二十四【睡觉就睡死，与原版一致】：她正睡着（在床）时自主战斗完全不介入——
+        // 不切任务、不改作息、不写目标、不还手。原版里睡觉就是睡觉，不该被"参战"从床上拽起来
+        // （实测八百二十三的"参战切全天作息"若落到睡着的她身上，会经 MaidClearSleepTask 把她弄醒，
+        // 违背本条）。飞行的两条行为本就以 isSleeping 让位，这里补齐同口径。
+        if (maid.m_5803_()) {
+            return 0;
+        }
         // v1.2.0：飞行作战（近战/远战）下【自主战斗不介入】——模式自己负责索敌/攻击/换装，
         // 自主战斗不得把她切走、不得换战术、不得还原（返回 2 = "已是战斗任务，跳过"）
         // v1.3.0：这一条从 isFlightTask 换成 isManualOnlyCombatTask（= 两种空袭 **+ 扫帚模式**）
@@ -229,6 +236,14 @@ public final class AutoCombatTargeting {
         }
         // 自保中让位（自保优先，血量恢复后自然退出再正常参与）
         if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
+            return 0;
+        }
+        // 实测八百二十二【拆刷怪笼 > 战斗】：她正在拆某只刷怪笼时不切走她——模组刷怪笼无视光照、
+        // 一刷怪就触发参战把她切走，旧行为下她"永远没有拆刷怪笼的机会"（
+        // 不动她当前任务：够得着的怪由 NeutralThreatDriver 兜底**原地反击**（不走导航），她的走位
+        // 被 SPAWNER_BREAK_TAG 锁住谁也拖不走。**天然有界**（拆除最多 20 秒），且有自保(250)在上、
+        // 本判据在"已在战斗中(return 2)""玩家接管"之下，不会覆盖它们。
+        if (com.maidsmart.combat.MaidSpawnerTorchBehavior.isBreakingSpawner(maid)) {
             return 0;
         }
         // 已被本系统切过：还在指派的战斗任务上 → 只刷新威胁计时；任务已被
@@ -318,10 +333,35 @@ public final class AutoCombatTargeting {
         // v1.1.0 实测一百四十九（参考 tlm_beyond_space RegularRescueSupport）：参战瞬间
         // 快照 home 模式与作息——还原时一并恢复（"切回之前的模式"的完整状态闭环）
         maid.getPersistentData().m_128379_(AutoCombatSwitch.COMBAT_PREV_HOME_TAG, maid.isHomeModeEnable());
+        String prevSched = "";
         try {
-            maid.getPersistentData().m_128359_(AutoCombatSwitch.COMBAT_PREV_SCHEDULE_TAG,
-                    maid.getSchedule() == null ? "" : maid.getSchedule().name());
+            prevSched = maid.getSchedule() == null ? "" : maid.getSchedule().name();
+            maid.getPersistentData().m_128359_(AutoCombatSwitch.COMBAT_PREV_SCHEDULE_TAG, prevSched);
         } catch (Throwable ignored) {
+        }
+        // 实测八百二十三【参战顺手把作息切成「全天」】——
+        //
+        //
+        // ── 为什么只切任务她不动手 ──
+        // TLM 的攻击任务行为（近战/弓/弩/三叉戟/弹幕…）**全部注册在 WORK 活动**里，而当前
+        // 活动由 TLM 自家作息（DAY/NIGHT/ALL）按游戏时间映射：夜里白班女仆处于 REST（睡觉），
+        // WORK 不是活动 → 攻击行为根本不 tick → 任务切了却站着不动。
+        // ── 怎么办 ──
+        // 参战时把作息临时换成 ALL（= WORK 常驻活动），她才会真的起身还手；威胁消失后
+        // （默认 200 tick = 10 秒安全期）restorePrevMode 用上面存的 COMBAT_PREV_SCHEDULE_TAG
+        // 把作息**一起复原**——不必新增还原逻辑，既有闭环已覆盖。排班开着时参战本就整体
+        // 让位（本方法上游 isOn 门），不会走到这里。
+        if (com.maidsmart.config.MaidSmartConfig.COMBAT_FORCE_ALL_SCHEDULE.get()) {
+            try {
+                if (maid.getSchedule() != MaidSchedule.ALL) {
+                    com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(), null,
+                            () -> maid.setSchedule(MaidSchedule.ALL));
+                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 参战：作息临时切「全天」（原 " + prevSched
+                            + "）→ WORK 常驻活动，她才会真的出手（威胁消失 10 秒后随任务一起复原）");
+                }
+            } catch (Throwable ignored) {
+            }
         }
         // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
         touchContact(maid);

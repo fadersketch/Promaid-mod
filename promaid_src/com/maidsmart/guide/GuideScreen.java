@@ -5,6 +5,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +32,11 @@ public class GuideScreen extends Screen {
     /** 行高（正文逐行渲染） */
     private static final int LINE_H = 10;
 
+    /** 行内图标尺寸（与字号 9 的物品图标一致）。 */
+    private static final int ICON = 10;
+    /** 图标与前后文字的间距。 */
+    private static final int ICON_GAP = 2;
+
     private final Screen parent;
     private int view = VIEW_CHAPTERS;
     /** 章节目录页码 */
@@ -38,10 +44,23 @@ public class GuideScreen extends Screen {
     /** 当前阅读章节下标 + 阅读页码 */
     private int reading = -1;
     private int readPage = 0;
-    /** 当前章节的渲染行列表（换行后）——changelog 按行、普通章节段落换行+空行 */
-    private List<String> lines = new ArrayList<>();
+
+    /**
+     * 当前章节的**渲染元素**列表（换行后）。
+     *
+     * <p>元素只有两种：{@link RLine}（一行正文，高 {@link #LINE_H}）与
+     * {@link Recipe}（一整块合成表，高 {@link Recipe#height()}）。
+     * 实测八百一十三之前这里只有 {@code List<String>}、分页按「每页几行」算；
+     * 加入合成表这种**比一行高**的元素后，分页必须按**累计像素高**算（见
+     * {@link #pageRanges}）——否则合成表会被页边界劈开、或把最后一行的位置算错。
+     */
+    private List<Object> elements = new ArrayList<>();
     /** 实测四百二十四：手册内可点击的配置链接——[[@大类:小类:行标签|显示文字]]。 */
     private static final String LINK_OPEN = "[[@";
+    /** 实测八百一十三：行内物品图标——[[i:物品id|说明文字]]（说明文字可省）。 */
+    private static final String ICON_OPEN = "[[i:";
+    /** 实测八百一十三：整块合成表——[[#shaped;行;行;行;K=物品id;>产物id;@说明]]。 */
+    private static final String RECIPE_OPEN = "[[#";
     private static final String LINK_CLOSE = "]]";
     private final java.util.List<int[]> linkBoxes = new java.util.ArrayList<>();
     private final java.util.List<String> linkTargets = new java.util.ArrayList<>();
@@ -70,10 +89,191 @@ public class GuideScreen extends Screen {
                 parts.length > 1 ? parts[1] : "",
                 parts.length > 2 ? parts[2] : null);
     }
-    /** 更新日志行（资源文件，一次加载） */
-    private static String[] changelogLines = null;
-    /** 更新日志章节下标（chapters() 里动态构造，防静态顺序漂移） */
-    private static int changelogIndex = -1;
+
+    // ================= 行内物品图标 / 合成表 元素 =================
+
+    /**
+     * 行内元素：一段文字、或一枚物品图标。
+     *
+     * <p>实测八百一十三：原文是整行 {@link String}，图标要插在行中间，所以把"一行"拆成
+     * 若干段（文字与图标混排），再整行居中画出来。
+     */
+    private static final class Seg {
+        final String text;      // 文字段（text != null）
+        final String iconId;    // 图标段（iconId != null）
+        final String tip;       // 图标鼠标悬停说明（可 null）
+
+        private Seg(String text, String iconId, String tip) {
+            this.text = text;
+            this.iconId = iconId;
+            this.tip = tip;
+        }
+
+        static Seg ofText(String t) {
+            return new Seg(t, null, null);
+        }
+
+        static Seg ofIcon(String id, String tip) {
+            return new Seg(null, id, tip);
+        }
+    }
+
+    /** 渲染行：居中，由若干 {@link Seg} 组成；height = 行高（图标行也占一行）。 */
+    private static final class RLine {
+        final boolean centered;
+        final List<Seg> segs;
+
+        RLine(boolean centered, List<Seg> segs) {
+            this.centered = centered;
+            this.segs = segs;
+        }
+
+        int height() {
+            return LINE_H;
+        }
+    }
+
+    /** 合成表格子：null = 空格子。 */
+    private static final class Cell {
+        final String id;
+
+        Cell(String id) {
+            this.id = id;
+        }
+    }
+
+    /**
+     * 整块合成表（实测八百一十三）。
+     *
+     * <p>【支持的形状】
+     * <ul>
+     *   <li>{@code shaped}：{@code "[[#shaped;IDI;RMR;IDI;I=铁块;D=钻石;R=红石块;M=矿车;>da_yun;@说明]]"}</li>
+     *   <li>{@code shapeless}：{@code "[[#shapeless;书;纸;>blueprint_book;@说明]]"}</li>
+     * </ul>
+     * 物品在格子里的写法是**别名**（{@code I}）或**直接写 id**（{@code minecraft:iron_block}）；
+     * 别名在 {@code 别名=物品id} 段里定义。
+     */
+    private static final class Recipe {
+        final boolean shaped;
+        final Cell[][] grid;            // shaped: 3×3 / shapeless: 1×N
+        final int rows;
+        final int cols;
+        final String resultId;
+        final String note;
+
+        Recipe(boolean shaped, Cell[][] grid, String resultId, String note) {
+            this.shaped = shaped;
+            this.grid = grid;
+            this.rows = grid.length;
+            this.cols = grid.length == 0 ? 0 : grid[0].length;
+            this.resultId = resultId;
+            this.note = note;
+        }
+
+        int height() {
+            // 上留白 3 + 格子 + 产物那一行 + 说明行 + 下留白 3
+            return 6 + rows * (CELL + 2) + 12;
+        }
+    }
+
+    /** 合成表格子像素尺寸（与物品图标一致）。 */
+    private static final int CELL = 18;
+
+    /**
+     * 把一个 {@code [[#…]]} token 解析成 {@link Recipe}；解析失败返回 null（跳过，绝不崩界面）。
+     *
+     * <p>格式（{@code ;} 分段，顺序固定：形状在前、{@code 别名=id} 与 {@code >产物}、
+     * {@code @说明}在后、其余段是网格行）：
+     * <pre>
+     * [[#shaped;IDI;RMR;IDI;I=minecraft:iron_block;D=minecraft:diamond;R=minecraft:redstone_block;M=minecraft:minecart;>maid_smart:da_yun;@铁块×4 + 钻石×4 + 红石块×2 + 矿车×1]]
+     * [[#shapeless;minecraft:book;minecraft:paper;>maid_smart:blueprint_book;@书 + 纸]]
+     * </pre>
+     */
+    private static Recipe parseRecipe(String token) {
+        try {
+            int end = token.length() - LINK_CLOSE.length();
+            String body = token.substring(3, Math.max(3, end)); // 去掉 "[[#" 与 "]]"
+            String[] parts = body.split(";");
+            if (parts.length < 2) {
+                return null;
+            }
+            boolean shaped = "shaped".equalsIgnoreCase(parts[0].trim());
+            boolean shapeless = "shapeless".equalsIgnoreCase(parts[0].trim());
+            if (!shaped && !shapeless) {
+                return null;
+            }
+            java.util.Map<String, String> alias = new java.util.HashMap<>();
+            String result = null;
+            String note = null;
+            List<String> gridRows = new ArrayList<>();
+            for (int i = 1; i < parts.length; i++) {
+                String p = parts[i];
+                if (p == null || p.isEmpty()) {
+                    continue;
+                }
+                char c0 = p.charAt(0);
+                if (c0 == '>') {
+                    result = p.substring(1).trim();
+                } else if (c0 == '@') {
+                    note = p.substring(1);
+                } else {
+                    int eq = p.indexOf('=');
+                    if (eq > 0 && eq == 1) {
+                        alias.put(p.substring(0, 1), p.substring(2).trim());
+                    } else {
+                        gridRows.add(p);
+                    }
+                }
+            }
+            if (result == null || gridRows.isEmpty()) {
+                return null;
+            }
+            java.util.function.Function<String, Cell> cellOf = s -> {
+                if (s == null || s.isEmpty() || " ".equals(s) || "_".equals(s)) {
+                    return null;
+                }
+                String id = alias.get(s);
+                return new Cell(id != null ? id : s);
+            };
+            if (shaped) {
+                int r = gridRows.size();
+                int c = 0;
+                for (String row : gridRows) {
+                    c = Math.max(c, row.length());
+                }
+                if (r == 0 || c == 0) {
+                    return null;
+                }
+                Cell[][] grid = new Cell[r][c];
+                for (int i = 0; i < r; i++) {
+                    String row = gridRows.get(i);
+                    for (int j = 0; j < c; j++) {
+                        grid[i][j] = j < row.length() ? cellOf.apply(row.substring(j, j + 1)) : null;
+                    }
+                }
+                return new Recipe(true, grid, result, note);
+            }
+            List<Cell> flat = new ArrayList<>();
+            for (String row : gridRows) {
+                for (String s : row.split("[,|]")) {
+                    Cell c = cellOf.apply(s.trim());
+                    if (c != null) {
+                        flat.add(c);
+                    }
+                }
+            }
+            if (flat.isEmpty()) {
+                return null;
+            }
+            Cell[][] grid = new Cell[1][flat.size()];
+            for (int i = 0; i < flat.size(); i++) {
+                grid[0][i] = flat.get(i);
+            }
+            return new Recipe(false, grid, result, note);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
 
     /**
      * 设置页输入状态（延迟提交，照 PromaidConfigScreen 的做法：输入时只记文本、
@@ -139,11 +339,12 @@ public class GuideScreen extends Screen {
             final int idx = i;
             String num = (i + 1) < 10 ? "0" + (i + 1) : String.valueOf(i + 1);
             this.m_142416_(Button.m_253074_(Component.m_237113_(
-                            "\u00a7e" + num + "  " + this.fitText(chs[i].title, btnW - 44)),
+                            "\u00a7e" + num + "  " + this.fitText(
+                                    com.maidsmart.i18n.PromaidI18n.tr(chs[i].title), btnW - 44)),
                             b -> {
                                 this.reading = idx;
                                 this.readPage = 0;
-                                this.lines = this.buildLines(idx);
+                                this.elements = this.buildElements(idx);
                                 this.view = VIEW_READ;
                                 this.m_7856_();
                             })
@@ -174,8 +375,10 @@ public class GuideScreen extends Screen {
             return;
         }
         int contentBottom = h - 56;
-        int perPage = Math.max(5, (contentBottom - CONTENT_TOP) / LINE_H);
-        int totalPages = Math.max(1, (this.lines.size() + perPage - 1) / perPage);
+        // 实测八百一十三：分页由「每页几行」改为「每页几像素高」——合成表比一行高，
+        // 必须按元素自己的高度累加（见 pageRanges），否则会被页边界劈成两半。
+        java.util.List<int[]> pages = this.pageRanges(contentBottom);
+        int totalPages = pages.size();
         this.readPage = Math.min(this.readPage, totalPages - 1);
         this.pageButtons(totalPages, this.readPage, cx, h, true);
         // 左上角：返回章节目录
@@ -225,65 +428,151 @@ public class GuideScreen extends Screen {
 
     // ================= 内容行构建 =================
 
-    /** 章节 → 渲染行列表（普通章节：段落换行 + 段间空行；更新日志：逐条完整换行显示） */
-    private List<String> buildLines(int idx) {
-        List<String> out = new ArrayList<>();
+    /** 空行元素（段间空行） */
+    private static RLine blankLine() {
+        return new RLine(false, new ArrayList<>());
+    }
+
+    /** 章节 → 渲染元素列表（段落换行 + 段间空行） */
+    private List<Object> buildElements(int idx) {
+        List<Object> out = new ArrayList<>();
         com.maidsmart.guide.GuideContent.Chapter ch = com.maidsmart.guide.GuideContent.chapters()[idx];
         int maxWidth = this.f_96543_ - 24;
-        if (ch.changelog) {
-            // v1.5.252h：更新日志不再 fitText 截断——反馈省略号太多（"至少要把
-            // 这一句话显示完整"）；改为与正文一致的自动换行，每条完整可见
-            String[] rows = loadChangelog();
-            for (String r : rows) {
-                List<String> wrapped = this.wrapText(r, maxWidth);
-                if (wrapped.isEmpty()) {
-                    wrapped.add("");
-                }
-                out.addAll(wrapped);
-            }
-            return out;
-        }
         for (String p : ch.paras) {
             if (p == null) {
                 continue;
             }
-            List<String> wrapped = this.wrapText(p, maxWidth);
-            if (wrapped.isEmpty()) {
-                wrapped.add("");
-            }
-            out.addAll(wrapped);
-            out.add(""); // 段间空行
+            this.appendParagraph(out, translateParagraph(p), maxWidth);
+            out.add(blankLine()); // 段间空行
         }
         // 实测四百二十四：每章正文末尾自动附一行可点击的「配置入口」链接
         if (ch.paras.length > 0) {
             String cfgLink = com.maidsmart.guide.GuideContent.configLinkFor(ch.title);
             if (cfgLink != null) {
-                out.add("");
-                out.add("\u00a77\u2699 \u914d\u7f6e\u5165\u53e3\uff1a[[@" + cfgLink
+                out.add(blankLine());
+                out.addAll(this.wrapLine("\u00a77\u2699 \u914d\u7f6e\u5165\u53e3\uff1a[[@" + cfgLink
                         + "|\u70b9\u6b64\u6253\u5f00\u5bf9\u5e94\u914d\u7f6e]]"
-                        + "\uff08\u8df3\u8f6c\u540e\u76ee\u6807\u53c2\u6570\u884c\u4f1a\u9ad8\u4eae\uff09");
+                        + "\uff08\u8df3\u8f6c\u540e\u76ee\u6807\u53c2\u6570\u884c\u4f1a\u9ad8\u4eae\uff09", maxWidth));
             }
         }
-        // v1.5.252h：去掉末尾空行——段落后追加的空行若落在分页边界，
-        // 最后一页只剩空白行（反馈"贴身辅助第 2 页完全空白"）
-        if (!out.isEmpty() && out.get(out.size() - 1).isEmpty()) {
+        // v1.5.252h：去掉末尾空行
+        while (!out.isEmpty() && out.get(out.size() - 1) instanceof RLine
+                && ((RLine) out.get(out.size() - 1)).segs.isEmpty()) {
             out.remove(out.size() - 1);
         }
         return out;
     }
 
     /**
-     * 按像素宽度逐字符换行（中英文混排），换行时延续 § 颜色样式——
-     * 旧式折行会在换行处丢掉颜色码，强调文字后半段变白。
+     * 把一个段落追加进元素表：段落里可能夹着整块合成表 token（{@code [[#…]]}），
+     * 所以先按它切开——文字段走 {@link #wrapLine} 折行，合成表段解析成 {@link Recipe}
+     * 元素（前后各垫一个空行，让它从正文里"跳出来"）。
      */
+    private void appendParagraph(List<Object> out, String text, int maxWidth) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        int i = 0;
+        int n = text.length();
+        while (i < n) {
+            int open = text.indexOf(RECIPE_OPEN, i);
+            if (open < 0) {
+                out.addAll(this.wrapLine(text.substring(i), maxWidth));
+                return;
+            }
+            if (open > i) {
+                out.addAll(this.wrapLine(text.substring(i, open), maxWidth));
+            }
+            int close = text.indexOf(LINK_CLOSE, open);
+            if (close < 0) {
+                out.addAll(this.wrapLine(text.substring(open), maxWidth));
+                return;
+            }
+            int end = close + LINK_CLOSE.length();
+            String token = text.substring(open, end);
+            Recipe r = parseRecipe(token);
+            if (r != null) {
+                out.add(blankLine());
+                out.add(r);
+                out.add(blankLine());
+            } else {
+                out.addAll(this.wrapLine(token, maxWidth));
+            }
+            i = end;
+        }
+    }
+
     /**
-     * 实测四百二十四：按像素宽度逐字符换行，同时把
-     * [[@目标|文字]] 当【原子 token】——按标签宽度计量、整块不拆行；
-     * 换行时延续 § 颜色样式。
+     * v1.5.395 实测八百零七：整段翻译（折行之前调）。
+     *
+     * <p>先按 {@code [[@目标|文字]]} 把链接**拆出来**，只翻译目标之外的普通文字，再按原样
+     * 拼回去——这样 {@code @WORK:BUILD:指标石} 这种含中文小类名的定位目标不会被译坏
+     * （译了它 {@code PromaidConfigScreen} 就找不到对应页了），而链接两侧的中文照译。
      */
-    private List<String> wrapText(String text, int maxWidth) {
-        List<String> out = new ArrayList<>();
-        StringBuilder cur = new StringBuilder();
+    private static String translateParagraph(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return raw;
+        }
+        try {
+            if (com.maidsmart.i18n.PromaidI18n.isChinese()) {
+                return raw;
+            }
+            if (raw.indexOf("[[") < 0) {
+                return com.maidsmart.i18n.PromaidI18n.tr(raw);
+            }
+            StringBuilder sb = new StringBuilder(raw.length() + 32);
+            int i = 0;
+            int n = raw.length();
+            while (i < n) {
+                int open = raw.indexOf("[[", i);
+                if (open < 0) {
+                    sb.append(com.maidsmart.i18n.PromaidI18n.tr(raw.substring(i)));
+                    break;
+                }
+                int close = raw.indexOf(LINK_CLOSE, open);
+                if (close < 0) {
+                    sb.append(com.maidsmart.i18n.PromaidI18n.tr(raw.substring(i)));
+                    break;
+                }
+                if (open > i) {
+                    sb.append(com.maidsmart.i18n.PromaidI18n.tr(raw.substring(i, open)));
+                }
+                int end = close + LINK_CLOSE.length();
+                String token = raw.substring(open, end);
+                if (token.startsWith(LINK_OPEN)) {
+                    // 配置链接：只译标签（| 之后），目标原样保留
+                    int bar = token.indexOf('|');
+                    if (bar > 0) {
+                        String target = token.substring(0, bar);          // "[[@目标"
+                        String label = token.substring(bar + 1, token.length() - LINK_CLOSE.length());
+                        sb.append(target).append('|')
+                                .append(com.maidsmart.i18n.PromaidI18n.tr(label))
+                                .append(LINK_CLOSE);
+                    } else {
+                        sb.append(token);
+                    }
+                } else {
+                    // 图标 / 合成表：整块原样（说明由 drawRecipe 单独翻译）
+                    sb.append(token);
+                }
+                i = end;
+            }
+            return sb.toString();
+        } catch (Throwable ignored) {
+            return raw;
+        }
+    }
+
+    /**
+     * 按像素宽度逐字符换行（中英文混排），换行时延续 § 颜色样式。
+     *
+     * <p>实测四百二十四：{@code [[@目标|文字]]} 当【原子 token】——按标签宽度计量、整块不拆行。
+     * <p>实测八百一十三：再支持行内图标 {@code [[i:物品id|说明]]}——同样原子，
+     * 按 {@link #ICON} + {@link #ICON_GAP} 计宽。产出 {@link RLine}（一行 = 若干段）。
+     */
+    private List<RLine> wrapLine(String text, int maxWidth) {
+        List<RLine> out = new ArrayList<>();
+        List<Seg> cur = new ArrayList<>();
         String active = "";
         int curW = 0;
         int i = 0;
@@ -291,24 +580,36 @@ public class GuideScreen extends Screen {
         while (i < n) {
             char ch = text.charAt(i);
             if (ch == '\n') {
-                out.add(cur.toString());
-                cur.setLength(0);
+                out.add(new RLine(false, cur));
+                cur = new ArrayList<>();
                 curW = 0;
                 i++;
                 continue;
             }
-            if (ch == '[' && text.startsWith(LINK_OPEN, i)) {
+            if (ch == '[' && (text.startsWith(ICON_OPEN, i) || text.startsWith(LINK_OPEN, i))) {
                 int close = text.indexOf(LINK_CLOSE, i);
                 if (close > 0) {
                     String token = text.substring(i, close + LINK_CLOSE.length());
-                    int tw = this.f_96547_.m_92895_(linkLabel(token));
-                    if (curW + tw > maxWidth && cur.length() > 0) {
-                        out.add(cur.toString());
-                        cur.setLength(0);
-                        cur.append(active);
-                        curW = active.isEmpty() ? 0 : this.f_96547_.m_92895_(active);
+                    boolean icon = text.startsWith(ICON_OPEN, i);
+                    int tw = icon ? ICON + ICON_GAP : this.f_96547_.m_92895_(linkLabel(token));
+                    if (curW + tw > maxWidth && !cur.isEmpty()) {
+                        out.add(new RLine(false, cur));
+                        cur = new ArrayList<>();
+                        curW = 0;
+                        if (!active.isEmpty()) {
+                            cur.add(Seg.ofText(active));
+                            curW = this.f_96547_.m_92895_(active);
+                        }
                     }
-                    cur.append(token);
+                    if (icon) {
+                        String inner = token.substring(ICON_OPEN.length(), token.length() - LINK_CLOSE.length());
+                        int bar = inner.indexOf('|');
+                        String id = (bar > 0 ? inner.substring(0, bar) : inner).trim();
+                        String tip = bar > 0 ? inner.substring(bar + 1) : null;
+                        cur.add(Seg.ofIcon(id, tip));
+                    } else {
+                        cur.add(Seg.ofText(token));
+                    }
                     curW += tw;
                     i = close + LINK_CLOSE.length();
                     continue;
@@ -316,25 +617,37 @@ public class GuideScreen extends Screen {
             }
             if (ch == '\u00a7' && i + 1 < n) {
                 active = "\u00a7" + text.charAt(i + 1);
-                cur.append(ch).append(text.charAt(i + 1));
+                cur.add(Seg.ofText(active));
                 i += 2;
                 continue;
             }
             int cw = this.f_96547_.m_92895_(String.valueOf(ch));
-            if (curW + cw > maxWidth && cur.length() > 0) {
-                out.add(cur.toString());
-                cur.setLength(0);
-                cur.append(active);
-                curW = active.isEmpty() ? 0 : this.f_96547_.m_92895_(active);
+            if (curW + cw > maxWidth && !cur.isEmpty()) {
+                out.add(new RLine(false, cur));
+                cur = new ArrayList<>();
+                curW = 0;
+                if (!active.isEmpty()) {
+                    cur.add(Seg.ofText(active));
+                    curW = this.f_96547_.m_92895_(active);
+                }
             }
-            cur.append(ch);
+            cur.add(Seg.ofText(String.valueOf(ch)));
             curW += cw;
             i++;
         }
-        if (cur.length() > 0) {
-            out.add(cur.toString());
+        if (!cur.isEmpty()) {
+            out.add(new RLine(false, cur));
         }
         return out;
+    }
+
+    /** 一行（若干段）的像素宽（图标按 {@link #ICON} + {@link #ICON_GAP} 计）。 */
+    private int lineWidth(RLine line) {
+        int w = 0;
+        for (Seg s : line.segs) {
+            w += s.iconId != null ? ICON + ICON_GAP : this.f_96547_.m_92895_(s.text);
+        }
+        return w;
     }
 
     /** 截断到屏幕宽度（长标题/长版本行防突出屏幕） */
@@ -350,32 +663,6 @@ public class GuideScreen extends Screen {
             t = t.substring(0, t.length() - 1);
         }
         return t + "…";
-    }
-
-    /** 更新日志行（资源文件一次加载；缺失/异常给提示行） */
-    private static String[] loadChangelog() {
-        if (changelogLines != null) {
-            return changelogLines;
-        }
-        try (java.io.InputStream in = GuideScreen.class.getResourceAsStream(
-                "/assets/promaid/guide/changelog.txt")) {
-            if (in == null) {
-                changelogLines = new String[]{"\u00a7c更新日志资源缺失（assets/promaid/guide/changelog.txt）"};
-                return changelogLines;
-            }
-            byte[] bytes = in.readAllBytes();
-            String text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-            List<String> rows = new ArrayList<>();
-            for (String ln : text.split("\r?\n")) {
-                if (!ln.trim().isEmpty()) {
-                    rows.add(ln.trim());
-                }
-            }
-            changelogLines = rows.toArray(new String[0]);
-        } catch (Exception e) {
-            changelogLines = new String[]{"\u00a7c更新日志加载失败: " + e.getMessage()};
-        }
-        return changelogLines;
     }
 
     // ================= 渲染 =================
@@ -417,7 +704,8 @@ public class GuideScreen extends Screen {
         if (this.view == VIEW_READ) {
             com.maidsmart.guide.GuideContent.Chapter[] chs = com.maidsmart.guide.GuideContent.chapters();
             if (this.reading >= 0 && this.reading < chs.length) {
-                this.drawCentered(graphics, "\u00a7e" + chs[this.reading].title, 36, 0xFFFFFF);
+                this.drawCentered(graphics, "\u00a7e" + com.maidsmart.i18n.PromaidI18n.tr(
+                        chs[this.reading].title), 36, 0xFFFFFF);
                 this.renderLines(graphics);
             }
         } else {
@@ -429,18 +717,63 @@ public class GuideScreen extends Screen {
         int totalPages = this.currentPages();
         if (totalPages > 1) {
             int page = this.view == VIEW_READ ? this.readPage : this.chapterPage;
-            this.drawCentered(graphics, "\u00a77第 " + (page + 1) + "/" + totalPages + " 页",
+            // 页码是拼出来的（"第 " + 数字 + " 页"），整串交 compose 逐段换，空格才对
+            this.drawCentered(graphics, com.maidsmart.i18n.PromaidI18n.compose(
+                            "\u00a77第 " + (page + 1) + "/" + totalPages + " 页"),
                     h - 26, 0xAAAAAA);
         }
         super.m_88315_(graphics, mouseX, mouseY, partialTick);
+    }
+
+    /**
+     * 实测八百一十三：按**累计像素高**切页——返回每页的元素区间 {@code {from, to}}。
+     *
+     * <p>为什么不再按"每页几行"：合成表元素高 {@code Recipe.height()}（约 80px），
+     * 比一行 10px 高一个数量级。仍按行数切，一张合成表就会被页边界劈开、下半截跑到下一页。
+     * 这里的规则是：本页放不下这个元素就从**下一页**开始放（元素本身不拆）——
+     * 只有当一个元素自身就高于整页时才允许它独占一页溢出（不会死循环）。
+     */
+    private java.util.List<int[]> pageRanges(int contentBottom) {
+        java.util.List<int[]> pages = new ArrayList<>();
+        int avail = Math.max(LINE_H, contentBottom - CONTENT_TOP);
+        int i = 0;
+        int n = this.elements.size();
+        if (n == 0) {
+            pages.add(new int[]{0, 0});
+            return pages;
+        }
+        while (i < n) {
+            int start = i;
+            int used = 0;
+            while (i < n) {
+                int hh = elementHeight(this.elements.get(i));
+                if (used + hh > avail && i > start) {
+                    break;
+                }
+                used += hh;
+                i++;
+                if (used >= avail) {
+                    break;
+                }
+            }
+            pages.add(new int[]{start, i});
+        }
+        return pages;
+    }
+
+    /** 元素像素高：字符串行 = {@link #LINE_H}；合成表 = 它自己算的高度。 */
+    private static int elementHeight(Object el) {
+        if (el instanceof Recipe r) {
+            return r.height();
+        }
+        return LINE_H;
     }
 
     /** 当前视图总页数 */
     private int currentPages() {
         int h = this.f_96544_;
         if (this.view == VIEW_READ) {
-            int perPage = Math.max(5, (h - 56 - CONTENT_TOP) / LINE_H);
-            return Math.max(1, (this.lines.size() + perPage - 1) / perPage);
+            return this.pageRanges(h - 56).size();
         }
         int rowH = h < 238 ? (h < 214 ? (h < 188 ? 16 : 18) : 21) : 24;
         int perPage = Math.max(3, (h - 56 - CONTENT_TOP) / rowH);
@@ -448,46 +781,101 @@ public class GuideScreen extends Screen {
         return Math.max(1, (n + perPage - 1) / perPage);
     }
 
-    /** 正文行渲染（左对齐 12px，右缘不超屏；链接单独着色 + 记命中区） */
+    /** 正文渲染（行居中；链接单独着色 + 记命中区；合成表整块画）。 */
     private void renderLines(net.minecraft.client.gui.GuiGraphics graphics) {
-        int h = this.f_96544_;
-        int perPage = Math.max(5, (h - 56 - CONTENT_TOP) / LINE_H);
-        int start = this.readPage * perPage;
-        int end = Math.min(this.lines.size(), start + perPage);
+        java.util.List<int[]> pages = this.pageRanges(this.f_96544_ - 56);
+        int pi = Math.min(this.readPage, pages.size() - 1);
+        int[] range = pages.get(pi);
         this.linkBoxes.clear();
         this.linkTargets.clear();
         int y = CONTENT_TOP;
-        for (int i = start; i < end; i++) {
-            String line = this.lines.get(i);
-            if (!line.isEmpty()) {
-                this.drawLine(graphics, line, y);
+        for (int i = range[0]; i < range[1]; i++) {
+            Object el = this.elements.get(i);
+            if (el instanceof Recipe r) {
+                this.drawRecipe(graphics, r, y);
+                y += r.height();
+            } else {
+                RLine line = (RLine) el;
+                if (!line.segs.isEmpty()) {
+                    this.drawRLine(graphics, line, y);
+                }
+                y += LINE_H;
             }
-            y += LINE_H;
         }
     }
 
-    /** 实测四百二十四：渲染一行，链接段用青色下划线并记录命中区 */
-    private void drawLine(net.minecraft.client.gui.GuiGraphics graphics, String line, int y) {
-        int x = 12;
+    /**
+     * 渲染一行（实测八百一十三：文字与图标混排；整行**居中**）。
+     */
+    private void drawRLine(net.minecraft.client.gui.GuiGraphics graphics, RLine line, int y) {
+        int total = lineWidth(line);
+        int x = Math.max(12, (this.f_96543_ - total) / 2);
+        for (Seg s : line.segs) {
+            if (s.iconId != null) {
+                ItemStack st = GuideIcons.stack(s.iconId);
+                if (st.m_41619_()) {
+                    // 认不出的 id：画一个占位方框，作者一眼能看出写错了
+                    graphics.m_280509_(x, y, x + ICON, y + ICON, 0x40FF5555);
+                } else {
+                    graphics.m_280480_(st, x, y - 1);
+                }
+                x += ICON + ICON_GAP;
+            } else {
+                this.drawTextWithLinks(graphics, s.text, x, y);
+                x += this.f_96547_.m_92895_(stripLinksForWidth(s.text));
+            }
+        }
+    }
+
+    /** 一行文字的像素宽：链接按**标签**宽度算，不是 token 原文宽度。 */
+    private String stripLinksForWidth(String text) {
+        if (text == null || text.indexOf(LINK_OPEN) < 0) {
+            return text == null ? "" : text;
+        }
+        StringBuilder sb = new StringBuilder();
         int i = 0;
-        int n = line.length();
-        while (i < n) {
-            int open = line.indexOf(LINK_OPEN, i);
+        while (i < text.length()) {
+            int open = text.indexOf(LINK_OPEN, i);
             if (open < 0) {
-                graphics.m_280614_(this.f_96547_, Component.m_237113_(line.substring(i)), x, y, 0xDDDDDD, false);
+                sb.append(text, i, text.length());
+                break;
+            }
+            sb.append(text, i, open);
+            int close = text.indexOf(LINK_CLOSE, open);
+            if (close < 0) {
+                sb.append(text, open, text.length());
+                break;
+            }
+            sb.append(linkLabel(text.substring(open, close + LINK_CLOSE.length())));
+            i = close + LINK_CLOSE.length();
+        }
+        return sb.toString();
+    }
+
+    /** 渲染一段文字，其中的 {@code [[@…]]} 链接用青色下划线并记录命中区。 */
+    private void drawTextWithLinks(net.minecraft.client.gui.GuiGraphics graphics, String text, int x, int y) {
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        int i = 0;
+        int n = text.length();
+        while (i < n) {
+            int open = text.indexOf(LINK_OPEN, i);
+            if (open < 0) {
+                graphics.m_280614_(this.f_96547_, Component.m_237113_(text.substring(i)), x, y, 0xDDDDDD, false);
                 break;
             }
             if (open > i) {
-                String plain = line.substring(i, open);
+                String plain = text.substring(i, open);
                 graphics.m_280614_(this.f_96547_, Component.m_237113_(plain), x, y, 0xDDDDDD, false);
                 x += this.f_96547_.m_92895_(plain);
             }
-            int close = line.indexOf(LINK_CLOSE, open);
+            int close = text.indexOf(LINK_CLOSE, open);
             if (close < 0) {
-                graphics.m_280614_(this.f_96547_, Component.m_237113_(line.substring(open)), x, y, 0xDDDDDD, false);
+                graphics.m_280614_(this.f_96547_, Component.m_237113_(text.substring(open)), x, y, 0xDDDDDD, false);
                 break;
             }
-            String token = line.substring(open, close + LINK_CLOSE.length());
+            String token = text.substring(open, close + LINK_CLOSE.length());
             String label = linkLabel(token);
             int lw = this.f_96547_.m_92895_(label);
             graphics.m_280614_(this.f_96547_, Component.m_237113_("\u00a7b\u00a7n" + label), x, y, 0x55FFFF, false);
@@ -495,6 +883,68 @@ public class GuideScreen extends Screen {
             this.linkTargets.add(linkTarget(token));
             x += lw;
             i = close + LINK_CLOSE.length();
+        }
+    }
+
+    /**
+     * 整块合成表（实测八百一十三）。
+     *
+     * <p>画法：深色底 + 每个格子一个凹槽，物品图标按格子画；右侧接一个箭头和产物图标；
+     * 最下面一行是说明文字（材料清单 / 备注）。整块**居中**。
+     */
+    private void drawRecipe(net.minecraft.client.gui.GuiGraphics graphics, Recipe r, int y) {
+        int gridW = r.cols * (CELL + 2) + 2;
+        int gridH = r.rows * (CELL + 2) + 2;
+        int arrowW = 16;
+        int resultW = CELL + 4;
+        int textW = 0;
+        if (r.note != null && !r.note.isEmpty()) {
+            textW = this.f_96547_.m_92895_(r.note);
+        }
+        int blockW = Math.max(gridW + arrowW + resultW, textW);
+        int x0 = Math.max(8, (this.f_96543_ - blockW) / 2);
+        if (x0 + blockW > this.f_96543_ - 8) {
+            x0 = Math.max(8, this.f_96543_ - 8 - blockW);
+        }
+        int gy = y + 3;
+        // 底
+        graphics.m_280509_(x0 - 4, gy - 3, x0 + blockW + 4, gy + gridH + 15, 0x66101018);
+        // 格子
+        for (int row = 0; row < r.rows; row++) {
+            for (int col = 0; col < r.cols; col++) {
+                int cx = x0 + col * (CELL + 2);
+                int cy = gy + row * (CELL + 2);
+                graphics.m_280509_(cx, cy, cx + CELL, cy + CELL, 0x40FFFFFF);
+                graphics.m_280509_(cx + 1, cy + 1, cx + CELL - 1, cy + CELL - 1, 0x80000000);
+                Cell c = r.grid[row] != null && col < r.grid[row].length ? r.grid[row][col] : null;
+                if (c != null && c.id != null) {
+                    ItemStack st = GuideIcons.stack(c.id);
+                    if (!st.m_41619_()) {
+                        graphics.m_280480_(st, cx + 1, cy + 1);
+                    }
+                }
+            }
+        }
+        // 箭头 + 产物
+        int ax = x0 + gridW + 2;
+        String arrow = r.shaped ? "\u00a77=>" : "\u00a77->";
+        graphics.m_280614_(this.f_96547_, Component.m_237113_(arrow), ax, gy + gridH / 2 - 4, 0xAAAAAA, false);
+        int rx = ax + arrowW;
+        graphics.m_280509_(rx, gy + (gridH - CELL) / 2, rx + CELL, gy + (gridH - CELL) / 2 + CELL, 0x40FFFFFF);
+        ItemStack out = GuideIcons.stack(r.resultId);
+        if (!out.m_41619_()) {
+            graphics.m_280480_(out, rx + 1, gy + (gridH - CELL) / 2 + 1);
+            graphics.m_280614_(this.f_96547_, Component.m_237113_("\u00a7f" + GuideIcons.name(r.resultId)),
+                    rx + CELL + 4, gy + (gridH - CELL) / 2 + 5, 0xFFFFFF, false);
+        } else {
+            graphics.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c?" + r.resultId),
+                    rx + CELL + 4, gy + (gridH - CELL) / 2 + 5, 0xFF5555, false);
+        }
+        // 说明行
+        if (r.note != null && !r.note.isEmpty()) {
+            String note = com.maidsmart.i18n.PromaidI18n.tr(r.note);
+            graphics.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + note),
+                    x0, gy + gridH + 3, 0x999999, false);
         }
     }
 

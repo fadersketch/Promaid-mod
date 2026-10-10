@@ -99,8 +99,9 @@ if (++this.trackTick < 100) {
             return;
         }
         for (ServerLevel level : server.getAllLevels()) {
-            for (EntityMaid maid : level.getEntities(
-                    net.minecraft.world.level.entity.EntityTypeTest.forClass(EntityMaid.class), m -> true)) {
+            // 实测八百三十九：来源改 MaidRoster（只收女仆、按 20 tick 复用）——这段本来就只要
+            // 已加载女仆；零女仆时不再白扫整张实体表
+            for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, level)) {
                 MaidTrack t = MAID_TRACK.get(maid.getUUID());
                 if (t != null) {
                     MAID_TRACK.put(maid.getUUID(), new MaidTrack(t.ownerUuid(),
@@ -317,16 +318,22 @@ if (PENDING_DEATHS.isEmpty()) {
         // 【实测七百二十四】悬空鞍位（龙）：她**不是乘客**、isPassenger 认不出她——
         // 单独判一次，免得主人死亡传送/归位把她从龙背鞍位上拽下来。
         // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）：
-        //  主人死亡归位是**自动传送**，特殊载具上一律不生效（玩家原话「所有的传送方面的行为
-        //  必须由玩家来」）。
+        //  主人死亡归位是**自动传送**，特殊载具上一律不生效（
+        //
         if (maid.isMaidInSittingPose() || maid.isPassenger()
                 || com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
             return true;
         }
         // v1.3.0(beta) 实测七百一十七：home（非建造）与其它传送链路同口径豁免
+        // v1.5.393 实测八百零三【口径补齐】：建造女仆不再借 home 压制 TLM 跟随之后，
+        // 旧版"建造可拽"这一条会把工地上的她当场拽到重生点（建造就地白费）。改口径：
+        // 主人死亡归位属【非玩家意愿的自动传送】，建造/指标石临时搭建中的女仆一并让位
+        // （见 MaidBuildBehavior.homeInert）。玩家仍可手动一键集合 / 排班表召回。
         try {
-            if (maid.isHomeModeEnable()
-                    && !com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(maid)) {
+            if (maid.isHomeModeEnable() && !com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(maid)) {
+                return true;
+            }
+            if (com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
                 return true;
             }
         } catch (Throwable ignored) {

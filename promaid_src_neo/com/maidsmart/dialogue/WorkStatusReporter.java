@@ -50,6 +50,10 @@ if (++this.tick < com.maidsmart.config.MaidSmartConfig.DIALOGUE_REPORT_CHECK.get
             return;
         }
         this.tick = 0;
+        // 实测八百三十九：零女仆直接返回（名册按 20 tick 复用，O(1)）——下面整段只为女仆服务
+        if (!com.maidsmart.tool.MaidRoster.any(event.getServer())) {
+            return;
+        }
         this.checkedThisTick.clear(); // v1.5.190：每轮重建，天然防泄漏
         for (ServerLevel level : event.getServer().getAllLevels()) {
             for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {

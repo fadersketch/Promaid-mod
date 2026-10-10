@@ -55,9 +55,11 @@ public final class CooldownHudTracker {
             Map<UUID, List<String[]>> soulByOwner = new HashMap<>();
             if (soulScanWanted()) {
                 for (ServerLevel level : server.getAllLevels()) {
-                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                        if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
-                                || !maid.isAlive()) {
+                    // 实测八百三十九：来源改 MaidRoster（只攒女仆、按 20 tick 复用）——
+                    // 这一段本就是本方法最贵的一步，零女仆时现在零成本
+                    for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
+                            : com.maidsmart.tool.MaidRoster.in(server, level)) {
+                        if (!maid.isAlive()) {
                             continue;
                         }
                         long[] cd = MaidSoulSpellGuard.hudCooldownSeconds(maid, level.getGameTime());
@@ -87,8 +89,8 @@ public final class CooldownHudTracker {
                 if (soul != null) {
                     entries.addAll(soul);
                 }
-                // 【实测六百七十八】左上角"绑定中"：玩家原话"在进入绑定状态下，最好是在左上角用
-                //  蓝色字体显示一下玩家现在处于绑定状态。（渲染机制同冷却计时）"——渲染那一半
+                // 【实测六百七十八】左上角"绑定中"：
+                //
                 //  一个字节都没新写（就是下面这个包 → CooldownHudRenderer，左上角同一条竖直串、
                 //  同样的带阴影文字），只是这一段在客户端被画成**蓝色**。判据只有一处来源：
                 //  GunnerTetherManager 的挂载表（谁在拴着谁）。放在最前面 = 永远显示在最上面。

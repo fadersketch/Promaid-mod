@@ -45,7 +45,7 @@ public class MaidStrollBehavior extends Behavior<EntityMaid> {
     /**
      * 门禁的逐条名字（与 {@link #gates} 同序）——自检/诊断照这个顺序念。
      *
-     * v1.2.2 实测六百二十：用户反馈「空闲散步移动速度调不了，0.1 倍速都跟快步跑一样」。
+     * v1.2.2 实测六百二十：。
      * 速度这一半是配置下限卡死的（见 {@code MaidSmartConfig.MISC_STROLL_SPEED} 的注释），
      * 另一半是「她到底有没有在散步」得能一眼看出来——所以把门禁从 {@link #m_6114_}
      * 里抽出来，{@code /maid_smart stroll check} 念的就是这几条。

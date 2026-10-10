@@ -44,6 +44,11 @@ public abstract class MaidSweepMixin {
         if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
             return attributes.getValue(attribute); // v1.2.2 实测六百：无主女仆走原版横扫倍率
         }
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_SWEEP_ALWAYS.get()) {
+            // 实测八百四十：本处原来没有配置项、只能硬问 isDiy；现在是真开关（默认开）。
+            // 关掉 = 回 TLM 原版；DIY 模式由预设把这条开关置 false，所以 DIY 下同样不介入。
+            return attributes.getValue(attribute);
+        }
         double value = attributes.getValue(attribute);
         if (attribute == Attributes.SWEEPING_DAMAGE_RATIO) {
             // 无横扫之刃附魔 → 0（原版不扫）→ 强制给 0.5（横扫之刃 I 倍率），保证每次平A横扫
@@ -57,8 +62,8 @@ public abstract class MaidSweepMixin {
      * 也不触发横扫）。v1.5.174：落地后的"禁横扫平A"窗口已删除（反馈：平A没意义
      * ——跳劈空档由 TLM 正常攻击穿插横扫补伤害，不再有单独的平A状态）。
      *
-     * <p>【v1.3.0(beta) 实测七百五十九·点1：骑乘时也不取消（玩家反馈"骑在坐骑上
-     * 没办法触发横扫之刃"）】。
+     * <p>【v1.3.0(beta) 实测七百五十九·点1：骑乘时也不取消（
+     *
      *
      * <p><b>根因</b>：这一档原来是"只看 {@code !onGround()} 就取消"，而**坐在任何坐骑上
      * 她都被抬离地面**（坐骑每拍在动、她的 Y 跟着坐骑漂），于是 {@code onGround()} 长期为
@@ -81,6 +86,9 @@ public abstract class MaidSweepMixin {
         EntityMaid self = (EntityMaid) (Object) this;
         if (!com.maidsmart.tool.MaidScope.owned(self)) {
             return; // v1.2.2 实测六百：无主女仆不干预
+        }
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_SWEEP_ALWAYS.get()) {
+            return; // 实测八百四十：整条"平A横扫"关掉时，这一档也回原版（空中照扫）；DIY 同此
         }
         if (self.onGround()) {
             return; // 在地面 → 照常横扫

@@ -16,7 +16,7 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 /**
  * v1.3.0(beta) 实测七百二十七·点4：**悬空鞍位（冰火传说的龙）配对的客户端同步**（S2C，单包）。
  *
- * <h2>玩家原话</h2>
+ * <h2>
  * 「如果龙是静止的时候还好。女仆可以很好待在龙背上，但是一旦龙开始飞行和跟随主人的时候，
  *  女仆的位置就会发生严重的改变和错乱。」
  *
@@ -115,8 +115,8 @@ public final class MaidSeatNetworking {
     /**
      * 【实测七百四十一·点1】请求"把我换到另一个座位"（主驾 ↔ 副驾来回换）。
      *
-     * <p>玩家原话：「如果玩家处于副座，可以通过手持骑乘指挥棒进行左击，从而把自己交换到主座位。
-     * 再左击一下再换回去。」——只带"要换到哪辆车"，不信任客户端算出的座位号：服务端自己按
+     * <p>
+     *
      * SWB 的座位表算（客户端那半只负责发这一下）。
      */
     public static class SwapSeatPacket implements CustomPacketPayload {

@@ -3,7 +3,7 @@ package com.maidsmart.combat;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 
 /**
- * 实测六百一十九【战斗时临时扩圈】（用户反馈）。
+ * 实测六百一十九【战斗时临时扩圈】（
  *
  * ── 需求原文 ──
  * "还有近战战斗时由于超出工作范围而被传送回来，然后就这么来回循环。感觉可以改成

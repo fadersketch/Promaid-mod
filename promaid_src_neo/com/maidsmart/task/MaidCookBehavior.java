@@ -70,7 +70,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      *  **没有任何炉子配方**——两份客户端 jar 的 {@code data/minecraft/recipes}
      *  逐个查过（smelting / smoking / blasting 全找遍）：这五个一条都没有，
      *  而同清单里的 potato / kelp / 生肉 / 鱼都查得到。
-     *  清单里多这五个的直接后果是"女仆会烧胡萝卜"（玩家反馈）。
+     *  清单里多这五个的直接后果是"女仆会烧胡萝卜"（
      *  删掉之后：模组/数据包**自己给这些物品补了配方**时照样能烧——那条路走
      *  {@link #extractAnySmeltable} 与 {@link #pickFurnaceKind} 的通用分支，
      *  它们查的是真实配方而不是这张表，所以这里是"白名单说法变准"，不是"功能变少"。 */
@@ -360,17 +360,25 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             return;
         }
         this.wanderCooldown = 40; // 2 秒换一个闲逛点
-        int r = 8;
-        int dx = maid.getRandom().nextInt(r * 2 + 1) - r;
-        int dz = maid.getRandom().nextInt(r * 2 + 1) - r;
-        BlockPos base = maid.blockPosition();
-        BlockPos spot = new BlockPos(base.getX() + dx, base.getY(), base.getZ() + dz);
-        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, spot)) {
+        // 实测八百一十五【乱窜根治】：取点锚点从"她此刻位置"改为**固定锚点**
+        //（home=玩家画的圈心 / 跟随=主人身边）。旧版每 2 秒"在她当前位置周围 8 格"取点
+        // = 无回复力的随机游走，每步都可能同方向多走一点 → 几十步就漂出去几十格
+        // （）。
+        // 锚定在固定点后，她是在这一点附近来回转悠着找活，不再一路漂走。
+        BlockPos spot = com.maidsmart.follow.WorkAreaClamp.pickWanderSpot(
+                maid, com.maidsmart.follow.WorkAreaClamp.wanderRadius(maid), maid.getRandom());
+        if (spot == null) {
+            return;
+        }
+        // 实测八百一十五：闲逛选点用 allowsWander——跟随模式也给个临时圈（旧版 allows 在
+        // 非 home 下恒放行 → 她每 2 秒换个方向满地图窜找活，正是"乱窜/跑出罗盘圈"的源头）
+        if (!com.maidsmart.follow.WorkAreaClamp.allowsWander(maid, spot)) {
             return; // 本轮不闲逛（下轮再选），绝不逛出工作圈
         }
         try {
             maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
-                    new WalkTarget(new BlockPosTracker(spot), 0.7f, 1));
+                    new WalkTarget(new BlockPosTracker(spot),
+                            (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 1)); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
         } catch (Throwable ignored) {
         }
     }

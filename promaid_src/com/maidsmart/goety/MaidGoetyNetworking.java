@@ -22,7 +22,7 @@ import java.util.function.Supplier;
  *   <li>{@link StatePacket}（S2C）：把该女仆的自动档状态回给发起者，客户端写进缓存供界面显示。</li>
  * </ul>
  *
- * 【为什么需要这一层（玩家原话：「聚晶必须要使用指令这些 OP 权限才可以使用吗？常规生存不能使用？」）】
+ * 【为什么需要这一层（）】
  * 七百一十八 那一版把 Goety 位移聚晶**只**挂在 {@code /maid_smart goety_*} 命令上（OP 专属），
  * 于是普通生存玩家即使身上真有飞行聚晶也**开不了这个功能**。而"仿创造飞行"（同类飞行功能）
  * 一直有主人可用的路径（快捷键 + 女仆配置界面一行，见 {@code MaidFreeFlightNetworking}）。

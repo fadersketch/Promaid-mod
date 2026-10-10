@@ -129,8 +129,8 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
      * 开火（由 `EntityMaid.performRangedAttack` 回调）。
      *
      * v1.2.0 实测四百七十六【手持武器没参与开火】——旧版这里**无条件造箭**：
-     * 拿御币/三叉戟/模组弹射武器也照样射出一支箭（反馈原话：「换了武器（如御币）
-     * 也没用，依旧发射弓箭」）。根因是本方法只判了"是不是 ProjectileWeaponItem"，
+     * 拿御币/三叉戟/模组弹射武器也照样射出一支箭（反馈
+     *
      * 之后就自己 `createArrow`，武器本身的发射机制从未被调用。
      *
      * 现在按武器分流（与玩家手持该武器时的表现对齐）：

@@ -67,9 +67,12 @@ public class DangerEscapeHandler {
             return; // 每 0.5 秒一轮
         }
         this.throttle = 0;
-        if (!MaidSmartConfig.MISC_DANGER_ESCAPE.get()
-                || !MaidSmartConfig.MISC_DANGER_AVOID.get()) {
-            return; // 总开关或避让开关关闭（共用同一张危险表）
+        // v1.5.395 实测八百二十一【解耦】：险境脱离只由自己的开关（dangerEscape）控制。
+        // 旧版这里还串了 dangerAvoid——两者本是"避让（别走进去）/脱离（已经在里面了拉出来）"
+        // 两件事，共用一张危险表不等于共用开关：关闭寻路避让（想让女仆照常踩过、只别出事）
+        // 的玩家，不该连"已经站在火上把她拉出来"一起失去。表仍是同一张（misc.dangerBlocks）。
+        if (!MaidSmartConfig.MISC_DANGER_ESCAPE.get()) {
+            return;
         }
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) {

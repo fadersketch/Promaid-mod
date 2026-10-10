@@ -142,7 +142,7 @@ public final class MaidWorkTags {
     /**
      * 刷怪笼插火把·**走位所有权**标记（v1.3.0(beta) 实测六百六十四）。
      *
-     * <p>【为什么需要它】玩家反馈：「女仆优先往刷怪笼上插一根火把这个操作没能实现」。
+     * <p>【为什么需要它】。
      * 那个「优先」在代码里原本只落在行为优先级 186 上——而 1.20.1 的 Brain 里
      * **CORE 与当前活动（WORK）是两套并发的行为表、互不阻断**：她去插火把的同时，
      * 挖矿/伐木/农活那几条驱动照样每 tick 发自己的寻路（直连 {@code moveTo}），
@@ -163,22 +163,39 @@ public final class MaidWorkTags {
      */
     public static final String SPAWNER_TORCH_TAG = "maid_smart_spawner_torch";
 
-    /** 是否处于"正走去插火把"的走位独占期（标记 + 若干让位判据，双保险防残留冻结） */
+    /**
+     * 实测八百二十二：刷怪笼**拆除**·走位所有权标记。
+     *
+     * <p>【为什么要与插火把分开一枚】模组刷怪笼无视光照，插火把压不住，改为**直接拆掉**。
+     * 拆除期间她的走位同样必须独占（否则挖矿/伐木/战斗的直连寻路会把她从刷怪笼前拖走、
+     * 一镐都刨不下去），但"拆除"是**默认行为**，不能跟着 {@code spawnerTorch.priority}
+     * （那个开关是给"要不要为了插火把放下手上的活"用的）一起被关掉——所以单开一枚标记，
+     * 拆除期间恒独占（见 {@link #isSpawnerTorchRun}）。
+     */
+    public static final String SPAWNER_BREAK_TAG = "maid_smart_spawner_break";
+
+    /** 是否处于"正走去插火把/拆刷怪笼"的走位独占期（标记 + 若干让位判据，双保险防残留冻结） */
     public static boolean isSpawnerTorchRun(EntityMaid maid) {
         try {
-            if (!maid.getPersistentData().m_128471_(SPAWNER_TORCH_TAG)) {
+            boolean brk = maid.getPersistentData().m_128471_(SPAWNER_BREAK_TAG);
+            if (!brk && !maid.getPersistentData().m_128471_(SPAWNER_TORCH_TAG)) {
                 return false;
             }
             if (maid.getTask() == null) {
                 return false;
             }
-            if (isAttackTask(maid)) {
-                return false; // 打架：她的走位归战斗，谁都不许挡
+            // 实测八百二十七【拆 > 战斗】：**正在拆**时即便她是战斗任务也独占走位——
+            // 。够得着的怪由
+            // NeutralThreatDriver 原地反击（不走导航），她钉在刷怪笼前把这一镐刨完。
+            // 插火把（brk=false）仍走旧口径：战斗任务让位（火把没那么要紧）。
+            if (isAttackTask(maid) && !brk) {
+                return false; // 打架 + 插火把：她的走位归战斗，谁都不许挡
             }
             if (maid.isMaidInSittingPose() || maid.m_20159_()) {
                 return false; // 坐着 / 乘客：本来就走不动
             }
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_TORCH_PRIORITY.get();
+            // 拆除：恒独占（默认行为，不受"优先去插"开关影响）；插火把：仍受该开关管
+            return brk || com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_TORCH_PRIORITY.get();
         } catch (Throwable ignored) {
             return false;
         }
@@ -189,6 +206,23 @@ public final class MaidWorkTags {
         try {
             maid.getPersistentData().m_128379_(SPAWNER_TORCH_TAG, on);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 实测八百二十二：置/清"正在拆刷怪笼"走位所有权标记 */
+    public static void setSpawnerBreak(EntityMaid maid, boolean on) {
+        try {
+            maid.getPersistentData().m_128379_(SPAWNER_BREAK_TAG, on);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 实测八百二十二：她此刻是否挂了"拆除"走位所有权标记 */
+    public static boolean isSpawnerBreak(EntityMaid maid) {
+        try {
+            return maid.getPersistentData().m_128471_(SPAWNER_BREAK_TAG);
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

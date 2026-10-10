@@ -152,7 +152,7 @@ public final class MaidBuildBlockFilter {
      *   <li><b>「只用原版天然方块」</b>开着（默认）→ 不在 {@link NaturalBlocks} 表里就 <b>禁止</b>
      *       ——于是<b>全部模组方块默认都被这一条拦住</b>（玩家要的默认）；</li>
      *   <li>以上都不适用 → 放行，交给前面那三条判定（沙子/沙砾这类下落方块照样过不去，
-     *       所以「现有的那些在黑名单里的仍然是不允许的，比如沙子」这句原话是自洽的）。</li>
+     *       所以「现有的那些在黑名单里的仍然是不允许的，比如沙子」这句
      * </ol>
      *
      * <p>匹配用完整注册名（也认裸 path：写 {@code sand} 等于 {@code minecraft:sand}），
@@ -267,6 +267,12 @@ public final class MaidBuildBlockFilter {
      *
      * 调用侧一律传 {@code BombPose.offhandBorrowed(maid)}：**借走期间副手不算材料**；没被借走时
      * 照旧（玩家把方块挂她副手是正常用法）。主手不跳——那格是她自己真握着的。
+     *
+     * <p>【实测七百九十九·issue #19 四修：这个参数现在退成兜底】上面那套"布尔闸"不再是主防线——
+     * {@link com.maidsmart.combat.BombPose} 与 {@link com.maidsmart.combat.FlightFireworkPose}
+     * 都已改成**展示只发客户端、服务端副手槽一个字不动**，于是"副手那件"永远是玩家的真东西，
+     * 不存在"复制品被当材料"这件事。这个参数保留只为兼容仍传它的调用点（语义不变：true = 跳过副手），
+     * 但即便某条链路忘了问、或问的时机差一拍，也不会再漏账——因为槽里根本没有复制品可漏。
      */
     public static Item takeBuildBlock(IItemHandler inv, IItemHandler hands, Level level, BlockPos pos,
                                       boolean skipBorrowedOffhand) {

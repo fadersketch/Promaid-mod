@@ -293,9 +293,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         ACTIVE_MAIDS.clear();
         for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
             int c = 0;
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
-                        && BlueprintBuildExecutor.isBuildingTask(m)) {
+            // 实测八百三十九：来源改 MaidRoster（只攒女仆、按 20 tick 复用）；零女仆时零成本
+            for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                    : com.maidsmart.tool.MaidRoster.in(server, level)) {
+                if (BlueprintBuildExecutor.isBuildingTask(m)) {
                     c++;
                 }
             }
@@ -398,13 +399,22 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             }
         } catch (Exception ignored) {
         }
-        // v1.5.121：恢复"进入建造 → 强制 home 模式"（v1.5.117 曾撤销，导致建造不执行：
-        // 非 home 模式下 TLM MaidFollowOwnerTask 持续启动，把女仆从工作状态拉向跟随，
-        // WORK activity 的建造行为不再运行 → 下达后只回话不建造）。
-        // home 模式本身【不产生传送】——它恰恰是阻止 TLM 跟随/瞬移回主人的机制；
-        // "随机传送"的根源（setPlan 清场 / suffocateCheck 救援）在 v1.5.117 已全部
-        // 禁用，恢复 home 后 promaid 侧 0 传送 + TLM 不瞬移 = 彻底无随机传送，且建造正常。
-        maid.setHomeModeEnable(true);
+        // v1.5.121：曾恢复"进入建造 → 强制 home 模式"（v1.5.117 撤销后建造不执行：
+        // 非 home 模式下 TLM MaidFollowOwnerTask 会启动，把女仆从 WORK 拉向跟随）。
+        //
+        // v1.5.393 实测八百零三【不再强制 home（玩家要求）】：
+        // 当初撤销失败是【当时】没有后来这几道源头闸（teleportToOwner 建造拦截、
+        // BuildActivityForceMixin 把 activity 钉在 WORK、Work_STILL/BUILD_SIT 的移动源头锁）。
+        // 现在跟随即便启动也动不了她，不再需要借 home 来压制它。
+        // 而 home 的副作用很重：它是 TLM 拿来复用原版「限制圈」的开关——hasRestriction 恒真、
+        // 圈心取 SchedulePos 的 work/idle/sleep 锚点、出圈传送/走回。建造行为只置 home 不配锚点
+        // → 圈心落在原点，把排班、召回、救援、区块保载、主人死亡传送等整条链路拖进互相打架
+        // （玩家实测的冲突根源）。
+        // 现在改为【不强制 home + 禁非玩家意愿的自动传送】（见 build.noForceHome /
+        // MaidBuildBehavior.homeInert）；关掉 build.noForceHome 即回退本段旧行为。
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_NO_FORCE_HOME.get()) {
+            maid.setHomeModeEnable(true);
+        }
         // v1.5.41：多女仆错峰——初始冷却按女仆 id 错开，避免 25 只女仆同一 tick 全部放置
         // （每 tick 25 次 setBlock+光照+客户端包造成 tick 尖峰；错峰后均匀分布，总量不变）
         this.placeCooldown = maid.getId() % PLACE_INTERVAL;
@@ -1374,6 +1384,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         }
         // v1.5.15：门下半放置后补全上半（setBlock 不会自动补，避免"半扇门"）
         ensureDoorUpper(level, maid, target, placeState);
+        // v1.3.0 实测八百一十五：床同理——只放了一格、另一半得我们补（setBlock 不走
+        // BlockPlaceContext.setPlacedBy，MC 从不自动补另一半）。补的是"配对格"，
+        // 不额外扣料（一件床物品本来就对应两格）。
+        ensureBedHalf(level, maid, target, placeState);
         // v1.5.275/276：放置成功后回收目标格附近【同 id】掉落物——替代品"搭一个又掉
         // 一个"的循环根源已由替代品验收（altUsed/isAltPlaced）根治：替代品放置后被
         // 认可为已建，不再被拆掉重放（拆→掉→捡回背包→再放→再拆 = 材料数量翻倍观感）。
@@ -1843,7 +1857,47 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         MaidWorkTags.setStill(maid, false);
         // v1.5.121：建造结束/切任务/完工 → 退出 home 模式，恢复跟随能力
         //（home 模式只在建造行为运行时才强制开启，行为一停立即切回）
-        maid.setHomeModeEnable(false);
+        // v1.5.393 实测八百零三：与 start 对称——只有"我们在 start 强制开过 home"才清。
+        // 不强制时【一个字都不碰】：她进建造前若本就 home（玩家手动 / 排班），退出建造
+        // 不该被我们关掉（旧版无条件置 false 会吃掉玩家的驻守设置）。
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_NO_FORCE_HOME.get()) {
+            maid.setHomeModeEnable(false);
+        }
+    }
+
+    /**
+     * v1.5.393 实测八百零三：建造/指标石临时搭建中，她的 home 状态是否「一律按无效处理」。
+     *
+     * <p>【口径（
+     * 我们一个字都不碰；但<b>建造时 home 的所有代码对建造无效</b>。即无论她此刻是不是 home
+     * （玩家手动开的 / 排班表开的），都不让它参与进来跟建造打架。
+     *
+     * <p>【为什么必须这样】TLM 的 home 在字节码里就是原版限制圈的开关（{@code hasRestriction()}
+     * = {@code isHomeModeEnable()}），一旦为真：{@code SchedulePos.tick} 每 40 tick 做
+     * restrictTo + 出圈传送/走回，{@code MaidFollowOwnerTask} 的跟随与
+     * {@code teleportToOwner} 也各按「她的跟随半径 + 4」判距。这些全部按【限制圆圆心的距离】
+     * 算，而建造从不配锚点 → 圈心是原点/上一次排班留下的旧工位。结果就是玩家实测的"冲突"：
+     * 她要么被按旧锚点拽走（建造停止），要么被 TLM 跟随按错误的距离判据传送走。
+     *
+     * <p>返回 true = 对她而言 home 视为不存在：自动传送类链路让位（她留在工地），
+     * 读限制圈 / 按圈钳位的选点逻辑一律按"无圈"走（见 {@code BuildHomeInertMixin}）。
+     *
+     * <p>【只禁非玩家意愿的】玩家主动操作一律不受影响：一键集合 / 排班表「传送到我身边」
+     * （走 {@code summonMaidTo}）、建造/指标石自己的 {@code teleportToWorkSite}
+     * （玩家要的"先瞬移到工地旁再放置"）。受困救援（真虚空 / 下界基岩顶）同样放行——
+     * 那是保命，且她若真在虚空里也不在盖房子。
+     *
+     * <p>开关 build.noForceHome（默认开）；关掉即回退旧行为（建造强制 home、home 照旧生效）。
+     */
+    public static boolean homeInert(EntityMaid maid) {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.BUILD_NO_FORCE_HOME.get()
+                    && (BlueprintBuildExecutor.isBuildingTask(maid)
+                        // 指标石临时搭建（任务 uid 是 index_build，与 build 不同）同口径
+                        || com.maidsmart.build.IndexStoneService.isIndexBuilding(maid));
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private void notifyMissing(EntityMaid maid, String blockId) {
@@ -1920,6 +1974,53 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         }
         int have = BlueprintLib.combinedHave(owner, maid, blockId);
         return Math.max(0, needed - have);
+    }
+
+    /**
+     * v1.3.0 实测八百一十五【床只剩半张、挖了也不掉】——床的另一半补全。
+     *
+     * <p>【根因】蓝图解码旧版把 {@code part=head} 当"二次半块"跳过（注释写着"MC 自动补全"），
+     * 可床根本没有补全机制：只有 {@code foot} 半扇真被放下，而**原版床的掉落表只在
+     * {@code part=head} 时才给物品**——于是半张床挖了什么都不掉。门早就单补了
+     * {@code ensureDoorUpper}（同一类问题），床一直没有对应物。
+     *
+     * <p>【补哪一格】原版 {@code BedBlock.getNeighbourDirection} 字节码实证：
+     * {@code foot.relative(facing) == head}；即 head 的配对格在 facing 的**反方向**、
+     * foot 的配对格在 facing 方向。两种情形都在这里补全（蓝图可能只留 head——
+     * 当配对 foot 缺席时我们保留了 head）。
+     *
+     * <p>【安全性】与 {@code ensureDoorUpper} 同款：配对格必须是空气（不覆盖已建方块）、
+     * 且不被主人/其他女仆碰撞箱占着。**不扣料**——一件床物品对应两格，扣料发生在主格。
+     */
+    private static void ensureBedHalf(ServerLevel level, EntityMaid maid, BlockPos target,
+                                     BlockState state) {
+        try {
+            if (!(state.getBlock() instanceof net.minecraft.world.level.block.BedBlock)) {
+                return;
+            }
+            net.minecraft.world.level.block.state.properties.EnumProperty<net.minecraft.world.level.block.state.properties.BedPart> partProp =
+                    net.minecraft.world.level.block.BedBlock.PART;
+            net.minecraft.world.level.block.state.properties.BedPart part = state.getValue(partProp);
+            net.minecraft.core.Direction facing = state.getValue(net.minecraft.world.level.block.BedBlock.FACING);
+            // head 的配对格在 facing 反方向；foot 的配对格在 facing 方向（字节码实证）
+            BlockPos paired = part == net.minecraft.world.level.block.state.properties.BedPart.HEAD
+                    ? target.relative(facing.getOpposite())
+                    : target.relative(facing);
+            net.minecraft.world.level.block.state.properties.BedPart other =
+                    part == net.minecraft.world.level.block.state.properties.BedPart.HEAD
+                            ? net.minecraft.world.level.block.state.properties.BedPart.FOOT
+                            : net.minecraft.world.level.block.state.properties.BedPart.HEAD;
+            if (!level.isLoaded(paired)) {
+                return; // 配对格区块未加载 → 下一轮补（不静默生成半张床）
+            }
+            if (level.getBlockState(paired).isAir()
+                    && !com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, paired)) {
+                // occupied 归 false——睡觉占用是运行时状态，蓝图里的值不带进来
+                level.setBlock(paired, state.setValue(partProp, other)
+                        .setValue(net.minecraft.world.level.block.BedBlock.OCCUPIED, false), 3);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     /** 门上半自动补全：放置 door 下半后，若上方是空气则补 upper half（防止半扇门） */

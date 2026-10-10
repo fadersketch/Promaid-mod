@@ -1,6 +1,6 @@
 # Promaid 架构大纲 / Architecture Outline
 
-修订 491ba927ffa91889b679f800817dd48763aabd62 · 112 模块 / 41 API / 61 箭头 / 最大深度 3
+修订 2aecfcf42170bc0d9d1966705e0998f044f53d1f · 112 模块 / 41 API / 61 箭头 / 最大深度 3
 
 - **Promaid 模组总览** `promaid`
   - **入口与装配** `promaid.entry`
@@ -152,6 +152,6 @@
     - **提示词追加** `promaid.core.prompt` *(leaf)*
   - **客户端界面** `promaid.client` *(leaf)*
   - **详细介绍手册** `promaid.guide` *(leaf)*
-    - `rpc:GuideContent.chapters()` — 36 章注册表。
+    - `rpc:GuideContent.chapters()` — 35 章注册表。
     - `rpc:GuideScreen.buildLines(...)` — 按像素宽度换行分页。
 - **Forge 1.20.1 镜像树** `promaid-forge` *(leaf)*

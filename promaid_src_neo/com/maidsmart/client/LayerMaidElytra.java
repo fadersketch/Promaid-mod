@@ -74,7 +74,7 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         }
         if (maid.isInvisible() || (!MaidWingSkins.enabled() && !MaidFlightKit.isFlightVisual(maid))) {
             // 【实测七百一十一】闸门从「飞行任务 或 正在滑翔」放宽为「胸甲槽穿着可渲染的鞘翅」
-            // ——玩家原话「同时在所有模式下渲染」：她站着/走路时背上也有一对**折叠**的翅膀
+            // ——：她站着/走路时背上也有一对**折叠**的翅膀
             // （张合仍由滑翔位决定，见下方 forceSpread）。与其他三层同一口径；开关关闭退回旧判据。
             return;
         }
@@ -103,6 +103,8 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             return;
         }
 
+        // 【实测八百三十四】渲染护栏：本层吞异常，若原版模型渲染中途抛异常会把它的 push 留在栈上
+        int guardDepth = com.maidsmart.client.MaidRenderGuard.depthOf(poseStack);
         poseStack.pushPose();
         // v1.2.0 实测四百八十三：与 1.20.1 对齐——pushPose 后必须 try/finally 兜 popPose，
         // 中途抛异常（模型/渲染类型异常）否则会漏 pop、污染后续渲染矩阵。
@@ -141,9 +143,11 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             var vc = ItemRenderer.getArmorFoilBuffer(buffer,
                     RenderType.armorCutoutNoCull(MaidWingSkins.textureFor(chest, maid)), chest.hasFoil());
             this.elytraModel.renderToBuffer(poseStack, vc, light, OverlayTexture.NO_OVERLAY);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            com.maidsmart.client.MaidRenderGuard.noteSwallowed("鞘翅图层（Bedrock）", t);
         } finally {
             poseStack.popPose();
+            com.maidsmart.client.MaidRenderGuard.restore(poseStack, guardDepth);
         }
     }
 }

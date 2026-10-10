@@ -37,6 +37,7 @@ java.lang.RuntimeException: Attempted to load class net/minecraft/client/gui/scr
 | `audit_mixin_callsites.py` | 对 `@Redirect/@ModifyArg/@ModifyConstant`，在目标方法的真实字节码里查找该成员调用是否真的存在（“Scanned 0 target(s)”类错误） |
 | `audit_subscriber_params.py` | 校验所有 `@SubscribeEvent` 方法参数类型是否**抽象事件类**（NeoForge 拒绝注册抽象事件监听器） |
 | `audit_bus_match.py` | 校验 `@EventBusSubscriber` 的 bus（MOD/GAME）与事件类型是否匹配（不匹配 = 静默不触发） |
+| `_audit_clientonly.py`（本机辅助件，不入库） | **找出服务端可达类「方法体内直接调用 TLM `@OnlyIn(Dist.CLIENT)` 成员」的地方**——按 class 文件常量池求 Methodref 交集，与 TLM jar 的注解表比对。现有 dist 审计只看**成员签名/描述符**，抓不到这一类调用（issue #4 与 实测七百九十五 两次都是它漏的） |
 
 ## 三、专用服务器回归测试
 
@@ -168,7 +169,7 @@ handle 只在客户端执行，服务端只做编码；dist 审计（audit_dist.
 ### 回归口径
 
 专用服务器实测是本节的最终判据（`python tools/test/test_server.py 1201`：日志出现 `Done (` = PASS）。
-本轮已跑，结果写在实测六百八十七 的 changelog 里。
+本轮已跑，结果写在 `rounds/R687-*.md`。
 
 ## 九、实测六百八十八：本批的服务端视角（新注入点落在全服热路径上）
 
@@ -191,3 +192,39 @@ handle 只在客户端执行，服务端只做编码；dist 审计（audit_dist.
 `_srv687b.py` 对这版编译产物重跑——forge 568 / neo 585 个类，成员描述符带客户端类型 **0 命中**；
 两个专用服务器（Forge 47.4.23 / NeoForge 21.1.250）启动实测 PASS（`Done (3.097s)` / `Done (1.093s)`，
 之后各盯 30 秒）。上一节"查出来但没动的"那三条（`getAllEntities()` 每 3 tick 等）**这一批照旧没动**。
+
+## 十、实测七百九十五：1.21.1 树漏镜像 issue #4 那处专服修复（AI 对话崩服）
+
+**症状**：玩家反馈「使用 AI 对话以后游戏会崩溃」。
+
+**根因**：`promaid_src_neo/com/maidsmart/dialogue/ChatInfoUtil.java` 一直在调用 TLM 的
+`ChatClientInfo.fromMaid(EntityMaid)`——该方法带 `@OnlyIn(Dist.CLIENT)`（方法体直接调
+`Minecraft.getInstance()`、`CustomPackLoader.MAID_MODELS`），专服加载 TLM 时被
+`RuntimeDistCleaner` 剥离 → 服务端调用即 `NoSuchMethodError`。
+
+```
+java.lang.NoSuchMethodError: '...ChatClientInfo ChatClientInfo.fromMaid(...EntityMaid)'
+    at com.maidsmart.dialogue.ChatInfoUtil.fromMaid(ChatInfoUtil.java:19)
+    at com.maidsmart.dialogue.ProactiveDialogueManager.tryScanFire(...)   ← 主动对话扫描
+    at net.minecraft.server.MinecraftServer.m_5705_                        ← 服务器主线程
+→ Preparing crash report → Stopping server
+```
+
+**为什么是崩服**：两代总线都是「`handleException` 记一条日志 → `athrow` 重抛」
+（Forge 1.20.1 `EventBus` 与 NeoForge `bus-8.0.5` `EventBus.post` 逐条反汇编核对），
+异常最终穿出 `MinecraftServer.tickServer`。触发点三个全在服务端事件里
+（`ProactiveDialogueManager.tryScanFire` / `fireEvent`、`AutonomousTaskManager.onServerTick`），
+且 `dialogue.proactive` / `dialogue.autonomous` 默认都是开——只在**启用 TLM LLM 的专用服务器**上复现；
+单机（dist=CLIENT，方法没被剥离）不炸。
+
+**为什么又漏了一次**：v1.1.0 的修复只写进 1.20.1 Forge 树，neo 树那份文件从头到尾没被改过
+（`1.2.4 / 1.2.5 / 1.3.0` 三个已发布 neo 包实证都带 bug）。**这是本文件的审计表连漏两次的那一类**：
+dist 审计看的是成员**描述符**，而 bug 在**方法体**里的一条 `invokestatic`。
+
+**修复**：neo 版按 Forge 实现改写（服务端自建 `ChatClientInfo`：语言取 `dialogue.outputLanguage`、
+留空 = `zh_cn`；名字取女仆实体名；描述留空）；顺带把两树的 `PerceptionManager.DANGER_CACHE`
+换成 `ConcurrentHashMap`（与本子系统其余状态表口径一致）。
+
+**回归口径**：两树 `javac` 0 错；`_audit_clientonly.py` 对编译产物重跑，neo 树命中 1 → 0；
+另跑 `python tools/test/test_server.py 1201` / `neoforge1211`（日志出现 `Done (` = PASS）。
+

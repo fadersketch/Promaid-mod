@@ -53,7 +53,9 @@ public abstract class ChunkMapRemotePumpMixin {
     @Final
     private Int2ObjectMap<Object> entityMap;
 
-    @Inject(method = "tick", at = @At("TAIL"))
+    // v1.5.394 实测八百零五：**必须写全描述符**——{@code ChunkMap} 上有两个 tick
+    // （{@code ()V} 与 {@code (BooleanSupplier)V}），不写描述符的 "tick" 有歧义。
+    @Inject(method = "tick()V", at = @At("TAIL"))
     private void promaid$pumpRemoteGui(CallbackInfo ci) {
         try {
             RemoteMaidGui.pump(level, entityMap);
@@ -64,6 +66,13 @@ public abstract class ChunkMapRemotePumpMixin {
         // （只扫本模组持票的那几只女仆，空表零成本）——见 MaidVisibilityGuard 的类注释。
         try {
             com.maidsmart.follow.MaidChunkLoadManager.visibilitySweep(level, entityMap);
+        } catch (Throwable ignored) {
+        }
+        // 实测七百九十九【issue #36 传送后看不见】：传送大跳变的**延迟补包**在这里到点执行
+        // （同样是空队列零成本）。放这个注入点是刻意的——它本来就是"原版刚扫完一遍实体同步
+        // 之后"的那个时刻，补包发出去的生成包会带她此刻的真实坐标。
+        try {
+            com.maidsmart.follow.MaidTeleportRebuild.pump(level, entityMap);
         } catch (Throwable ignored) {
         }
     }

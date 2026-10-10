@@ -56,17 +56,17 @@ import net.minecraft.world.item.ItemStack;
  *
  * ============ v1.3.0 实测六百九十四【模式门禁的「换得上弹」那一半也交给 TACZ 自己】 ============
  *
- * 【玩家原话】「现在关于远程空袭模式和扫帚模式枪械的判定还是 tacz 原版能够开火的判定吗？我想的
- * 是现在对于允许激活的判定，不应该是单纯的远程武器加弹药（很简单，因为像冲锋枪跟狙击枪并不是
- * 只要有远程武器和弹药就行的），最好是走 TACZ 的 API，发现手持武器对应的 TACZ 端允许开火，那么
- * 就判定为武器和弹药方面为可通过的。」
+ * 【
  *
- * 【玩家说的没错：缺口正好在「换得上弹」那一半】实测六百六十六 只把「此刻扣扳机打得响吗」
+ *
+ *
+ *
+ * 【那一半】实测六百六十六 只把「此刻扣扳机打得响吗」
  * （{@link #canFeed}）交给了 TACZ；实测六百九十二 为了让打空弹匣的女仆不从扫帚上掉下来，又给
  * 模式门禁配了一个「现在打不响但换得上吗」的宽松档（当时的 {@link #canReload}）——那一档用的是
  * {@link #looseAmmoScan}，**任意 {@code tacz:ammo} 都算，不看口径**。于是「她背着一包步枪弹、
  * 手里却是狙击枪 / 重机枪 / 蓄力枪」这种**口径对不上**的局面照样判「备弹通过」：模式激活、
- * 气泡不报缺件、她就一直绕圈不开火。这正是玩家说的「并不是只要有远程武器和弹药就行」。
+ * 气泡不报缺件、她就一直绕圈不开火。这正是。
  *
  * 【现在的口径：原样调用 TACZ 的 {@code AbstractGunItem.canReload}】它就是 TACZ 自己那句
  * 「这把枪换得上弹吗」（javap 实证：1.20.1 与 1.21.1 两版 1.1.8 签名一致、字节码逐句相同）：
@@ -95,7 +95,7 @@ import net.minecraft.world.item.ItemStack;
  *
  * ============ v1.3.0 实测六百九十五【卓越前线的「换得上弹」那一半也交给它自己】 ============
  *
- * 【玩家原话】「现在我把卓越前线也下过来了，你也改一改吧。」——实测六百九十四 只把 TACZ 那一半
+ * 【——实测六百九十四 只把 TACZ 那一半
  * 交给它自己；卓越前线当时本机未装、无法 javap 实证，仍在走 {@link #looseAmmoScan} 的老口径
  * （「任意 5 类 SBW 弹药之一都算」、不看口径）。现在 SBW 0.8.9.1 两版 jar 都装上了，实证到位。
  *
@@ -132,8 +132,8 @@ import net.minecraft.world.item.ItemStack;
  * {@code Capabilities.EnergyStorage.ITEM}——SBW 自己在 {@code GunItem.getEnergyProvider} /
  * {@code isBarVisible} 里读的就是它，两版语义一致）。旧版在 {@link #canReload} 里对它们
  * **无条件 return true**，于是能量打空后「打得响 **或** 换得上」的或门被这条短路恒真 →
- * 模式门禁永不关闭 → 女仆不报缺件、不下鞍、在天上一直飞（玩家原话「枪内的能量打完了，
- * 女仆又不会下鞍，又不会报缺，只会在天上一直飞」）。
+ * 模式门禁永不关闭 → 女仆不报缺件、不下鞍、在天上一直飞（
+ *
  * 现在删掉那条短路：{@link #canFeed}（= SBW 的 hasEnoughAmmoToShoot，对纯能量枪算的就是
  * 能量池储量）如实为假、{@link #canReload}（= SBW 的 shouldStartReloading，纯能量枪
  * useBackpackAmmo 恒真故恒假）如实为假 → 门禁正确关闭。
@@ -557,8 +557,8 @@ public final class GunCompat {
      *   <li>{@link #canFeed} = **此刻扣扳机能打响吗**（弹匣里 / 弹膛里有弹）→ 开火链路的诊断日志用它；</li>
      *   <li>本方法 = **喂得进这把枪吗**（打空了也没关系，换弹就能继续）→ **模式门禁**用它。</li>
      * </ul>
-     * 玩家原话：「扫帚模式如果女仆持有的是冲锋枪或者狙击枪，这两类枪械很容易飞着飞着就突然从
-     * 扫帚上掉下来。」根因就是模式门禁拿 {@code canFeed} 判弹药：TACZ 弹匣枪的
+     *
+     *
      * {@code taczCanFeed} 只看"弹匣里这一拍还有没有弹"（{@code useInventoryAmmo=false} →
      * {@code getCurrentAmmoCount>0 || hasBulletInBarrel}），于是**弹匣打空的那一拍 = 判定缺弹药**，
      * 她就被从扫帚上请下来（实测日志 01:38:09「弹=无」紧跟着「下扫帚（理由=缺远程武器/弹药）」）。
@@ -566,8 +566,8 @@ public final class GunCompat {
      * 下一发就会拉栓/换弹。
      *
      * <p>【口径】v1.3.0 实测六百九十四 之前是 实测五百六十八 那条老判据 {@link #looseAmmoScan}
-     * （主手/背包里有**任意** tacz:ammo 就算，不校验口径）——玩家反馈「像冲锋枪跟狙击枪并不是只要
-     * 有远程武器和弹药就行」，指的就是这里。**现在改成两家枪各自问自己**：TACZ 原样调用
+     * （主手/背包里有**任意** tacz:ammo 就算，不校验口径）——
+     *
      * {@code AbstractGunItem.canReload}（{@link #taczCanReload}，实测六百九十四）；卓越前线原样
      * 调用 {@code GunData.shouldStartReloading}（{@link #sbwCanReload}，实测六百九十五，与 TLM
      * 自己的 SBW 换弹链路用的是同一个方法）。两者都按口径认弹、也认弹药箱，TACZ 那支还顺带否掉
@@ -579,9 +579,9 @@ public final class GunCompat {
         if (maid == null || gun == null || gun.isEmpty() || !isGun(gun)) {
             return false;
         }
-        // 【实测七百一十二：删掉"能量武器一律放行"那条短路】玩家原话：「关于扫帚模式和空袭
-        //  卓越前线的能量枪判定有一些问题，如果枪内的能量打完了，那么女仆又不会下鞍，又不会
-        //  报缺，只会在天上一直飞。」
+        // 【实测七百一十二：删掉"能量武器一律放行"那条短路】
+        //
+        //
         //
         // 【旧版错在哪】旧版这里对 {@link #isEnergyGun} 直接 `return true`，而模式门禁是
         //  ``canFeed || canReload`` 的**或门**（见 {@link #canFeed} 的类注释与

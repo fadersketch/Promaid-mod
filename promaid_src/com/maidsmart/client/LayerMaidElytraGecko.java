@@ -215,7 +215,7 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
         }
         if (maid.m_20145_() || (!MaidWingSkins.enabled() && !MaidFlightKit.isFlightVisual(maid))) {
             // 【实测七百一十一】闸门从「飞行任务 或 正在滑翔」放宽为「胸甲槽穿着可渲染的鞘翅」
-            // ——玩家原话「同时在所有模式下渲染」：她站着/走路时背上也有一对**折叠**的翅膀
+            // ——：她站着/走路时背上也有一对**折叠**的翅膀
             // （张合仍由滑翔位决定，见下方 forceSpread）。与 Bedrock 那层同一口径；
             // 开关关闭时退回旧判据。
             return;
@@ -252,6 +252,8 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
             modelScale = 1.0f;
         }
 
+        // 【实测八百三十四】渲染护栏：本层吞异常，若模型渲染中途抛异常会把它的 push 留在栈上
+        int guardDepth = com.maidsmart.client.MaidRenderGuard.depthOf(poseStack);
         poseStack.m_85836_();
         try {
             // ① 锚到"背部挂点"（两种渲染器两条路，见 render 里的说明）：
@@ -294,9 +296,11 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
                     RenderType.m_110431_(MaidWingSkins.textureFor(chest, maid)), false, chest.m_41790_());
             this.elytraModel.m_7695_(poseStack, vc, light, OverlayTexture.f_118083_,
                     1.0f, 1.0f, 1.0f, 1.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            com.maidsmart.client.MaidRenderGuard.noteSwallowed("鞘翅图层（Gecko/YSM）", t);
         } finally {
             poseStack.m_85849_();
+            com.maidsmart.client.MaidRenderGuard.restore(poseStack, guardDepth);
         }
     }
 

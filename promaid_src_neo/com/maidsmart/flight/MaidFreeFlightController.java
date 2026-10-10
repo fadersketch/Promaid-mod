@@ -95,8 +95,8 @@ public final class MaidFreeFlightController {
     /**
      * 我们此刻是否**正在控制她的移动**（飞行中 / 软着陆中）。
      *
-     * 【给"走位型"链路让位用（实测六百八十）】用户反馈："她创造飞行跟上玩家的时候依然会进行搭路
-     * ——因为移动是搭路的逻辑，所以会影响移动速度。" 搭路（{@code BridgeUpBehavior}，core 245）
+     * 【给"走位型"链路让位用（实测六百八十）】
+     *
      * 是一边铺方块一边用走路的 move 驱动她，与我们的飞行抢移动。作者给"飞行跟随"已经加过同款
      * 让位（见 {@code BridgeUpBehavior} 里对 {@code MaidFlightFollowBehavior.isFollowing} 的两处检查），
      * 这里照同一套写法给创造飞行补上。
@@ -114,8 +114,8 @@ public final class MaidFreeFlightController {
     /**
      * 【实测六百八十七：有创造飞行能力就禁用搭路（需求方口径）】
      *
-     * <p>需求方原话："既然引入了创造飞行这个概念，那么它无疑是搭方块的上位替代，有创造飞行能力，
-     * 那就禁用搭路。"
+     * <p>
+     *
      *
      * <p>与 {@link #isControlling} 的区别就是"能力"与"正在飞"：搭路（{@code BridgeUpBehavior}）
      * 是"一边铺方块一边用走路驱动她"，而有飞行能力的女仆根本不需要那一套——要过沟、要上坡、要跟上
@@ -210,7 +210,7 @@ public final class MaidFreeFlightController {
     /**
      * 【实测六百八十八】"本来要走路过去的活"也交给仿创造飞行。
      *
-     * <p>需求方口径（原话）："本来就走过去应该交给创造。"上一批已经按同一句话把**搭路**
+     * <p>需求方口径（上一批已经按同一句话把**搭路**
      * （{@code BridgeUpBehavior}，垫方块过沟/上坡）整段让位了——这一条是它的对偶面：
      * **不搭路，也不绕路**，要过去就直接飞过去。
      *

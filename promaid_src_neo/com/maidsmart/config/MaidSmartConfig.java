@@ -55,6 +55,11 @@ public static final ModConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
     public static final ModConfigSpec.BooleanValue BUILD_ORIGIN_PLAYER;
     /** v1.2.0：指标石（临时蓝图制作器）总开关 */
     public static final ModConfigSpec.BooleanValue BUILD_INDEX_STONE;
+    /**
+     * v1.5.393 实测八百零三：建造不强制 home 模式 + 禁非玩家意愿的自动传送（默认开）。
+     * <p>详见 {@code MaidBuildBehavior.homeInert} 与 {@code start/stop} 的注释。
+     */
+    public static final ModConfigSpec.BooleanValue BUILD_NO_FORCE_HOME;
 /** v1.5.316：红石机器专属搭建（专属顺序 + 活建造 + 自动放矿车），默认开 */
 public static final ModConfigSpec.BooleanValue BUILD_MACHINE_SMART;
 /** v1.2.2 实测五百八十五（issue #15）：图纸流体保留档位 auto/always/never */
@@ -87,6 +92,32 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.IntValue BUILD_LOOKAHEAD;
     public static final ModConfigSpec.IntValue BUILD_DEFERRED_SCAN_CAP;
     public static final ModConfigSpec.IntValue BUILD_STRUCTURE_MAX_VOLUME;
+
+    // ================= 饰品「大运」（v1.5.393 实测八百零四） =================
+    /** 总开关：鞘翅飞行中 5×5×5 开路（女仆空袭 / 玩家 Curios 佩戴） */
+    public static final ModConfigSpec.BooleanValue DAYUN_ENABLE;
+    /** 玩家侧开关（自己 Curios 戴着「大运」，滑翔时同样开路） */
+    public static final ModConfigSpec.BooleanValue DAYUN_PLAYER_ENABLE;
+    /** 硬度上限：只清硬度 < 此值的方块（默认 50 = 黑曜石，即"硬度≥黑曜石不清"） */
+    public static final ModConfigSpec.DoubleValue DAYUN_MAX_HARDNESS;
+    /** 容器安全：带方块实体的一律跳过（不掉自家箱子） */
+    public static final ModConfigSpec.BooleanValue DAYUN_SKIP_CONTAINERS;
+    /** 是否掉落（关 = 直接消失，纯清场） */
+    public static final ModConfigSpec.BooleanValue DAYUN_DROP_ITEMS;
+    /** 破坏时是否播放原版「方块被破坏」粒子+音效（实测八百一十，默认开） */
+    public static final ModConfigSpec.BooleanValue DAYUN_BREAK_PARTICLES;
+    /** 单 tick 破坏上限（性能闸） */
+    public static final ModConfigSpec.IntValue DAYUN_MAX_PER_TICK;
+    /** v1.5.398 实测八百一十三：破坏范围（立方体边长，格）——5 = 5×5×5，偶数自动进一位 */
+    public static final ModConfigSpec.IntValue DAYUN_RANGE;
+
+    // ---- v1.5.394 实测八百零五：BGM 与穿墙锁敌 ----
+    /** 佩戴「大运」鞘翅飞行时播放的 BGM 曲目（1 或 2；0 = 关） */
+    public static final ModConfigSpec.IntValue DAYUN_BGM;
+    /** 女仆佩戴「大运」后是否可穿墙锁敌（不可破坏的方块不穿） */
+    public static final ModConfigSpec.BooleanValue DAYUN_WALL_PHASE;
+    /** 佩戴「大运」者鞘翅滑翔时免疫冲撞伤害（原版 fly_into_wall） */
+    public static final ModConfigSpec.BooleanValue DAYUN_NO_WALL_DAMAGE;
 
     // ================= 挖矿 =================
     public static final ModConfigSpec.ConfigValue<List<? extends String>> MINE_ORE_VALUES;
@@ -215,6 +246,27 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue MEMORY_DUAL_AGENT;
     // v1.2.1：人设统一（TLM 已有人设时人格块降级为补充）
     public static final ModConfigSpec.BooleanValue MEMORY_PERSONA_UNIFY;
+    // ===== 实测八百二十九c：移植 maidsoulcore v3 检索能力 =====
+    public static final ModConfigSpec.BooleanValue MEMORY_RECALL_GATE;
+    public static final ModConfigSpec.IntValue MEMORY_RECALL_MIN_INTERVAL;
+    public static final ModConfigSpec.IntValue MEMORY_RECALL_MIN_MESSAGES;
+    public static final ModConfigSpec.IntValue MEMORY_RECALL_CACHE_TTL;
+    public static final ModConfigSpec.BooleanValue MEMORY_GRAPH_ENABLE;
+    public static final ModConfigSpec.IntValue MEMORY_GRAPH_HOPS;
+    public static final ModConfigSpec.BooleanValue MEMORY_TEMPORAL_ENABLE;
+    public static final ModConfigSpec.BooleanValue MEMORY_PROFILE_ITEMS;
+    public static final ModConfigSpec.BooleanValue MEMORY_SNAPSHOT_ENABLE;
+    public static final ModConfigSpec.IntValue MEMORY_SNAPSHOT_EVERY_N;
+    public static final ModConfigSpec.BooleanValue MEMORY_CONTINUITY_ENABLE;
+    public static final ModConfigSpec.BooleanValue MEMORY_EVENT_POLICY;
+    public static final ModConfigSpec.BooleanValue MEMORY_AUDIT_ENABLE;
+    public static final ModConfigSpec.BooleanValue MEMORY_VECTOR_ENABLE;
+    public static final ModConfigSpec.ConfigValue<String> MEMORY_EMBED_URL;
+    public static final ModConfigSpec.ConfigValue<String> MEMORY_EMBED_KEY;
+    public static final ModConfigSpec.ConfigValue<String> MEMORY_EMBED_MODEL;
+    public static final ModConfigSpec.IntValue MEMORY_EMBED_DIM;
+    public static final ModConfigSpec.IntValue MEMORY_EMBED_TIMEOUT_MS;
+    public static final ModConfigSpec.IntValue MEMORY_EMBED_BATCH;
 
     // ================= 对话与提示 =================
     public static final ModConfigSpec.BooleanValue DIALOGUE_STATUS_REPORTER;
@@ -262,6 +314,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.IntValue PERCEPTION_LOOK_TICKS;
     public static final ModConfigSpec.DoubleValue PERCEPTION_LOOK_ENTER_DEG;
     public static final ModConfigSpec.DoubleValue PERCEPTION_LOOK_EXIT_DEG;
+    /** 实测八百二十五："主人一直在看着我…"语音/气泡的【每只女仆】触发间隔（秒） */
+    public static final ModConfigSpec.IntValue PERCEPTION_LOOK_COOLDOWN;
     // v1.5.95：情绪（PAD 情绪层）
     public static final ModConfigSpec.BooleanValue AFFECT_ENABLE;
     public static final ModConfigSpec.BooleanValue AFFECT_INJECT;
@@ -299,6 +353,10 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.DoubleValue COMBAT_PEARL_DIST;
     // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆立即切战斗，威胁消失还原）
     public static final ModConfigSpec.BooleanValue COMBAT_AUTO_SWITCH;
+    // 实测八百四十：平A横扫（含"跳劈不横扫"那一半）——原先没有配置项，只在 mixin 里硬问 isDiy
+    public static final ModConfigSpec.BooleanValue COMBAT_SWEEP_ALWAYS;
+    // 实测八百四十：类型闸对"正在打我方"的生物让位（给类型判不出威胁的模组生物用）
+    public static final ModConfigSpec.BooleanValue COMBAT_ATTACK_THOSE_ATTACKING_US;
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
     public static final ModConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_VANILLA_WEIGHT;
     public static final ModConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_MOD_WEIGHT;
@@ -353,6 +411,9 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_EXPAND;
     /** v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式的工作范围圈，见 CombatWorkRange） */
     public static final ModConfigSpec.IntValue COMBAT_WORK_RANGE;
+    /** 实测八百二十三：参战时把 TLM 作息临时切「全天」（默认开）——夜里白班女仆处于 REST、
+     *  WORK 攻击行为不 tick，"切了任务却站着不动"；切成 ALL 让她真出手，威胁消失后随任务一起复原。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_FORCE_ALL_SCHEDULE;
     /** v1.3.8 实测六百六十三【援护半径】——借自别人改过的 TLM 1.5.3 的 MaidCombatRange：
      *  ① 她没有目标时优先打「主人最近的仇人」（最近打主人的人 → 主人最近打的人，5 秒窗口）；
      *  ② 目标离她和主人都超过这个半径就松手（不再追已经跑掉的怪）。0 = 两条一起关。 */
@@ -372,8 +433,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /**
      * 【实测六百八十二】接敌爬升高度（格，相对敌人脚底，默认 15）：「遇到敌人先爬到它上方几格」
      * ——这一个数字同时**决定这一场遭遇的盘旋高度**（爬完就一直保持在那儿打）。
-     * 玩家原话："考虑到现在加入了这个模式，那么女仆需要飞的再高一点，默认应该是10格的高度。
-     * （之前的扫帚模式盘旋是8格）"
+     *
+     *
      */
     public static final ModConfigSpec.DoubleValue COMBAT_BROOM_CLIMB;
     /** 平时（没有敌人）是否悬停跟随主人 */
@@ -385,21 +446,21 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 时，她巡逻的目标高度 = **她脚下那块地之上这么多格**。
      *
      * <p>旧版这一档不存在（高度取"扫帚当前高度"），而起飞相位只抬 1 格 → 她整场守家都贴着地面飞。
-     * 玩家原话：「home 模式下女仆会进行飞行盘旋巡逻对吧？但是女仆很喜欢贴地飞行。这个观感太差了。」
+     *
      *
      * <p>为什么与「接敌爬升高度」分开：那个数是**相对敌人**（没有敌人时根本不存在那个参照物），
      * 这个数是**离地**，两个参照系不同。头顶有天花板时由 {@code MaidBroomDrive.safeY} 自动压低到
      * 放得下的最高一格，一格都放不下就留在原高度（不会为了够这个数一直往上顶）。
      *
-     * <p>【实测六百九十二：这个数是"上限"不是"每拍重算的加数"】玩家原话「尽可能保持启动盘旋的
-     * 高度（躲建筑只是暂时调整高度）。防止女仆在躲避其他建筑物的时候越飞越高」。脚下**找不到
+     * <p>【实测六百九十二：这个数是"上限"不是"每拍重算的加数"】
+     *
      * 地面**时（虚空 / 她比地形高 24 格以上）目标高度取"这场巡逻的高度记忆"，只降不升；
      * 脱困取格也不许爬过目标高度 +3 格。详见 {@code MaidBroomDrive.homeOrbitPoint} /
      * {@code ESCAPE_UP_MAX} 那两段因果。
      */
     public static final ModConfigSpec.DoubleValue COMBAT_BROOM_HOME_ALT;
     /** v1.3.0(beta) 实测六百六十四【扫帚模式自己的跟随距离】——此前直接复用「飞行跟随」那一对
-     *  （玩家原话：「扫帚模式好像照搬了这个，但是没有任何程度上的调试面板」），现在扫帚模式有
+     *  （），现在扫帚模式有
      *  自己的一对，面板「移动与行为 → 扫帚模式」里可调；[flightFollow] 那一对只管飞行跟随。 */
     public static final ModConfigSpec.DoubleValue COMBAT_BROOM_FOLLOW_START;
     public static final ModConfigSpec.DoubleValue COMBAT_BROOM_FOLLOW_END;
@@ -418,7 +479,7 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 而不是普通女仆那条传送。完整口径见 {@code com.maidsmart.combat.MaidBroomRecall}。
      *
      * <p>【实测六百九十二】守家（home）时**参照点与落点都是她的工作区圈心**，不是主人：
-     * 玩家原话「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+     *
      * ——守家的语义是"待在家里"，主人走多远都不该把她拽走；"飞太远回不来"照旧兜住，拉回家
      * （走 {@code recallBroomRiderTo}，扫帚照旧一起搬）。
      */
@@ -429,8 +490,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 【v1.3.8】巡逻航迹总开关（默认开）：扫帚模式 + 在家模式下，若她身上绑了一条**已连接（闭环）**
      * 的航迹，她就沿这条航迹巡逻，**替代**原本"沿工作范围那个圈盘旋"的守家行为。
      *
-     * <p>玩家原话（规格）：「既然是巡逻，那它相当于替代了原来 home 模式下。所以这个功能也只对
-     * home 模式下的扫帚模式下女仆进行操作。」
+     * <p>
+     *
      *
      * <p>关掉 = 整条功能不生效：绑了的航迹留在她身上但不起作用，扫帚模式回到原本的守家盘旋
      * （一个字节不变）。接敌档不受影响（有敌人照旧先接敌）。
@@ -457,9 +518,9 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * （环绕 / 蛇形 / 高悠悠 / 脱离再进 / 8 字横切，见 {@code com.maidsmart.combat.CombatManeuver}），
      * 而不是所有女仆都只会绕圈。关掉 = 退回旧行为（永远环绕，但半径/旋向/快慢的随机照旧）。
      *
-     * <p>玩家原话：「在女仆扫帚模式接敌的情况下随机性能不能稍微高一点？我是说现在全都是保持
-     * 盘旋状态的，战斗方式有些过于单一了。……然后女仆接敌之后，会从这多种飞行方式中选择一个
-     * 进行执行。而不全是统一绕圈。」
+     * <p>
+     *
+     *
      */
     public static final ModConfigSpec.BooleanValue COMBAT_MANEUVER_ENABLE;
     /**
@@ -567,17 +628,17 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /**
      * 【实测七百二十七·点1 + 七百二十八】**跟随**时的悬停高度（**离地**格数，默认 3）。
      * 骑上飞行载具就进入悬停，**没有敌人**时高度按"她脚下的地面 + 这个数"保持。
-     * 玩家原话「骑上直升机之后就进入悬停状态，离地三格左右」。
+     * 。
      *
-     * <p>【只作用于跟随】玩家 728 补正原话：「我是说跟随的时候保持离地三格的……但是遇到敌人
-     * 还是要升高到比敌人高 15 格的位置的呀」——所以这一项只管**跟随档**；接敌（有敌人）时
+     * <p>【只作用于跟随】玩家 728 补正
+     *
      * 高度改由 {@link #COMBAT_RIDE_FIGHT_ALT} 管（比敌人高多少格）。
      */
     public static final ModConfigSpec.DoubleValue COMBAT_RIDE_AIR_ALT;
     /**
      * 【实测七百二十八】**接敌**时的爬升高度（比敌人高多少格，默认 15）。
      *
-     * <p>玩家 728 补正原话：「遇到敌人还是要升高到比敌人高 15 格的位置的呀，同时缩小绕圈的半径」
+     * <p>玩家 728 补正
      * ——七百二十七 误把"离地三格"也套到了接敌上（把 726 那套"爬到敌上 15 格"整段删了），
      * 这里拆出独立旋钮还原：**跟随 = 离地 N 格（低空）**、**接敌 = 敌上 M 格（高位俯射）**。
      *
@@ -589,7 +650,7 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /**
      * 【实测七百二十七·点1 + 七百二十八】盘旋半径（格，默认 4）。骑飞行载具接敌时绕着敌人
      * 转的圈有多大；比扫帚那套（`combat.broom.range`/`orbitMax`，默认 8~10 还会被机动放大）
-     * 单独一个旋钮。玩家两条原话：「范围绕的特别大」+「同时缩小绕圈的半径」——所以默认比
+     * 单独一个旋钮。玩家两条+「同时缩小绕圈的半径」——所以默认比
      * 七百二十七 的 6 再收紧到 4。
      */
     public static final ModConfigSpec.DoubleValue COMBAT_RIDE_ORBIT_RADIUS;
@@ -598,8 +659,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /**
      * v1.3.0(beta) 实测七百四十七【投弹安全高度：基洛夫先爬升再投弹】。
      *
-     * <p>玩家原话：「女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，
-     * 防止被炸到。」
+     * <p>
+     *
      *
      * <p>基洛夫的武器就是往下丢的航空炸弹（SWB 里那颗 42 格半径的大家伙）——贴地投弹等于
      * 把自己也圈进爆心。所以本项定一个"比目标高多少格才允许投弹"的安全高度：她先把机身上升
@@ -613,8 +674,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /**
      * v1.3.0(beta) 实测七百一十八【issue #31：坐下的女仆不被自保传送拉走】。
      *
-     * <p>反馈者原话：「女仆坐下或蹲下之后，就固定在那里了……当残血时，女仆会说"回到主人身边，
-     * 我先缓缓"，残血情况下主人如果远离，即使女仆是蹲下状态，也会瞬移到主人身边」。
+     * <p>反馈者
+     *
      *
      * <p>坐下（{@code isMaidInSittingPose}）与蹲下（{@code isShiftKeyDown}）是玩家**明确把她
      * 停放**在那儿的动作——本模组的原版传送拦截（{@code MaidTeleportPreserveMixin}）已经豁免
@@ -628,6 +689,14 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * {@code MaidTeleportPreserveMixin} 完全同口径：坐姿 / 蹲下 / 乘客。
      */
     public static final ModConfigSpec.BooleanValue COMBAT_TELEPORT_EXEMPT_SITTING;
+    /**
+     * 实测八百三十五：TLM 原版「离主人过远自动传送 / 跟随启动」的豁免总闸。
+     *
+     * <p>管住 {@code MaidTeleportPreserveMixin} 与 {@code FollowPreserveMixin} 里所有"不拉她"的分支
+     * （自保逃跑中 / 坐姿 / 蹲下 / 乘客 / 特殊坐骑 / 滑翔 / 扫帚 / 建造 / 搭路 / 主人已死亡）。
+     * 关掉 = 一条都不拦，TLM 原版照拉（DIY 预设会关掉）。
+     */
+    public static final ModConfigSpec.BooleanValue TLM_TELEPORT_EXEMPT;
 
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
@@ -635,9 +704,24 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue COMBAT_SPAWNER_TORCH_ENABLE;
     /** 刷怪笼的搜索半径（格）。数值与判据见 {@code com.maidsmart.combat.MaidSpawnerTorchBehavior} */
     public static final ModConfigSpec.DoubleValue COMBAT_SPAWNER_TORCH_RADIUS;
-    /** v1.3.0(beta) 实测六百六十四【"优先"落到走位所有权上】——玩家原话：「女仆优先往刷怪笼上
-     *  插一根火把这个操作没能实现」。发现目标后这段时间她独占走位（见 MaidWorkTags.SPAWNER_TORCH_TAG）。 */
+    /** v1.3.0(beta) 实测六百六十四【"优先"落到走位所有权上】——
+     * */
     public static final ModConfigSpec.BooleanValue COMBAT_SPAWNER_TORCH_PRIORITY;
+    /** 实测八百二十二【拆刷怪笼】——整包刷怪笼无视光照（custom_spawn_rules），插火把压不住：
+     *  。默认开 = 发现就拆；
+     *  关掉 = 回到旧的插火把链路（火把降为可选）。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_SPAWNER_BREAK;
+    /** 实测八百二十二：拆除是否要求带镐（默认开）。只影响**速度**——镐约 4~15 刻、徒手约 25 秒
+     *  （刷怪笼本身无掉落物，故不设"收掉落"项）。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_SPAWNER_BREAK_PICKAXE;
+    /** 实测八百三十 / 八百三十b【只在真在刷怪时才拆 + 空笼子 / 和平生物笼子不拆】——
+     *
+     *
+     *  回到旧的"见到就拆"（隔墙不拆仍恒生效）。判据见 MaidSpawnerTorchBehavior.spawnSkipReason。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_SPAWNER_BREAK_ACTIVE_ONLY;
+    /** 实测八百四十五【拆除黑名单】——名单里的刷怪笼**任何情况下都不拆**，不再看"在不在刷怪"。
+     *  判据见 MaidSpawnerTorchBehavior.breakBlacklistHit。 */
+    public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> COMBAT_SPAWNER_BREAK_BLACKLIST;
 
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ModConfigSpec.BooleanValue BRIDGE_ENABLED;
@@ -652,8 +736,8 @@ public static final ModConfigSpec.IntValue BRIDGE_MIN_DY;
     public static final ModConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
 public static final ModConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
     /**
-     * v1.3.0(beta) 实测六百八十【搭方块禁用名单·总开关】——玩家原话：「默认禁止搭建的为所有
-     * 非的原版自然生成方块」。开 = 只许用 {@link com.maidsmart.tool.NaturalBlocks} 那张原版
+     * v1.3.0(beta) 实测六百八十【搭方块禁用名单·总开关】——
+     *
      * 天然方块表里的方块搭（**模组方块一律默认禁**，想放开去面板里点一下）；关 = 除了显式
      * 禁用名单（{@link #BRIDGE_BUILD_FORBIDDEN}）以外都放行。
      */
@@ -665,9 +749,9 @@ public static final ModConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
 /**
  * v1.2.2 实测六百〇八 / 六百一十一【飞行跟随】：主人自己飞走了，她也能背上鞘翅追过来（默认关，观赏玩法）。
  *
- * 口径来自作者原话："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
- * 没有方块阻拦，自己包里面还鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞是一样的，
- * 但是 target 等于主人）。可以调整这种飞行跟随的时候是否消耗烟花和鞘翅耐久。"
+ * 口径来自作者
+ *
+ *
  *
  * 所以它们是**搭路这一档的替代路径**：条件满足时她直接起飞，条件不满足时搭路那条老链路一字不动。
  * 逻辑见 {@code com.maidsmart.combat.MaidFlightFollowBehavior}。
@@ -680,7 +764,7 @@ public static final ModConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
  * 进到收手半径内**解除烟花给的推进矢量**、触发判定**推广到所有任务模式**（两个空袭任务
  * **未接敌**时也照飞，不再"看见空袭任务就跳过"）、威胁出现当场解除本趟链路（与搭路同口径）。
  *
- * v1.2.2 实测六百一十三【启动并入位移法术】（用户原话："位移法术也可以加入到飞行跟随的启动中"）：
+ * v1.2.2 实测六百一十三【启动并入位移法术】（用户）：
  * "能飞的道具"从两选一（烟花 / 羽扇）扩成**三选一**（加"能上天的位移法术"，判据与空袭三件套的
  * 第三条**同一份定义**：{@code MaidFlightKit.hasFlightPropellant}），推进顺序 = 扇子 → 烟花 →
  * **位移法术**（与空袭**起飞**同序："有烟花先走烟花链路、没有才用位移法术"——带烟花的存档手感与
@@ -689,13 +773,13 @@ public static final ModConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
  *
  * v1.2.2 实测六百一十五【起手/收手拆成两个球 + 整块搬到自己的板块】——
  * <ol>
- *   <li><b>起手半径默认 5 → 25 格</b>（用户原话："现在女仆稍微走出去一点就开始飞（默认5格导致的），
- *       需要对判定进行一个收紧……25 格球内无主人 + 无方块阻挡 + 未发现威胁 + 开关打开 = 启动"）；</li>
+ *   <li><b>起手半径默认 5 → 25 格</b>（用户
+ *
  *   <li><b>收手半径独立成一个配置</b>（{@code endDist}，默认 5 格）——旧版收手半径是"起手减 1"
- *       推导出来的，现在两个球各管各的（用户原话："开始跟结束两个半点的球大小应该不一样，
- *       默认值就是我说的那两个，依旧可以在手册内调试"）；</li>
- *   <li><b>从 {@code [bridge]} 搬到自己的 {@code [flightFollow]} 小节</b>（用户原话："把飞行跟随
- *       这个板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的一个板块"）——
+ *       推导出来的，现在两个球各管各的（用户
+ *
+ *   <li><b>从 {@code [bridge]} 搬到自己的 {@code [flightFollow]} 小节</b>（用户
+ *
  *       <b>老配置里 {@code [bridge]} 那几行不再生效</b>（NeoForge 不会替你搬），重新打开一次即可。</li>
  * </ol>
  */
@@ -791,9 +875,9 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     /**
      * v1.3.0(beta) 实测七百一十一 + 七百一十三【鞘翅渲染】：所有模式下都画鞘翅 + 用那件鞘翅**自己的外观**。
      *
-     * <p>玩家原话：「目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，
-     * 能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。」后来又追加：
-     * 「我希望这种渲染是一种**通解通法**，而不是一些专门的适配。尽可能规避去专门适配的情况。」
+     * <p>
+     *
+     *
      *
      * <p>关闭 = 旧行为（只在飞行任务/滑翔时画、且一律原版贴图）。贴图解析见 {@code MaidWingSkins}
      * （三段式：先反射模组自己的公开取值口 → 再查静态表 → 退回原版）。
@@ -827,7 +911,7 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     /**
      * v1.2.4 实测六百四十一 / 六百四十二【激流三叉戟当"推进剂"时的力度倍数】（默认 **1.0 = 不打折**）。
      *
-     * 用户反馈原文："女仆使用三叉戟起飞/飞行的时候飞行格数异常，一下子就能飞100多格。激流3"
+     *
      * ＋"而且三叉戟没有减少矢量的相关措施。"＋（第二版改完之后）"实测下来，起飞的时候女仆还是
      * 会飞的特别高……还是会轻松飞出100格。"＋（设计决定）"将激流三叉戟在起飞/俯冲/飞行突进的
      * 链路改为拟真烟花……数值跟玩家在水中使用三叉戟（还要判定附魔等级）一致。"
@@ -904,7 +988,7 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 所以"飞太高"本身也会触发。完整口径见 {@code com.maidsmart.combat.MaidFlightRecall}。
      *
      * <p>【实测六百九十二】守家（home）时**参照点与落点都是她的工作区圈心**，不是主人：
-     * 玩家原话「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+     *
      * ——守家的语义是"待在家里"，主人走多远都不该把她拽走；"飞太远回不来"照旧兜住，拉回家。
      */
     public static final ModConfigSpec.IntValue COMBAT_FLIGHT_RECALL_DISTANCE;
@@ -942,7 +1026,7 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     /**
      * v1.2.0 实测五百七十二【空袭·位移法术：分"提供高度"与"提供速度"两类】（默认开）。
      *
-     * 需求：① 位移类法术用于**飞行加速**；② 用于**平地起飞**（来自法术模组作者转达的玩家反馈）。
+     * 需求：① 位移类法术用于**飞行加速**；② 用于**平地起飞**（来自法术模组作者转达的
      *
      * 【为什么要分两类】ISS 里两类位移法术的**冲量方向**不同，行为逻辑因此也不同：
      * - 「升腾」`irons_spellbooks:ascension`：`motion = 视线水平分量 + (0,5,0)` —— 给**向上**初速；
@@ -1168,6 +1252,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
     // v1.5.203：搭高安全高度（补完目标，与落地水触发高度配合）
     public static final ModConfigSpec.IntValue COMBAT_PILLAR_SAFE_HEIGHT;
+    // v1.5.394 实测八百二十：搭高目标高度改为"高于敌人多少格"（对抗远程 Boss/监守者）
+    public static final ModConfigSpec.IntValue COMBAT_PILLAR_ABOVE_ENEMY;
     // v1.1.0 实测一百五十三/一百五十四：TLM 保护饰品识别（火焰/溺水）——佩戴时对应环境危险不再惊慌
     public static final ModConfigSpec.BooleanValue COMBAT_FIRE_PROTECT_BAUBLE;
     public static final ModConfigSpec.BooleanValue COMBAT_DROWN_PROTECT_BAUBLE;
@@ -1181,9 +1267,19 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.3.0(beta) 实测七百七十一：支援范围扩大到其他友方单位（主人的其他宠物 / 同主人的
     // 诡厄仆从等——判据 = OwnableEntity 且主人 UUID 相同；只给药水/金苹果/牛奶蜂蜜）
     public static final ModConfigSpec.BooleanValue AID_FRIENDLY_UNITS;
+    // 实测八百一十七：是否支援亡灵单位（僵尸/骷髅仆从、凋灵系等 isInvertedHealAndHarm 生物）——
+    // 关掉 = 支援链跳过一切亡灵目标（不改两张分类表，只是不再对亡灵动手）
+    public static final ModConfigSpec.BooleanValue AID_UNDEAD_UNITS;
     public static final ModConfigSpec.IntValue AID_FOOD_THRESHOLD;
     // v1.2.0 实测五百一十九：投喂食物黑名单（通用判定 + 黑名单）
     public static final ModConfigSpec.ConfigValue<List<? extends String>> AID_FOOD_BLACKLIST;
+    // 实测八百一十七：支援物品两张表（通用 / 亡灵）——条目 = 「键=分类」（对策/增益/回复/禁用）
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> AID_SUPPORT_CATEGORY;
+    /** 实测八百一十七：亡灵支援表——对亡灵（生死颠倒）单独一张，因为治疗药水对亡灵是扣血 */
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> AID_SUPPORT_CATEGORY_UNDEAD;
+    // 实测八百一十七（续）：女仆【自己】用药水/吃食物是否也共用上面两张支援分类表
+    // （默认开——与「支援女仆」同一份白名单；关掉 = 自用退回旧行为，不看这两张表）
+    public static final ModConfigSpec.BooleanValue AID_SELF_USE;
     // 实测五百七十一：喂水（软联动「口渴」Thirst Was Taken，modid=thirst）——判定位点 =
     // 主人口渴值。模组不在场时这两项【不注册】（保持 null，配置文件与面板都不出现；
     // 需求原文："如果没有装这个模组，那么此配置项目不会出现"）
@@ -1259,6 +1355,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue MISC_SCHEDULE_BUBBLE_ENABLED;
     public static final ModConfigSpec.DoubleValue MISC_SCHEDULE_BUBBLE_RADIUS;
     public static final ModConfigSpec.BooleanValue MISC_PICKUP_PRIORITY;
+    /** 实测八百三十五：拾取目标按价值重排（原版低价值物品降权排后；DIY 预设会关掉） */
+    public static final ModConfigSpec.BooleanValue MISC_PICKUP_VALUE_REORDER;
     // v1.5.102：烹饪/酿造垂直搜索范围（v1.5.134 整理任务已删除，仅烹饪/酿造使用）
     public static final ModConfigSpec.IntValue MISC_VERTICAL_RANGE;
     // v1.5.252：酿造自动下料（true=自动两阶段酿药 / false=只维持：补燃料+收成品，
@@ -1279,10 +1377,33 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.IntValue MISC_MAID_SAME_DIM_DIST;
     // v1.1.0 实测一百八十八（反馈："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
     public static final ModConfigSpec.IntValue MISC_MAID_SAME_DIM_VERTICAL;
+    /**
+     * 【实测七百九十九·issue #36】传送后客户端重建（默认开）。
+     *
+     * <p>远距离传送后"女仆在服务端活着、客户端却看不见她"的根因是**客户端插值被冻住**：
+     * 大跳变让客户端走 {@code Entity.lerpTo(目标, 3 步)}，第一步落点恰好是起终点的 1/3；
+     * 若那个落点在客户端没加载的区块里，实体就脱离 tick 列表、插值永久冻结在 1/3，
+     * 她所在 section 未编译 → 模型与碰撞箱一起消失（服务端一切正常、还能打怪搭路）。
+     *
+     * <p>开启后：{@code ServerEntity.sendChanges} 检测到位置基线大跳变时拦下传送包，
+     * 改用"删+生成"让客户端整个重建（坐标一次到位、不经插值），并在 1 秒后再补一枪
+     * （那时传送已生效，生成包才带玩家身边的新坐标）。机制与上游开源项目
+     * 2415564388/maidsync（MIT）一致。
+     */
+    public static final ModConfigSpec.BooleanValue MISC_MAID_TELEPORT_REBUILD;
     /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
     public static final ModConfigSpec.BooleanValue MISC_MAID_RESCUE;
     // v1.1.0 实测一百五十一：跟随收紧（每 tick 重断言跟随目标，平常跟随在 4 格内）
     public static final ModConfigSpec.BooleanValue MISC_FOLLOW_TIGHTEN;
+    // 实测八百一十四：干活时把移速压回 0 好感档（战斗/空闲保持原样）
+    public static final ModConfigSpec.BooleanValue MISC_WORK_SPEED_LEVEL0;
+    // 实测八百一十五：干活时闲逛不出圈（跟随模式也给一个圈，防"以极高速度满地图窜"）
+    public static final ModConfigSpec.BooleanValue MISC_WORK_STAY_IN_CIRCLE;
+    // 实测八百一十五：河童的罗盘优先（排班/建造不覆盖玩家用罗盘画的圈）
+    public static final ModConfigSpec.BooleanValue MISC_COMPASS_PRIORITY;
+    // 实测八百一十六：非战斗模式下女仆移速硬上限（不许比玩家快）
+    public static final ModConfigSpec.BooleanValue MISC_NONCOMBAT_SPEED_CAP;
+    public static final ModConfigSpec.DoubleValue MISC_NONCOMBAT_MAX_SPEED;
     // v1.1.0 实测一百五十二：有增益也喂牛奶（很多装备/饰品带永久增益，旧版"无增益才喝"导致中毒/凋零也不解）
     public static final ModConfigSpec.BooleanValue MISC_MILK_FEED_WITH_BUFF;
     /** v1.1.0 实测八十九：寻路危险方块避让（女仆寻路绕开岩浆/火等） */
@@ -1291,8 +1412,17 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> MISC_DANGER_BLOCKS;
     /** v1.1.0 实测九十：险境脱离——已身处危险方块上时自动挪到最近安全格 */
     public static final ModConfigSpec.BooleanValue MISC_DANGER_ESCAPE;
+    /** v1.5.395 实测八百二十一：营火/灵魂营火补进默认危险表的一次性迁移标记（内部） */
+    public static final ModConfigSpec.BooleanValue DANGER_CAMPFIRE_MIGRATED;
     // v1.1.0 实测九十四：运行日志总开关（游戏目录/logs/promaid.log）
     public static final ModConfigSpec.BooleanValue MISC_LOG_ENABLED;
+    /**
+     * 实测八百三十五：当前预设模式（{@code default} / {@code diy}）。
+     *
+     * <p>只记录"上一次点的是哪个模式"，供手册首页「DIY / 默认模式」页与配置面板显示；切模式的实际动作在
+     * {@code com.maidsmart.config.MaidConfigPreset}。DIY = 全模组不介入女仆行为（像 TLM 原版）。
+     */
+    public static final ModConfigSpec.ConfigValue<String> MISC_PRESET_MODE;
     // v1.5.161：农场连锁收获 / 收获物自动收集（默认关闭）
     public static final ModConfigSpec.BooleanValue MISC_CHAIN_HARVEST;
     public static final ModConfigSpec.BooleanValue MISC_AUTO_COLLECT;
@@ -1348,6 +1478,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.BooleanValue MISC_SCHEDULE_FORCE_BRAIN_REFRESH;
     // v1.1.0 实测一百八十三（反馈："排班状态下增大活动的范围"）：排班/home 模式活动半径下限
     public static final ModConfigSpec.IntValue SCHEDULE_ACTIVITY_RANGE;
+    /** 实测八百三十五：排班活动半径是否作为下限生效（关 = 完全用 TLM 自己的半径；DIY 预设会关掉） */
+    public static final ModConfigSpec.BooleanValue MISC_SCHEDULE_RANGE_FLOOR;
 
     // ================= 语音（v1.5.198） =================
     public static final ModConfigSpec.DoubleValue TTS_VOLUME_MULTIPLIER;
@@ -1392,7 +1524,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 恢复成真默认。但撤回只改"声明"——Forge/NeoForge 不会替你改老 toml 里已经写着的值；
         // 而客户端 config 目录在本机只有管理员可写，模组没法直接改文件。让游戏自己搬一次最干净。
         // 只搬"值恰好还停在 679 那批值上"的键（玩家自己调成别的值的一律不动），标记落盘后永不再碰。
-        DEFAULT_REPAIR_MIGRATED = BUILDER.comment("内部标记：实测六百八十一 默认值修复迁移（把 679 误当默认的 12 项搬回真默认）是否已执行；一次性，请勿手动修改")
+        DEFAULT_REPAIR_MIGRATED = BUILDER.comment("内部标记：默认值修复迁移（把 679 误当默认的 12 项搬回真默认）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.misc.defaultRepairMigrated").define("defaultRepairMigrated", false);
         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
                 .translation("config.promaid.build.globalQuota")
@@ -1404,8 +1536,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.build.maxBlocks").defineInRange("maxBlocks", 200, 16, 500000);
         BUILD_MAX_RANGE = BUILDER.comment("LLM 蓝图平面范围（±）")
                 .translation("config.promaid.build.maxRange").defineInRange("maxRange", 12, 4, 64);
-        BUILD_MAX_HEIGHT = BUILDER.comment("LLM 蓝图高度上限")
-                .translation("config.promaid.build.maxHeight").defineInRange("maxHeight", 8, 2, 64);
+        BUILD_MAX_HEIGHT = BUILDER.comment("LLM 蓝图高度上限（默认由 8 提到 32——8 格高连一棵 20 格高的树都放不下，是「图纸设计出来后存不成蓝图」的直接原因之一；smart_build 现场 JSON 用，smart_design 自绘蓝图不受此限）")
+                .translation("config.promaid.build.maxHeight").defineInRange("maxHeight", 32, 2, 64);
         BUILD_DESIGN_MAX_BLOCKS = BUILDER.comment("AI 子 Agent 设计蓝图方块上限（v1.5.222：默认与上限放开到 50 万——构建链统一支持 50 万块级建筑）")
                 .translation("config.promaid.build.designMaxBlocks").defineInRange("designMaxBlocks", 500000, 100, 500000);
         BUILD_STRUCTURE_MAX_BLOCKS = BUILDER.comment("结构文件蓝图方块上限（100万是服务器负担）")
@@ -1420,6 +1552,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 可搭方块逐格填充（材料不固定，搭路同款取材规则）
         BUILD_INDEX_STONE = BUILDER.comment("指标石（默认开）：手持指标石右击方块锁定（绿→红，可锁很远）→ 右击你的女仆绑定 → 从女仆所在格到锁定格之间的空气方块组成临时蓝图，她立刻从自己背包（不够从你背包）取材料逐格填充，材料不固定（数量最多者优先、必须有碰撞）。关闭后指标石退化为普通物品")
                 .translation("config.promaid.build.indexStone").define("indexStone", true);
+        // v1.5.393 实测八百零三：建造不强制 home + 禁非玩家意愿的自动传送（默认开）。
+        // 【为什么】旧版进建造就强制 home 来压制 TLM 跟随；但 home 在 TLM 里是复用原版
+        // 「限制圈」的开关（hasRestriction 恒真、圈心取 SchedulePos 锚点、出圈传送/走回），
+        // 而建造只置 home 不配锚点 → 圈心落在原点，把排班/召回/救援/区块保载/主人死亡传送
+        // 整条链路拖进互相打架（玩家实测的冲突根源）。现在改由「不强制 home + 在源头拦住
+        // 各处自动传送」达成同一目的（TLM 跟随瞬移早已单独拦下 + activity 钉在 WORK +
+        // 移动源头锁）。关掉本项 = 整体回退 v1.5.121 旧行为（强制 home、自动传送照吃）。
+        BUILD_NO_FORCE_HOME = BUILDER.comment("建造不强制 home（默认开）：建造/指标石临时搭建期间不再把她切成守家（home）模式，改为在源头拦下各处【非玩家意愿】的自动传送（TLM 跟随瞬移 / 同维远距拉回 / 跨维自动跟随 / 主人死亡归位 / 自保归位），她安心留在工地；一键集合、排班表「传送到我身边」、受困救援、建造自己的瞬移照常可用。关 = 回退旧行为（建造强制 home，自动传送照吃）")
+                .translation("config.promaid.build.noForceHome").define("noForceHome", true);
         // v1.5.316：红石机器改革开关——机器专属搭建顺序 + 活建造（去禁锢）
         BUILD_MACHINE_SMART = BUILDER.comment("红石机器专属搭建（v1.5.316 改革）：机器按红石拓扑分层放置（结构→惰性机构→活动件→传感→动力源→TNT，动力源最后落位）+ 活建造（红石/水流随放随算），机器建好即自然运行；轰炸机类完工自动放矿车启动。关 = 回退旧行为（常规顺序+静默放置+完工唤醒）")
                 .translation("config.promaid.build.machineSmart").define("machineSmart", true);
@@ -1491,6 +1632,38 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("structureMaxVolume", 16777216, 100000, 67108864);
         BUILDER.pop();
 
+        // ---- 饰品「大运」（v1.5.393 实测八百零四） ----
+        BUILDER.comment("饰品「大运」设置").translation("config.promaid.accessory").push("accessory");
+        DAYUN_ENABLE = BUILDER.comment("「大运」总开关（默认开）：鞘翅飞行途中，直接击毁自身周边 5×5×5 内除「硬度≥黑曜石」与「硬度<0」之外的一切方块（基岩/屏障之类硬物与任何带方块实体的容器一律不动）。女仆把它放进饰品栏后【只在空袭模式】生效；玩家自己戴（Curios 饰品栏）则滑翔即生效")
+                .translation("config.promaid.accessory.daYun.enable").define("daYunEnable", true);
+        DAYUN_PLAYER_ENABLE = BUILDER.comment("「大运」玩家侧（默认开）：玩家自己把「大运」放进 Curios 饰品栏后，鞘翅滑翔时同样开路。需要装 Curios；没装则这一档静默不生效（物品与女仆侧不受影响）")
+                .translation("config.promaid.accessory.daYun.playerEnable").define("daYunPlayerEnable", true);
+        DAYUN_MAX_HARDNESS = BUILDER.comment("「大运」硬度上限（默认 50 = 黑曜石）：只清【硬度 < 此值】的方块。50 即需求：的「硬度大于等于黑曜石不清」；基岩/屏障等硬度为 -1 的一律不清。调大可清黑曜石（51），调小则只清软方块（如 3 = 只清不超过深板岩）")
+                .translation("config.promaid.accessory.daYun.maxHardness")
+                .defineInRange("daYunMaxHardness", 50.0d, 0.0d, 100.0d);
+        DAYUN_SKIP_CONTAINERS = BUILDER.comment("「大运」跳过容器（默认开）：带方块实体的方块（箱子/熔炉/漏斗/潜影盒/刷怪笼…）整个不破坏——否则一路飞过去会把自家仓库炸成满地战利品。关 = 容器也照破（里面的东西全掉出来）")
+                .translation("config.promaid.accessory.daYun.skipContainers").define("daYunSkipContainers", true);
+        DAYUN_DROP_ITEMS = BUILDER.comment("「大运」破坏后掉落（默认开）：按原版战利品表正常掉落（与原版挖掘一致）。关 = 方块直接消失、不产生任何物品（纯清场，性能最好但挖掉的资源也没了）")
+                .translation("config.promaid.accessory.daYun.dropItems").define("daYunDropItems", true);
+        DAYUN_BREAK_PARTICLES = BUILDER.comment("「大运」破坏粒子（默认开）：破坏方块时喷该方块自己的碎屑并播破坏音（与原版挖掘完全一致）。关 = 方块静静消失，没有粒子也没有声音——嫌一路飞过去碎屑太多、或想省一点客户端开销时关掉")
+                .translation("config.promaid.accessory.daYun.breakParticles").define("daYunBreakParticles", true);
+        DAYUN_MAX_PER_TICK = BUILDER.comment("「大运」单 tick 破坏上限（默认 64）：每 tick 最多清多少格，超出的下一 tick 继续。飞行速度很快时可调大，但服务器负担随之上升")
+                .translation("config.promaid.accessory.daYun.maxPerTick")
+                .defineInRange("daYunMaxPerTick", 64, 1, 512);
+        DAYUN_RANGE = BUILDER.comment("「大运」破坏范围（默认 5，范围 1~15）：以她/他所站的那一格为中心，清掉【此数 × 此数 × 此数】的**立方体**里的方块。\n\n【怎么理解这个数】填 5 = 前后左右上下各 2 格 = 5×5×5（125 格，原版口径）；填 3 = 各 1 格 = 3×3×3（27 格，贴身穿行最不容易误伤）；填 9 = 各 4 格 = 9×9×9（729 格，一条很宽的隧道）；填 15 = 各 7 格 = 15×15×15（3375 格，几乎是在「犁地」）。\n\n【偶数会被自动进一位】填 4 实际按 5 生效、填 8 实际按 9——因为以「所站格」为中心时，只有奇数边长才能前后/左右/上下对称。界面里填的数不会被改写，只是生效范围按进一位算。\n\n【注意性能】范围每翻一倍，每 tick 要检查的格子数按立方增长（空中的格子不消耗破坏预算、也不掉落，只是要「看一眼」）。调到 11 以上建议同时把「单 tick 破坏上限」也调大，否则一 tick 只能清几十格、跟不上飞行的速度会觉得「后面漏了一串」。服务端单人建议不超过 9。\n\n【前瞻段同样放大】沿速度方向提前清的那几段用的也是这个边长——所以调大之后「撞墙顿挫」的消解距离也跟着变长。")
+                .translation("config.promaid.accessory.daYun.range")
+                .defineInRange("daYunRange", 5, 1, 15);
+        DAYUN_BGM = BUILDER.comment("佩戴「大运」鞘翅飞行时播放的 BGM（默认 1，可选 1 或 2）：玩家与女仆都按这一条播；**1 = 天真的橡皮DJ，2 = Tom Tom**；200 格内听得见，同一处只留最后响起的那条（播放机制照搬 hatmod）。0 = 关掉 BGM")
+                .translation("config.promaid.accessory.daYun.bgm")
+                .defineInRange("daYunBgm", 1, 0, 2);
+        DAYUN_WALL_PHASE = BUILDER.comment("「大运」穿墙锁敌（默认关）：女仆佩戴「大运」时，可以隔着**可破坏的**方块锁定敌人（等于认定前方墙自己会铲掉）。硬度 ≥ 上限或 < 0 的方块（基岩/黑曜石/屏障）仍然不穿——她看得见也不会锁。只在女仆侧生效")
+                .translation("config.promaid.accessory.daYun.wallPhase")
+                .define("daYunWallPhase", false);
+        DAYUN_NO_WALL_DAMAGE = BUILDER.comment("「大运」免疫冲撞（默认开）：佩戴者（玩家戴 Curios / 女仆戴 TLM 饰品栏）鞘翅滑翔中撞到方块，免疫原版「撞墙」伤害。关掉 = 照原版结算，飞得越快撞得越疼。与飞行作战那条「免疫撞击」是两道独立闸：这条只认「戴着大运」，那条只认「女仆在飞任务」")
+                .translation("config.promaid.accessory.daYun.noWallDamage")
+                .define("daYunNoWallDamage", true);
+        BUILDER.pop();
+
         // ---- 挖矿 ----
         BUILDER.comment("挖矿设置").translation("config.promaid.mine").push("mine");
         MINE_ORE_VALUES = BUILDER.comment("可挖掘方块表（自定义矿表）：每项 方块注册名=价值，如 minecraft:mod_ore=300；适配其他 mod 的矿石")
@@ -1538,13 +1711,13 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_SPEED_FACTOR = BUILDER.comment("挖矿速度系数（1.0=玩家速度，1.2=快20%）")
                 .translation("config.promaid.mine.speedFactor")
                 .defineInRange("speedFactor", 1.2, 0.5, 3.0);
-        MINE_MOVE_SPEED = BUILDER.comment("发现矿物后的移动速度（v1.5.118 起 0.6 = TLM 伐木任务同款移速（IFarmTask 实测 0.6f），走路观感自然；v1.5.111 曾 0.4：旧值偏快（每秒 17+ 格狂奔），搭高时女仆直接冲出柱子范围；0.4 又偏慢像爬行）")
+        MINE_MOVE_SPEED = BUILDER.comment("发现矿物后的移动速度（v1.5.118 起 0.6 = TLM 伐木任务同款移速（IFarmTask 同款 0.6f），走路观感自然；v1.5.111 曾 0.4：旧值偏快（每秒 17+ 格狂奔），搭高时女仆直接冲出柱子范围；0.4 又偏慢像爬行）")
                 .translation("config.promaid.mine.moveSpeed")
                 .defineInRange("moveSpeed", 0.6, 0.2, 1.5);
         MINE_JUNK_KEEP = BUILDER.comment("废石保留量（每种超出销毁）")
                 .translation("config.promaid.mine.junkKeep").defineInRange("junkKeep", 32, 4, 128);
         MINE_PLACED_LIFETIME = BUILDER.comment("搭方块自动清理时间（秒）")
-                .translation("config.promaid.mine.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
+                .translation("config.promaid.mine.placedLifetime").defineInRange("placedLifetime", 5, 3, 60);
         // v1.1.0 实测二十七：默认开启——软方块（徒手可挖）不磨损镐，与伐木一致。
         // v1.5.138 曾改 false（反馈"挖矿不消耗耐久"），实测二十七按新需求改回。
         MINE_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致）")
@@ -1574,7 +1747,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.mine.pillarCooldown")
                 .defineInRange("pillarCooldown", 4, 1, 20);
         // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
-        MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘/坐下中禁止搭方块（默认开；v1.2.4 实测六百三十五 起对**所有**搭方块行为生效）：女仆骑乘中（扫帚等载具、TLM 的椅子）**或坐下**时，挖矿垫脚 / 伐木垫脚 / 搭路 / 自保搭高全部不再放方块——这两种形态下她根本挪不动，垫方块只会留一堆残渣；关闭 = 旧行为（骑乘/坐下也照常搭）。蓝图建造与指标石建造不受影响（她本来就是坐着施工的）")
+        MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘/坐下中禁止搭方块（默认开；v1.2.4 起对**所有**搭方块行为生效）：女仆骑乘中（扫帚等载具、TLM 的椅子）**或坐下**时，挖矿垫脚 / 伐木垫脚 / 搭路 / 自保搭高全部不再放方块——这两种形态下她根本挪不动，垫方块只会留一堆残渣；关闭 = 旧行为（骑乘/坐下也照常搭）。蓝图建造与指标石建造不受影响（她本来就是坐着施工的）")
                 .translation("config.promaid.mine.rideNoPillar").define("rideNoPillar", true);
         MINE_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.mine.junkCheckInterval")
@@ -1606,7 +1779,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
         MINE_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：挖矿期间连续 N 秒既没挖掉任何方块、位置也没挪动（原地发呆/内部状态卡死）时，自动整体重置该女仆的挖矿状态——锚点/扫描缓存/排除表/目标全部清空重新开始，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭路都算进展，不会误触发")
                 .translation("config.promaid.mine.stuckWatchdog").define("stuckWatchdog", true);
-        MINE_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 8，实测发呆出现很快）：连续这么久既没挖掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
+        MINE_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 8，发呆出现很快）：连续这么久既没挖掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
                 .translation("config.promaid.mine.stuckResetSeconds").defineInRange("stuckResetSeconds", 8, 4, 300);
         BUILDER.pop();
 
@@ -1642,12 +1815,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.depthPenalty").defineInRange("depthPenalty", 0.0, 0.0, 10.0);
         WOOD_SPEED_FACTOR = BUILDER.comment("砍伐速度系数（1.0=玩家速度，1.2=快20%）")
                 .translation("config.promaid.wood.speedFactor").defineInRange("speedFactor", 1.2, 0.5, 3.0);
-        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率（v1.1.0 实测四十八：0.6→0.3——实测伐木移速至少快一倍，观感像狂奔；0.3 = 挖矿同款基础的一半，悠闲走向下一棵树）")
+        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率（v1.1.0：0.6→0.3——伐木移速至少快一倍，观感像狂奔；0.3 = 挖矿同款基础的一半，悠闲走向下一棵树）")
                 .translation("config.promaid.wood.moveSpeed").defineInRange("moveSpeed", 0.3, 0.2, 1.5);
         WOOD_JUNK_KEEP = BUILDER.comment("废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组")
                 .translation("config.promaid.wood.junkKeep").defineInRange("junkKeep", 32, 4, 128);
         WOOD_PLACED_LIFETIME = BUILDER.comment("搭方块清理时间（秒）")
-                .translation("config.promaid.wood.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
+                .translation("config.promaid.wood.placedLifetime").defineInRange("placedLifetime", 5, 3, 60);
         WOOD_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗斧耐久")
                 .translation("config.promaid.wood.softNoDurability").define("softNoDurability", true);
         WOOD_PILLAR_GUARD = BUILDER.comment("搭方块防掉落（潜行效果，速度不变）")
@@ -1796,6 +1969,47 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.memory.dualAgent").define("dualAgent", true);
         MEMORY_PERSONA_UNIFY = BUILDER.comment("人设统一（TLM 原版已有人设时，人格种子块降级为补充——只补人格参数/核心记忆，不再重复身份，冲突以 TLM 设定为准；关 = 双人设并存旧行为）")
                 .translation("config.promaid.memory.personaUnify").define("personaUnify", true);
+        // ===== 实测八百二十九c：移植 maidsoulcore v3 检索能力（默认取便宜的、稳的） =====
+        MEMORY_RECALL_GATE = BUILDER.comment("记忆召回闸门（移植自 MemoryRecallGate）：不必每轮都按完整口径投影——无新消息、未到最小间隔且话题未变时走精简投影省 token；显式回忆线索（记得/上次/之前）强制放行")
+                .translation("config.promaid.memory.recallGate").define("recallGate", true);
+        MEMORY_RECALL_MIN_INTERVAL = BUILDER.comment("召回最小间隔（秒）：两次完整召回之间至少隔这么久")
+                .translation("config.promaid.memory.recallMinInterval").defineInRange("recallMinInterval", 45, 0, 3600);
+        MEMORY_RECALL_MIN_MESSAGES = BUILDER.comment("触发重召回所需的最少新增消息数")
+                .translation("config.promaid.memory.recallMinMessages").defineInRange("recallMinMessages", 2, 0, 64);
+        MEMORY_RECALL_CACHE_TTL = BUILDER.comment("召回缓存有效期（秒）")
+                .translation("config.promaid.memory.recallCacheTtl").defineInRange("recallCacheTtl", 120, 0, 86400);
+        MEMORY_GRAPH_ENABLE = BUILDER.comment("关系图多跳召回（移植自 MemoryGraphStore）：query 命中实体后按 maxHops 跳传播，能答'主人的朋友是谁'这类多跳问题；关 = 回退一跳词面匹配")
+                .translation("config.promaid.memory.graphEnable").define("graphEnable", true);
+        MEMORY_GRAPH_HOPS = BUILDER.comment("关系图最大跳数（1=只含直接命中）")
+                .translation("config.promaid.memory.graphHops").defineInRange("graphHops", 2, 1, 4);
+        MEMORY_TEMPORAL_ENABLE = BUILDER.comment("时间路召回（移植自 MinecraftTimeQuery）：把'昨天/上周/N天前'解析成游戏日窗口按时距检索")
+                .translation("config.promaid.memory.temporalEnable").define("temporalEnable", true);
+        MEMORY_PROFILE_ITEMS = BUILDER.comment("结构化画像条目（移植自 UserProfile$ProfileItem）：主人画像拆成 category|key|置信度 的可去重条目并注入")
+                .translation("config.promaid.memory.profileItems").define("profileItems", true);
+        MEMORY_SNAPSHOT_ENABLE = BUILDER.comment("记忆快照（移植自 MemorySnapshotStore）：女仆第一人称'心里话'（≤200字），常驻注入提供情绪连续性")
+                .translation("config.promaid.memory.snapshotEnable").define("snapshotEnable", true);
+        MEMORY_SNAPSHOT_EVERY_N = BUILDER.comment("每 N 次摘要刷新/生成一次记忆快照")
+                .translation("config.promaid.memory.snapshotEveryN").defineInRange("snapshotEveryN", 3, 1, 50);
+        MEMORY_CONTINUITY_ENABLE = BUILDER.comment("续写队列（移植自 ConversationContinuityStore）：发提取请求前把这批对话落盘，回调成功才摘除——关服重启不丢未总结的对话")
+                .translation("config.promaid.memory.continuityEnable").define("continuityEnable", true);
+        MEMORY_EVENT_POLICY = BUILDER.comment("世界事件策略（移植自 WorldEventMemoryPolicy）：过滤原版背景噪音事件、抬升危险/承诺类事件重要度")
+                .translation("config.promaid.memory.eventPolicy").define("eventPolicy", true);
+        MEMORY_AUDIT_ENABLE = BUILDER.comment("记忆审计（移植自 MemoryV3Store 审计元数据）：纠错/删除写 audit_log.jsonl，排查'记忆怎么变了'有据可查")
+                .translation("config.promaid.memory.auditEnable").define("auditEnable", true);
+        MEMORY_VECTOR_ENABLE = BUILDER.comment("向量语义检索（移植自 MemoryVectorIndex/HttpEmbeddingClient）：默认关——需自备 OpenAI 兼容 embeddings 端点，配好后 '我们上次挖的那个矿' 这类同义改写也能召回")
+                .translation("config.promaid.memory.vectorEnable").define("vectorEnable", false);
+        MEMORY_EMBED_URL = BUILDER.comment("embeddings 端点（OpenAI 兼容，如 https://api.siliconflow.cn/v1/embeddings）")
+                .translation("config.promaid.memory.embedUrl").define("embedUrl", "");
+        MEMORY_EMBED_KEY = BUILDER.comment("embeddings 密钥")
+                .translation("config.promaid.memory.embedKey").define("embedKey", "");
+        MEMORY_EMBED_MODEL = BUILDER.comment("embeddings 模型名（如 BAAI/bge-m3）")
+                .translation("config.promaid.memory.embedModel").define("embedModel", "");
+        MEMORY_EMBED_DIM = BUILDER.comment("向量维度（0=不校验；模型维度不一致会自动跳过不崩）")
+                .translation("config.promaid.memory.embedDim").defineInRange("embedDim", 1024, 0, 8192);
+        MEMORY_EMBED_TIMEOUT_MS = BUILDER.comment("embeddings 请求超时（毫秒）")
+                .translation("config.promaid.memory.embedTimeout").defineInRange("embedTimeout", 5000, 500, 60000);
+        MEMORY_EMBED_BATCH = BUILDER.comment("embeddings 单批文本数上限")
+                .translation("config.promaid.memory.embedBatch").defineInRange("embedBatch", 16, 1, 128);
         BUILDER.pop();
 
         // ---- 感知（v1.5.95 新段：借鉴 maidsoulcore 感知变化检测）----
@@ -1830,6 +2044,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         PERCEPTION_LOOK_EXIT_DEG = BUILDER.comment("看向退出角度（度）")
                 .translation("config.promaid.perception.lookExitDeg")
                 .defineInRange("lookExitDeg", 55.0, 20.0, 90.0);
+        // 实测八百二十五：这条播报带语音（owner_looking.ogg），玩家要求每只女仆 1800 秒
+        // （30 分钟）最多一次——独立于 30 秒的同类事件限频，按女仆各自计时
+        PERCEPTION_LOOK_COOLDOWN = BUILDER.comment("「主人一直在看着我…」触发间隔（秒，每只女仆各自计时；默认 1800 = 30 分钟）")
+                .translation("config.promaid.perception.lookCooldown")
+                .defineInRange("lookCooldown", 1800, 5, 86400);
         BUILDER.pop();
 
         // ---- 情绪（v1.5.95 新段：PAD 情绪层）----
@@ -1967,7 +2186,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.threatDistance").defineInRange("threatDistance", 12, 4, 32);
         COMBAT_WATER_CLUTCH = BUILDER.comment("落地水（有水桶+坠落自动放水缓冲）")
                 .translation("config.promaid.combat.waterClutch").define("waterClutch", true);
-        COMBAT_WATER_FALL_DISTANCE = BUILDER.comment("落地水触发高度（格）")
+        COMBAT_WATER_FALL_DISTANCE = BUILDER.comment("落地水触发高度（格，默认 4）：坠落超过此值才放水——它是最小高度闸（防小跳/走路误放）；真正的放水时机是即将落地那一瞬（与重锤/空袭同款落点帧）")
                 .translation("config.promaid.combat.waterFallDistance").defineInRange("waterFallDistance", 4.0, 2.0, 20.0);
         // v1.5.199：水桶垫水——岩浆逃生时放水灭火（1 秒后收回）
         COMBAT_WATER_BUCKET_LAVA = BUILDER.comment("岩浆逃生放水（垫高后周围无水源且包里有水桶 → 在自己垫的方块上放水灭火，1 秒后收回；岩浆源可能变黑曜石）")
@@ -2002,6 +2221,13 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     COMBAT_PILLAR_SAFE_HEIGHT = BUILDER.comment("搭高安全高度（格，默认 5）：搭高惯性/补完垫到的高度——调高可配合落地水触发高度（跳下稳定触发落地水减速怪物），调低则更快下柱")
             .translation("config.promaid.combat.pillarSafeHeight")
             .defineInRange("pillarSafeHeight", 5, 2, 12);
+    // v1.5.394 实测八百二十：搭高目标 = 敌人 Y + 本值（默认 30）——对策监守者/远程 Boss。
+    // 旧口径只垫到"自身基点 + pillarSafeHeight（5 格）"，面对远程毫无还手之力还会被打到；
+    // 现在爬到她比敌人高 30 格（大多数远程 Boss 的射程/视线够不着，且远超其索敌高度）。
+    // 上限仍由 pillarMax（默认 30，可调 5~64）封顶；无威胁时回落到 pillarSafeHeight 兜底。
+    COMBAT_PILLAR_ABOVE_ENEMY = BUILDER.comment("搭高时高于敌方的格数（默认 30）：爬到她比敌人高这么多格——对策监守者/远程 Boss 的核心参数；上限受「至多向上搭多少个方块」封顶，无威胁时回落到「搭高安全高度」")
+            .translation("config.promaid.combat.pillarAboveEnemy")
+            .defineInRange("pillarAboveEnemy", 30, 2, 64);
     COMBAT_HEAL_COOLDOWN = BUILDER.comment("治疗食物冷却（tick）")
                 .translation("config.promaid.combat.healCooldown")
                 .defineInRange("healCooldown", 40, 10, 200);
@@ -2009,9 +2235,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.threatScan")
                 .defineInRange("threatScan", 5, 1, 40);
         // 实测三百六十三：逃跑删除——本项现供自保小幅走位（拉开身位）使用
-        COMBAT_FLEE_SPEED = BUILDER.comment("走位速度倍率（自保小幅走位拉开身位的移动加成，1.0=正常）")
+        // 实测八百二十八：默认 1.4 → 1.0（，
+        // 要求本 mod 不再给女仆额外速度加成）。1.0 = 不额外加速（走位仍按基础速度进行，
+        // 只是不再乘 1.4）；想要原来的"更快拉开身位"手感，可在面板把它调回 1.4。
+        COMBAT_FLEE_SPEED = BUILDER.comment("走位速度倍率（自保小幅走位拉开身位的移动加成，1.0=正常、不额外加速）")
                 .translation("config.promaid.combat.fleeSpeed")
-                .defineInRange("fleeSpeed", 1.4, 0.8, 3.0);
+                .defineInRange("fleeSpeed", 1.0, 0.8, 3.0);
         // v1.1.0 实测一百五十三：TLM 火焰保护饰品识别
         COMBAT_FIRE_PROTECT_BAUBLE = BUILDER.comment("火焰保护饰品识别（默认开）：女仆饰品栏佩戴 TLM 火焰保护饰品（火焰伤害免疫+受伤时给 15 秒抗火并喷灭火剂）时，着火/泡岩浆不再惊慌灭火/找水/往主人身边跑——饰品自己会处理；关闭 = 旧行为（着火照常走灭火链路）")
                 .translation("config.promaid.combat.fireProtectBauble").define("fireProtectBauble", true);
@@ -2032,7 +2261,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         SOUL_SPELL_OWNER_RADIUS = BUILDER.comment("主人收符半径（格，默认 24）：女仆与主人距离超过此值不自动收符（太远收不了，魂符在主人背包）")
                 .translation("config.promaid.combat.soulSpellOwnerRadius")
                 .defineInRange("soulSpellOwnerRadius", 24.0, 1.0, 256.0);
-        SOUL_SPELL_COOLDOWN_SECONDS = BUILDER.comment("收符冷却（秒，默认 60）：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）——实测四百零四：冷却从【释放时刻】重新起算（旧版沿用收符时刻，释放时剩 175 秒导致第二次作战必死不收）")
+        SOUL_SPELL_COOLDOWN_SECONDS = BUILDER.comment("收符冷却（秒，默认 60）：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）——冷却从【释放时刻】重新起算（旧版沿用收符时刻，释放时剩 175 秒导致第二次作战必死不收）")
                 .translation("config.promaid.combat.soulSpellCooldownSeconds")
                 .defineInRange("soulSpellCooldownSeconds", 60, 0, 86400);
         // 实测四百一十六：女仆自动复活（反馈："女仆死亡后 60 秒那个墓碑就会自己消失掉，
@@ -2089,7 +2318,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（落点预测偏一格即空摔，追求稳请用水桶）；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；触发高度/保持时长/下探格数各自独立可调（见下方三项），两者都有桶时优先用水")
                 .translation("config.promaid.combat.snowClutch").define("snowClutch", true);
         // v1.2.0：落地雪独立数值（旧版借用水的三项；默认与落地水一致，保持旧行为）
-        COMBAT_SNOW_FALL_DISTANCE = BUILDER.comment("落地雪触发高度（格，默认 4）：累计坠落高度超过此值才铺雪垫缓冲")
+        COMBAT_SNOW_FALL_DISTANCE = BUILDER.comment("落地雪触发高度（格，默认 4）：累计坠落超过此值才铺雪垫——它是最小高度闸（防小跳/走路误放）；真正的铺雪时机是即将落地那一瞬（与重锤/空袭同款落点帧）")
                 .translation("config.promaid.combat.snowFallDistance").defineInRange("snowFallDistance", 4.0, 2.0, 20.0);
         COMBAT_SNOW_HOLD = BUILDER.comment("落地雪保持时长（tick，默认 5）：铺出的细雪保留多久后收回（上限 100 tick = 5 秒 < 细雪冻伤线 140 tick——安全）")
                 .translation("config.promaid.combat.snowHold")
@@ -2127,7 +2356,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_MACE_TRIGGER_RANGE = BUILDER.comment("重锤起跳距离（格，默认 3）：女仆与目标的直线距离在此值内才起跳猛击（参考僵尸的 3 格）")
                 .translation("config.promaid.combat.maceTriggerRange").defineInRange("maceTriggerRange", 3, 1, 6);
         // v1.2.0（1.21.1 专属）：飞行作战（鞘翅 + 重锤 + 烟花三件齐备才激活）
-        COMBAT_FLIGHT_MODE = BUILDER.comment("飞行作战（1.21.1 专属，默认开）：新的作战模式（图标=鞘翅），女仆身上【鞘翅 + 重锤 + 烟花火箭】三件齐备时激活——进入后自己在胸甲穿鞘翅、主手换重锤（烟花不必拿在手上，副手留给你放盾牌/食物），照搬 JerotesWarehouse「类玩家单位穿鞘翅用长矛」那一套：目标升空/自身坠落时张开鞘翅滑翔、用烟花火箭推进接近，到目标上方后收翅俯冲用重锤猛砸（重锤下落加成要求不在滑翔状态，所以必须先收翅），落地后仍有烟花则继续起飞。三件缺任意一件 = 模式不激活，行为表现与普通攻击模式一致（地面近战）。本模式【不响应自主切换】。关闭 = 该模式完全不工作")
+        // v1.5.397 实测八百五十四：改名为「空袭·总开关」并挪到面板「空袭数值」页第一条（原来叫
+        // 「飞行作战」、藏在「主动参战」页；DIY 玩家按"空袭"找不到它，而扫帚页第一条就是总开关）
+        COMBAT_FLIGHT_MODE = BUILDER.comment("空袭·总开关（飞行作战 1.21.1 专属，默认开）：新的作战模式（图标=鞘翅），女仆身上【鞘翅 + 重锤 + 烟花火箭】三件齐备时激活——进入后自己在胸甲穿鞘翅、主手换重锤（烟花不必拿在手上，副手留给你放盾牌/食物），照搬 JerotesWarehouse「类玩家单位穿鞘翅用长矛」那一套：目标升空/自身坠落时张开鞘翅滑翔、用烟花火箭推进接近，到目标上方后收翅俯冲用重锤猛砸（重锤下落加成要求不在滑翔状态，所以必须先收翅），落地后仍有烟花则继续起飞。三件缺任意一件 = 模式不激活，行为表现与普通攻击模式一致（地面近战）。本模式【不响应自主切换】。关闭 = 近战空袭与远程空袭两个任务完全不工作；DIY 模式会关掉它，想只把空袭开回来就打开这一条")
                 .translation("config.promaid.combat.flightMode").define("flightMode", true);
         // v1.2.0 实测四百六十九：飞行作战免疫"鞘翅撞击伤害"（用户指定"开个后门"，默认开）
         COMBAT_FLIGHT_NO_WALL_DAMAGE = BUILDER.comment("飞行作战免疫鞘翅撞击伤害（默认开）：女仆在飞行作战滑翔中撞到方块不再受到 fly_into_wall 伤害——高速滑翔撞墙在飞行链路里很容易发生，一撞就掉血会打断连招；关闭则恢复原版撞击伤害")
@@ -2139,7 +2370,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 她只有 20 血——那属于"机制没接住"，不该由玩家承担。想按原版吃摔伤随时可关。
         COMBAT_FLIGHT_NO_FALL_DAMAGE = BUILDER.comment("空袭免疫摔落伤害（默认开）：开启后两种空袭模式（近战空袭/远程空袭）下的女仆完全不受摔落伤害——空袭常态是高空盘旋与收翅俯冲，落地水/雪万一没接住（背包没桶、落点被占、被打断）就是十几点伤害甚至摔死；开启本项即彻底免摔。关闭 = 恢复按落地水/雪（与重锤同款特殊落地缓冲）保护")
                 .translation("config.promaid.combat.flightNoFallDamage").define("flightNoFallDamage", true);
-        // v1.3.0(beta) 实测六百九十六：飞行时也把危险方块当"不可靠近"（玩家原话见
+        // v1.3.0(beta) 实测六百九十六：飞行时也把危险方块当"不可靠近"（
         // MaidFlightHazardGuard 的类注释）。危险表与判据与地面那套**同一份**（misc.dangerBlocks
         // + DangerBlocks.cellDangerous），本项只是"飞行这一侧要不要看它"的开关。
         COMBAT_FLIGHT_DANGER_AVOID = BUILDER.comment("飞行危险环境避让（默认开）：扫帚模式 / 空袭 / 飞行跟随的**飞行途中**，把危险方块表（misc.dangerBlocks：岩浆/火/岩浆块/仙人掌等）视为不可靠近——① 掠过的航段会穿进危险格时自动侧向绕开（绕不开就抬升爬过去），② 滑翔下沉到危险格上方时把竖直速度抬平、不往格里沉。**攻击动作不受影响**（空袭的收翅俯冲/俯冲推助推照旧朝目标冲）。关闭 = 飞行完全不看危险方块（旧行为）")
@@ -2151,7 +2382,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_HEAT_ESCAPE = BUILDER.comment("烫伤脱困（默认开）：扫帚模式 / 空袭 / 飞行跟随途中，女仆**真的**泡进岩浆或被点着时，立刻（本 tick 内）传送到最近的空气格——骑扫帚时【连人带扫帚一起搬】（与「扫帚牵引绳」同一段搬运代码，直接传她会被从扫帚上踹下来）。\n\n【与「飞行危险环境避让」是两层】那一条是**预测式**：她还没进去时侧向绕开 / 抬平不往格里沉；本项是**已经在里面了就出来**——被击退、被地形挤、烟花推偏都可能让她真贴上去，光靠预测挡不住。\n\n【为什么飞行一侧原先一条逃生都没有】地面的危险方块处理（险境脱离）明确豁免了「乘客」：扫帚模式的女仆**永远**是乘客（她骑的就是扫帚），空袭/飞行跟随又整天在空中——于是这三个模式里一条逃生都没有。\n\n【判据用原版那一个】isInLava / isOnFire，正是「这一 tick 原版要不要烧她」——与「窒息脱困用 isInWall」同源。泡在水里不算（水会浇灭火）；烫不疼的不算（抗火药水 / TLM 火焰保护饰品，那两样本就是泡岩浆不掉血）。\n\n【传送而非飘过去】岩浆每秒 4 点、她只有 20 血——等不起扫帚那种有时长的转向脱困，所以直接传送（清摔落 / 清速度）。落点 = 最近的、她放得下的空气格（站立格 + 头顶格都空气，且自身/脚下不是危险方块）；一圈都找不到就退一步只要能容下她（先脱离流体最重要）。1 秒冷却防抖。日志搜「烫伤脱困」。\n\n关闭 = 飞行中不再有这道保命传送（只剩预测式避让）")
                 .translation("config.promaid.combat.heatEscape").define("heatEscape", true);
         // v1.3.0(beta) 实测七百一十一 + 七百一十三【鞘翅渲染】：所有模式都画 + 用那件鞘翅自己的外观。
-        COMBAT_WING_RENDER = BUILDER.comment("鞘翅外观（默认开）：玩家原话「目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。」后又追加「我希望这种渲染是一种通解通法，而不是一些专门的适配。尽可能规避去专门适配的情况。」开启后两件事一起做——\n\n【① 所有模式下渲染】女仆只要胸甲槽穿着能滑翔的装备（原版鞘翅，或任何自称 canElytraFly 的模组滑翔装备，含鞘翅胸甲这类“滑翔护甲”）就画那一对翅膀：站着挖矿 / 走路 / 跟随 / 空闲时背上都有一对**折叠**的翅膀，飞起来（滑翔）才张开——与原版玩家「穿着鞘翅背上就有翅膀」完全同款（旧版只在飞行任务或正在滑翔时才画）。\n\n【② 用那件鞘翅自己的外观·三段式解析】① 先反射模组**已经公开**的取值口——只要这件物品有 getType() 且其返回对象有返回 ResourceLocation 的 getTexture()（伊卡洛斯之翼就是这样：getType().getTexture()/getTextureReversed()），或物品自身公开了 getElytraTexture(...)，就直接采信，**不写死任何类名**（该模组日后新增翅膀物品零改动即可画对）；② 问不到再查 MaidWingSkins 的静态表（只收“贴图藏在私有图层里、没有公开取值口”的模组：神秘遗物+）；③ 仍认不出退回原版 textures/entity/elytra.png——不会画错，只是外观是原版的。\n\n【为什么不能“完全不认识任何模组也画对”】NeoForge 的 IClientItemExtensions 里根本没有“告诉我你的鞘翅贴图”这个钩子（javap 实证），没有共享 API 就没有万能解。三段式是能达到的最通用形态：已支持模组零适配，新模组要么恰好符合第 ① 档的鸭子类型、要么加一条解析规则。\n\n【与「自推鞘翅」是两件事】能不能自己飞由「自推鞘翅·资格物品表」管；长什么样由本项这套解析器管——一件普通鞘翅（羽毛系）也能有自己的外观，只是它不会自推。\n\n关闭 = 旧行为（只在飞行任务/滑翔时画、且一律原版贴图）")
+        COMBAT_WING_RENDER = BUILDER.comment("鞘翅外观（默认开）：需求：目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。；需求补充：我希望这种渲染是一种通解通法，而不是一些专门的适配。尽可能规避去专门适配的情况。开启后两件事一起做——\n\n【① 所有模式下渲染】女仆只要胸甲槽穿着能滑翔的装备（原版鞘翅，或任何自称 canElytraFly 的模组滑翔装备，含鞘翅胸甲这类“滑翔护甲”）就画那一对翅膀：站着挖矿 / 走路 / 跟随 / 空闲时背上都有一对**折叠**的翅膀，飞起来（滑翔）才张开——与原版玩家「穿着鞘翅背上就有翅膀」完全同款（旧版只在飞行任务或正在滑翔时才画）。\n\n【② 用那件鞘翅自己的外观·三段式解析】① 先反射模组**已经公开**的取值口——只要这件物品有 getType() 且其返回对象有返回 ResourceLocation 的 getTexture()（伊卡洛斯之翼就是这样：getType().getTexture()/getTextureReversed()），或物品自身公开了 getElytraTexture(...)，就直接采信，**不写死任何类名**（该模组日后新增翅膀物品零改动即可画对）；② 问不到再查 MaidWingSkins 的静态表（只收“贴图藏在私有图层里、没有公开取值口”的模组：神秘遗物+）；③ 仍认不出退回原版 textures/entity/elytra.png——不会画错，只是外观是原版的。\n\n【为什么不能“完全不认识任何模组也画对”】NeoForge 的 IClientItemExtensions 里根本没有“告诉我你的鞘翅贴图”这个钩子（javap 实证），没有共享 API 就没有万能解。三段式是能达到的最通用形态：已支持模组零适配，新模组要么恰好符合第 ① 档的鸭子类型、要么加一条解析规则。\n\n【与「自推鞘翅」是两件事】能不能自己飞由「自推鞘翅·资格物品表」管；长什么样由本项这套解析器管——一件普通鞘翅（羽毛系）也能有自己的外观，只是它不会自推。\n\n关闭 = 旧行为（只在飞行任务/滑翔时画、且一律原版贴图）")
                 .translation("config.promaid.combat.wingRender").define("wingRender", true);
         // v1.3.0(beta)【鞘翅渲染·YSM 让位】：装了 YSM 且女仆用 YSM 模型时，滑翔期间不叠画我们的翅膀。
         COMBAT_WING_YSM_YIELD = BUILDER.comment("鞘翅外观·YSM 让位（默认开）：装了「是，史蒂夫模型」（YSM）且这只女仆用的是 **YSM 模型**时，她**滑翔期间**不再叠画我们那一对翅膀，让位给 YSM 模型自己那一对。\n\n【为什么只让滑翔这一档】YSM 内置模型里只有两件的翅膀与鞘翅有关：`21_saint` 把翅膀骨的显隐挂在 `ysm.has_elytra`（只认原版鞘翅）上、滑翔才张开；`09_hailuo` 的 `Elytra` 骨平时 `scale:0` 藏起来。也就是说**站着/走路时 YSM 模型背上没有翅膀**——那一档照旧由我们画（否则 YSM 模型下站着就没翅膀了），只有滑翔那一段两边都有、会叠在一起。本项就在那一刻让位。\n\n【对原版鞘翅才需要】YSM 只认 `minecraft:elytra`（字节码实证），我们支持的模组滑翔装备（伊卡洛斯之翼 / 神秘遗物+ / 自带外观的鞘翅胸甲）YSM 一律不认——那些滑翔时照旧由我们画，本项不介入。\n\n【关了会怎样】滑翔时我们和 YSM 各画一对，若该 YSM 模型自身有翅膀就是两对重叠（`21_saint` / `09_hailuo` 这类）。关闭 = 旧行为")
@@ -2163,14 +2394,14 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 被这条链路取代（TLM 原生近战不再出手）。
         RIPTIDE_DASH_ENABLE = BUILDER.comment("激流三叉戟旋转冲击（默认开）：攻击模式 / 空袭下主手拿着【激流】三叉戟时，**她原本那一记普通挥砍会被换成旋转冲击**——近身 4 格内替换（地面要站在地上；空袭的**收翅俯冲那一记在空中也替换**：那一下本来就在空中、实战价值更大），旋转 16 tick（与玩家同款：平躺 + 高速自转），撞到谁就结算一次伤害（攻击力 + 附魔，同一目标每次突进只打一下；空中旋转期间不自我摔伤）；触发时机就是她的攻击时机，走路、索敌、排班等一律不变。默认开——这才是激流这个附魔存在的意义；关闭 = 激流三叉戟只当普通三叉戟挥砍")
                 .translation("config.promaid.combat.riptideDash").define("riptideDash", true);
-        // v1.2.4 实测六百四十一 / 六百四十二：激流推进剂的力度倍数（用户反馈：飞行格数异常 100+ 格 / 起飞
+        // v1.2.4 实测六百四十一 / 六百四十二：激流推进剂的力度倍数（
         // 特别高（配合重锤弹射起跳时轻松 100 格）→ 设计决定"改为拟真烟花，数值跟玩家在水中使用
         // 三叉戟（还要判定附魔等级）一致"）。结论：力度照搬玩家在**水里**那一记（默认 1.0 不打折）、
         // 形状走烟花式递推（竖直也一起管）——推导见字段声明处与 MaidRiptideBoost 的类文档。
         // v1.2.4 实测六百四十二：实测"激流三甚至还没有俯冲飞行自己飞得快，缺乏实战价值"，于是把
         // **力度**整体 ×1.3（基线写死在 MaidRiptideBoost.PLAY_SCALE，本项在那个基线之上再乘），
         // 语义从"折扣"改成"倍数"、范围放宽到 0.1~2.0。
-        COMBAT_RIPTIDE_FLIGHT_SCALE = BUILDER.comment("激流三叉戟·推进剂力度倍数（默认 1.0 = 不打折，范围 0.1~2.0）：用激流三叉戟当【推进剂】时（起飞 / 飞行跟随补推 / 空袭的掉高抬升与俯冲冲刺），力度 = 原版 `3.0×(1+等级)/4` × **1.3**（实测六百四十二 的调参基线） × 本项（判附魔等级：I 1.95 / II 2.93 / III 3.90 格/tick）。\n\n【行为形状走烟花】推进剂不是「一次性冲量」，而是像挂载烟花那样**每 tick 把整个速度矢量**往「视线 × 当前力度」上拉（`v ← v×0.5 + 视线×(力度/2)`，与原版挂载烟花同形）——所以**竖直分量也归推进管**（旧版只压水平，竖直没人管，起飞就会一路窜高）。\n\n【数值取水里的那一记】当前力度按**玩家在水里的阻力 ×0.80/tick** 递减，掉到滑翔常态（0.35 格/tick）即收手。行程按递推式逐 tick 累加：I ≈ 7.6 格 / II ≈ 12.5 格 / III ≈ 17.3 格（闭式 力度 ÷ (1 − 0.80) = 9.75 / 14.6 / 19.5 是理想上限）。六百四十一 照搬玩家那一记（III 级 12.9 格）实测偏慢——「激流三甚至还没有俯冲飞行自己飞得快」——所以六百四十二 起基线 ×1.3。\n\n【什么时候调小 / 调大】想更省更稳往 0.1 调；想回到六百四十一 的手感调到 1÷1.3 ≈ 0.77；想更猛可以往 2.0 调。0.1 仍是原版力度的十分之一。\n\n【只管推进剂】近战那一记「朝目标的旋转冲击」（combat.riptideDash）照旧用原版矢量，不受本项影响")
+        COMBAT_RIPTIDE_FLIGHT_SCALE = BUILDER.comment("激流三叉戟·推进剂力度倍数（默认 1.0 = 不打折，范围 0.1~2.0）：用激流三叉戟当【推进剂】时（起飞 / 飞行跟随补推 / 空袭的掉高抬升与俯冲冲刺），力度 = 原版 `3.0×(1+等级)/4` × **1.3**（调参基线） × 本项（判附魔等级：I 1.95 / II 2.93 / III 3.90 格/tick）。\n\n【行为形状走烟花】推进剂不是「一次性冲量」，而是像挂载烟花那样**每 tick 把整个速度矢量**往「视线 × 当前力度」上拉（`v ← v×0.5 + 视线×(力度/2)`，与原版挂载烟花同形）——所以**竖直分量也归推进管**（旧版只压水平，竖直没人管，起飞就会一路窜高）。\n\n【数值取水里的那一记】当前力度按**玩家在水里的阻力 ×0.80/tick** 递减，掉到滑翔常态（0.35 格/tick）即收手。行程按递推式逐 tick 累加：I ≈ 7.6 格 / II ≈ 12.5 格 / III ≈ 17.3 格（闭式 力度 ÷ (1 − 0.80) = 9.75 / 14.6 / 19.5 是理想上限）。六百四十一 照搬玩家那一记（III 级 12.9 格）偏慢——「激流三甚至还没有俯冲飞行自己飞得快」——所以基线 ×1.3。\n\n【什么时候调小 / 调大】想更省更稳往 0.1 调；想回到六百四十一 的手感调到 1÷1.3 ≈ 0.77；想更猛可以往 2.0 调。0.1 仍是原版力度的十分之一。\n\n【只管推进剂】近战那一记「朝目标的旋转冲击」（combat.riptideDash）照旧用原版矢量，不受本项影响")
                 .translation("config.promaid.combat.riptideFlightScale").defineInRange("riptideFlightScale", 1.0, 0.1, 2.0);
         // v1.3.0(beta) 实测七百一十【自推鞘翅】：不靠烟花也能飞的那一类模组鞘翅（三件套的"推进剂"
         // 再多一条腿）。默认表 = 伊卡洛斯之翼空域系 6 件 + 神秘遗物+ 两件（逐条反编译确认它们
@@ -2204,7 +2435,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_RANGED_PUSH = BUILDER.comment("远程空袭近身弹开（默认开）：怪物贴到 3 格内时，女仆会被施加一个【远离怪物】的速度矢量并保持 1.5 秒，防止她在远程攻击时仍往敌人身上飞、下落途中被贴脸打死。只弹开女仆自己、不弹开怪物——她脱离的同时也就离开了输出位，且在狭小空间（墙角/洞穴）里跑不掉，所以敌人仍有命中机会。关闭 = 恢复旧行为（贴着怪物盘旋）")
                 .translation("config.promaid.combat.flightRangedPush").define("flightRangedPush", true);
         // v1.2.0 实测五百四十七：空袭牵引绳（用户指定半径 100 格，0 = 关闭）
-        COMBAT_FLIGHT_RECALL_DISTANCE = BUILDER.comment("空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到参照点】（3D 距离，水平+竖直一起算）时，立刻把她传送回去——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。参照点是【非守家=主人；守家(home)=她的工作区圈心】（实测六百九十二：守家时主人走多远都不再把她拽走，拉回来的是家/岗位）。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则（48 格，且守家/坐姿/干活都有豁免）；主人跨维度时也不抢——那一路由跨维度跟随在本轮攻击结束后处理（立刻抢会打断扑击）。触发时会给她主人发一条系统消息（10 秒最多一条）。")
+        COMBAT_FLIGHT_RECALL_DISTANCE = BUILDER.comment("空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到参照点】（3D 距离，水平+竖直一起算）时，立刻把她传送回去——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。参照点是【非守家=主人；守家(home)=她的工作区圈心】（守家时主人走多远都不再把她拽走，拉回来的是家/岗位）。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则（48 格，且守家/坐姿/干活都有豁免）；主人跨维度时也不抢——那一路由跨维度跟随在本轮攻击结束后处理（立刻抢会打断扑击）。触发时会给她主人发一条系统消息（10 秒最多一条）。")
                 .translation("config.promaid.combat.flightRecallDistance")
                 .defineInRange("flightRecallDistance", 100, 0, 1000);
         // v1.2.0（2026-09-18）：空袭·法术层（需求："用空袭的默认武器的同时进行法术释放"）
@@ -2214,9 +2445,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.flightSpellCastInterval")
                 .defineInRange("flightSpellCastInterval", 20, 5, 200);
         // v1.2.0 实测五百七十二：位移法术分两类——"提供高度"（起飞/补高）与"提供速度"（飞行加速）
-        COMBAT_FLIGHT_DASH_CLIMB = BUILDER.comment("空袭·位移法术【提供高度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：用于**平地起飞**与**补高**——朝向**完全照抄烟花**（实测五百七十八 A 方案）：起飞/爬升用烟花那一套（地面目标＝背离敌人＋抬头，目标高出 10 格以上才朝目标爬），并清掉法术模组那份施法目标（否则它施法前会把朝向拧平）。默认表里放了【升腾】irons_spellbooks:ascension（原生的向上冲量）与【烈焰冲锋】irons_spellbooks:burning_dash（沿视线冲刺、垂直分量保留，所以抬头瞄着放同样能起飞——只带这一个也能上天）。没有烟花/羽扇时，它也是空袭模式能否激活的那件「推进剂」")
+        COMBAT_FLIGHT_DASH_CLIMB = BUILDER.comment("空袭·位移法术【提供高度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：用于**平地起飞**与**补高**——朝向**完全照抄烟花**（A 方案）：起飞/爬升用烟花那一套（地面目标＝背离敌人＋抬头，目标高出 10 格以上才朝目标爬），并清掉法术模组那份施法目标（否则它施法前会把朝向拧平）。默认表里放了【升腾】irons_spellbooks:ascension（原生的向上冲量）与【烈焰冲锋】irons_spellbooks:burning_dash（沿视线冲刺、垂直分量保留，所以抬头瞄着放同样能起飞——只带这一个也能上天）。没有烟花/羽扇时，它也是空袭模式能否激活的那件「推进剂」")
                 .translation("config.promaid.combat.flightDashClimb").define("flightDashClimb", true);
-        COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：在盘旋的**掉高窗口**里（与烟花同窗口、同朝向：抬头 45° 朝目标）冲一口给速度续命（鞘翅掉速就是掉高度）——实测五百七十八：窗口之外不再放，否则等于当着敌人的面从盘旋圈上切进去。这一类只负责「在空中加速」，不参与起飞判定、也不参与维持高度；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
+        COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：在盘旋的**掉高窗口**里（与烟花同窗口、同朝向：抬头 45° 朝目标）冲一口给速度续命（鞘翅掉速就是掉高度）——窗口之外不再放，否则等于当着敌人的面从盘旋圈上切进去。这一类只负责「在空中加速」，不参与起飞判定、也不参与维持高度；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
                 .translation("config.promaid.combat.flightDashBoost").define("flightDashBoost", true);
         COMBAT_FLIGHT_DASH_CLIMB_SPELLS = BUILDER.comment("【提供高度】的法术表（填完整法术 id）：用于起飞与补高；一个法术可以同时出现在两张表里。默认 ascension + burning_dash（后者抬头瞄着放也能顶人起来，这样「只带烈焰冲锋」的女仆同样能平地起飞）。id 写错时表现是【这张表里排第一的法术永远不生效】——六百一十四 起挑法术前会校验一遍，认不出的在 logs/promaid.log 里报一条「法术兼容 … 认不出来，已被跳过」（同一个 id 只报一次；最常见的原因是少写复数 s，ISS 的命名空间是 irons_spellbooks:）")
                 .translation("config.promaid.combat.flightDashClimbSpells")
@@ -2231,7 +2462,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_DASH_INTERVAL = BUILDER.comment("位移法术间隔（tick，默认 40 = 2 秒）：两次起飞/冲刺/补高之间的最短间隔（我们这边的节流下限）。搭配下面那条「尊重法术自身冷却」一起看——默认下真实间隔取两者较大值")
                 .translation("config.promaid.combat.flightDashInterval")
                 .defineInRange("flightDashInterval", 40, 10, 600);
-        COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN = BUILDER.comment("位移法术·【提供速度】尊重法术自身冷却（默认开）：只管空中冲刺那一类——开启时写回冷却取 max(空袭位移间隔, 法术自身冷却)（例：烈焰冲锋原版 10 秒），她不会比玩家更频繁；关掉则那一类也完全按上面的间隔来。\n\n注意【提供高度】（起飞/补高）**始终不受法术自身冷却约束**、只按上面的间隔放——依据是本模组对位移手段一向让女仆比玩家宽松（激流三叉戟就是忽略原版「必须在水中/雨中」的限制），而且「平地起飞」本身就要求她没烟花也能持续飞：若这里也卡冷却，升腾 15 秒一记只抬约 6 格后缓降（实测），需求等于没满足")
+        COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN = BUILDER.comment("位移法术·【提供速度】尊重法术自身冷却（默认开）：只管空中冲刺那一类——开启时写回冷却取 max(空袭位移间隔, 法术自身冷却)（例：烈焰冲锋原版 10 秒），她不会比玩家更频繁；关掉则那一类也完全按上面的间隔来。\n\n注意【提供高度】（起飞/补高）**始终不受法术自身冷却约束**、只按上面的间隔放——依据是本模组对位移手段一向让女仆比玩家宽松（激流三叉戟就是忽略原版「必须在水中/雨中」的限制），而且「平地起飞」本身就要求她没烟花也能持续飞：若这里也卡冷却，升腾 15 秒一记只抬约 6 格后缓降，需求等于没满足")
                 .translation("config.promaid.combat.flightDashBoostRespectCooldown")
                 .define("flightDashBoostRespectCooldown", true);
         COMBAT_FLIGHT_SPELL_CAST_RANGE = BUILDER.comment("空袭施法距离（格，默认 24）：空袭中只在目标进入这个 3D 距离内才发起施法。默认 24 与法术模组自己的 maxSpellRange 一致（它的任务行为用的就是这个上限）；调大可让她在更远处起手（法术飞行途中还能命中），调小 = 只有贴近了才放法术")
@@ -2253,6 +2484,30 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 不喂普通食物、不给不死图腾。判据见 MaidAidOwnerBehavior.aidFriendlyUnits。
         AID_FRIENDLY_UNITS = BUILDER.comment("支援其他友方单位（默认开）：主人的其他宠物（狼/猫/马等）与同主人的模组仆从（诡厄巫法红石巨兽等）低血/着火/中毒时，自动投药水、金苹果、牛奶蜂蜜支援它们（判据 = 归属同一主人）。它们没有饥饿值，所以不喂普通食物、不给不死图腾；关闭 = 只支援主人与女仆")
                 .translation("config.promaid.combat.aidFriendlyUnits").define("aidFriendlyUnits", true);
+        // 实测八百一十七（）：是否支援亡灵单位。
+        // 亡灵（僵尸/骷髅仆从、凋灵系等）在支援里是「生死颠倒」的一类——治疗药水对它们是扣血、
+        // 伤害药水才是回血（见 MaidSupportPolicy 的亡灵档与 MaidAidOwnerBehavior.isInvertedHeal）。
+        // 关掉 = 支援链完全跳过亡灵目标（两张分类表原样保留，只是不再对亡灵动手）。
+        AID_UNDEAD_UNITS = BUILDER.comment("支援亡灵单位（默认开）：对亡灵类友军/同主女仆（僵尸/骷髅仆从、"
+                + "凋灵系等「生死颠倒」生物——治疗药水对它们反而扣血、伤害药水才是回血）"
+                + "自动换用亡灵专属池（伤害药水 + 走后门金苹果），并播专属语音「我知道这在对你有用！」；"
+                + "关闭 = 支援链完全跳过亡灵目标（两张支援分类表原样保留）。"
+                + "\n\n【与「支援其他友方单位」的区别】那一项管「非主人、非女仆的友军要不要支援」，"
+                + "本项管「亡灵这一类要不要支援」——两者独立，都开才支援亡灵友军。")
+                .translation("config.promaid.combat.aidUndeadUnits").define("aidUndeadUnits", true);
+        // 实测八百一十七（续）：
+        //
+        // 支援分类表（她给主人/姐妹投什么，就是她自己能喝什么，一份白名单管两头）。
+        // 关掉 = 自用退回旧行为：不看两张表，仍按「效果/硬编码治疗食物名单 + 投喂黑名单」。
+        AID_SELF_USE = BUILDER.comment("自用也走支援表（默认开）：女仆【自己】喝药水/吃食物时，"
+                + "也按「支援物品分类」那两张表（通用 / 亡灵）判定——与「支援女仆」同一份白名单："
+                + "标「禁用」的药水她自己也绝不喝，标「回复」的只在低血时喝，标「对策」的只在"
+                + "对应处境喝，标「增益」的只在战局助战时喝。"
+                + "\n\n【注意】女仆自己不是亡灵生物（她不会被治疗药水伤到），所以她自用一律走"
+                + "「通用」表，与「亡灵支援表」无关。"
+                + "\n\n关闭 = 自用退回旧行为（不看这两张表，仍按效果自动挑 + 治疗食物名单），"
+                + "与旧版逐字节一致。")
+                .translation("config.promaid.combat.aidSelfUse").define("aidSelfUse", true);
         // v1.5.301：范围上限 18 → 20——旧版注释写"0-20"但 defineInRange 上限 18：
         // 面板填 20 被 Forge 静默钳制回 18（输入框显示 20、实际生效 18），
         // 饱食度 18~19 时永远不喂（反馈："那个修改按键要真实有效"——测试调 20
@@ -2269,10 +2524,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.2.0 实测五百二十五：补上【不祥之瓶】——它在 1.21 带食物组件、能"喝"，
         // 于是被通用判定当成普通食物，喂下去等于给女仆挂【不祥之兆】（袭击/试炼触发条件）。
         // 玩家喂她是为了回饱食度，不该顺手给她上一层负面标记，故默认拉黑。
-        AID_FOOD_BLACKLIST = BUILDER.comment("投喂食物黑名单（完整注册名，逗号分隔；留空 = 只按\"能吃\"判定，所有食物可喂）。"
-                + "\n\n【剩余次数细分（实测五百八十）】能喂好几次的物品（水壶这类耐久容器）可以按剩余次数分开禁："
-                + "条目写成「完整注册名#剩余次数」（例：mod:water_canteen#1 = 只剩 1 次的别喂），"
-                + "不带 # 的裸注册名 = 该物品**任意剩余次数**都不能喂（旧配置语义不变）。")
+        AID_FOOD_BLACKLIST = BUILDER.comment("投喂食物黑名单（完整注册名，逗号分隔；留空 = 只按\"能吃\"判定，所有食物可喂）。\n\n【剩余次数细分】能喂好几次的物品（水壶这类耐久容器）可以按剩余次数分开禁：条目写成「完整注册名#剩余次数」（例：mod:water_canteen#1 = 只剩 1 次的别喂），不带 # 的裸注册名 = 该物品**任意剩余次数**都不能喂（旧配置语义不变）。")
                 .translation("config.promaid.combat.aidFoodBlacklist")
                 .defineList("aidFoodBlacklist", java.util.List.of(
                         "minecraft:rotten_flesh",
@@ -2292,6 +2544,37 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                         "minecraft:golden_apple",
                         "minecraft:enchanted_golden_apple",
                         "minecraft:ominous_bottle"), o -> o instanceof String s && !s.isEmpty());
+        // ── 实测八百一十七：支援物品两张表（通用 / 亡灵）──
+        //
+        //
+        // 这两张是【黑名单】（与「投喂食物」同款：不勾 = 列入黑名单），留空 = 不排除任何支援物品
+        // → 与本功能引入前逐字节一致。记账键：药水 = 物品id|药水id（裸物品 id = 该形态所有药水）；
+        // 其它物品 = 物品id（耐久容器可带 #剩余次数）。
+        AID_SUPPORT_CATEGORY = BUILDER.comment("通用支援品分类表（条目 = 「键=分类」，逗号分隔；留空 = 所有支援品按效果自动推断）。"
+                + "\n\n【管什么】女仆【非亡灵】目标（主人 / 同主女仆 / 友军单位）投喂与投掷的消耗品——"
+                + "药水（饮用/喷溅/滞留）、金苹果/附魔金苹果、牛奶桶、蜂蜜瓶，以及自带效果的普通食物"
+                + "（腐肉/蜘蛛眼/河豚/生鸡肉/可疑炖菜等）。普通无效果食物不在这里，由「投喂食物勾选」管。"
+                + "\n\n【四类分类】counter = 对策性（只在对应处境/负面效果出现时才用：抗火=着火时、水肺=溺水时、"
+                + "牛奶/蜂蜜=有负面效果时）；buff = 增益性（战局一开始（附近有威胁）就能用，可给自己/主人/其他友军，"
+                + "不等低血也不等 debuff）；heal = 生命回复性（只在目标血量低于「治疗触发血量」时才用，"
+                + "见 combat.aidHealthThreshold，默认 0.3）；off = 禁用。"
+                + "\n未在表中列出的物品 = 按效果自动推断（治疗/再生→回复；抗火/水肺/牛奶/蜂蜜→对策；"
+                + "力量/迅捷/跳跃/夜视/抗性/生命提升/吸收等→增益；毒/凋零/即时伤害等有害效果→禁用）。"
+                + "\n\n【条目写法】药水 = 「物品id|药水id=分类」（例：minecraft:splash_potion|minecraft:healing=heal；"
+                + "裸物品 id = 该形态所有药水）；其它物品 = 「物品id=分类」，耐久容器可带「#剩余次数」。"
+                + "\n\n【面板】战斗与自保 → 贴身辅助 → 「支援物品分类」，点图标循环切换 自动·对策·增益·回复·禁用。")
+                .translation("config.promaid.combat.aidSupportCategory")
+                .defineList("aidSupportCategory", java.util.List.of(),
+                        o -> o instanceof String s && !s.isEmpty());
+        AID_SUPPORT_CATEGORY_UNDEAD = BUILDER.comment("亡灵支援品分类表（条目 = 「键=分类」，逗号分隔；留空 = 按效果自动推断）。"
+                + "\n\n【为什么要单独一张】本模组对亡灵（僵尸/骷髅仆从、凋灵系 isInvertedHealAndHarm）有一条「生死颠倒」后门："
+                + "治疗药水对亡灵是【扣血】、伤害药水才是【回血】、再生会被原版拒收。亡灵链自动换池"
+                + "（用伤害药水 + 走后门的金苹果），本表就是让你单独把关这个池子："
+                + "默认推断会把 minecraft:instant_health 判为【禁用】、minecraft:instant_damage 判为【回复】、minecraft:regeneration 也判为【禁用】（亡灵免疫再生，原版拒收）。"
+                + "\n\n【分类与写法】同「通用支援品分类表」（counter/buff/heal/off）。")
+                .translation("config.promaid.combat.aidSupportCategoryUndead")
+                .defineList("aidSupportCategoryUndead", java.util.List.of(),
+                        o -> o instanceof String s && !s.isEmpty());
         // ── 实测五百七十一：喂水配置（软联动「口渴」Thirst Was Taken）——
         // 构建期判定：模组在 → 注册；不在 → 保持 null。面板（贴身辅助小节）同步按
         // ThirstCompat.available() 条件渲染，toml 里也不会出现这两项。
@@ -2301,10 +2584,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             AID_DRINK_MIN_PURITY = BUILDER.comment("喂水最低水质（0-3，默认 2=可接受的）：喂水时【装水容器】必须达到这个水质等级——口渴模组自己的四档：0 肮脏 / 1 有点脏 / 2 可接受的 / 3 纯净。反馈：如果女仆给玩家喂脏水那么反而会耽误玩家，所以默认只喂可接受的及以上；只对装水容器生效（果汁/牛奶这类没有水质概念的饮品不受影响）；填 0 = 脏水也喂")
                 .translation("config.promaid.combat.aidDrinkMinPurity")
                 .defineInRange("aidDrinkMinPurity", 2, 0, 3);
-        AID_DRINK_WHITELIST = BUILDER.comment("喂水白名单（完整注册名，逗号分隔）：只喂名单里、且「口渴」模组认识（能回口渴值）的饮品——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶），其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水。"
-                + "\n\n【剩余次数细分（实测五百八十）】能喝好几次的容器（水壶这类）可以按剩余次数分开允许："
-                + "条目写成「完整注册名#剩余次数」（例：mod:water_canteen#4 = 只喂满的那个），"
-                + "不带 # 的裸注册名 = 该物品**任意剩余次数**都算命中（旧配置语义不变）")
+        AID_DRINK_WHITELIST = BUILDER.comment("喂水白名单（完整注册名，逗号分隔）：只喂名单里、且「口渴」模组认识（能回口渴值）的饮品——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶），其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水。\n\n【剩余次数细分】能喝好几次的容器（水壶这类）可以按剩余次数分开允许：条目写成「完整注册名#剩余次数」（例：mod:water_canteen#4 = 只喂满的那个），不带 # 的裸注册名 = 该物品**任意剩余次数**都算命中（旧配置语义不变）")
                     .translation("config.promaid.combat.aidDrinkWhitelist")
                     .defineList("aidDrinkWhitelist", java.util.List.of(
                             "minecraft:potion",
@@ -2369,7 +2649,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.2.2 实测六百二十一：把实测一百八十一的「模组任务优先」做成开关
         //（旧行为默认开）——有人觉得"池里有模组任务就把原版通用任务整体踢掉"太笼统，
         // 关掉即纯按权重随机（原版/模组两条权重照旧生效）。
-        COMBAT_VANILLA_YIELD_TO_MOD = BUILDER.comment("模组任务优先让位（默认开）：开 = 候选池里只要有模组专属攻击任务，原版通用五件套（近战/弓/弩/三叉戟/弹幕）就整体让位（实测一百八十一的行为——拔刀剑同时被原版攻击任务认作武器，旧版 1:2 权重随机会有 1/3 概率落到原版攻击上）；关 = 不整体让位，原版与模组同池纯按权重随机。\n\n「战斗模式分类表」里点名写过的任务两条路都不受本项影响（点名优先）。")
+        COMBAT_VANILLA_YIELD_TO_MOD = BUILDER.comment("模组任务优先让位（默认开）：开 = 候选池里只要有模组专属攻击任务，原版通用五件套（近战/弓/弩/三叉戟/弹幕）就整体让位（旧版的行为——拔刀剑同时被原版攻击任务认作武器，旧版 1:2 权重随机会有 1/3 概率落到原版攻击上）；关 = 不整体让位，原版与模组同池纯按权重随机。\n\n「战斗模式分类表」里点名写过的任务两条路都不受本项影响（点名优先）。")
                 .translation("config.promaid.combat.vanillaYieldToMod").define("vanillaYieldToMod", true);
         // v1.2.4 实测六百二十五（反馈："包里没有法术书却仍然显示法术类的切换选项…而那个
         // 自主战斗切到法术是真的"）：附属把"法术装备"的定义交给各前置附属的 provider，
@@ -2403,6 +2683,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.autoSwitchRestore").define("autoSwitchRestore", true);
         COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，200=10 秒）：威胁消失后持续安全这么久才切回原任务")
                 .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 200, 60, 3600);
+        COMBAT_FORCE_ALL_SCHEDULE = BUILDER.comment("参战时把作息临时切「全天」（默认开）：TLM 的攻击任务行为全部挂在 WORK 活动下，而当前活动由 TLM 自家作息按时间映射——夜里白班女仆处于 REST（睡觉），WORK 不活动 → 自主战斗把任务切了、她却站在那不动（需求：晚上忘了调工作时间，主人被打只会切模式、女仆却不攻击，看着奇怪）。打开后参战瞬间把作息换成「全天」（WORK 常驻），她才会真的起身还手；威胁消失后随任务一起复原（默认 200 tick = 10 秒安全期后）。关掉 = 回到旧行为（作息原样，夜里可能只切任务不出手）。\n\n【不影响】开了排班书的女仆本就不参与自主战斗（参战上游整体让位），此条对她无效。")
+                .translation("config.promaid.combat.forceAllSchedule").define("forceAllSchedule", true);
         COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST = BUILDER.comment("还原判定威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算\"威胁消失\"、开始还原计时——独立于响应半径（远处怪不该让女仆一直卡在战斗里回不了岗）；战斗中玩家手动换的任务不会被还原翻回去")
                 .translation("config.promaid.combat.autoSwitchRestoreThreatDist").defineInRange("autoSwitchRestoreThreatDist", 8, 2, 32);
         // v1.1.0 实测八十四：僵局逃逸——够不着的敌对生物不再让女仆永远卡在战斗任务
@@ -2419,6 +2701,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 15, 0, 512);
         COMBAT_ASSIST_RADIUS = BUILDER.comment("援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3）：两条一起管——①【援护】她的战斗任务没有目标时，优先把「主人最近的仇人」（最近打主人的人，其次主人最近打的人，都只在 5 秒窗口内）当成目标去帮；②【撒手】她的目标离她**和**主人都超过这个半径时松开目标（追一个已经跑掉的怪正是「追出去→被圈拽回来」的循环源头）。援护对象必须过完整合法性链：她的任务认它是敌人 + 非友军 + 看得见（隔着墙不写目标）+ 在她工作圈内；工作圈随「战斗时临时扩圈」一起放大。0 = 两条一起关（0~64）")
                 .translation("config.promaid.combat.assistRadius").defineInRange("assistRadius", 16, 0, 64);
+        // 实测八百四十：这两条原先只在 mixin 里硬问 isDiy（没有配置项）——开发者要求落成开关
+        COMBAT_SWEEP_ALWAYS = BUILDER.comment("平A必横扫（默认开）：她每次平A都触发横扫之刃（没带该附魔时按 50% 攻击力倍率结算），跳劈（真·空中攻击）保持单体暴击不横扫——TLM 原版只在带横扫之刃附魔时才横扫，所以开着的手感与玩家一致。关闭 = 回 TLM 原版（只有带附魔才横扫，空中照扫）")
+                .translation("config.promaid.combat.sweepAlways").define("sweepAlways", true);
+        COMBAT_ATTACK_THOSE_ATTACKING_US = BUILDER.comment("反击类型判不出的攻击者（默认开）：正在打她/主人、或刚打过我们这一边的生物，即使它的类型在 TLM 的闸门里算「中立/友方」也当敌人打（给 ALEX 的生物这类「扑上来咬人、类型却判不出威胁」的模组生物用；只在它真的在攻击我们的 5 秒窗口内成立，主人/同主女仆/友军照旧不碰）。关闭 = 回 TLM 原版类型闸")
+                .translation("config.promaid.combat.attackThoseAttackingUs").define("attackThoseAttackingUs", true);
         BUILDER.pop();
 
         // ---- v1.3.0「扫帚模式」（配置面板：战斗与自保 → 扫帚模式）----
@@ -2426,41 +2713,41 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 默认值刻意"装上就是能用的样子"：总开关开、盘旋 8 格、悬停 2 格、接敌爬升 15 格（实测六百八十二）、
         // 平时跟随主人、受活动范围约束（守家女仆不会为了跟主人越界）。
         BUILDER.comment("扫帚模式（配置面板：战斗与自保 → 扫帚模式）").translation("config.promaid.broom").push("broom");
-        COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件。\n\n【v1.3.2 实测六百五十六 的飞行顺序】骑上 → **原地往上抬 1 格悬停**（头顶被顶住就地悬停）→ 没敌人时按下面那条【跟随主人】飞 → 遇到敌人先**向上爬 8 格**（顶住就就地悬停）→ 再绕着敌人盘旋开火。两个高度是代码里的常量（RISE_BLOCKS / CLIMB_BLOCKS）。\n\n【移动速度照搬原版】速度、阻尼、无输入时的衰减全部取自 TLM 给玩家驾驶写的 PlayerBroomControl：水平上限 0.75 格/tick、竖直 0.30（原版跳跃键那一档是 0.5，这里刻意收一半），**只慢不快**\n\n【v1.3.3 两条实测修正】①「坐上去之后原地左右乱晃、被反复拉回、不上升」的根因是**客户端也在驱动扫帚**，与服务端的「取走即清」意图队列抢同一份数据（原版 travelRidden 是从 isControlledByLocalInstance 那一侧才施加位移的，我们漏了这道闸）；现在只让服务端驱动。②她坐在椅子/别的载具上时原来的 startRiding 恒失败（原版要求「当前不是乘客」），现在走 force 骑乘把她换过来。\n\n【排查留痕】日志搜「扫帚模式」和「扫帚接管」：取出扫帚骑上（这把是我们放的）、扫帚接管（服务端真的开始驱动）、爬升到位 与 头顶被顶住（带起止高度与「整段只抬了几格」）、想飞却没骑上扫帚（骑不上时不再静默）。你自己骑在这把扫帚上时她只开火、不接管飞行，日志写「玩家在驾驶这把扫帚」")
+        COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件。\n\n【飞行顺序】骑上 → **原地往上抬 1 格悬停**（头顶被顶住就地悬停）→ 没敌人时按下面那条【跟随主人】飞 → 遇到敌人先**向上爬 8 格**（顶住就就地悬停）→ 再绕着敌人盘旋开火。两个高度是代码里的常量（RISE_BLOCKS / CLIMB_BLOCKS）。\n\n【移动速度照搬原版】速度、阻尼、无输入时的衰减全部取自 TLM 给玩家驾驶写的 PlayerBroomControl：水平上限 0.75 格/tick、竖直 0.30（原版跳跃键那一档是 0.5，这里刻意收一半），**只慢不快**\n\n【两条修正】①「坐上去之后原地左右乱晃、被反复拉回、不上升」的根因是**客户端也在驱动扫帚**，与服务端的「取走即清」意图队列抢同一份数据（原版 travelRidden 是从 isControlledByLocalInstance 那一侧才施加位移的，我们漏了这道闸）；现在只让服务端驱动。②她坐在椅子/别的载具上时原来的 startRiding 恒失败（原版要求「当前不是乘客」），现在走 force 骑乘把她换过来。\n\n【排查留痕】日志搜「扫帚模式」和「扫帚接管」：取出扫帚骑上（这把是我们放的）、扫帚接管（服务端真的开始驱动）、爬升到位 与 头顶被顶住（带起止高度与「整段只抬了几格」）、想飞却没骑上扫帚（骑不上时不再静默）。你自己骑在这把扫帚上时她只开火、不接管飞行，日志写「玩家在驾驶这把扫帚」")
                 .translation("config.promaid.broom.enable").define("enable", true);
-        COMBAT_BROOM_RANGE = BUILDER.comment("战斗盘旋的站立距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）\n\n【实测六百九十三：这个数现在是「区间的近端」而不是固定值】接敌后她的盘旋半径在这个数与下面「离敌最远距离」之间**随机缓动**（每只女仆各不相同、每 4 秒重掷一次），所以两只一起上也不会落在同一个圆上被一条射线串到。实际区间 = [min(最远距离, 本值 × 0.75), 最远距离]")
+        COMBAT_BROOM_RANGE = BUILDER.comment("战斗盘旋的站立距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）\n\n【这个数现在是「区间的近端」而不是固定值】接敌后她的盘旋半径在这个数与下面「离敌最远距离」之间**随机缓动**（每只女仆各不相同、每 4 秒重掷一次），所以两只一起上也不会落在同一个圆上被一条射线串到。实际区间 = [min(最远距离, 本值 × 0.75), 最远距离]")
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
-        COMBAT_BROOM_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 10，1~48）：她绕着目标打的时候**不会被拉出这个半径之外**（越过它径向修正会加倍往回带）。\n\n【实测六百九十三：玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 站立距离 × 0.75), 本值] 里缓动。默认 10 = 站立距离 8 的 1.25 倍，所以均值仍落在 8 上（观感与旧版同一条圈），只是半径会在 6~10 之间飘、每只女仆还不一样。\n\n调小它 = 把她整体拉近并收紧随机范围（越近越容易被近战摸到，但越不容易被\"串\"）；调大它 = 允许她在更宽的一圈里机动（远程更安全，但枪械命中率会随距离下降）。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
+        COMBAT_BROOM_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 10，1~48）：她绕着目标打的时候**不会被拉出这个半径之外**（越过它径向修正会加倍往回带）。\n\n【玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 站立距离 × 0.75), 本值] 里缓动。默认 10 = 站立距离 8 的 1.25 倍，所以均值仍落在 8 上（观感与旧版同一条圈），只是半径会在 6~10 之间飘、每只女仆还不一样。\n\n调小它 = 把她整体拉近并收紧随机范围（越近越容易被近战摸到，但越不容易被\"串\"）；调大它 = 允许她在更宽的一圈里机动（远程更安全，但枪械命中率会随距离下降）。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
                 .translation("config.promaid.broom.orbitMax").defineInRange("orbitMax", 10.0, 1.0, 48.0);
-        COMBAT_BROOM_MIN_STANDOFF = BUILDER.comment("锁敌之后离敌的**最小距离**（格，默认 6，1~32）：接敌后她绕圈时**绝不会**比这个距离更近——近战怪摸不到她，才有稳定的远程输出窗口。\n\n【实测七百零一：玩家点名要的那个数】原话：「应该要保证至少与怪物拉开多少距离」+「剩下的运动的绕圈速度以及半径要每隔一小段时间就变化一下。同时与其他的女仆拉开距离（这些机制仅在扫帚模式接敌以后才启用）」。\n\n【它管什么】盘旋半径的**近端**取 max(基础盘旋距离 × 0.75, 本值)：随机环绕只发生在这条线之外。旧版的近端是\"基础距离 × 0.75\"现算的——把「离敌最远距离」调到 4，近端就塌到 3 格、她正好飘进近战范围；现在这条下限独立存在，不受另一个旋钮拖动。\n\n【怎么调】调大 = 她离得更远、更安全，但枪械/弹道的命中率会随距离下降、也可能超出某些武器的射程；调小 = 更贴脸（1 格会让她几乎贴着怪，不建议）。近端被本值顶到超过「离敌最远距离」时以「离敌最远距离」为准（区间不会倒挂）")
+        COMBAT_BROOM_MIN_STANDOFF = BUILDER.comment("锁敌之后离敌的**最小距离**（格，默认 6，1~32）：接敌后她绕圈时**绝不会**比这个距离更近——近战怪摸不到她，才有稳定的远程输出窗口。\n\n【玩家点名要的那个数】原话：「应该要保证至少与怪物拉开多少距离」+「剩下的运动的绕圈速度以及半径要每隔一小段时间就变化一下。同时与其他的女仆拉开距离（这些机制仅在扫帚模式接敌以后才启用）」。\n\n【它管什么】盘旋半径的**近端**取 max(基础盘旋距离 × 0.75, 本值)：随机环绕只发生在这条线之外。旧版的近端是\"基础距离 × 0.75\"现算的——把「离敌最远距离」调到 4，近端就塌到 3 格、她正好飘进近战范围；现在这条下限独立存在，不受另一个旋钮拖动。\n\n【怎么调】调大 = 她离得更远、更安全，但枪械/弹道的命中率会随距离下降、也可能超出某些武器的射程；调小 = 更贴脸（1 格会让她几乎贴着怪，不建议）。近端被本值顶到超过「离敌最远距离」时以「离敌最远距离」为准（区间不会倒挂）")
                 .translation("config.promaid.broom.minStandoff").defineInRange("minStandoff", 6.0, 1.0, 32.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
-        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 12，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十六：默认 15 → 12】玩家原话：\"把扫帚盘旋的默认配置高度改为12格。\"——旧档里写着 15 的会由一次性迁移搬到 12（**只有值等于 15 才搬**，玩家自己调过的其它值一律不碰，标记 broomClimb12Migrated）。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
+        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 12，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【默认 15 → 12】需求：把扫帚盘旋的默认配置高度改为12格。——旧档里写着 15 的会由一次性迁移搬到 12（**只有值等于 15 才搬**，玩家自己调过的其它值一律不碰，标记 broomClimb12Migrated）。\n\n【默认 10 → 15】需求：现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。（10 是早先定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
                 .translation("config.promaid.broom.climb").defineInRange("climb", 12.0, 2.0, 32.0);
-        COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开，v1.3.2 实测六百五十六）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
+        COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**，直到接敌，而不是跟着主人跑；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞：平时跟主人、为了追怪/跟主人可以越界")
                 .translation("config.promaid.broom.clampHome").define("clampHome", true);
-        COMBAT_BROOM_HOME_ALT = BUILDER.comment("守家盘旋高度（格，离地，默认 8，1~32）：开着「守家时绕工作范围盘旋」时，她巡逻的目标高度 = **她脚下那块地之上这么多格**。\n\n【实测六百九十一：这一项是新加的】旧版守家盘旋**不碰高度**（y 取扫帚当前高度），而起飞相位只抬 1 格 → 她整场守家巡逻都贴着地面飞。玩家原话：「home 模式下女仆会进行飞行盘旋巡逻对吧？但是女仆很喜欢贴地飞行。这个观感太差了。」现在高度改成\"离地 8 格\"（可调），再由 MaidBroomDrive.safeY 兜住天花板：想要的高度被顶住就取放得下的最高一格，一格都放不下就留在原高度（绝不硬顶）。\n\n【实测六百九十二：这个数是\"巡逻高度\"，躲建筑只是暂时偏离】玩家原话：「尽可能保持启动盘旋的高度（躲建筑只是暂时调整高度）。防止女仆在躲避其他建筑物的时候越飞越高。如果女仆飞得太高了……之后的攻击、链路等方面就都不会触发了。」两处配套：① 脚下**找不到地面**时（虚空 / 她比地形高出 24 格以上）目标高度取\"这场巡逻的高度记忆\"，**只降不升**（旧版那一档是\"她当前高度 + 离地格数\"= 每拍 +8 的无上限爬升）；② 卡墙脱困挑空气格时也**不许超过目标高度 +3 格**。\n\n【为什么不复用「接敌爬升高度」】那个数是\"相对敌人\"（没有敌人时根本没有那个参照物），这个数是\"离地\"，两个参照系不同；合成一个数只会让其中一边永远不对。\n\n【只影响哪一档】只影响**守家巡逻**（平时没有敌人、且工作在范围内）；接敌照旧走「接敌爬升高度」，跟主人照旧是\"主人上方 2 格\"（同样过了那道安全高度判据）。")
+        COMBAT_BROOM_HOME_ALT = BUILDER.comment("守家盘旋高度（格，离地，默认 8，1~32）：开着「守家时绕工作范围盘旋」时，她巡逻的目标高度 = **她脚下那块地之上这么多格**。\n\n【这一项是新加的】旧版守家盘旋**不碰高度**（y 取扫帚当前高度），而起飞相位只抬 1 格 → 她整场守家巡逻都贴着地面飞。需求：home 模式下女仆会进行飞行盘旋巡逻对吧？但是女仆很喜欢贴地飞行。这个观感太差了。现在高度改成\"离地 8 格\"（可调），再由 MaidBroomDrive.safeY 兜住天花板：想要的高度被顶住就取放得下的最高一格，一格都放不下就留在原高度（绝不硬顶）。\n\n【这个数是\"巡逻高度\"，躲建筑只是暂时偏离】需求：尽可能保持启动盘旋的高度（躲建筑只是暂时调整高度）。防止女仆在躲避其他建筑物的时候越飞越高。如果女仆飞得太高了……之后的攻击、链路等方面就都不会触发了。两处配套：① 脚下**找不到地面**时（虚空 / 她比地形高出 24 格以上）目标高度取\"这场巡逻的高度记忆\"，**只降不升**（旧版那一档是\"她当前高度 + 离地格数\"= 每拍 +8 的无上限爬升）；② 卡墙脱困挑空气格时也**不许超过目标高度 +3 格**。\n\n【为什么不复用「接敌爬升高度」】那个数是\"相对敌人\"（没有敌人时根本没有那个参照物），这个数是\"离地\"，两个参照系不同；合成一个数只会让其中一边永远不对。\n\n【只影响哪一档】只影响**守家巡逻**（平时没有敌人、且工作在范围内）；接敌照旧走「接敌爬升高度」，跟主人照旧是\"主人上方 2 格\"（同样过了那道安全高度判据）。")
                 .translation("config.promaid.broom.homeAlt").defineInRange("homeAlt", 8.0, 1.0, 32.0);
-        COMBAT_BROOM_FOLLOW_START = BUILDER.comment("扫帚·跟随起手距离（格，默认 6，2~128）：主人比她远过这个 3D 距离，她（平时没有敌人时）才飞过去跟；更近就原地悬停——扫帚没有耐久，但\"主人挪一步她也动一下\"看着烦，所以留一条迟滞。这一对**只管扫帚模式**（「移动与行为 → 飞行跟随」那一对只管鞘翅飞行跟随，两边互不影响）\n\n【实测六百七十五：默认 25 → 6】玩家原话：\"当前扫帚模式必须要在玩家走出超过20格之后才会跟过来。这边最好还是改成默认为6（因为扫帚的容错比鞘翅高太多了。不需要隔那么多，隔近距离跟随即可）\"。扫帚不烧料、不磨耐久、撞了也能靠「卡墙脱困」钻出来，所以不需要鞘翅那条 25 格的远距离迟滞——默认 **6** 就是贴着你飞（她的跟随点本身在你身后 3.5 格、高 2 格）。**旧存档里的 25 不会自动变**（配置文件里写死的值优先），想跟着新默认走就把这两行改掉或删掉重开。\n\n【实测六百七十五：刻意**不加**\"与主人之间被方块挡住视线就不起飞\"那道判定】玩家把这件事交给我定夺，我的判断是不加——鞘翅那条的退路是**改走路**，而扫帚链路没有这条退路（加了她只会在墙后原地悬停、而你越走越远）；\"被挡住\"这件事已经有解：下面的「卡墙脱困」会先飘到最近的空气格再续链路。")
+        COMBAT_BROOM_FOLLOW_START = BUILDER.comment("扫帚·跟随起手距离（格，默认 6，2~128）：主人比她远过这个 3D 距离，她（平时没有敌人时）才飞过去跟；更近就原地悬停——扫帚没有耐久，但\"主人挪一步她也动一下\"看着烦，所以留一条迟滞。这一对**只管扫帚模式**（「移动与行为 → 飞行跟随」那一对只管鞘翅飞行跟随，两边互不影响）\n\n【默认 25 → 6】需求：当前扫帚模式必须要在玩家走出超过20格之后才会跟过来。这边最好还是改成默认为6（因为扫帚的容错比鞘翅高太多了。不需要隔那么多，隔近距离跟随即可）。扫帚不烧料、不磨耐久、撞了也能靠「卡墙脱困」钻出来，所以不需要鞘翅那条 25 格的远距离迟滞——默认 **6** 就是贴着你飞（她的跟随点本身在你身后 3.5 格、高 2 格）。**旧存档里的 25 不会自动变**（配置文件里写死的值优先），想跟着新默认走就把这两行改掉或删掉重开。\n\n【刻意**不加**\"与主人之间被方块挡住视线就不起飞\"那道判定】玩家把这件事交给我定夺，我的判断是不加——鞘翅那条的退路是**改走路**，而扫帚链路没有这条退路（加了她只会在墙后原地悬停、而你越走越远）；\"被挡住\"这件事已经有解：下面的「卡墙脱困」会先飘到最近的空气格再续链路。")
                 .translation("config.promaid.broom.followStart").defineInRange("followStart", 6.0, 2.0, 128.0);
-        COMBAT_BROOM_FOLLOW_END = BUILDER.comment("扫帚·跟随收手距离（格，默认 3，1~64）：主人进到这么近（3D 距离）就中断这一趟、原地悬停。**必须比起手距离小**——写成大于等于起手距离时她会\"一起飞就收手\"、一次都飞不起来，所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值）\n\n【实测六百七十五：默认 5 → 3】跟起手距离一起改（6 / 3 这一对的本意是\"一直贴着你飞\"：她的跟随点在你身后 3.5 格、高 2 格，3D 距离约 4.0 格，所以进不到 3 格以内 = 一直跟着；你停下来她才悬停在你旁边）。")
+        COMBAT_BROOM_FOLLOW_END = BUILDER.comment("扫帚·跟随收手距离（格，默认 3，1~64）：主人进到这么近（3D 距离）就中断这一趟、原地悬停。**必须比起手距离小**——写成大于等于起手距离时她会\"一起飞就收手\"、一次都飞不起来，所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值）\n\n【默认 5 → 3】跟起手距离一起改（6 / 3 这一对的本意是\"一直贴着你飞\"：她的跟随点在你身后 3.5 格、高 2 格，3D 距离约 4.0 格，所以进不到 3 格以内 = 一直跟着；你停下来她才悬停在你旁边）。")
                 .translation("config.promaid.broom.followEnd").defineInRange("followEnd", 3.0, 1.0, 64.0);
-        COMBAT_BROOM_UNSTICK = BUILDER.comment("卡墙脱困（默认开）：她朝目标直飞、被方块顶住原地不动超过 0.6 秒时，**先飘到最近的空气格**（只挑让她离目标更近、且上下两格都空的那个），到了再接着飞原来的链路——玩家原话：「如果撞到了阻挡的方块，那么应该先尝试往最近的空气方块进行移动，然后再继续执行原有的扫帚链路」。关掉 = 旧行为（一直顶着墙飞）。日志搜「扫帚卡墙」")
+        COMBAT_BROOM_UNSTICK = BUILDER.comment("卡墙脱困（默认开）：她朝目标直飞、被方块顶住原地不动超过 0.6 秒时，**先飘到最近的空气格**（只挑让她离目标更近、且上下两格都空的那个），到了再接着飞原来的链路——需求：如果撞到了阻挡的方块，那么应该先尝试往最近的空气方块进行移动，然后再继续执行原有的扫帚链路。关掉 = 旧行为（一直顶着墙飞）。日志搜「扫帚卡墙」")
                 .translation("config.promaid.broom.unstick").define("unstick", true);
-        COMBAT_BROOM_IDLE_LAND = BUILDER.comment("扫帚待命落地（默认开）：扫帚模式里\"没有敌人、也没在跟主人这一趟\"那一档（起飞抬 1 格之后、打完一仗之后、主人在别的维度/跟随关着时）**降回地面待命**，而不是原地挂在半空——玩家原话：「还会出现女仆骑上扫帚，结果在空中悬空的状态」。做法：顺着她脚下探地（最多 24 格），找到就降到\"地面之上 1.6 格\"；**探不到地就照旧原地悬停，绝不往下扎**（虚空 / 她比地形高出 24 格以上）；已经贴地时也照旧悬停（不再上下抖）。**接敌与跟随一个字都不受影响**（那两档在它前面）；主人自己飞在天上时也不落地（那时贴着他悬停才是对的）。关掉 = 旧行为（原地悬停，可能一直挂在半空）。日志搜「待命 → 降回地面」")
+        COMBAT_BROOM_IDLE_LAND = BUILDER.comment("扫帚待命落地（默认开）：扫帚模式里\"没有敌人、也没在跟主人这一趟\"那一档（起飞抬 1 格之后、打完一仗之后、主人在别的维度/跟随关着时）**降回地面待命**，而不是原地挂在半空——需求：还会出现女仆骑上扫帚，结果在空中悬空的状态。做法：顺着她脚下探地（最多 24 格），找到就降到\"地面之上 1.6 格\"；**探不到地就照旧原地悬停，绝不往下扎**（虚空 / 她比地形高出 24 格以上）；已经贴地时也照旧悬停（不再上下抖）。**接敌与跟随一个字都不受影响**（那两档在它前面）；主人自己飞在天上时也不落地（那时贴着他悬停才是对的）。关掉 = 旧行为（原地悬停，可能一直挂在半空）。日志搜「待命 → 降回地面」")
                 .translation("config.promaid.broom.idleLand").define("idleLand", true);
 
-        COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离【参照点】超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回参照点，免得飞太远回不来。0 = 关闭。参照点是【非守家=你；守家(home)=她的工作区圈心】（实测六百九十二：守家时你走多远都不再把她拽走，拉回来的是家/岗位）。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）\n\n【v1.3.9 巡逻航迹】她正沿巡逻轨道飞时，这条牵引绳**整体不生效**——玩家原话「也不会受到牵引绳之类的东西的影响」，所以巡逻期间不做任何距离判据；口径与「巡逻跳过工作圈夹取」同源（都问 PatrolFlight.effective）。")
+        COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离【参照点】超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回参照点，免得飞太远回不来。0 = 关闭。参照点是【非守家=你；守家(home)=她的工作区圈心】（守家时你走多远都不再把她拽走，拉回来的是家/岗位）。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）\n\n【v1.3.9 巡逻航迹】她正沿巡逻轨道飞时，这条牵引绳**整体不生效**——需求：也不会受到牵引绳之类的东西的影响，所以巡逻期间不做任何距离判据；口径与「巡逻跳过工作圈夹取」同源（都问 PatrolFlight.effective）。")
                 .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);
         // ---- v1.3.8「巡逻航迹」（配置面板：移动与行为 → 扫帚模式 板块末尾）----
-        COMBAT_PATROL_ENABLE = BUILDER.comment("巡逻航迹总开关（默认开）：扫帚模式 **+ 在家模式** 下，若她身上绑了一条**已连接（闭环）**的航迹，她就沿那条航迹飞，**替代**原本「沿工作范围那个圈盘旋」的守家行为。\n\n【怎么用】拿「巡逻航图」（纸 + 指南针 + 墨囊）：**右键**开界面 → 点「＋ 创建一个轨道」→ 进它的管理页把女仆绑上、点「开始标记」→ 退出界面后**鼠标中键**（不用潜行；空中地面都行）在你站/飞的位置记一个标记 → 再**右键**回界面点「连接」把首尾接成闭环。**连接没有任何门槛**（v1.3.9.3 起：原来的点数/坡度/自交/半径/挡路方块判据全部只作为 ⚠ 提醒，触犯了也照样连上，后果由玩家自己负责）。然后她的任务切成「扫帚模式」、开着在家模式即可；巡逻期间她**不受扫帚牵引绳影响**。\n\n【敌人怎么办】有敌人时**仍然先接敌**（爬升 → 绕圈/轰炸），敌人消失后自己回到航迹——这是相位顺序白捡的，不需要额外配置。\n\n【为什么与 home 绑在一起】玩家原话：「既然是巡逻，那它相当于替代了原来 home 模式下。所以这个功能也只对 home 模式下的扫帚模式下女仆进行操作。」关掉这一项 = 绑了的航迹不起作用，扫帚模式回到原本的守家盘旋。\n\n【排查】日志搜「扫帚巡逻」；命令 /maid_smart broom_patrol status 看生效与否。")
+        COMBAT_PATROL_ENABLE = BUILDER.comment("巡逻航迹总开关（默认开）：扫帚模式 **+ 在家模式** 下，若她身上绑了一条**已连接（闭环）**的航迹，她就沿那条航迹飞，**替代**原本「沿工作范围那个圈盘旋」的守家行为。\n\n【怎么用】拿「巡逻航图」（纸 + 指南针 + 墨囊）：**右键**开界面 → 点「＋ 创建一个轨道」→ 进它的管理页把女仆绑上、点「开始标记」→ 退出界面后**鼠标中键**（不用潜行；空中地面都行）在你站/飞的位置记一个标记 → 再**右键**回界面点「连接」把首尾接成闭环。**连接没有任何门槛**（v1.3.9.3 起：原来的点数/坡度/自交/半径/挡路方块判据全部只作为 ⚠ 提醒，触犯了也照样连上，后果由玩家自己负责）。然后她的任务切成「扫帚模式」、开着在家模式即可；巡逻期间她**不受扫帚牵引绳影响**。\n\n【敌人怎么办】有敌人时**仍然先接敌**（爬升 → 绕圈/轰炸），敌人消失后自己回到航迹——这是相位顺序白捡的，不需要额外配置。\n\n【为什么与 home 绑在一起】需求：既然是巡逻，那它相当于替代了原来 home 模式下。所以这个功能也只对 home 模式下的扫帚模式下女仆进行操作。关掉这一项 = 绑了的航迹不起作用，扫帚模式回到原本的守家盘旋。\n\n【删掉轨道会怎样】删掉一条轨道 = **绑着它的女仆一并作废、回到默认状态**（回到原本的守家盘旋 / 跟随 / 悬停），不用你一只只手动解绑；她此刻不在场（区块未加载）也不要紧，等她下次被载入时同样自行失效（作废是**落盘**的：删一条轨道会在全服记一笔 id，见 PatrolRevocation）。\n\n【排查】日志搜「扫帚巡逻」；命令 /maid_smart broom_patrol status 看生效与否。")
                 .translation("config.promaid.patrol.enable").define("enable", true);
-        COMBAT_PATROL_CLEARANCE = BUILDER.comment("新建航迹的默认净空半径（格，默认 1.5，0.5~6.0）：航迹每个采样点周围要留出这么多空隙——「连接」时沿曲线密采样逐点查方块，有阻挡或危险方块（岩浆/火/仙人掌…）只给一句**黄色提示**（v1.3.9.2 起**不再**导致连接失败，飞的时候她会让一让）。它同时是「两段航线贴太近」那项提醒的阈值来源（贴得比 2× 本值还近就提醒）。\n\n每条航迹自己存一份（打点当时的值），改这一项只影响**之后新建**的航迹。调大 = 更早开始抬升（空中走廊更宽），调小 = 更贴着障碍走。\n\n【为什么还要查障碍】玩家原话：「（但是要加一个前提，不能有阻挡方块。）」——查的是**曲线上**的密采样点，不是只看标记：两个标记本身都在空气里，它们之间完全可能穿进山体。查到只提示，不作为门槛（玩家后续反馈：「不要把它做一个门槛了，交给女仆自己的寻路」）。")
+        COMBAT_PATROL_CLEARANCE = BUILDER.comment("新建航迹的默认净空半径（格，默认 1.5，0.5~6.0）：航迹每个采样点周围要留出这么多空隙——「连接」时沿曲线密采样逐点查方块，有阻挡或危险方块（岩浆/火/仙人掌…）只给一句**黄色提示**（v1.3.9.2 起**不再**导致连接失败，飞的时候她会让一让）。它同时是「两段航线贴太近」那项提醒的阈值来源（贴得比 2× 本值还近就提醒）。\n\n每条航迹自己存一份（打点当时的值），改这一项只影响**之后新建**的航迹。调大 = 更早开始抬升（空中走廊更宽），调小 = 更贴着障碍走。\n\n【为什么还要查障碍】需求：（但是要加一个前提，不能有阻挡方块。）——查的是**曲线上**的密采样点，不是只看标记：两个标记本身都在空气里，它们之间完全可能穿进山体。查到只提示，不作为门槛（玩家后续反馈：「不要把它做一个门槛了，交给女仆自己的寻路」）。")
                 .translation("config.promaid.patrol.clearance").defineInRange("clearance", 1.5, 0.5, 6.0);
-        COMBAT_PATROL_MAX_RADIUS = BUILDER.comment("巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制）：连接/绑定时航迹的水平包围盒半径超过它**只给一句提醒**（v1.3.9.3 起不再拒绝——玩家原话「连接方面就不要再加入门禁了，强制连接，后果由玩家自己负责。原来那些门禁可以作为一个提醒，触犯了以后就提醒一下」）。它原来的用途是防一条横跨几百格的航线让她飞出你找得着的范围（每只女仆自带 2 区块、随她移动的区块票，不预载整条航迹）——现在超限的后果由玩家自己承担。")
+        COMBAT_PATROL_MAX_RADIUS = BUILDER.comment("巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制）：连接/绑定时航迹的水平包围盒半径超过它**只给一句提醒**（v1.3.9.3 起不再拒绝——需求：连接方面就不要再加入门禁了，强制连接，后果由玩家自己负责。原来那些门禁可以作为一个提醒，触犯了以后就提醒一下）。它原来的用途是防一条横跨几百格的航线让她飞出你找得着的范围（每只女仆自带 2 区块、随她移动的区块票，不预载整条航迹）——现在超限的后果由玩家自己承担。")
                 .translation("config.promaid.patrol.maxRadius").defineInRange("maxRadius", 128, 0, 512);
         // v1.3.0(beta) 实测六百八十二：上面「接敌爬升高度」默认 10 → 15 的一次性迁移标记。
         // 【为什么用标记，而不是"值 == 10 就迁"】老档 toml 里都写着 10，只凭值分不出
@@ -2482,19 +2769,19 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.pop();
 
         // ---- v1.3.0(beta) 实测七百〇三「接敌机动」（配置面板：战斗与自保 → 接敌机动）----
-        // 玩家原话：「在女仆扫帚模式接敌的情况下随机性能不能稍微高一点？……现在全都是保持盘旋
-        // 状态的，战斗方式有些过于单一了。首先先研究多种飞行方式（要求适配远程武器，可以参考一下
-        // 现代空军战术里面都有哪些飞行方式），然后女仆接敌之后，会从这多种飞行方式中选择一个
-        // 进行执行。而不全是统一绕圈。即使真的选到了绕圈，那么每次的盘旋方向、速度等，各方面
-        // 都要有一定的随机性，当然不要太大。而且基础比敌人高多少格这一点还是要的。」
+        //
+        //
+        //
+        //
+        //
         // 单独成段（不塞进 [broom] / [airRaid]）：它管的是**两条链路共有**的一件事
         // （扫帚接敌 + 鞘翅空袭），塞进任一边都会让另一边的人找不到。
         BUILDER.comment("接敌机动（配置面板：战斗与自保 → 接敌机动）").translation("config.promaid.maneuver").push("maneuver");
-        COMBAT_MANEUVER_ENABLE = BUILDER.comment("接敌机动·总开关（默认开）：接敌后每只女仆**每场遭遇各抽一种飞行方式**，而不是所有女仆都只会绕圈。\n\n【五种机动（参考现代空战战术命名）】① 环绕（基线与并列第一，占 24%——半径/旋向/快慢照旧由随机环绕那套管，而且**旋向每 8 秒会随机掉头**，见下）；② 蛇形 WEAVE（24%：一边绕一边径向进出 ±22%，敌人算不准她下一拍在几格外）；③ 高悠悠 YOYO（18%：高度做慢波、**高处转得慢低处转得快**——真实 yo-yo 拿速度换高度那一套）；④ 脱离再进 EXTEND（17%：周期性拉到最外圈再切回来，\"输出\"与\"退出去喘一口\"交替，最省血）；⑤ 8 字横切 FIGURE8（17%：每隔 4 秒翻一次旋向，在敌人正面来回横穿）。\n\n【每 20 秒换一种】同一场遭遇里每满 20 秒重抽一次，且**保证与上一段不同**——旧版\"一场只抽一次\"在打 boss 时（实测日志里那一仗打了 163 秒）等于\"一抽定两分钟\"，这正是玩家说的\"打那么多场都一直在用环绕\"的主因。\n\n【环绕的旋向每 8 秒随机掉头】玩家原话：「不要一直顺时针或者逆时针……差不多 8 秒钟一个周期吧。随机选择继续顺时针或者逆时针。」每 8 秒对半概率决定\"继续原方向 / 翻过来\"；掉头只改角速度符号、位置连续（不是瞬移）。\n\n【抽签是稳定的】由「女仆 UUID + 这是她第几场遭遇」派生：同一份存档重放出来还是同一种，而她**下一场会换一种**；同场多只女仆各抽各的，所以不会再出现\"一群人在转同一个圈\"。\n\n【两条硬保证】① 高度只加不减——玩家那条「基础比敌人高多少格」在任何机动下都成立；② 半径倍率与角速度倍率都在 ±20% 以内，最终半径仍夹进 [离敌最近距离, 离敌最远距离]，所以\"随机\"绝不会变成\"越飞越远\"或\"贴脸\"。\n\n关掉 = 退回旧行为（永远环绕）。日志搜「接敌机动」")
+        COMBAT_MANEUVER_ENABLE = BUILDER.comment("接敌机动·总开关（默认开）：接敌后每只女仆**每场遭遇各抽一种飞行方式**，而不是所有女仆都只会绕圈。\n\n【五种机动（参考现代空战战术命名）】① 环绕（基线与并列第一，占 24%——半径/旋向/快慢照旧由随机环绕那套管，而且**旋向每 8 秒会随机掉头**，见下）；② 蛇形 WEAVE（24%：一边绕一边径向进出 ±22%，敌人算不准她下一拍在几格外）；③ 高悠悠 YOYO（18%：高度做慢波、**高处转得慢低处转得快**——真实 yo-yo 拿速度换高度那一套）；④ 脱离再进 EXTEND（17%：周期性拉到最外圈再切回来，\"输出\"与\"退出去喘一口\"交替，最省血）；⑤ 8 字横切 FIGURE8（17%：每隔 4 秒翻一次旋向，在敌人正面来回横穿）。\n\n【每 20 秒换一种】同一场遭遇里每满 20 秒重抽一次，且**保证与上一段不同**——旧版\"一场只抽一次\"在打 boss 时（有一仗打了 163 秒）等于\"一抽定两分钟\"，这正是需求：的\"打那么多场都一直在用环绕\"的主因。\n\n【环绕的旋向每 8 秒随机掉头】需求：不要一直顺时针或者逆时针……差不多 8 秒钟一个周期吧。随机选择继续顺时针或者逆时针。每 8 秒对半概率决定\"继续原方向 / 翻过来\"；掉头只改角速度符号、位置连续（不是瞬移）。\n\n【抽签是稳定的】由「女仆 UUID + 这是她第几场遭遇」派生：同一份存档重放出来还是同一种，而她**下一场会换一种**；同场多只女仆各抽各的，所以不会再出现\"一群人在转同一个圈\"。\n\n【两条硬保证】① 高度只加不减——玩家那条「基础比敌人高多少格」在任何机动下都成立；② 半径倍率与角速度倍率都在 ±20% 以内，最终半径仍夹进 [离敌最近距离, 离敌最远距离]，所以\"随机\"绝不会变成\"越飞越远\"或\"贴脸\"。\n\n关掉 = 退回旧行为（永远环绕）。日志搜「接敌机动」")
                 .translation("config.promaid.maneuver.enable").define("enable", true);
         COMBAT_MANEUVER_YOYO_AMP = BUILDER.comment("高悠悠高度幅度（格，默认 4，0~16）：「高悠悠」这一种机动在**你设的基础盘旋高度之上**再多爬这么多格（0 = 这一档退化成普通环绕）。\n\n【它绝不会把她压到基准高度以下】幅度是**加**在基础高度上的（0~幅度 的慢波），所以「基础比敌人高多少格」这条口径一个字节不动。配套的角速度关系也照真实物理：波峰（最高处）转得最慢（0.75 倍），波谷回到原速——那是拿速度换高度")
                 .translation("config.promaid.maneuver.yoyoAmp").defineInRange("yoyoAmp", 4.0, 0.0, 16.0);
-        COMBAT_AIR_SEPARATION = BUILDER.comment("空袭·空中防叠罗汉（默认开）：多只女仆同时接同一个敌人时，鞘翅空袭（近战 / 远程）原本**一点分离机制都没有**——远程空袭的盘旋半径虽已各自随机，但起点没有错开；近战空袭更直接：\"背离敌人抬头爬升\"那 1.5 秒她们飞的是**同一条直线**。\n\n【打开后做两件事】① 远程空袭的盘旋半径各自带一份**稳定的偏置**；② 近战空袭的**爬升方位**各自偏十几度——俯冲那一记的瞄准一个字不改（偏置只作用在不需要精度的爬升段，这个模组在命中率上专门修过两轮）。\n\n【与扫帚那条的关系】扫帚链路本来就有一套（相位错开 + 邻近互斥，实测六百九十一），这一条是**补上鞘翅这边缺的那一半**。关掉 = 旧行为")
+        COMBAT_AIR_SEPARATION = BUILDER.comment("空袭·空中防叠罗汉（默认开）：多只女仆同时接同一个敌人时，鞘翅空袭（近战 / 远程）原本**一点分离机制都没有**——远程空袭的盘旋半径虽已各自随机，但起点没有错开；近战空袭更直接：\"背离敌人抬头爬升\"那 1.5 秒她们飞的是**同一条直线**。\n\n【打开后做两件事】① 远程空袭的盘旋半径各自带一份**稳定的偏置**；② 近战空袭的**爬升方位**各自偏十几度——俯冲那一记的瞄准一个字不改（偏置只作用在不需要精度的爬升段，这个模组在命中率上专门修过两轮）。\n\n【与扫帚那条的关系】扫帚链路本来就有一套（相位错开 + 邻近互斥），这一条是**补上鞘翅这边缺的那一半**。关掉 = 旧行为")
                 .translation("config.promaid.airSeparation").define("airSeparation", true);
         COMBAT_AIR_SEPARATION_RADIUS = BUILDER.comment("空袭·半径偏置强度（格，默认 2.0，0~8）：空袭防叠罗汉给每只女仆的盘旋半径各自加减这么多格——它只把她们的圈叉开，最终半径仍夹在「离敌最近距离」与「离敌最远距离」之间（那条硬上界由调用方夹取，本值改不动它）。0 = 半径不错开（只保留近战爬升方位的错开）")
                 .translation("config.promaid.airSeparationRadius").defineInRange("airSeparationRadius", 2.0, 0.0, 8.0);
@@ -2502,61 +2789,61 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- v1.3.7「武装拴绳」（配置面板：战斗与自保 → 扫帚模式板块末尾）----
         // ---- v1.3.7「武装拴绳」（配置面板：移动与行为 → 武装拴绳（二号位）；实测六百七十五 起
-        //      从「扫帚模式」那一页里独立出来成板块——玩家反馈"这些新功能都没有配置面板、
-        //      很难精准定位到哪个功能在哪配置"，面板改革见 PromaidConfigScreen.Section.TETHER）----
+        //      从「扫帚模式」那一页里独立出来成板块——
+        //
         BUILDER.comment("武装拴绳（直升机二号位；配置面板：移动与行为 → 武装拴绳（二号位））").translation("config.promaid.tether").push("tether");
-        COMBAT_TETHER_ENABLE = BUILDER.comment("武装拴绳总开关（默认开）：手持武装拴绳右击【飞行中的】女仆，把自己挂到她下方（像武装直升机的二号位枪手；**在扫帚上右击她 = 换到二号位**，绑定态右击 = 坐回扫帚驾驶位）——她照常飞、照常用远程武器开火，你也一样；再右击一次（或按潜跳）解除。**地面不再自动解除**（「绳子不会自己断」，实测六百七十一）；**她不替你定高度、也不替你定座位**（实测六百七十二：拴着的时候她只原地悬停、一个高度数字都不写，接敌照旧；她站在地上时改成水平拉开并肩站，不再和你建模重叠）；只有落水超过 0.6 秒会把你放下（溺水是致命的）；解除瞬间人在空中给 5 秒摔伤豁免；挂着时卡墙/挤墙伤全免。\n\n【v1.3.9.4：也能拴到骑乘的载具上】玩家原话「武装拴绳可以拓展一下。也可以拴到骑乘的载具上」。她此刻骑着直升机 / 龙 / 陆行坐骑等载具时：①同样能拴上（右击她本人、或右键她骑的那台载具都认）；②吊挂的**锚点是那台载具**（吊在直升机下面才是二号位，吊在坐在机舱里的她下面会被机壳夹住）；③**不占载具的驾驶位**——玩家仍是「她本人」的乘客，载具怎么飞、谁在开，一个字节都不改；④玩家本来也坐在那台载具上时，抓一下绳子就先下载具、再吊到她下面（同「坐回扫帚」那一档的逆操作）。\n\n【规则】只认主人；一只女仆同时只挂一人；扫帚模式必须她已经飞在空中（地面挂着会把人拖进地里），空袭模式（flight_combat / flight_ranged）随时可挂；绑定后**空袭不再改她的高度**（「不要套用悬空起程」：她照常自己爬升/俯冲，绳子只负责把你吊在下面），扫帚仍是原地悬停（不再绕着你转圈），接敌照旧；挂着期间你和女仆同款免摔落/卡墙/挤墙/撞墙伤。她本人对你的伤害本来就被「主人/友军免伤总闸」拦着，挂多紧都不会被她自己打中。\n\n【实测六百七十三】三条「可以优化」落地：①「坐在扫帚上右击切不到绑定模式」已修（换座态准星前方没有实体，右击走的是 RightClickItem，旧版只监听 EntityInteract）；②空袭档多一档**牵绳**——绑定空袭模式的女仆时她还没起飞就**先不挂人**，你自由活动、她跟着走（原版拴绳观感），她真起飞才把你挂到二号位，落地满 2 秒再放下来；③挂在下面时被她的模型挡视野 → 改成**渲染层面**解决：只对你（挂着的那位）+第一人称把她画成半透明，透明度见下一项。\n\n【二号位开火】挂着时照常射击（弓/弩/枪械都行）——她打她的目标，你打你瞄的，各自独立。合成：拴绳 + 铁锭×2。日志搜「武装拴绳」\n\n【实测六百七十四】四点落地：①半透明默认 0.35 → **0.1**，而且**扫帚本体**也一起半透明（自己骑扫帚时扫帚模型就挡在视野里）；②修好空袭档的**「玩家坐到她头上」**——牵绳档转「起飞挂载」时没重发 S2C 相位包，客户端不认那个枪手，悬挂定位于是不生效、人被原版摆在**她头顶**（现在每次相位变化都重发）；③被拴绳选中的女仆加**金色描边标记**（同光灵箭的发光渲染，光边改成金色），她**正式起飞**（牵绳 → 悬挂）时解除；④牵绳档的绳子在客户端也照画（旧版 1.21.1 树还留着「必须是她乘客」那道门）。")
+        COMBAT_TETHER_ENABLE = BUILDER.comment("武装拴绳总开关（默认开）：手持武装拴绳右击【飞行中的】女仆，把自己挂到她下方（像武装直升机的二号位枪手；**在扫帚上右击她 = 换到二号位**，绑定态右击 = 坐回扫帚驾驶位）——她照常飞、照常用远程武器开火，你也一样；再右击一次（或按潜跳）解除。**地面不再自动解除**（「绳子不会自己断」）；**她不替你定高度、也不替你定座位**（拴着的时候她只原地悬停、一个高度数字都不写，接敌照旧；她站在地上时改成水平拉开并肩站，不再和你建模重叠）；只有落水超过 0.6 秒会把你放下（溺水是致命的）；解除瞬间人在空中给 5 秒摔伤豁免；挂着时卡墙/挤墙伤全免。\n\n【v1.3.9.4：也能拴到骑乘的载具上】需求：武装拴绳可以拓展一下。也可以拴到骑乘的载具上。她此刻骑着直升机 / 龙 / 陆行坐骑等载具时：①同样能拴上（右击她本人、或右键她骑的那台载具都认）；②吊挂的**锚点是那台载具**（吊在直升机下面才是二号位，吊在坐在机舱里的她下面会被机壳夹住）；③**不占载具的驾驶位**——玩家仍是「她本人」的乘客，载具怎么飞、谁在开，一个字节都不改；④玩家本来也坐在那台载具上时，抓一下绳子就先下载具、再吊到她下面（同「坐回扫帚」那一档的逆操作）。\n\n【规则】只认主人；一只女仆同时只挂一人；扫帚模式必须她已经飞在空中（地面挂着会把人拖进地里），空袭模式（flight_combat / flight_ranged）随时可挂；绑定后**空袭不再改她的高度**（「不要套用悬空起程」：她照常自己爬升/俯冲，绳子只负责把你吊在下面），扫帚仍是原地悬停（不再绕着你转圈），接敌照旧；挂着期间你和女仆同款免摔落/卡墙/挤墙/撞墙伤。她本人对你的伤害本来就被「主人/友军免伤总闸」拦着，挂多紧都不会被她自己打中。\n\n【已落地的三条优化】①「坐在扫帚上右击切不到绑定模式」已修（换座态准星前方没有实体，右击走的是 RightClickItem，旧版只监听 EntityInteract）；②空袭档多一档**牵绳**——绑定空袭模式的女仆时她还没起飞就**先不挂人**，你自由活动、她跟着走（原版拴绳观感），她真起飞才把你挂到二号位，落地满 2 秒再放下来；③挂在下面时被她的模型挡视野 → 改成**渲染层面**解决：只对你（挂着的那位）+第一人称把她画成半透明，透明度见下一项。\n\n【二号位开火】挂着时照常射击（弓/弩/枪械都行）——她打她的目标，你打你瞄的，各自独立。合成：拴绳 + 铁锭×2。日志搜「武装拴绳」\n\n【已落地的四点】①半透明默认 0.35 → **0.1**，而且**扫帚本体**也一起半透明（自己骑扫帚时扫帚模型就挡在视野里）；②修好空袭档的**「玩家坐到她头上」**——牵绳档转「起飞挂载」时没重发 S2C 相位包，客户端不认那个枪手，悬挂定位于是不生效、人被原版摆在**她头顶**（现在每次相位变化都重发）；③被拴绳选中的女仆加**金色描边标记**（同光灵箭的发光渲染，光边改成金色），她**正式起飞**（牵绳 → 悬挂）时解除；④牵绳档的绳子在客户端也照画（旧版 1.21.1 树还留着「必须是她乘客」那道门）。")
                 .translation("config.promaid.tether.enable").define("enable", true);
-        COMBAT_TETHER_LEASH_STEER = BUILDER.comment("二号位·悬挂时用武装拴绳操控方向（默认开，仅空袭档）：挂在她下方时，若她此刻没有目标（丢锁敌、或本来就没敌人），把手里那根武装拴绳举着——**你看哪儿她就往哪儿飞**（水平跟你的朝向、高低跟你的俯仰，抬头=爬升、低头=下降）。\n\n【为什么要有它（需求方原话）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌，而玩家只能任由其在空中自由滑行，一点办法都没有。扫帚模式可以因为玩家可以接管扫帚而进行补救。\"——扫帚能接管是因为玩家骑在扫帚上，空袭档的补救手段就是这条：把绳子当操纵杆。\n\n【边界】只在**她没目标**时生效（有敌人时方向归她的空袭链路，绳子不抢手）；只在空袭档生效（扫帚档玩家本来就在驾驶位）；**必须手持武装拴绳**（不在手上 = 只悬停，不会误触）。")
+        COMBAT_TETHER_LEASH_STEER = BUILDER.comment("二号位·悬挂时用武装拴绳操控方向（默认开，仅空袭档）：挂在她下方时，若她此刻没有目标（丢锁敌、或本来就没敌人），把手里那根武装拴绳举着——**你看哪儿她就往哪儿飞**（水平跟你的朝向、高低跟你的俯仰，抬头=爬升、低头=下降）。\n\n【为什么要有它（需求：）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌，而玩家只能任由其在空中自由滑行，一点办法都没有。扫帚模式可以因为玩家可以接管扫帚而进行补救。\"——扫帚能接管是因为玩家骑在扫帚上，空袭档的补救手段就是这条：把绳子当操纵杆。\n\n【边界】只在**她没目标**时生效（有敌人时方向归她的空袭链路，绳子不抢手）；只在空袭档生效（扫帚档玩家本来就在驾驶位）；**必须手持武装拴绳**（不在手上 = 只悬停，不会误触）。")
                 .translation("config.promaid.combat.tetherLeashSteer").define("tetherLeashSteer", true);
-        COMBAT_TETHER_HANG = BUILDER.comment("悬挂距离（格，默认 2.6，0.5~6.0）：玩家脚底到女仆脚底的垂直距离，也就是那根「不会断」的绳子的长度（**她站在地上/贴着地形时改成「水平拉开这么远」**——实测六百七十二 玩家反馈「平时待命没有起飞的时候，直接跟女仆的建模完全重叠」，那一档两个建模并排站着，像被拴着伴走）。默认 2.6 = 她的脚底高过你的视线（眼高约 1.62 格），前方视野让开（实测六百七十一 玩家反馈「视线会被女仆的建模挡住」）；调小 = 人贴在她身上（1.8 以下两个碰撞箱会重叠），调大 = 吊得更低（更像吊机）。定位是平滑滑变的，不会上下横跳")
+        COMBAT_TETHER_HANG = BUILDER.comment("悬挂距离（格，默认 2.6，0.5~6.0）：玩家脚底到女仆脚底的垂直距离，也就是那根「不会断」的绳子的长度（**她站在地上/贴着地形时改成「水平拉开这么远」**——需求：平时待命没有起飞的时候，直接跟女仆的建模完全重叠，那一档两个建模并排站着，像被拴着伴走）。默认 2.6 = 她的脚底高过你的视线（眼高约 1.62 格），前方视野让开（需求：视线会被女仆的建模挡住）；调小 = 人贴在她身上（1.8 以下两个碰撞箱会重叠），调大 = 吊得更低（更像吊机）。定位是平滑滑变的，不会上下横跳")
                 .translation("config.promaid.tether.hang").defineInRange("hang", 2.6, 0.5, 6.0);
-        COMBAT_TETHER_GHOST_ALPHA = BUILDER.comment("【实测六百七十三 / 六百七十四】第一人称下的透明度（默认 0.1，0.0~1.0；**设 1.0 = 关掉这个功能**，照旧不透明）。玩家原话：「有的时候还是会被女仆的模型挡到视野。而如果继续降低模型高度会导致玩家的高度太低容易被打中。渲染的话最好是改成半透明状态。而且仅限绑定玩家的第 1 视角会展示半透明状态。」\n\n【实测六百七十四 起：生效范围有两档】① **你挂着的那只女仆**（吊在她下面 / 骑着她，空袭档与扫帚档都算）；② **你骑的那把扫帚本体**（自己驾驶扫帚时扫帚模型就在视野里；吊在骑扫帚的女仆下面时也算）。都只对**你的第一人称**生效（第三人称、别的玩家、别人骑别的女仆/扫帚一律不动）。实现是把她的渲染类型换成原版「幽灵渲染」那一档（itemEntityTranslucentCull，同贴图）+ 顶点 alpha 乘这个系数——只压 alpha 没用，cutout 那一档**根本没开混合**（javap 实证）。她的模型本体与各图层一起变半透明，绳子照旧画。纯客户端，服务端不用改；异常时按不透明走，绝不因为渲染崩游戏")
+        COMBAT_TETHER_GHOST_ALPHA = BUILDER.comment("【第一人称下的透明度】（默认 0.1，0.0~1.0；**设 1.0 = 关掉这个功能**，照旧不透明）。需求：有的时候还是会被女仆的模型挡到视野。而如果继续降低模型高度会导致玩家的高度太低容易被打中。渲染的话最好是改成半透明状态。而且仅限绑定玩家的第 1 视角会展示半透明状态。\n\n【生效范围有两档】① **你挂着的那只女仆**（吊在她下面 / 骑着她，空袭档与扫帚档都算）；② **你骑的那把扫帚本体**（自己驾驶扫帚时扫帚模型就在视野里；吊在骑扫帚的女仆下面时也算）。都只对**你的第一人称**生效（第三人称、别的玩家、别人骑别的女仆/扫帚一律不动）。实现是把她的渲染类型换成原版「幽灵渲染」那一档（itemEntityTranslucentCull，同贴图）+ 顶点 alpha 乘这个系数——只压 alpha 没用，cutout 那一档**根本没开混合**（javap 实证）。她的模型本体与各图层一起变半透明，绳子照旧画。纯客户端，服务端不用改；异常时按不透明走，绝不因为渲染崩游戏")
                 .translation("config.promaid.tether.ghostAlpha").defineInRange("ghostAlpha", 0.1, 0.0, 1.0);
-        COMBAT_TETHER_GLOW_MARK = BUILDER.comment("【实测六百七十五】被拴绳选中的女仆打金色描边标记（默认开）。\n\n需求原文：\"对被武装拴绳选中的女仆加一层标记效果。效果同光灵箭射中敌人时的渲染，但是将光边改为金色。正式起飞时解除该标记效果。\"\n\n用的是原版自己的「发光标记」（写共享标志位，同光灵箭、穿墙可见的描边），描边颜色由客户端改成金色；只对**牵绳档**（她还没起飞、你牵着走）生效，她**正式起飞**（挂到二号位）那一刻就撤掉。\n\n【为什么要有这个开关】它会让女仆发光，联机/录像时可能有人不想要这一层；关掉 = 完全不发光（连标记位都不写），挂载本身一切照旧。\n\n【实测六百七十五：魂符收放的残留已修】收进魂符再放出来时，这个标记（连同发光位）会跟着女仆的 NBT 一起被保存、但拴绳关系不会——旧版于是出现\"边框还在、效果却没了\"。现在女仆**重新入世界**（魂符放出的最后一步 / 区块重载 / 跨维度）就会当场清掉残留标记，见 GunnerTetherManager.onMaidJoin。")
+        COMBAT_TETHER_GLOW_MARK = BUILDER.comment("【金色描边标记】（默认开）。\n\n需求：对被武装拴绳选中的女仆加一层标记效果。效果同光灵箭射中敌人时的渲染，但是将光边改为金色。正式起飞时解除该标记效果。\n\n用的是原版自己的「发光标记」（写共享标志位，同光灵箭、穿墙可见的描边），描边颜色由客户端改成金色；只对**牵绳档**（她还没起飞、你牵着走）生效，她**正式起飞**（挂到二号位）那一刻就撤掉。\n\n【为什么要有这个开关】它会让女仆发光，联机/录像时可能有人不想要这一层；关掉 = 完全不发光（连标记位都不写），挂载本身一切照旧。\n\n【魂符收放的残留已修】收进魂符再放出来时，这个标记（连同发光位）会跟着女仆的 NBT 一起被保存、但拴绳关系不会——旧版于是出现\"边框还在、效果却没了\"。现在女仆**重新入世界**（魂符放出的最后一步 / 区块重载 / 跨维度）就会当场清掉残留标记，见 GunnerTetherManager.onMaidJoin。")
                 .translation("config.promaid.tether.glowMark").define("glowMark", true);
-        COMBAT_TETHER_BROOM_EXTRA = BUILDER.comment("【实测六百七十五】扫帚档的额外下沉（格，默认 0.3，0.0~2.0）。\n\n需求原文：\"扫帚飞行的时候再把玩家的高度再往下调个0.3格左右吧。现在还是会有少量的重叠。\"\n\n扫帚模式下她是**骑在扫帚上**的，而扫帚模型比她的脚底还低——只按「悬挂距离」吊在你下面时，你的人和扫帚会叠在一起。这一项就是在悬挂距离之上**再往下让这么多**（只在扫帚档生效：任务在扫帚模式、或她此刻正骑着世界里的扫帚）。0 = 关掉这个补偿。")
+        COMBAT_TETHER_BROOM_EXTRA = BUILDER.comment("【扫帚档的额外下沉】（格，默认 0.3，0.0~2.0）。\n\n需求：扫帚飞行的时候再把玩家的高度再往下调个0.3格左右吧。现在还是会有少量的重叠。\n\n扫帚模式下她是**骑在扫帚上**的，而扫帚模型比她的脚底还低——只按「悬挂距离」吊在你下面时，你的人和扫帚会叠在一起。这一项就是在悬挂距离之上**再往下让这么多**（只在扫帚档生效：任务在扫帚模式、或她此刻正骑着世界里的扫帚）。0 = 关掉这个补偿。")
                 .translation("config.promaid.tether.broomExtra").defineInRange("broomExtra", 0.3, 0.0, 2.0);
-        COMBAT_TETHER_MACE_SMASH = BUILDER.comment("【实测六百七十六】二号位重锤猛击（默认开，**1.21.1 专属**：重锤是 1.21 才有的东西，1.20.1 那边没有这一项）。\n\n玩家原话：\"我刚刚在运行游戏的时候，让女仆进行了近战空袭，然后我手里面也拿了个重锤。那么我可以正常触发这个重锤的增伤等效果吗？我更希望玩家可以吃到这些效果。而不受坐下这个状态影响。\"\n\n【为什么原来吃不到】重锤的下落加成全部读 fallDistance 这一个字段（MaceItem.canSmashAttack = fallDistance > 1.5 && !isFallFlying()，伤害再按 4f / 12+2(f-3) / 22+(f-8) 三段算），而这个字段只在 Entity.move → Entity.checkFallDamage 里累加——**乘客不走 move**（rideTick 先清零速度，再由载具的 positionRider 直接 setPos，我们的悬挂定位也是这么做的），所以吊在她下面的你 fallDistance 恒为 0，一锤都砸不出猛击。\n\n【实测六百八十六：只对空袭那一档生效】玩家原话：\"我说的重锤是指女仆在使用近战空袭的时候，同时带着玩家，玩家这个时候拿重锤进行砸击……把这边的后门开了，扫帚模式不要开。\" 所以**近战空袭驮着你俯冲时照旧按下落算**，而**扫帚档一个字都不记**——扫帚是运输、不是俯冲，挂着扫帚平飞慢慢降两三格不该换来一记猛击（实测六百八十四 把门槛调低之后扫帚那种慢降也能攒得出来，本批按玩家要求收回去）。扫帚档也不会打「重锤门 玩家=」那一行。\n\n【现在怎么算】既然动的是她，就按**你的实际下降**替你记一份：她这一段俯冲下落了多少格，你的这一锤就按多少格算（原版那套音效、周围击退、增伤全都会自己跑通）。一次下落只换一锤（取用即清零，同原版猛击成功后 resetFallDistance）；悬停/慢降不计（单次 2 tick 采样下降不足 0.2 格 = 0.1 格/tick 就把累计钳回 1.0，免得悬停时的漂移也攒出超重击）；她落地 = 清零。\n\n关掉 = 完全恢复原版（挂着时砸不出猛击）。")
+        COMBAT_TETHER_MACE_SMASH = BUILDER.comment("【二号位重锤猛击】（默认开，**1.21.1 专属**：重锤是 1.21 才有的东西，1.20.1 那边没有这一项）。\n\n需求：我刚刚在运行游戏的时候，让女仆进行了近战空袭，然后我手里面也拿了个重锤。那么我可以正常触发这个重锤的增伤等效果吗？我更希望玩家可以吃到这些效果。而不受坐下这个状态影响。\n\n【为什么原来吃不到】重锤的下落加成全部读 fallDistance 这一个字段（MaceItem.canSmashAttack = fallDistance > 1.5 && !isFallFlying()，伤害再按 4f / 12+2(f-3) / 22+(f-8) 三段算），而这个字段只在 Entity.move → Entity.checkFallDamage 里累加——**乘客不走 move**（rideTick 先清零速度，再由载具的 positionRider 直接 setPos，我们的悬挂定位也是这么做的），所以吊在她下面的你 fallDistance 恒为 0，一锤都砸不出猛击。\n\n【只对空袭那一档生效】需求：我说的重锤是指女仆在使用近战空袭的时候，同时带着玩家，玩家这个时候拿重锤进行砸击……把这边的后门开了，扫帚模式不要开。 所以**近战空袭驮着你俯冲时照旧按下落算**，而**扫帚档一个字都不记**——扫帚是运输、不是俯冲，挂着扫帚平飞慢慢降两三格不该换来一记猛击（早先把门槛调低之后扫帚那种慢降也能攒得出来，本批按玩家要求收回去）。扫帚档也不会打「重锤门 玩家=」那一行。\n\n【现在怎么算】既然动的是她，就按**你的实际下降**替你记一份：她这一段俯冲下落了多少格，你的这一锤就按多少格算（原版那套音效、周围击退、增伤全都会自己跑通）。一次下落只换一锤（取用即清零，同原版猛击成功后 resetFallDistance）；悬停/慢降不计（单次 2 tick 采样下降不足 0.2 格 = 0.1 格/tick 就把累计钳回 1.0，免得悬停时的漂移也攒出超重击）；她落地 = 清零。\n\n关掉 = 完全恢复原版（挂着时砸不出猛击）。")
                 .translation("config.promaid.tether.maceSmash").define("maceSmash", true);
-        COMBAT_TETHER_PULL = BUILDER.comment("【实测六百七十七】拉扯：绳子绷紧时像原版拴绳一样把女仆拽过来（默认开）。\n\n需求原文：\"我要的拉扯感是可以拉着女仆走，像原版拴绳一样。\"\n\n【照搬的是原版拴绳自己那套分档】原版的拴绳力学只有三档（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，两版字面量一模一样）：距离 > 10 格**直接撒手掉拴绳**、> 6 格朝持有者来一记冲量、2~6 格**走到离持有者 2 格处**。我们的绳子\"不会断\"，所以第一档改成\"继续拉\"（走远了她自己的牵引绳会把连人带扫帚传回来）；生效的是后两档：> 6 格照抄原版那一记 0.4·方向² 的冲量，2~6 格用\"朝主人的速度上限\"（= 原版 followLeashSpeed 的口径：走到离你 2 格为止）代替原版的寻路——原版那里每 tick 会重新算一条 A* 路径，女仆一多就是服务器灾难，我们只补速度、不碰导航。\n\n【生效范围】只有**牵绳档**（她还没起飞、你牵着她在走，玩家原话\"原版的拴绳逻辑是玩家牵着女仆走\"）——那一档你**不是**她的乘客、能自由走动，绳子才受得上力。悬挂档（你已经吊在她身下）由原版骑乘定位刚性控制，不参与拉扯。\n\n【怎么关】关掉 = 绳子只画不使劲（她自己的跟随链路照旧工作，只是没有那记额外的拉力）。")
+        COMBAT_TETHER_PULL = BUILDER.comment("【拉扯】绳子绷紧时像原版拴绳一样把女仆拽过来（默认开）。\n\n需求：我要的拉扯感是可以拉着女仆走，像原版拴绳一样。\n\n【照搬的是原版拴绳自己那套分档】原版的拴绳力学只有三档（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，两版字面量一模一样）：距离 > 10 格**直接撒手掉拴绳**、> 6 格朝持有者来一记冲量、2~6 格**走到离持有者 2 格处**。我们的绳子\"不会断\"，所以第一档改成\"继续拉\"（走远了她自己的牵引绳会把连人带扫帚传回来）；生效的是后两档：> 6 格照抄原版那一记 0.4·方向² 的冲量，2~6 格用\"朝主人的速度上限\"（= 原版 followLeashSpeed 的口径：走到离你 2 格为止）代替原版的寻路——原版那里每 tick 会重新算一条 A* 路径，女仆一多就是服务器灾难，我们只补速度、不碰导航。\n\n【生效范围】只有**牵绳档**（她还没起飞、你牵着她在走，需求：原版的拴绳逻辑是玩家牵着女仆走）——那一档你**不是**她的乘客、能自由走动，绳子才受得上力。悬挂档（你已经吊在她身下）由原版骑乘定位刚性控制，不参与拉扯。\n\n【怎么关】关掉 = 绳子只画不使劲（她自己的跟随链路照旧工作，只是没有那记额外的拉力）。")
                 .translation("config.promaid.tether.pull").define("pull", true);
         BUILDER.pop();
 
         // ---- v1.3.0(beta)「原版生物骑乘」：骑乘指挥棒（配置面板：移动与行为 → 骑乘指挥棒）----
-        // 玩家原话：「先做原版生物乘坐坐骑吧。直接套僵尸的骑乘代码，速度上是坐骑的最大速度与女仆的
-        // 最大速度之间取最大值。……引入一个新物品，骑乘指挥棒，可以将可骑乘坐骑与女仆绑定起来，
-        // 被绑定以后会出现光标。（类似于前段时间的武装拴绳）不管是先绑女仆还是先绑可骑乘坐骑都
-        // 没问题。绑定之后，女仆就会坐到那个坐骑上。」
+        //
+        //
+        //
+        //
         BUILDER.comment("骑乘指挥棒·原版生物骑乘（配置面板：移动与行为 → 骑乘指挥棒）")
                 .translation("config.promaid.ride").push("ride");
-        COMBAT_RIDE_ENABLE = BUILDER.comment("原版生物骑乘总开关（默认开）：手持**骑乘指挥棒**右击一只**已上鞍**的坐骑绑定、再右击自己的女仆（或反过来，顺序随意）→ 她坐上去，此后**跟着主人走**（走到离你 5 格就停）。潜行+右击就下来。\n\n【套的就是原版僵尸骑鸡那套】上鞍走 startRiding(force)（跳过原版两道门），驱动走**坐骑自己的寻路**——原版 LivingEntity.aiStep 只在「第一乘客是玩家」时才走 travelRidden，而马/猪/炽足兽/骆驼的 getControllingPassenger() 也**只认玩家**（字节码实证），所以女仆当乘客时它们走的是**普通 travel**、导航照常推着它走。我们只把目的地（主人的位置 / 她本来要去的地方）喂进它自己的 PathNavigation，上下坡/绕障/跳跃/原版动画全部由它自己处理——这就是「降级偷懒」。\n\n【可骑乘 = 能力探测，不写死 id】原版马/驴/骡/骷髅马/僵尸马、猪、炽足兽、骆驼都实现 Saddleable（javap 全量扫描实证），且都要**已上鞍**；模组生物只要也实现这个接口、已上鞍，零适配即可骑。\n\n【速度】玩家原话「坐骑的最大速度与女仆的最大速度之间取最大值」——换算成喂给坐骑寻路的倍率（max(坐骑,女仆) / 坐骑，因为寻路的 speed 参数是倍率、会乘上坐骑自己的移动速度属性）。\n\n【她骑着的时候照常战斗】TLM 在她是乘客时自动把大脑切到 RIDE_*（判据 isPassenger()），女仆自己那条链路不受影响。关闭 = 指挥棒不再绑定，坐骑照原版自由行动")
+        COMBAT_RIDE_ENABLE = BUILDER.comment("原版生物骑乘总开关（默认开）：手持**骑乘指挥棒**右击一只**已上鞍**的坐骑绑定、再右击自己的女仆（或反过来，顺序随意）→ 她坐上去，此后**跟着主人走**（走到离你 5 格就停）。潜行+右击就下来。\n\n【套的就是原版僵尸骑鸡那套】上鞍走 startRiding(force)（跳过原版两道门），驱动走**坐骑自己的寻路**——原版 LivingEntity.aiStep 只在「第一乘客是玩家」时才走 travelRidden，而马/猪/炽足兽/骆驼的 getControllingPassenger() 也**只认玩家**（字节码实证），所以女仆当乘客时它们走的是**普通 travel**、导航照常推着它走。我们只把目的地（主人的位置 / 她本来要去的地方）喂进它自己的 PathNavigation，上下坡/绕障/跳跃/原版动画全部由它自己处理——这就是「降级偷懒」。\n\n【可骑乘 = 能力探测，不写死 id】原版马/驴/骡/骷髅马/僵尸马、猪、炽足兽、骆驼都实现 Saddleable（javap 全量扫描实证），且都要**已上鞍**；模组生物只要也实现这个接口、已上鞍，零适配即可骑。\n\n【速度】需求：坐骑的最大速度与女仆的最大速度之间取最大值——换算成喂给坐骑寻路的倍率（max(坐骑,女仆) / 坐骑，因为寻路的 speed 参数是倍率、会乘上坐骑自己的移动速度属性）。\n\n【她骑着的时候照常战斗】TLM 在她是乘客时自动把大脑切到 RIDE_*（判据 isPassenger()），女仆自己那条链路不受影响。关闭 = 指挥棒不再绑定，坐骑照原版自由行动")
                 .translation("config.promaid.ride.enable").define("enable", true);
         COMBAT_RIDE_FOLLOW_DIST = BUILDER.comment("跟随停下距离（格，默认 5.0，1.0~16.0）：骑着坐骑跟主人走时，离主人**水平距离**在这个数以内就不再给它下移动目标——不然它会顶着主人来回蹭（坐骑转身半径大，贴太近会绕着主人打转）。调到 2~3 = 几乎贴着走；调到 8 以上 = 远远跟着（适合大坐骑）")
                 .translation("config.promaid.ride.followDist").defineInRange("followDist", 5.0, 1.0, 16.0);
         COMBAT_RIDE_SPEED_SCALE = BUILDER.comment("速度总倍率（默认 1.0，0.2~3.0）：乘在「坐骑速度与女仆速度取最大」之上。1.0 = 严格按原话取最大值；嫌慢（比如骑驴/猪跟着跑跟不上）可以调到 1.5~2.0；嫌快（复杂地形上容易被甩下去）往 0.5 调。它不会突破载具自己的寻路安全上限，只是把目标速度按比例缩放")
                 .translation("config.promaid.ride.speedScale").defineInRange("speedScale", 1.0, 0.2, 3.0);
-        // v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单】——玩家原话："我们需要给原版 tlm 的
-        // 椅子这些道具开一个后门，他们虽然是家具类物品，但是从某种意义上，他们也算坐骑，
-        // 需要开一个额外的黑名单，保证女仆坐在这个上面的时候，我们所做的所有骑乘更改全都不生效。"
+        // v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单】——
+        //
+        //
         // 默认两项 = TLM 自带的椅子与坐垫。模组家具只要在这里填一行实体类型 id 即可，代码不用动。
         COMBAT_RIDE_FURNITURE_BLACKLIST = BUILDER.comment("家具类坐骑黑名单（女仆坐上去时，本模组所有骑乘改动一律不生效）：一行/逗号一条实体类型 id（modid:entity）。默认 = TLM 自带的椅子 chair 与坐垫 sit——它们只是「能坐的家具」，不该被当成可驾车/可传送的坐骑。她正坐在黑名单里的家具上时：骑乘指挥棒不绑她、驱动不喂目标、传送不「连坐骑一起搬」（走原版乘客规则）、也不抑制载具闲逛")
                 .translation("config.promaid.ride.furnitureBlacklist")
                 .defineList("furnitureBlacklist",
                         java.util.List.of("touhou_little_maid:chair", "touhou_little_maid:sit"),
                         o -> o instanceof String s && !s.isBlank());
-        // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】——玩家原话："骑乘开始考虑兼容卓越前线的
-        // 和冰火传说的龙，这两类载具都具有攻击能力以及飞行能力，不能用通用的兼容。看看能不能给出
-        // 一个通用解。还有一件事，冰火传说有普通版和社区版。看看关于骑乘方面能不能给一个通用的兼容。"
+        // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】——
+        //
+        //
         // 做法：把"怎么开"抽象成可插拔驱动（MaidMountCompat），按载具类型派发；两家模组全程反射、
         // 编译期不依赖；普通版/社区版按类名探测、同一套方法名驱动（反编译实证成员名逐字相同）。
         COMBAT_RIDE_MOD_MOUNTS = BUILDER.comment("模组坐骑兼容（默认开）：让女仆能骑并**驾驶**第三方模组的载具/坐骑——当前支持【卓越前线（Superb Warfare）的载具】与【冰火传说（含社区版）的龙】。\n\n【为什么不能用一条通用判据】原版兽（马/猪/骆驼）能被本模组驱动，是因为原版对「女仆当乘客」走的是普通 travel + 寻路；而这两类模组载具**根本不走原版那一套**：卓越前线的座驾不是 Saddleable、也没有 PathNavigation，它自己实现了一套 processInput(short) 位掩码 + 分引擎（地面/履带/船/直升机/固定翼/飞艇）的驾驶模型；冰火传说的龙既不是 Saddleable、也没有鞍，骑乘只由「驯服 + 主人 + 阶段>2」决定，飞行由一个独立的 IafDragonFlightManager 驱动。\n\n【通解 = 可插拔驱动】探测到载具类型 → 派给对应驱动，每个驱动只把同一个「意图」（去某点 / 停下 / 攻击某目标）翻译成那个模组自己的 API：卓越前线走 processInput 位掩码（直升机前=加总距、固定翼改俯仰、飞艇用上下位升降，按引擎类型分流）+ 直接写偏航；冰火传说的龙走 flightManager.setFlightTarget（女仆骑龙时 getControllingPassenger 只认玩家 → 恒为 null → 龙自己每 tick 跟着飞行目标跑，升降/俯仰全归它自己的飞行逻辑）。\n\n【攻击】卓越前线的载具基类**本来就内置**「Mob 乘客有目标就自动瞄准开火」，所以女仆坐进武器位、把目标交给她自己即可；冰火传说的龙要显式触发吐息。开关见下一项。\n\n【普通版 vs 社区版】反编译三个 jar 对照：结构相同、只有包名不同（普通版 com.github.alexthe666.iceandfire，社区版 com.iafenvoy.iceandfire；1.21.1 上类名多了 Entity 后缀），承载骑乘/飞行/攻击的成员名四份 jar 逐字相同 → 一条代码路径通吃。\n\n【全程反射】没装 / 换版本 / 改包名 → 整条链路不激活，一个字节都不碰原版。关闭 = 只认原版 Saddleable 兽，模组载具/龙一律按原版规则（她坐上去但没人驾驶）")
                 .translation("config.promaid.ride.modMounts").define("modMounts", true);
         COMBAT_RIDE_MOD_MOUNT_FIRE = BUILDER.comment("模组坐骑·代她开火（默认开）：把她 brain 里的攻击目标交给坐骑去打——① 卓越前线载具走它自己内置的「Mob 乘客有目标就自动瞄准开火」链路；② 冰火传说龙走吐息（strike + riderShootFire，以她为控制者）；③ **其余任何 Mob 坐骑**走通用兜底：无条件把她的目标写到它的 target 上，让它自己那套目标 AI 用它自己的攻击方式打（无攻击 AI 的坐骑写了也无副作用）。关闭 = 她照常驾驶，但坐骑不开火（你自己开）。只在她被骑乘指挥棒绑定时生效，原版/别的模组让她坐上去的场合一次都不会碰")
                 .translation("config.promaid.ride.modMountFire").define("modMountFire", true);
-        // 【无鞍可骑仆从后门】玩家原话："像诡厄巫法的可骑仆从（红石巨兽），以及某些整合包魔改的
-        // 套用代码的仆从（下界合金巨兽），这些都是没有办法让女仆骑乘的（不能装鞍），能不能走个
-        // 后门让女仆可以骑乘那些？" 根因：这些仆从实现的是原版 PlayerRideable（一个空标记接口）
+        // 【无鞍可骑仆从后门】
+        //
+        //
         // 或诡厄自己的 IAutoRideable，**不是** Saddleable——原版是"主人空手右击一下就骑上去"，
         // 全程没有鞍这一环。而我们的 isRideableMount 只认 Saddleable && isSaddled → 整类被挡。
         // 判据（默认自动、不写死 id）：是 Mob + 声明了 PlayerRideable 或 IAutoRideable + **不能装鞍**。
@@ -2567,14 +2854,14 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.ride.servantAuto").define("servantAuto", true);
         COMBAT_RIDE_SERVANT_TRANSFER = BUILDER.comment("模组仆从坐骑·伤害转移（默认开）：女仆骑着**无鞍可骑模组仆从**时，她受到的伤害**转给身下的仆从**（同源打到它身上，仇恨也顺势落到它身上）。\n\n【不转移】环境自伤（虚空 outOfWorld / 卡墙 inWall / 挤压 cramming / 撞墙 flyIntoWall）不转移——它们是每拍重复的伤害、且她与坐骑通常在同一处，转了只会一起被挤死。其余（近战/弹射物/爆炸/火/岩浆/毒…）一律转移。\n\n【范围】判据只在「我们棍子绑的女仆正骑着的无鞍可骑模组仆从」上；其余任何实体受伤一律不受影响。")
                 .translation("config.promaid.ride.servantTransfer").define("servantTransfer", true);
-        // v1.3.0(beta) 实测七百二十【点2：骑乘指挥棒独占右击】——玩家原话："加一个新设定，骑乘指挥棒
-        // 在使用的时候不会触发原本的右击效果。只会触发骑乘棒自己的右击效果，也就是说你拿骑乘棒是
-        // 骑不上龙或者车子的。" 为什么旧版能骑上龙：龙是多部件实体，准星常打中的是翅膀/尾巴/头那些
+        // v1.3.0(beta) 实测七百二十【点2：骑乘指挥棒独占右击】——
+        //
+        //
         // 部位实体，它们会把右击转发给龙本体（反编译实证）。本档 = 手持棍子时这一下实体右击一律
         // 由棍子吃掉（含 interactAt）。完整口径见 1.20.1 树同名字段的注释。
         COMBAT_RIDE_BATON_EXCLUSIVE = BUILDER.comment("骑乘指挥棒·独占右击（默认开）：手持**骑乘指挥棒**时，右击任何实体都由棍子吃掉，不再触发那个实体原本的右击效果——最直接的一条就是「拿棍子骑不上龙/车子」。\n\n【为什么要专门开这一档】冰火传说的龙是**多部件实体**：准星常常打中的是它的翅膀/尾巴/头，那些是独立的小实体，会把这一下右击**转发给龙本体**，龙本体收到就让你骑上去。旧版只认「目标本身是不是能骑的坐骑」，看到一块“部位”就放行 → 转发 → 你就骑上去了。本档把整条路堵死：只要手里是骑乘指挥棒，这一下右击一律归棍子。\n\n【也管 interactAt】客户端对实体右击是「先 interactAt、没被消费才 interact」，两个入口都拦掉才叫“不触发原本的右击效果”。\n\n【关掉 = 与上一版一字不差】只有我们认得出的目标（女仆 / 已上鞍坐骑 / 模组载具·龙 / 家具扫帚）才由棍子接管，对着别的实体挥棍子仍然放行。")
                 .translation("config.promaid.ride.batonExclusive").define("batonExclusive", true);
-        // v1.3.0(beta) 实测七百二十七·点1【骑飞行载具：上机即悬停、盘旋同高空】——玩家原话：
+        // v1.3.0(beta) 实测七百二十七·点1【骑飞行载具：上机即悬停、盘旋同高空】——
         // "女仆似乎不会让直升机悬停。而且在打精英敌人进行绕圈的时候，总是范围绕的特别大，而且
         //  高度很低。导致实际的命中率非常堪忧。最好是采用跟扫帚一样的机制，骑上直升机之后就进入
         //  悬停状态，离地三格左右。随后的盘旋也是悬停在同一高度盘旋。"
@@ -2585,28 +2872,28 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 全程保持这个高度（高度差进死区就不动总距），不再有"爬到敌上"那一段。
         COMBAT_RIDE_AIR_COMBAT = BUILDER.comment("骑飞行载具时的悬停与低空盘旋（默认开）：女仆驾驶**飞行载具**（卓越前线的武装直升机 / 固定翼）时——① 一绑上就进入**悬停**状态，用总距把机身稳在「她脚下的地面 + 下一项那个格数」；② 接敌时绕着敌人盘旋射击，**全程保持这同一个高度**（不会再爬高、也不会再贴地），盘旋半径见「盘旋半径」那一项。\n\n【为什么旧版会又大又低】飞行载具的航向/俯仰走**鼠标通道**、高度只靠**总距 + 悬停开关**（反编译 helicopterEngine 实证）。七百二十六 那一版写的是「先爬到敌人**上方** 15 格」——敌人一旦在她脚下（实机日志出现高差 -24），机头就会被压向地面、越飞越低；而盘旋半径又是直接借扫帚那套（8~10 格还会被机动放大），所以圈大、命中率差。本版把「爬到敌上」这一段整个去掉，改成**离地固定高度悬停 + 独立的小半径盘旋**。\n\n关闭 = 回到旧行为（飞行载具只当成会飞的跟随载具，不做悬停/高度锁定，接敌仍按七百二十六 那套爬到敌上）。地面载具（坦克/装甲车）不受本档影响，它们照旧贴地跟着主人、用车上的炮塔打。")
                 .translation("config.promaid.ride.airCombat").define("airCombat", true);
-        COMBAT_RIDE_AIR_ALT = BUILDER.comment("**跟随**时的悬停高度（**离地**格数，默认 3，1~20）：骑上飞行载具后、**没有敌人**时，机身稳定在「她脚下的地面 + 这么多格」——玩家原话「骑上直升机之后就进入悬停状态，离地三格左右」。\n\n【只作用于跟随】玩家后来的补正：「我是说跟随的时候保持离地三格的……但是遇到敌人还是要升高到比敌人高 15 格的位置的呀」——所以**接敌（有敌人）时**这一项不生效，那时改由「接敌高度」那一项管（比敌人高多少格）。头顶被方块/天花板顶住时按实际能到的高度悬停，绝不硬顶。")
+        COMBAT_RIDE_AIR_ALT = BUILDER.comment("**跟随**时的悬停高度（**离地**格数，默认 3，1~20）：骑上飞行载具后、**没有敌人**时，机身稳定在「她脚下的地面 + 这么多格」——需求：骑上直升机之后就进入悬停状态，离地三格左右。\n\n【只作用于跟随】玩家后来的补正：「我是说跟随的时候保持离地三格的……但是遇到敌人还是要升高到比敌人高 15 格的位置的呀」——所以**接敌（有敌人）时**这一项不生效，那时改由「接敌高度」那一项管（比敌人高多少格）。头顶被方块/天花板顶住时按实际能到的高度悬停，绝不硬顶。")
                 .translation("config.promaid.ride.airAlt")
                 .defineInRange("airAlt", 3.0, 1.0, 20.0);
-        COMBAT_RIDE_FIGHT_ALT = BUILDER.comment("**接敌**时的爬升高度（比敌人高多少格，默认 15，3~40）：骑飞行载具**有敌人**时，机身升到敌人**上方**这么多格再开始盘旋俯射——玩家原话「遇到敌人还是要升高到比敌人高 15 格的位置的呀，同时缩小绕圈的半径」。\n\n【与跟随高度的分工】「悬停高度」只管没敌人时的低空跟随（离地 3 格）；这一项只管接敌时的站位（敌上 15 格）。两者互不影响。\n\n【与旧版的区别】数值同样是 15，但旧版是把它写进**俯仰**（机头压向目标方向）——敌人一旦在她脚下很多，机头就被压向地面、越飞越低；本版把它写进**目标点高度**、用总距升到位，姿态不再决定高度，所以她能真正稳在敌上方。")
+        COMBAT_RIDE_FIGHT_ALT = BUILDER.comment("**接敌**时的爬升高度（比敌人高多少格，默认 15，3~40）：骑飞行载具**有敌人**时，机身升到敌人**上方**这么多格再开始盘旋俯射——需求：遇到敌人还是要升高到比敌人高 15 格的位置的呀，同时缩小绕圈的半径。\n\n【与跟随高度的分工】「悬停高度」只管没敌人时的低空跟随（离地 3 格）；这一项只管接敌时的站位（敌上 15 格）。两者互不影响。\n\n【与旧版的区别】数值同样是 15，但旧版是把它写进**俯仰**（机头压向目标方向）——敌人一旦在她脚下很多，机头就被压向地面、越飞越低；本版把它写进**目标点高度**、用总距升到位，姿态不再决定高度，所以她能真正稳在敌上方。")
                 .translation("config.promaid.ride.fightAlt")
                 .defineInRange("fightAlt", 15.0, 3.0, 40.0);
-        COMBAT_RIDE_ORBIT_RADIUS = BUILDER.comment("盘旋半径（格，默认 4，2~24）：骑飞行载具接敌时，绕着敌人转的圈有多大。\n\n【为什么单独一个旋钮】扫帚那套半径是 `combat.broom.range` / `orbitMax`（默认 8~10，还会被接敌机动放大到更远），玩家反馈直升机用那套「范围绕的特别大」，随后又补了一句「同时缩小绕圈的半径」——所以默认从 6 再收到 4，且本项独立、不被任何机动倍率放大。\n\n越小 = 贴得越近、绕得越紧（命中率高但更容易挨打）；越大 = 越安全但绕得松散。")
+        COMBAT_RIDE_ORBIT_RADIUS = BUILDER.comment("盘旋半径（格，默认 4，2~24）：骑飞行载具接敌时，绕着敌人转的圈有多大。\n\n【为什么单独一个旋钮】扫帚那套半径是 `combat.broom.range` / `orbitMax`（默认 8~10，还会被接敌机动放大到更远），需求：直升机用那套「范围绕的特别大」，随后又补了一句「同时缩小绕圈的半径」——所以默认从 6 再收到 4，且本项独立、不被任何机动倍率放大。\n\n越小 = 贴得越近、绕得越紧（命中率高但更容易挨打）；越大 = 越安全但绕得松散。")
                 .translation("config.promaid.ride.orbitRadius")
                 .defineInRange("orbitRadius", 4.0, 2.0, 24.0);
-        // v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具里装弹】——玩家原话："卓越前线，如果女仆身上
-        // 有这个载具对应的子弹。能不能让女仆自己把弹扔进装弹区里面呢？"
+        // v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具里装弹】——
+        //
         // 根因：车的枪弹从 getAmmoSupplier() = 车自己的**容器**里取（Capabilities.ItemHandler.ENTITY
         // → VehicleContainerHandler，反编译 ModCapabilities 实证）；她背包里的子弹在**她**身上，
         // 车根本看不见。本档把她背包里"这车这把枪对得上的子弹"搬进车的容器。
         COMBAT_RIDE_AMMO_FEED = BUILDER.comment("骑载具时替她装弹（默认开）：女仆驾驶卓越前线的载具时，如果**她背包里有这辆车需要的子弹**，她会把子弹搬进**载具自己的弹药容器**里——车的枪弹是从车容器取的（反编译实证），她背包里的子弹车看不见，所以旧版她身上带再多弹也打不响。\n\n搬的是什么：只搬**这辆车当前武器实际吃的那种子弹**（从车里那门枪的弹药配置读出来），对不上的子弹一件不动。每 0.5 秒检查一次、按需搬，绝不一次全倒进去。\n\n关闭 = 不搬（你想手动装弹就关掉它）。只在她被骑乘指挥棒绑定时生效。")
                 .translation("config.promaid.ride.ammoFeed")
                 .define("ammoFeed", true);
-        // v1.3.0(beta) 实测七百四十七【投弹安全高度：基洛夫先爬升再投弹】——玩家原话：
+        // v1.3.0(beta) 实测七百四十七【投弹安全高度：基洛夫先爬升再投弹】——
         // "女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到。"
         // 基洛夫的武器是往下丢的航空炸弹（SWB 里那颗 42 格半径的大家伙），贴地投弹等于把自己
         // 也圈进爆心。本项 = "比目标高多少格才允许投弹"，默认 20（玩家给的数），0 = 关掉这道闸。
-        COMBAT_RIDE_BOMB_STANDOFF = BUILDER.comment("投弹安全高度（格，默认 20，0~64）：女仆驾驶**飞行载具**（尤其基洛夫空艇）准备对地投弹时，先把机身升到**比目标高这么多格**、再松弹——玩家原话「女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到」。\n\n【为什么需要】基洛夫的武器是往下丢的航空炸弹，爆炸半径极大（SWB 里那颗 Bor-57 是 42 格）；贴地投弹等于把她自己也圈进爆心。本项就是那道「先拉高再丢」的闸：\n\n【怎么生效】她骑飞行载具、有攻击目标时，机身高度会被抬到「目标 + 本项格数」（与「接敌升到敌上」同一条总距/liftSpeed 通道，不用新的一档控制）；**没到位就不投弹**，到位了才照常投。\n\n【0 = 关掉】填 0 = 不做这道闸，想投就投（贴地俯冲投弹也照投，后果自负）。\n\n【只作用于飞行载具】地面载具（坦克/装甲车）不受影响。且这一档属于「骑飞行载具·悬停与盘旋」，那一项关掉时本闸也不生效。")
+        COMBAT_RIDE_BOMB_STANDOFF = BUILDER.comment("投弹安全高度（格，默认 20，0~64）：女仆驾驶**飞行载具**（尤其基洛夫空艇）准备对地投弹时，先把机身升到**比目标高这么多格**、再松弹——需求：女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到。\n\n【为什么需要】基洛夫的武器是往下丢的航空炸弹，爆炸半径极大（SWB 里那颗 Bor-57 是 42 格）；贴地投弹等于把她自己也圈进爆心。本项就是那道「先拉高再丢」的闸：\n\n【怎么生效】她骑飞行载具、有攻击目标时，机身高度会被抬到「目标 + 本项格数」（与「接敌升到敌上」同一条总距/liftSpeed 通道，不用新的一档控制）；**没到位就不投弹**，到位了才照常投。\n\n【0 = 关掉】填 0 = 不做这道闸，想投就投（贴地俯冲投弹也照投，后果自负）。\n\n【只作用于飞行载具】地面载具（坦克/装甲车）不受影响。且这一档属于「骑飞行载具·悬停与盘旋」，那一项关掉时本闸也不生效。")
                 .translation("config.promaid.ride.bombStandoff")
                 .defineInRange("bombStandoff", 20.0, 0.0, 64.0);
         BUILDER.pop();
@@ -2616,11 +2903,16 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_TELEPORT_EXEMPT_SITTING = BUILDER.comment("坐下的女仆不被自保传送拉走（默认开）：她坐下（TLM 坐姿）或蹲下（Shift）时，自保的\"回到主人身边\"归位传送不再把她拉走——这两种姿势是玩家明确把她停放在那儿的动作，本模组对 TLM 原版传送早就豁免了，这里给我们自己的自保传送补上同一道闸。关掉 = 回到旧行为（坐着的残血女仆也会被自保传送回主人身边）。她自己站起来（含受伤起身）后自然恢复传送能力")
                 .translation("config.promaid.teleportExemptSitting")
                 .define("teleportExemptSitting", true);
+        // 实测八百三十五：TLM 原版传送/跟随的豁免总闸（面板：战斗与自保 → 传送与逃生）。
+        // 与上面那条同族，但那条只管我们自己的自保传送，这条管 TLM 原版那条。
+        TLM_TELEPORT_EXEMPT = BUILDER.comment("TLM 瞬移/跟随豁免（默认开）：女仆处于【自保逃跑中 / 坐下或蹲下 / 骑乘或坐着载具 / 骑特殊坐骑 / 鞘翅滑翔中 / 骑扫帚腾空中 / 建造任务中 / 搭路中 / 主人已死亡】这些状态时，TLM 原版的「离主人过远自动传送回来」与跟随启动一律不生效——这些状态要么是玩家明确把她停放在那儿，要么是本模组自己的功能正在用她。关掉 = 完全回到 TLM 原版：她被拉回主人身边（包括从扫帚 / 坐骑背上 / 坐垫上被拽下来），主人死亡期间也会被传送到尸体旁")
+                .translation("config.promaid.tlmTeleportExempt")
+                .define("tlmTeleportExempt", true);
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----
-        // 玩家建议原文：「女仆在发现刷怪笼以后如果手上有火把会优先在刷怪笼上插火把（用来防止
-        // 刷怪，当然可能涉及我的知识盲区，如果有和火把一样功效的东西，那么一样可以接受判定）。
-        // 如果这一块区域被判定为 Home 模式工作区域（河童的罗盘标记的那一块）则不执行这个链路。」
+        //
+        //
+        //
         // 判据与"为什么光就够了"整段写在 MaidSpawnerTorchBehavior 的类注释里。
         BUILDER.comment("防刷怪：发现刷怪笼就去插火把（配置面板：战斗与自保 → 防刷怪插火把）")
                 .translation("config.promaid.spawnerTorch").push("spawnerTorch");
@@ -2628,8 +2920,18 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.spawnerTorch.enable").define("enable", true);
         COMBAT_SPAWNER_TORCH_RADIUS = BUILDER.comment("搜索半径（格，默认 12，4~32）：她每隔 4 秒在自己周围这个水平半径、上下各 4 格里找一次刷怪笼（只找最近的这一个）。调大能提前发现远处的，但每次扫描要读的方块数按半径平方涨——12 已经覆盖一般地下矿道/地牢的视野，没必要太大")
                 .translation("config.promaid.spawnerTorch.radius").defineInRange("radius", 12.0, 4.0, 32.0);
-        COMBAT_SPAWNER_TORCH_PRIORITY = BUILDER.comment("优先去插（默认开，v1.3.0(beta) 实测六百六十四）：发现刷怪笼之后，她**放下手上的活**先把它哑掉——这段时间她的走位独占（取消 MoveToTargetSink 的 WALK_TARGET 执行、并掐掉挖矿/伐木等驱动发起的直连寻路），走过去插上再回去干活。关掉 = 她照旧会去插，但**不抢走位**：正在挖矿/伐木时那几条驱动会一路把她按在工位上（玩家反馈的\"没能实现\"多半就是这一条）。打架/自保/骑乘/坐着时这条闸自动让位（战斗永远优先）")
+        COMBAT_SPAWNER_TORCH_PRIORITY = BUILDER.comment("优先去插（默认开）：发现刷怪笼之后，她**放下手上的活**先把它哑掉——这段时间她的走位独占（取消 MoveToTargetSink 的 WALK_TARGET 执行、并掐掉挖矿/伐木等驱动发起的直连寻路），走过去插上再回去干活。关掉 = 她照旧会去插，但**不抢走位**：正在挖矿/伐木时那几条驱动会一路把她按在工位上（需求：的\"没能实现\"多半就是这一条）。打架/自保/骑乘/坐着时这条闸自动让位（战斗永远优先）")
                 .translation("config.promaid.spawnerTorch.priority").define("priority", true);
+        COMBAT_SPAWNER_BREAK = BUILDER.comment("发现刷怪笼直接**拆掉**（默认开）：整合包里绝大多数刷怪笼无视光照（带 custom_spawn_rules，生成不再看亮度），火把压不住——她走过去用镐把刷怪笼挖掉，才是真正断刷怪。\n\n【为什么拆除优先级高于战斗】模组刷怪笼一刷怪她就会被写攻击目标、被切去打架，旧行为下「永远没有拆刷怪笼的机会」（需求：）。本开关打开后：正在拆刷怪笼的女仆**不被自动参战切走**（钉住），够得着的怪由原地反击兜底（不追怪），血量跌破自保线时自保(250)接管逃跑/回血、拆除让位。三级顺序：自保 > 拆刷怪笼 > 战斗。拆除最多持续 20 秒（超时放下），不会永久锁死战斗。\n\n【关掉】= 回到旧的「插火把」链路（见上面两项；火把降为可选）。\n\n【不碰的情况】仍同插火把：刷怪笼落在她「在家模式/工作区」圈里一律不动（那可能是你故意留的刷怪塔），以及她在自保中时不动。另有三道修正：**没在刷怪的 / 空笼子 / 只刷牛羊猪这类和平生物的不拆**（见下面「只在真在刷怪时才拆」）；其中**空笼子与只刷和平生物的笼子另有一道独立的「拆除黑名单」硬保证**（下面那一项，默认含 empty / benign）——**任何情况下都不拆**，连「只在真在刷怪时才拆」关掉也照样生效；以及**她与刷怪笼之间隔着方块（看不见）的不拆**（这一条恒生效）。\n\n【日志】搜「刷怪笼」：发现 → 过去拆 / 拆掉了 / 没带镐放过 / 20 秒没够到。")
+                .translation("config.promaid.spawnerTorch.breakSpawner").define("breakSpawner", true);
+        COMBAT_SPAWNER_BREAK_PICKAXE = BUILDER.comment("拆除刷怪笼要求带镐（默认开）：只影响**速度**——正确的镐约 4~15 刻（0.2~0.75 秒）拆完；徒手按原版公式慢 3.3 倍、约 25 秒，中途极易被刷出来的怪打断（所以默认要求带镐）。没有镐时她会从背包/精妙背包自动换一把上来；一件都没有就先放过（不做这条链）。刷怪笼本身**没有掉落物**（空掉宝表），镐不影响产物、只影响快慢。")
+                .translation("config.promaid.spawnerTorch.breakRequirePickaxe").define("breakRequirePickaxe", true);
+        COMBAT_SPAWNER_BREAK_ACTIVE_ONLY = BUILDER.comment("只在刷怪笼**真的在刷怪**时才拆（默认开）：需求：哪怕这个刷怪笼里面没有在刷怪，他也会把它破坏掉……有一部分情况下，玩家是可以主动获取刷怪蛋和刷怪笼的。打开后，**现在没在刷怪**的刷怪笼一律不碰（留着给你收走 / 改造 / 当刷怪塔材料）；只有它**此刻确实在刷怪**才动手。\n\n【怎么判“在刷怪”】① 刷怪笼周围 12 格内确实有敌对生物在游荡（这是跨版本、跨模组都稳的信号：不管原版还是无视光照的模组刷怪笼，只要在出货，周围就会有怪）；或者 ② 有玩家在 16 格内（原版刷怪笼的激活半径）**且**它没被光照压住（光照已经压住的 = 现在没在刷，不拆）。\n\n【空笼子 / 只刷和平生物的不拆】原版刷怪笼要刷什么写在方块实体 NBT 里，读得出来就**只认会刷敌对生物的**：**空笼子**（没设任何刷怪数据，永远刷不出东西）不拆；**只刷牛羊猪这类和平生物**的笼子（动物 / 村民 / 鱼…）不拆——它不构成威胁，往往正是你要留着刷动物或收走的。刷敌对生物（僵尸 / 骷髅 / 爬行者…）才拆；**刷怪表读不出来时按「在出货」处理（拆）**，不再当成「和平生物」——整合包会把刷怪表放在自己的键下（如 custom_spawn_rules），只按固定键名读会漏。\n\n【空笼子 / 只刷和平生物另有独立硬保证】这两类笼子默认也在「拆除黑名单」（下一项，默认 empty,benign）里 → **任何情况下都不拆**：黑名单压在本条的所有判据之前，所以哪怕它旁边正好有敌对生物在游荡、或本条被关掉，也不拆。想让「读不出刷怪表的模组笼子」也一起留，把 unreadable 加进黑名单。\n\n【同一批修正的另一条：隔墙不拆】只一条判据——**她与刷怪笼之间只要还挡着方块，就当没看见**（放下这一只、进冷却）：不加计时、不绕路、不退让，就这一条。判据与自保 / 飞行那几条视线检查同口径（眼睛 → 刷怪笼中心打一发射线，第一个命中的方块必须就是它本身）。这一条**恒生效**，不受本开关影响。\n\n【关掉】= 回到旧的「见到就拆」（不看它有没有在刷怪、也不看笼子刷的是什么）；**隔墙不拆**这条仍恒生效。\n\n【日志】搜「刷怪笼」：不拆时会**各自成句**说清是哪一种——「现在没在出货（…）」/「它的刷怪数据里只有和平生物」/「它的刷怪数据是空的」，句尾还附「读到 entity.id = […]」；扫到却被墙挡住的写「扫到 N 个刷怪笼，但都与她之间隔着方块」。")
+                .translation("config.promaid.spawnerTorch.breakOnlyWhenActive").define("breakOnlyWhenActive", true);
+        COMBAT_SPAWNER_BREAK_BLACKLIST = BUILDER.comment("拆除黑名单（永不拆的刷怪笼，默认 empty,benign）：写进这里的东西，**不管它此刻在不在刷怪、旁边有没有敌对生物**，她一律不拆（这一条压在所有判定之前，把「只在真在刷怪时才拆」关掉也照样生效）。名单里可以写四种：\n\n· empty —— 空笼子：读得出方块实体、但里面一个刷怪数据都没配（永远刷不出东西）。这类笼子往往正是你要收走 / 当装饰的；\n· benign —— 只刷和平生物的笼子（牛羊猪 / 村民 / 鱼…）：不构成威胁，往往是你留着刷动物的；\n· unreadable —— 刷怪数据读不出来（没有方块实体、或 NBT 读失败）的笼子；默认**不在**名单里（读不出时按「在出货」处理，宁可多拆不可漏拆），需要连模组笼子一起留就自己写进来；\n· 一个实体注册名，如 minecraft:zombie（也可只写 zombie）——笼子的刷怪表里有它就命中，用来专门留住某一种怪。\n\n写空 = 这份名单不生效（回到只看「只在真在刷怪时才拆」的行为）。日志搜「刷怪笼」：命中时写「在黑名单里（命中的那条）→ 永不拆」")
+                .translation("config.promaid.spawnerTorch.breakBlacklist")
+                .defineList("breakBlacklist", java.util.List.of("empty", "benign"),
+                        o -> o instanceof String s && !s.isEmpty());
         BUILDER.pop();
 
 
@@ -2687,19 +2989,19 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_MAX_PITCH_DOWN = BUILDER.comment("阶段二俯仰限幅·低头（度，默认 70）：飞向目标时低头不超过这个角度（90 = 垂直扎下去）")
                 .translation("config.promaid.airRaid.maxPitchDown")
                 .defineInRange("maxPitchDown", 70.0, 0.0, 89.0);
-        AIR_RAID_ORBIT_RADIUS = BUILDER.comment("远程空袭的盘旋半径（格，默认 10）：以目标为圆心维持的水平距离，靠径向修正拉回圈上\n\n【实测六百九十三：这个数现在是「区间的近端」而不是固定值】接敌后她的盘旋半径在这个数与下面「离敌最远距离」之间**随机缓动**（每只女仆各不相同、每 4 秒重掷一次），并额外按 UUID 决定旋向（一半顺时针一半逆时针）——旧版所有女仆同一个圆、同一个旋向，敌人一条射线就能串到对面那只。实际区间 = [min(最远距离, 本值 × 0.75), 最远距离]")
+        AIR_RAID_ORBIT_RADIUS = BUILDER.comment("远程空袭的盘旋半径（格，默认 10）：以目标为圆心维持的水平距离，靠径向修正拉回圈上\n\n【这个数现在是「区间的近端」而不是固定值】接敌后她的盘旋半径在这个数与下面「离敌最远距离」之间**随机缓动**（每只女仆各不相同、每 4 秒重掷一次），并额外按 UUID 决定旋向（一半顺时针一半逆时针）——旧版所有女仆同一个圆、同一个旋向，敌人一条射线就能串到对面那只。实际区间 = [min(最远距离, 本值 × 0.75), 最远距离]")
                 .translation("config.promaid.airRaid.orbitRadius")
                 .defineInRange("orbitRadius", 10.0, 2.0, 48.0);
-        AIR_RAID_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 12，2~64）：远程空袭盘旋时**不会被拉出这个半径之外**——越过它径向修正的增益从 0.5 提到 1.0（双倍往回带），所以\"随机环绕\"不会变成\"越飞越远\"。\n\n【实测六百九十三：玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 盘旋半径 × 0.75), 本值] 里缓动。默认 12 = 盘旋半径 10 的 1.2 倍，所以均值仍落在 10 附近（观感与旧版同一条圈）。\n\n注意它**不是**「有效开火距离」：开火那一道门是 airRaid.rangedFireRange（默认 24，超出就不扣扳机、先盘旋拉近），本值只决定\"她绕在哪一圈上\"，一般应当小于等于开火距离。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
+        AIR_RAID_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 12，2~64）：远程空袭盘旋时**不会被拉出这个半径之外**——越过它径向修正的增益从 0.5 提到 1.0（双倍往回带），所以\"随机环绕\"不会变成\"越飞越远\"。\n\n【玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 盘旋半径 × 0.75), 本值] 里缓动。默认 12 = 盘旋半径 10 的 1.2 倍，所以均值仍落在 10 附近（观感与旧版同一条圈）。\n\n注意它**不是**「有效开火距离」：开火那一道门是 airRaid.rangedFireRange（默认 24，超出就不扣扳机、先盘旋拉近），本值只决定\"她绕在哪一圈上\"，一般应当小于等于开火距离。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
                 .translation("config.promaid.airRaid.orbitMax")
                 .defineInRange("orbitMax", 12.0, 2.0, 64.0);
-        AIR_RAID_MIN_STANDOFF = BUILDER.comment("空袭·离敌最小距离（格，默认 6.0，0~32；0 = 关闭）：「拉开距离」在空袭这边的落地。\n\n【实测七百〇四：玩家点名要的那个数】原话：「其实近远程空袭的女仆也是需要有一个拉开距离的」。\n\n【它管三件事】① **远程空袭盘旋半径的硬下限**——盘旋半径的区间近端取 max(盘旋半径 × 0.75, 本值)，所以她绕的那个圈**绝不会**比这条线更近（旧版近端是\"盘旋半径 × 0.75\"现算的，把「离敌最远距离」调小、近端就跟着塌下去，她可能绕到 3 格、正好进近战怪的攻击范围）；② **近战空袭的\"先把距离拉开再俯冲\"**——已占好高度但水平距离还没拉开到这条线时，先背离敌人平飞一小段（不俯冲），拉开了才压低机头；③ 同一条线也兜住\"被贴脸\"：贴身怪把她推到这条线以内时，她不会继续压着敌人绕。\n\n【怎么调】调大 = 她离得更远、更安全，但枪械/弹道命中率会随距离下降、也可能超出某些武器射程（一般应当 ≤「有效开火距离」airRaid.rangedFireRange）；调小 = 更贴脸。**近战那一档不会因此打不中**：这条线只作用在\"俯冲之前\"那一段，俯冲一旦开始，瞄准与命中判定一个字不改（这个模组在命中率上专门修过两轮）。被本值顶到超过「离敌最远距离」时以后者为准（区间不会倒挂）。日志搜「拉开距离」")
+        AIR_RAID_MIN_STANDOFF = BUILDER.comment("空袭·离敌最小距离（格，默认 6.0，0~32；0 = 关闭）：「拉开距离」在空袭这边的落地。\n\n【玩家点名要的那个数】原话：「其实近远程空袭的女仆也是需要有一个拉开距离的」。\n\n【它管三件事】① **远程空袭盘旋半径的硬下限**——盘旋半径的区间近端取 max(盘旋半径 × 0.75, 本值)，所以她绕的那个圈**绝不会**比这条线更近（旧版近端是\"盘旋半径 × 0.75\"现算的，把「离敌最远距离」调小、近端就跟着塌下去，她可能绕到 3 格、正好进近战怪的攻击范围）；② **近战空袭的\"先把距离拉开再俯冲\"**——已占好高度但水平距离还没拉开到这条线时，先背离敌人平飞一小段（不俯冲），拉开了才压低机头；③ 同一条线也兜住\"被贴脸\"：贴身怪把她推到这条线以内时，她不会继续压着敌人绕。\n\n【怎么调】调大 = 她离得更远、更安全，但枪械/弹道命中率会随距离下降、也可能超出某些武器射程（一般应当 ≤「有效开火距离」airRaid.rangedFireRange）；调小 = 更贴脸。**近战那一档不会因此打不中**：这条线只作用在\"俯冲之前\"那一段，俯冲一旦开始，瞄准与命中判定一个字不改（这个模组在命中率上专门修过两轮）。被本值顶到超过「离敌最远距离」时以后者为准（区间不会倒挂）。日志搜「拉开距离」")
                 .translation("config.promaid.airRaid.minStandoff")
                 .defineInRange("minStandoff", 6.0, 0.0, 32.0);
-        AIR_RAID_MIN_ABOVE_HEIGHT = BUILDER.comment("空袭·离敌最低高度（格，默认 8.0，0~64；0 = 关闭）：**远程空袭盘旋时的硬地板**——她与目标的**高度差**任何时候都不得低于本值。\n\n【实测七百〇六：玩家点名要的那个数】原话：「远程空袭的时候，不管是处于哪一种飞行状态，那么至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」\n\n【为什么旧版会\"飞着飞着只剩一点高度\"】旧版只有一条软约束：`期望盘旋高度 10 格 + 俯仰增益按误差回正`。俯仰有死区、滑翔每 tick 都在掉高、而\"掉高补推\"有 5 秒冷却——三段叠加的结果是高度在 [8, 11] 之间持续锯齿，偶尔探到 8 格以下、甚至只剩一两格（那时她的俯仰才刚开始往回抬，但要好几秒才能补回来）。\n\n【本值怎么管】它是一条**硬地板**，与上面那条软回正并存、优先级更高：只要高度差低于本值，就把盘旋俯仰**直接钉成最大抬头**（不管误差算出来的角度是多少），于是她立刻转入爬升、绝不会继续往下滑；同时把\"掉高补推\"的触发门槛也提到本值（低于它就算掉高，不必等掉出 10 格带），冷却一好就补推。\n\n【怎么调】调大 = 她更贴着\"始终比敌人高这么多\"、更安全、但更费燃料（补推更频繁）；0 = 关掉地板，退回旧版\"软回正 + 5 秒补推\"。默认 8 与「期望盘旋高度 10」配成\"目标带 10、地板 8\"——正常时在 10 附近飘，最坏也不低于 8。日志搜「高度地板」")
+        AIR_RAID_MIN_ABOVE_HEIGHT = BUILDER.comment("空袭·离敌最低高度（格，默认 8.0，0~64；0 = 关闭）：**远程空袭盘旋时的硬地板**——她与目标的**高度差**任何时候都不得低于本值。\n\n【玩家点名要的那个数】原话：「远程空袭的时候，不管是处于哪一种飞行状态，那么至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」\n\n【为什么旧版会\"飞着飞着只剩一点高度\"】旧版只有一条软约束：`期望盘旋高度 10 格 + 俯仰增益按误差回正`。俯仰有死区、滑翔每 tick 都在掉高、而\"掉高补推\"有 5 秒冷却——三段叠加的结果是高度在 [8, 11] 之间持续锯齿，偶尔探到 8 格以下、甚至只剩一两格（那时她的俯仰才刚开始往回抬，但要好几秒才能补回来）。\n\n【本值怎么管】它是一条**硬地板**，与上面那条软回正并存、优先级更高：只要高度差低于本值，就把盘旋俯仰**直接钉成最大抬头**（不管误差算出来的角度是多少），于是她立刻转入爬升、绝不会继续往下滑；同时把\"掉高补推\"的触发门槛也提到本值（低于它就算掉高，不必等掉出 10 格带），冷却一好就补推。\n\n【怎么调】调大 = 她更贴着\"始终比敌人高这么多\"、更安全、但更费燃料（补推更频繁）；0 = 关掉地板，退回旧版\"软回正 + 5 秒补推\"。默认 8 与「期望盘旋高度 10」配成\"目标带 10、地板 8\"——正常时在 10 附近飘，最坏也不低于 8。日志搜「高度地板」")
                 .translation("config.promaid.airRaid.minAboveHeight")
                 .defineInRange("minAboveHeight", 8.0, 0.0, 64.0);
-        AIR_RAID_RANGED_HOLD_HEIGHT = BUILDER.comment("期望盘旋高度（目标上方格数，默认 10）：低于这条高度带就补推——远程空袭的核心是「脚不沾地」，实测五百七十九由 3.5 提到 10")
+        AIR_RAID_RANGED_HOLD_HEIGHT = BUILDER.comment("期望盘旋高度（目标上方格数，默认 10）：低于这条高度带就补推——远程空袭的核心是「脚不沾地」，由 3.5 提到 10")
                 .translation("config.promaid.airRaid.rangedHoldHeight")
                 .defineInRange("rangedHoldHeight", 10.0, 0.0, 64.0);
         AIR_RAID_RANGED_HOLD_GAIN = BUILDER.comment("高度修正增益（默认 5.0）：高度误差 → 俯仰角度的比例系数，越大越急着回到期望高度")
@@ -2708,7 +3010,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_RANGED_HOLD_BIAS = BUILDER.comment("高度修正偏置（格，默认 1.0）：给高度误差加一点正偏置，让她略微偏高于期望高度（留余量）")
                 .translation("config.promaid.airRaid.rangedHoldBias")
                 .defineInRange("rangedHoldBias", 1.0, -20.0, 20.0);
-        AIR_RAID_RANGED_BOOST_DROP = BUILDER.comment("掉高容差（格，默认 0.5）：掉出期望高度带这么多格就补一口推（法术 / 激流三叉戟 / 扇子 / 烟花），实测五百七十八由 3.0 收到 0.5")
+        AIR_RAID_RANGED_BOOST_DROP = BUILDER.comment("掉高容差（格，默认 0.5）：掉出期望高度带这么多格就补一口推（法术 / 激流三叉戟 / 扇子 / 烟花），由 3.0 收到 0.5")
                 .translation("config.promaid.airRaid.rangedBoostDrop")
                 .defineInRange("rangedBoostDrop", 0.5, 0.0, 20.0);
         AIR_RAID_RANGED_ORBIT_UP_MAX = BUILDER.comment("盘旋抬头上限（度，默认 45）：高度修正抬头时的角度上限")
@@ -2743,7 +3045,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 默认取 24 = 和「远程射程」同一个量级（TLM 自家枪械任务的中距离带也在这一档），
         // 超出就不扣扳机、让盘旋的径向修正把她拉回圈上（盘旋半径默认 10）再打。
         // 弓弩那一档本来就只有 24，所以**默认对弓弩一字未改**。0 = 关掉这条门（用武器自己的射程）。
-        AIR_RAID_RANGED_FIRE_RANGE = BUILDER.comment("空袭·有效开火距离（格，默认 24，0 = 不限）：只有在她到目标的 3D 距离小于这一条时才扣扳机。\n\n【为什么要有它】枪械模组自己的射程（实测现场 48 格）比弓弩的 24 大一倍，旧版于是会在 40 格开外一路点射——子弹是有飞行时间的实体，打一直在动的敌人基本打不中，玩家看到的是「打得很远、准度极低」。超出这条距离她**不开火**，改为继续盘旋（盘旋的径向修正会把她拉回半径 10 的圈上）再打。\n\n【锁敌没变】50 格索敌是「看不看得见该打的怪」，这条只管「打得到才算数」。\n\n0 = 关掉这条门（回到「用武器自己的射程」的旧口径）。弓弩的射程本来就是 24，所以默认值对弓弩一字未改。")
+        AIR_RAID_RANGED_FIRE_RANGE = BUILDER.comment("空袭·有效开火距离（格，默认 24，0 = 不限）：只有在她到目标的 3D 距离小于这一条时才扣扳机。\n\n【为什么要有它】枪械模组自己的射程（现场 48 格）比弓弩的 24 大一倍，旧版于是会在 40 格开外一路点射——子弹是有飞行时间的实体，打一直在动的敌人基本打不中，玩家看到的是「打得很远、准度极低」。超出这条距离她**不开火**，改为继续盘旋（盘旋的径向修正会把她拉回半径 10 的圈上）再打。\n\n【锁敌没变】50 格索敌是「看不看得见该打的怪」，这条只管「打得到才算数」。\n\n0 = 关掉这条门（回到「用武器自己的射程」的旧口径）。弓弩的射程本来就是 24，所以默认值对弓弩一字未改。")
                 .translation("config.promaid.airRaid.rangedFireRange")
                 .defineInRange("rangedFireRange", 24.0, 0.0, 128.0);
         AIR_RAID_RANGED_PUSH_RADIUS = BUILDER.comment("弹开触发半径（格，默认 3）：怪物贴到这么近就触发「近身弹开」（开关在落地缓冲那页）")
@@ -2782,13 +3084,13 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.airRaid.diveBoostImpulse").defineInRange("diveBoostImpulse", 0.55, 0.05, 3.0);
         AIR_RAID_DIVE_BOOST_FIREWORK = BUILDER.comment("俯冲段冲刺·用烟花（默认开）：俯冲途中真的点一枚挂载烟花——**消耗 1 枚**，推力由原版给（滑翔中生效、沿视线 = 朝着敌人，方向不变），并照旧让副手亮一下烟花模型、放点火音效")
                 .translation("config.promaid.airRaid.diveBoostFirework").define("diveBoostFirework", true);
-        AIR_RAID_DIVE_BOOST_FIREWORK_SCALE = BUILDER.comment("俯冲段冲刺·烟花力度倍数（默认 1.4，v1.2.2 实测六百一十五 新增）：用户原话「我发现加强力度太小，加速效果不明显。还耗了一颗烟花，没啥用。这边建议这个烟花加速力度效果乘以1.4倍」。\n\n【这一条到底乘的是什么（字节码实证，两版本一致）】原版挂载烟花每 tick 做的是 v = v×0.5 + 视线×0.85（1.20.1 FireworkRocketEntity.tick / 1.21.1 同名方法：`look×0.1 + (look×1.5 − v)×0.5`），即**把速度往「1.7 倍视线」这个不动点上拉**。本模组给俯冲段点的那一枚挂载烟花**额外补一份沿视线的推力**，大小 = 0.85 ×(倍数 − 1)，于是不动点从 1.7 变成 1.7×倍数——默认 1.4 就是「俯冲时那枚烟花把速度拉到 2.38 倍视线」，而不是只把速度改得快一点。\n\n【为什么不是「多发一枚」】用户要的是「这一枚更狠」，不是「烧得更快」：倍数只改推力大小，**不额外消耗烟花**（仍然一发一枚）。范围 1.0~3.0：1.0 = 完全照原版（与旧版一字不差），调大 = 俯冲更猛。\n\n【只影响俯冲那一段】起飞/爬升/盘旋用的是原版烟花（倍数 1.0），行为一字未改。")
+        AIR_RAID_DIVE_BOOST_FIREWORK_SCALE = BUILDER.comment("俯冲段冲刺·烟花力度倍数（默认 1.4，v1.2.2 新增）：需求：我发现加强力度太小，加速效果不明显。还耗了一颗烟花，没啥用。这边建议这个烟花加速力度效果乘以1.4倍。\n\n【这一条到底乘的是什么（字节码实证，两版本一致）】原版挂载烟花每 tick 做的是 v = v×0.5 + 视线×0.85（1.20.1 FireworkRocketEntity.tick / 1.21.1 同名方法：`look×0.1 + (look×1.5 − v)×0.5`），即**把速度往「1.7 倍视线」这个不动点上拉**。本模组给俯冲段点的那一枚挂载烟花**额外补一份沿视线的推力**，大小 = 0.85 ×(倍数 − 1)，于是不动点从 1.7 变成 1.7×倍数——默认 1.4 就是「俯冲时那枚烟花把速度拉到 2.38 倍视线」，而不是只把速度改得快一点。\n\n【为什么不是「多发一枚」】用户要的是「这一枚更狠」，不是「烧得更快」：倍数只改推力大小，**不额外消耗烟花**（仍然一发一枚）。范围 1.0~3.0：1.0 = 完全照原版（与旧版一字不差），调大 = 俯冲更猛。\n\n【只影响俯冲那一段】起飞/爬升/盘旋用的是原版烟花（倍数 1.0），行为一字未改。")
                 .translation("config.promaid.airRaid.diveBoostFireworkScale").defineInRange("diveBoostFireworkScale", 1.4, 1.0, 3.0);
-        AIR_RAID_DIVE_BOOST_FAN = BUILDER.comment("俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但**不用它那一式推力**（它自带 +1.25 竖直升力、还会把速度往视线×2 收敛，在朝下扎的俯冲里等于把她顶成平飞——这正是实测里「孔雀羽扇好像不行」的由来）。速度改由本模组按「俯冲段冲刺·一口速度」给，方向不变。\n\n【燃料优先级】法术 → 激流三叉戟 → 烟花 → 羽扇：法术不消耗物资、激流只扣三叉戟耐久，两者都在烟花（真的要烧掉一枚）之前")
+        AIR_RAID_DIVE_BOOST_FAN = BUILDER.comment("俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但**不用它那一式推力**（它自带 +1.25 竖直升力、还会把速度往视线×2 收敛，在朝下扎的俯冲里等于把她顶成平飞——这正是「孔雀羽扇好像不行」的由来）。速度改由本模组按「俯冲段冲刺·一口速度」给，方向不变。\n\n【燃料优先级】法术 → 激流三叉戟 → 烟花 → 羽扇：法术不消耗物资、激流只扣三叉戟耐久，两者都在烟花（真的要烧掉一枚）之前")
                 .translation("config.promaid.airRaid.diveBoostFan").define("diveBoostFan", false);
-        AIR_RAID_DIVE_BOOST_RIPTIDE = BUILDER.comment("俯冲段冲刺·用激流三叉戟（默认开，v1.2.4 实测六百三十四）：俯冲途中挥一次激流三叉戟换一口加速——**方向不变**（那一段她的视线已经被钉在敌人身上，所以这一口天然是「朝下扎得更快」），力度照原版 `3.0 × (1 + 激流等级) / 4` 再整体 ×1.3（实测六百四十二；I 1.95 / II 2.93 / III 3.90 格/tick），动作也是原版那一记（旋转 20 tick + 按等级的音效），只扣 1 点耐久、**不消耗任何物资**。\n\n【为什么排在烟花之前】烟花是消耗品、这一条只扣耐久，所以有激流三叉戟时先用它，把玩家的烟花省下来。\n\n【总开关】`combat.riptideDash`（激流三叉戟旋转突进）关掉时，这一条也一起退回")
+        AIR_RAID_DIVE_BOOST_RIPTIDE = BUILDER.comment("俯冲段冲刺·用激流三叉戟（默认开，v1.2.4）：俯冲途中挥一次激流三叉戟换一口加速——**方向不变**（那一段她的视线已经被钉在敌人身上，所以这一口天然是「朝下扎得更快」），力度照原版 `3.0 × (1 + 激流等级) / 4` 再整体 ×1.3（I 1.95 / II 2.93 / III 3.90 格/tick），动作也是原版那一记（旋转 20 tick + 按等级的音效），只扣 1 点耐久、**不消耗任何物资**。\n\n【为什么排在烟花之前】烟花是消耗品、这一条只扣耐久，所以有激流三叉戟时先用它，把玩家的烟花省下来。\n\n【总开关】`combat.riptideDash`（激流三叉戟旋转突进）关掉时，这一条也一起退回")
                 .translation("config.promaid.airRaid.diveBoostRiptide").define("diveBoostRiptide", true);
-        AIR_RAID_RANGED_BOOST_RIPTIDE = BUILDER.comment("掉高补推·用激流三叉戟（默认开，v1.2.4 实测六百三十四）：远程空袭盘旋中掉出高度带时，**先把机头抬到「补推仰角」再沿视线推**原版那一口——这就是 PvP 玩家用激流「向上抬升飞行」的做法（原版激流的方向就是视线，抬头才升得起来）。仰角与其他补推手段共用 `rangedBoostPitch`（默认 -45°，抬头 45°），并照旧开同一个抬头窗口。\n\n【为什么不能照搬起飞那一记】盘旋期她的视线是「绕圈切线」（faceOrbit 摆的），沿它推只在圈上窜一下、抬不起来——所以这一路必须自己摆机头，这也是它单独写一套的原因（见 MaidRiptideBoost）。\n\n【总开关】`combat.riptideDash` 关掉时，这一条也一起退回")
+        AIR_RAID_RANGED_BOOST_RIPTIDE = BUILDER.comment("掉高补推·用激流三叉戟（默认开，v1.2.4）：远程空袭盘旋中掉出高度带时，**先把机头抬到「补推仰角」再沿视线推**原版那一口——这就是 PvP 玩家用激流「向上抬升飞行」的做法（原版激流的方向就是视线，抬头才升得起来）。仰角与其他补推手段共用 `rangedBoostPitch`（默认 -45°，抬头 45°），并照旧开同一个抬头窗口。\n\n【为什么不能照搬起飞那一记】盘旋期她的视线是「绕圈切线」（faceOrbit 摆的），沿它推只在圈上窜一下、抬不起来——所以这一路必须自己摆机头，这也是它单独写一套的原因（见 MaidRiptideBoost）。\n\n【总开关】`combat.riptideDash` 关掉时，这一条也一起退回")
                 .translation("config.promaid.airRaid.rangedBoostRiptide").define("rangedBoostRiptide", true);
         BUILDER.pop();
 
@@ -2800,9 +3102,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 所以重生锚链路只要 1 颗萤石；末地水晶 6.0F、床 5.0F、TNT 4.0F，详见 MaidBombing。
         BUILDER.comment("空袭轰炸（配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸）")
                 .translation("config.promaid.bombing").push("bombing");
-        COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 第三方战斗任务都会放（实测六百〇三起远程空袭也算在内，她飞在天上也照放）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
+        COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 第三方战斗任务都会放（远程空袭也算在内，她飞在天上也照放）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
                 .translation("config.promaid.bombing.melee").define("melee", true);
-        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——TNT 的判据 v1.2.2 实测六百〇四/六百〇五 起放宽为**注册名里带 tnt 的都算，方块继承 TntBlock 的也算**（原版那一件与各模组自加的 TNT 通吃）；而且认出来的那一件是**它自己那一枚就放它自己**——模组自己写的 TNT 方块走它自己的点火钩子（放出来的是模组自己的 TNT 实体，威力/带火归它自己；**「破不破方块」自 v1.2.2 实测六百〇七 起跟着「轰炸破坏方块」开关走**：关着时那一炸也一个方块都不拆、伤害照旧），原版那一件才由本模组按『不破坏方块』的口径整段接管；点火料 = 类打火石（打火石及其子类，优先，每发掉 1 点耐久）或类火焰弹（火焰弹及其子类，没有打火石时消耗 1 个），走哪条看这一件**有没有耐久**（有耐久＝道具扣耐久、没耐久＝消耗品整件消耗），两种都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，本模组自己的炸弹伤害与击飞对主人/友军/她自己都不生效")
+        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——TNT 的判据 v1.2.2 起放宽为**注册名里带 tnt 的都算，方块继承 TntBlock 的也算**（原版那一件与各模组自加的 TNT 通吃）；而且认出来的那一件是**它自己那一枚就放它自己**——模组自己写的 TNT 方块走它自己的点火钩子（放出来的是模组自己的 TNT 实体，威力/带火归它自己；**「破不破方块」自 v1.2.2 起跟着「轰炸破坏方块」开关走**：关着时那一炸也一个方块都不拆、伤害照旧），原版那一件才由本模组按『不破坏方块』的口径整段接管；点火料 = 类打火石（打火石及其子类，优先，每发掉 1 点耐久）或类火焰弹（火焰弹及其子类，没有打火石时消耗 1 个），走哪条看这一件**有没有耐久**（有耐久＝道具扣耐久、没耐久＝消耗品整件消耗），两种都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，本模组自己的炸弹伤害与击飞对主人/友军/她自己都不生效")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
         COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害与击飞）")
                 .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
@@ -2812,9 +3114,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 200, 10, 1200);
         COMBAT_BOMBING_TNT_SPEED = BUILDER.comment("投掷初速（格/tick，默认 0.9）：水平方向的速度，调大 = 飞得更快更直、调小 = 抛物线更明显")
                 .translation("config.promaid.bombing.tntSpeed").defineInRange("tntSpeed", 0.9, 0.1, 3.0);
-        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。**模组自己的 TNT 也归这条管**（v1.2.2 实测六百〇七）：她扔出去的模组 TNT（例如等价交换的爆破新星）威力与带不带火仍归它自己，但「破不破方块」跟着这条开关走——关着时那一炸也一个方块都不拆（只收走地形权限；伤害那一半见下面那条「伤到主人/友军」，v1.2.2 实测六百一十 起那一炸同样认得出是她放的）。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包（背包满落地），重生锚/床起爆即被它们自己那一炸消耗掉")
+        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。**模组自己的 TNT 也归这条管**（v1.2.2）：她扔出去的模组 TNT（例如等价交换的爆破新星）威力与带不带火仍归它自己，但「破不破方块」跟着这条开关走——关着时那一炸也一个方块都不拆（只收走地形权限；伤害那一半见下面那条「伤到主人/友军」，v1.2.2 起那一炸同样认得出是她放的）。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包（背包满落地），重生锚/床起爆即被它们自己那一炸消耗掉")
                 .translation("config.promaid.bombing.breakBlocks").define("breakBlocks", false);
-        COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发。**她自己扔的模组 TNT（例如等价交换的爆破新星）也归这条管**（v1.2.2 实测六百一十）：关着时那一炸同样认得出是她放的、主人/友军一格血不掉；开着才照它自己的口径来")
+        COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发。**她自己扔的模组 TNT（例如等价交换的爆破新星）也归这条管**（v1.2.2）：关着时那一炸同样认得出是她放的、主人/友军一格血不掉；开着才照它自己的口径来")
                 .translation("config.promaid.bombing.hurtFriendly").define("hurtFriendly", false);
         COMBAT_BOMBING_TNT_RANGE = BUILDER.comment("投掷索敌半径（格，默认 12）：战斗任务下她自动找这么近的敌人扔 TNT——照《女仆生存》那套 12 格索敌；调小 = 只贴脸扔，调大 = 主动远投")
                 .translation("config.promaid.bombing.tntRange")
@@ -2843,12 +3145,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中强制放置（默认开）：空袭时她一直在飞、脚边常常没有地面——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
                 .translation("config.promaid.bombing.airPlace")
                 .define("airPlace", true);
-        COMBAT_BOMBING_AIR_DROP = BUILDER.comment("空中悬空投弹（走后门，默认开，v1.2.2 实测六百〇三）：落点的最后一级。远程空袭她一直在天上盘旋，而目标常常自己就悬空（蝙蝠 / 恶魂 / 被击飞到半空中的怪 / 站在水里的怪）——它脚边那四格全是空气、原版又会以『那一格站着实体』为由拒绝，前几级落点因此全部落空。开启后最后再试一手：直接把落点取在**目标头顶那一格 → 目标自己那一格**上，不要求支撑面、也不要求那一格没站着目标自己（原版拒绝之后就强制放下），于是底座可以**悬在空中**、正好贴在目标身上，0.5 秒后原地开花。唯一保留的避让是那一格若站着除目标以外的别人的活物就跳过（免得把路过的埋进黑曜石）。关 = 只按原版规则落点，悬空的目标基本放不下")
+        COMBAT_BOMBING_AIR_DROP = BUILDER.comment("空中悬空投弹（走后门，默认开，v1.2.2）：落点的最后一级。远程空袭她一直在天上盘旋，而目标常常自己就悬空（蝙蝠 / 恶魂 / 被击飞到半空中的怪 / 站在水里的怪）——它脚边那四格全是空气、原版又会以『那一格站着实体』为由拒绝，前几级落点因此全部落空。开启后最后再试一手：直接把落点取在**目标头顶那一格 → 目标自己那一格**上，不要求支撑面、也不要求那一格没站着目标自己（原版拒绝之后就强制放下），于是底座可以**悬在空中**、正好贴在目标身上，0.5 秒后原地开花。唯一保留的避让是那一格若站着除目标以外的别人的活物就跳过（免得把路过的埋进黑曜石）。关 = 只按原版规则落点，悬空的目标基本放不下")
                 .translation("config.promaid.bombing.airDrop")
                 .define("airDrop", true);
         COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
                 .translation("config.promaid.bombing.pinkMark").define("pinkMark", true);
-        COMBAT_BOMBING_PINK_FIRE = BUILDER.comment("爆炸火焰改粉色（默认开）：**只有她自己那一炸点着的火换成粉色**（重生锚 / 床那一炸会按原版口径在地上留火——javap 实证：着火只看 fire=true，与「破不破坏方块」无关）。换的时机是「边点边换」：那一炸点着的每一格直接生成为粉色火，与距离无关（实测：一炸 119 格全部直接变粉）。**世界里别的火一概不碰**——打火石 / 闪电 / 岩浆 / 别的模组 /早先留下的原版火，本模组既不换也不灭（实测六百〇一收回：曾经「全都换」，那等于顺手把全世界的火蔓延关掉，是越界）。粉火长这样：粉色火焰贴图 + 粉色火星，不蔓延、几秒后自己熄灭。关 = 保持原版橙色火（等同旧版行为）。注意末地水晶与 TNT 原版都是 fire=false、本来就不留火，所以这条对它们没有可见变化")
+        COMBAT_BOMBING_PINK_FIRE = BUILDER.comment("爆炸火焰改粉色（默认开）：**只有她自己那一炸点着的火换成粉色**（重生锚 / 床那一炸会按原版口径在地上留火——javap 实证：着火只看 fire=true，与「破不破坏方块」无关）。换的时机是「边点边换」：那一炸点着的每一格直接生成为粉色火，与距离无关（一炸 119 格全部直接变粉）。**世界里别的火一概不碰**——打火石 / 闪电 / 岩浆 / 别的模组 /早先留下的原版火，本模组既不换也不灭（早先「全都换」，那等于顺手把全世界的火蔓延关掉，是越界）。粉火长这样：粉色火焰贴图 + 粉色火星，不蔓延、几秒后自己熄灭。关 = 保持原版橙色火（等同旧版行为）。注意末地水晶与 TNT 原版都是 fire=false、本来就不留火，所以这条对它们没有可见变化")
                 .translation("config.promaid.bombing.pinkFire").define("pinkFire", true);
         COMBAT_BOMBING_FIRE_RENDER = BUILDER.comment("粉色火焰渲染（默认开）：关掉之后粉色火**还在那个位置**（熄灭逻辑、伤害判定照旧按下面那条走），只是不画出来——相当于「看不见的火」。想彻底不要火请关上面那条『爆炸火焰改粉色』")
                 .translation("config.promaid.bombing.fireRender").define("fireRender", true);
@@ -2872,9 +3174,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.comment("搭路设置").translation("config.promaid.bridge").push("bridge");
         BRIDGE_ENABLED = BUILDER.comment("搭路（默认开）：她背包有可放置方块、周围无威胁时，朝主人方向铺方块搭桥/搭高靠近（借鉴僵尸搭方块追人；搭的方块到期自动回收）")
                 .translation("config.promaid.bridge.enabled").define("enabled", true);
-        BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 32）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五，参考僵尸搭桥追人）")
+        BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 32）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0，参考僵尸搭桥追人）")
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 32, 2, 32);
-        BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 50）：主人【高于女仆】需爬高/或女仆已在空中时，主人再远也直接铺桥走过去——空中没有'走路过去'的选项；设为 0 关闭远距铺桥（只保留近距逻辑）。v1.1.0 实测一百六十五：平路/低高差追逐（主人不低于女仆）已不受任何距离上限约束")
+        BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 50）：主人【高于女仆】需爬高/或女仆已在空中时，主人再远也直接铺桥走过去——空中没有'走路过去'的选项；设为 0 关闭远距铺桥（只保留近距逻辑）。v1.1.0：平路/低高差追逐（主人不低于女仆）已不受任何距离上限约束")
                 .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 50, 0, 128);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 5）：主人至少高于女仆这么多格才走垂直搭高（平路/低处走路或铺桥处理）——默认 5：平地蹦一下、上下 1~4 格的小台阶/箱子/矮墙都不该看成'需要搭路'，跟随走路即可（v1.3.9.5 按要求从 3 提高到 5，范围下限同时收到 4）")
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 5, 4, 8);
@@ -2896,13 +3198,13 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 4, 2, 40);
         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 3）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）——与搭块速度联动：默认节奏下同时存在约 20~30 块，不会堆积成片")
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 3, 1, 60);
-        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
+        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的垫脚方块不掉落地面，同维度内无论女仆离得多远都直接塞回【搭它的那只女仆】的背包——只有她死亡、或她已在另一个维度、或她背包满了才落地；关闭则一律恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
-        // ---- v1.3.0(beta) 实测六百八十【搭方块禁用名单】玩家原话：「加一个额外的配置界面
-        //（类似于挖矿的配置面板），是一个黑名单面板，选择方即让女仆禁止使用哪个东西来搭方块
-        //（此配置对于自保搭高、挖矿、伐木、搭路都生效），默认禁止搭建的为所有非的原版自然生成
-        // 方块（当然现有的那些在黑名单里的仍然是不允许的，比如沙子），不包含模组方块。但是玩家
-        // 如果想要让他用模组方块搭，那还是可以的。只要在这个配置面板里面把模组物品取消掉就行了。」
+        // ---- v1.3.0(beta) 实测六百八十【搭方块禁用名单】
+        //
+        //
+        //
+        //
         //
         // 单一口径在 com.maidsmart.tool.MaidBuildBlockFilter#isBlacklistedBuildBlock（四个消费方
         // 全走 MaidBuildBlockFilter.isUsableBuildBlock，所以这条规则天然覆盖
@@ -2914,7 +3216,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BRIDGE_BUILD_FORBIDDEN = BUILDER.comment("搭方块禁用名单（完整注册名，逗号分隔；默认空）：面板「移动与行为 → 搭路 → 搭方块禁用名单」里点成【红框✖】的方块都记在这里——被记下的方块女仆绝不拿来垫脚/搭高/搭桥（自保搭高/挖矿/伐木/搭路四个链路同时生效）。这是「显式禁用」，优先级最高：即使它本来在天然方块表里也会被禁（例如把 minecraft:cobblestone 写进来 = 连圆石都不许搭）。带不带 minecraft: 前缀都认；留空 = 没有额外禁用")
                 .translation("config.promaid.bridge.buildBlacklist")
                 .defineList("buildBlacklist", java.util.List.of(), o -> o instanceof String s && !s.isEmpty());
-        BRIDGE_BUILD_ALLOWED = BUILDER.comment("搭方块放宽名单（完整注册名，逗号分隔；默认空）：面板里被【取消勾选（绿框✔ = 允许）】的方块记在这里，是「默认禁止」的例外——最典型的用法就是在面板里把想让她用的模组方块点成允许（玩家原话：「如果想要让他用模组方块搭，那还是可以的。只要在这个配置面板里面把模组物品取消掉就行了」）。优先级高于「禁用名单」，也高于「只用原版天然方块」那条默认规则；带不带 minecraft: 前缀都认")
+        BRIDGE_BUILD_ALLOWED = BUILDER.comment("搭方块放宽名单（完整注册名，逗号分隔；默认空）：面板里被【取消勾选（绿框✔ = 允许）】的方块记在这里，是「默认禁止」的例外——最典型的用法就是在面板里把想让她用的模组方块点成允许（需求：如果想要让他用模组方块搭，那还是可以的。只要在这个配置面板里面把模组物品取消掉就行了）。优先级高于「禁用名单」，也高于「只用原版天然方块」那条默认规则；带不带 minecraft: 前缀都认")
                 .translation("config.promaid.bridge.buildWhitelist")
                 .defineList("buildWhitelist", java.util.List.of(), o -> o instanceof String s && !s.isEmpty());
         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
@@ -2922,12 +3224,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 每块还有完整寿命缓冲，不会整塔瞬间塌）
         // 实测三百六十六：寿命 60→30 秒（要求"利落"）；女仆还站在上面的
         // 方块照旧刷新计时（走开后才开始倒数），塔上狙击/守势不受影响
-        COMBAT_PLACED_LIFETIME = BUILDER.comment("战斗搭方块清理时间（秒，默认 30）：自保（搭高/搭桥）与高地狙击搭的方块 N 秒后自动回收；女仆还站在上面的方块会刷新计时（走开后才开始倒数），不会把她摔下去")
-                .translation("config.promaid.combat.placedLifetime").defineInRange("combatPlacedLifetime", 30, 3, 600);
+        COMBAT_PLACED_LIFETIME = BUILDER.comment("战斗搭方块清理时间（秒，默认 10）：自保（搭高/搭桥）与高地狙击搭的方块 N 秒后自动回收；女仆还站在上面的方块会刷新计时（走开后才开始倒数），不会把她摔下去")
+                .translation("config.promaid.combat.placedLifetime").defineInRange("combatPlacedLifetime", 10, 3, 600);
         BUILDER.pop();
 
         // ---- v1.2.2 实测六百一十五【飞行跟随：整块从 [bridge] 搬出来，与搭路平级】----
-        // 用户原话："把飞行跟随这个板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的一个板块。"
+        // 用户
         // 它此前挂在 [bridge] 里只有一个理由：六百〇八 的实现位置是"轮到该搭路时的替代路径"。
         // 但它本身是**独立的一整套玩法**（自己的开关、自己的两个距离、两个省料开关），与搭路共用
         // 一节只会让"我只想调飞行"的人在一堆搭路参数里翻。**升级注意**：老配置里 [bridge] 下的
@@ -2935,25 +3237,25 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // **不再生效**（Forge 不会替你把值搬过来）——要沿用旧设置请手动搬进 [flightFollow]；
         // 面板上它也从「移动与行为 → 搭路」搬到了平级的「移动与行为 → 飞行跟随」。
         BUILDER.comment("飞行跟随设置").translation("config.promaid.flightFollow").push("flightFollow");
-        FLIGHT_FOLLOW_ENABLED = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八 / 六百一十一 / 六百一十二 / 六百一十三 / 六百一十五）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条【起手距离】、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、威胁半径内也没有敌对生物，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到【收手距离】（见下面那条，默认 5 格）内就收手交回普通跟随——进半径时**解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），之后自然滑翔、落地还回胸甲，与空袭打完一波同款；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。属于观赏玩法（会烧烟花、磨鞘翅耐久），想玩再开。六百一十四【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
+        FLIGHT_FOLLOW_ENABLED = BUILDER.comment("飞行跟随（默认关）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条【起手距离】、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、威胁半径内也没有敌对生物，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到【收手距离】（见下面那条，默认 5 格）内就收手交回普通跟随——进半径时**解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），之后自然滑翔、落地还回胸甲，与空袭打完一波同款；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。属于观赏玩法（会烧烟花、磨鞘翅耐久），想玩再开。六百一十四【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
                 .translation("config.promaid.flightFollow.enabled").define("enabled", false);
-        FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随·起手距离（格，默认 25，v1.2.2 实测六百一十五 由 5 改大）：你离她超过这个 3D 距离才起飞追——**更近的距离走路/搭路本来就够得着**，犯不上烧烟花（旧默认 5 太灵敏：她稍微走出去一点就起飞）。范围 3~128。\n\n【起手与收手是两个不同的球】用户原话「开始跟结束两个半点的球大小应该不一样，默认值就是我说的那两个（25 / 5）」。 旧版只有**一个**判定球（收手半径由起手距离减 1 推导），于是「起飞门槛」与「收手门槛」绑死——迟滞只有 1 格，她在边界上来回起降。现在起手 = 这一条（默认 25），收手 = 下面那条（默认 5），默认档留 20 格迟滞。\n\n注意：老存档的配置文件里若已写着 dist = 5，Forge 不会替你改大，想用新默认请删掉那一行或手动改成 25")
+        FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随·起手距离（格，默认 25，v1.2.2 起由 5 改大）：你离她超过这个 3D 距离才起飞追——**更近的距离走路/搭路本来就够得着**，犯不上烧烟花（旧默认 5 太灵敏：她稍微走出去一点就起飞）。范围 3~128。\n\n【起手与收手是两个不同的球】需求：开始跟结束两个半点的球大小应该不一样，默认值就是我说的那两个（25 / 5）。 旧版只有**一个**判定球（收手半径由起手距离减 1 推导），于是「起飞门槛」与「收手门槛」绑死——迟滞只有 1 格，她在边界上来回起降。现在起手 = 这一条（默认 25），收手 = 下面那条（默认 5），默认档留 20 格迟滞。\n\n注意：老存档的配置文件里若已写着 dist = 5，Forge 不会替你改大，想用新默认请删掉那一行或手动改成 25")
                 .translation("config.promaid.flightFollow.dist").defineInRange("dist", 25.0, 3.0, 128.0);
-        FLIGHT_FOLLOW_END_DIST = BUILDER.comment("飞行跟随·收手距离（格，默认 5，v1.2.2 实测六百一十五 新增）：你进到这么近（3D 距离）就中断本趟、交回普通跟随，并**解除烟花给的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。范围 1~64。\n\n【必须比起手距离小】写成大于等于起手距离时，她会「一起飞就已经在收手半径内」= 起飞即刻收手、一次都飞不起来。所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值；默认 25 / 5 用不到这条兜底）")
+        FLIGHT_FOLLOW_END_DIST = BUILDER.comment("飞行跟随·收手距离（格，默认 5，v1.2.2 新增）：你进到这么近（3D 距离）就中断本趟、交回普通跟随，并**解除烟花给的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。范围 1~64。\n\n【必须比起手距离小】写成大于等于起手距离时，她会「一起飞就已经在收手半径内」= 起飞即刻收手、一次都飞不起来。所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值；默认 25 / 5 用不到这条兜底）")
                 .translation("config.promaid.flightFollow.endDist").defineInRange("endDist", 5.0, 1.0, 64.0);
         FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有能飞的道具**（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是她能飞的凭证），但补推不再扣那一枚——纯观赏档，适合只想看她跟着飞的存档。(背包里同时有羽扇时走扇子那条：挥扇推进、按扇子自己的口径扣耐久；这条开关只管烟花——位移法术不消耗物资，开与关都一样，它按自己的冷却放)")
                 .translation("config.promaid.flightFollow.firework").define("firework", true);
         FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
                 .translation("config.promaid.flightFollow.elytra").define("elytra", true);
         // v1.2.4 实测六百四十：第三个省料开关（需求原文"飞行跟随没有不消耗三叉戟耐久的开关"）
-        FLIGHT_FOLLOW_TRIDENT = BUILDER.comment("飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点，v1.2.4 实测六百四十 新增）：关 = 这一趟里用激流三叉戟推进不再扣它的耐久——与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。\n\n【只管飞行跟随】空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久（那边没有、也不该有这个开关）。\n\n【顺序不变】她背包里有烟花时依旧先烧烟花（有羽扇先挥扇），所以这个开关对「有烟花可烧」的存档没有任何影响——它只在真轮到激流三叉戟推进时才起作用（见 MaidRiptideBoost 与 MaidFlightFollowBehavior.boost 的取用顺序）")
+        FLIGHT_FOLLOW_TRIDENT = BUILDER.comment("飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点，v1.2.4 新增）：关 = 这一趟里用激流三叉戟推进不再扣它的耐久——与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。\n\n【只管飞行跟随】空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久（那边没有、也不该有这个开关）。\n\n【顺序不变】她背包里有烟花时依旧先烧烟花（有羽扇先挥扇），所以这个开关对「有烟花可烧」的存档没有任何影响——它只在真轮到激流三叉戟推进时才起作用（见 MaidRiptideBoost 与 MaidFlightFollowBehavior.boost 的取用顺序）")
                 .translation("config.promaid.flightFollow.trident").define("trident", true);
         BUILDER.pop();
 
 // ---- v1.2.2 实测六百一十六【压缩盒：一格 114514 个，放进女仆背包算她背包的延伸】----
-        // 用户原话："加入一个新道具，压缩盒……将这个箱子放进女仆的背包里面，女仆可以从这个里面拿
-        // 东西，这个箱子里面的内容会被视为女仆背包的延伸。而且这个箱子里面物品堆叠上限大大增加，
-        // 也就是说不再是只能堆 64 个，而是可以堆 114514 个……虽然堆叠上限很高，但它的格子数量只有 5 个。"
+        // 用户
+        //
+        //
         // 只有两条可调：她要能"看见"盒子（女仆侧开关）与每格上限。格数固定 5（用户点名的），
         // 界面的交互方式与那一堆原版数量字段的坑写在 CHANGELOG 与 CompressionBoxData 里。
         BUILDER.comment("压缩盒设置").translation("config.promaid.compressionBox").push("compressionBox");
@@ -2991,7 +3293,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 1728000);
         MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16，范围 4~128）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
-        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.4；范围 0.05~2.5）：这是**女仆基础移动速度的几成**——女仆的基础移动速度属性是 0.7（原版 LivingEntity 的默认值，玩家是 0.1），倍率就乘在它上面。\n\n【六百二十 实测的对照表】实际格/秒不是线性的（慢到一定程度她会一步一顿，寻路每格重新判定），下面这些数是本模组在专用服务器上量出来的「走一段路的平均速度」（玩家走路 4.32 格/秒、跑步 5.61）：\n  0.1~0.2 → 0.1（几乎不走，像卡住）\n  0.3 → 1.9　0.4 → 3.3（默认）　0.5 → 4.9（≈玩家走路）\n  0.6 → 6　0.7 → 8（比玩家跑步还快）　1.0 → 14（鬼畜）\n（同一档换地形/机器会有大约 ±20% 波动）\n\n【六百二十 改了两处】①默认 0.7 → 0.4：老的默认实测约 8 格/秒、比玩家跑步（5.61）还快，用户反馈的「0.1 倍速都跟快步跑一样」看到的就是这个数；②下限 0.3 → 0.05：老下限把想调慢的人卡死了（0.3 就是能调到的最慢值）。注意 0.2 以下实测几乎不走，好用的慢档是 0.3~0.4。\n\n游戏里可以用 /maid_smart stroll speed <值> 当场改，/maid_smart stroll check 会把她**自己**的基础移速属性、实测参考表和当前门禁打出来，/maid_smart stroll go 让她走一次 24 格直线再 check 就能看到实测格/秒。")
+        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.4；范围 0.05~2.5）：这是**女仆基础移动速度的几成**——女仆的基础移动速度属性是 0.7（原版 LivingEntity 的默认值，玩家是 0.1），倍率就乘在它上面。\n\n【对照表】实际格/秒不是线性的（慢到一定程度她会一步一顿，寻路每格重新判定），下面这些数是本模组在专用服务器上量出来的「走一段路的平均速度」（玩家走路 4.32 格/秒、跑步 5.61）：\n  0.1~0.2 → 0.1（几乎不走，像卡住）\n  0.3 → 1.9　0.4 → 3.3（默认）　0.5 → 4.9（≈玩家走路）\n  0.6 → 6　0.7 → 8（比玩家跑步还快）　1.0 → 14（鬼畜）\n（同一档换地形/机器会有大约 ±20% 波动）\n\n【改过两处】①默认 0.7 → 0.4：老的默认约 8 格/秒、比玩家跑步（5.61）还快，需求：的「0.1 倍速都跟快步跑一样」看到的就是这个数；②下限 0.3 → 0.05：老下限把想调慢的人卡死了（0.3 就是能调到的最慢值）。注意 0.2 以下几乎不走，好用的慢档是 0.3~0.4。\n\n游戏里可以用 /maid_smart stroll speed <值> 当场改，/maid_smart stroll check 会把她**自己**的基础移速属性、参考表和当前门禁打出来，/maid_smart stroll go 让她走一次 24 格直线再 check 就能看到实际格/秒。\n\n这一项现在同时也是**干活闲逛 / home 漫游的速度**：烧制/酿造/宰杀「没活可干」时的闲逛、以及 home 模式的漫游/巡逻，都改用这一项（旧版写死 0.7 → 约 8 格/秒，比玩家奔跑还快）。默认 0.4 ≈ 3.3 格/秒，慢悠悠散步的观感。")
                 .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.4, 0.05, 2.5);
         // 实测四百一十八：床铺互通（女仆睡原版床 / 玩家睡女仆床）
         MISC_BED_INTEROP = BUILDER.comment("床铺互通（默认开）：女仆能睡原版床（16 色床，TLM 原生只认女仆床），玩家也能睡女仆床（并可把女仆床设为重生点）——两个方向互开；关掉恢复 TLM 原版行为（女仆只睡女仆床、玩家不能睡女仆床）")
@@ -3051,6 +3353,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.scheduleBubbleDist").defineInRange("scheduleBubbleDist", 3.5, 1.0, 16.0);
         MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")
                 .translation("config.promaid.misc.pickupPriority").define("pickupPriority", true);
+        MISC_PICKUP_VALUE_REORDER = BUILDER.comment("拾取按价值重排（默认开）：同一个地方散着一堆掉落物时，原版低价值物品（废石/泥土/沙子/粘土/地狱岩/凝灰岩等）的拾取优先级降到最低，矿石与模组物品排前面——她不会被一堆挖矿废石挤掉真正的战利品。关掉 = TLM 原版顺序（就近优先，不看价值）")
+                .translation("config.promaid.misc.pickupValueReorder").define("pickupValueReorder", true);
         MISC_VERTICAL_RANGE = BUILDER.comment("烹饪/酿造垂直搜索范围")
                 .translation("config.promaid.misc.verticalRange")
                 .defineInRange("verticalRange", 4, 1, 16);
@@ -3083,10 +3387,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百八十八：Y 轴拉回（反馈："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
         MISC_MAID_SAME_DIM_VERTICAL = BUILDER.comment("Y 轴拉回门槛（格，默认 16）：女仆与主人同维度、水平距离没超上一条阈值但【垂直高度差】超过本值时——若主人旁边 16 格内有安全落点（findStand）就传送过来；没有安全落点则不传（等有落点/再试）。旧版只有 48 格 3D 距离阈值，水平贴身、竖直搭高 30 格的女仆永远不触发（骑到你头顶挂机）；守家/坐姿/骑乘/干活中同样不拉")
                 .translation("config.promaid.misc.maidSameDimVertical").defineInRange("maidSameDimVertical", 16, 4, 128);
+        // 实测七百九十九：【issue #36】传送后客户端重建——治"远距离传送后客户端看不见女仆"。
+        // 根因是客户端插值被冻住（lerpTo 第一步落点在未加载区块 → 脱离 tick → 永久停在 1/3 → 不渲染），
+        // 不是追踪关系掉了。机制与修法照搬上游开源项目 2415564388/maidsync（MIT）。
+        MISC_MAID_TELEPORT_REBUILD = BUILDER.comment("传送后客户端重建（默认开·issue #36）：治「远距离传送后女仆在服务端活着、客户端却看不见她」。\n\n【根因】大跳变让客户端走 Entity.lerpTo(目标, 3 步) 逐 tick 插值，第一步落点恰好是起终点的 1/3；若那个落点在客户端【没加载的区块】里，实体就脱离 tick 列表、插值永久冻结在 1/3，她所在 section 未编译 → 模型与碰撞箱一起消失。服务端因为位置基线已对齐、delta≈0，再也不会发位置包（不会自愈）。这解释了「她能打怪、能搭路，就是看不见、也右键不到」。\n\n【修法】① 在 ServerEntity.sendChanges 检测到位置基线大跳变（>64 格）时拦下传送包，改用「删+生成」让客户端整个重建（坐标一次到位、完全不经过插值）；② 1 秒后再补一枪——那时传送已真正生效，生成包才带玩家身边的新坐标（那个区块客户端是加载的）。\n\n关闭 = 回到原版行为（远距离传送后可能看不见她，需要 /maid_smart resync 或重进存档）。")
+                .translation("config.promaid.misc.maidTeleportRebuild").define("maidTeleportRebuild", true);
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
-            MISC_FREE_FLIGHT = BUILDER.comment("仿创造飞行（默认关，实测六百七十三）：让女仆悬浮并自由升降——创造模式飞行的手感。\n\n【为什么需要】整合包里给飞的物品千奇百怪（饰品/护甲套装/药水效果/重力归零类法术），而它们几乎全部**只对玩家生效**（写死 instanceof Player），女仆装着它们一字不动。本功能不复刻每个物品的物理，而是：**她有资格（下表/效果表/重力归零）我们就托住她**——setNoGravity + 每 tick 直接给速度，形成悬停与平滑位移。\n\n【资格三路】①物品表（双手/护甲/背包/饰品栏/额外容器）②效果表（药水效果对女仆天然有效）③重力属性 ≈ 0（通用启发式，覆盖所有重力归零型来源，不需要点名模组）。\n\n【刻意不做】不识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料**的装备：它们的推力绑在玩家身上，我们仿创造飞行等于凭空绕过燃料，算作弊——想用请自己加进物品表。\n\n【安全】收工时若她还在半空会先软着陆（保持无重力缓慢下降）再交还重力，不会把她从高空扔下去。")
+            MISC_FREE_FLIGHT = BUILDER.comment("仿创造飞行（默认关）：让女仆悬浮并自由升降——创造模式飞行的手感。\n\n【为什么需要】整合包里给飞的物品千奇百怪（饰品/护甲套装/药水效果/重力归零类法术），而它们几乎全部**只对玩家生效**（写死 instanceof Player），女仆装着它们一字不动。本功能不复刻每个物品的物理，而是：**她有资格（下表/效果表/重力归零）我们就托住她**——setNoGravity + 每 tick 直接给速度，形成悬停与平滑位移。\n\n【资格三路】①物品表（双手/护甲/背包/饰品栏/额外容器）②效果表（药水效果对女仆天然有效）③重力属性 ≈ 0（通用启发式，覆盖所有重力归零型来源，不需要点名模组）。\n\n【刻意不做】不识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料**的装备：它们的推力绑在玩家身上，我们仿创造飞行等于凭空绕过燃料，算作弊——想用请自己加进物品表。\n\n【安全】收工时若她还在半空会先软着陆（保持无重力缓慢下降）再交还重力，不会把她从高空扔下去。")
                 .translation("config.promaid.misc.freeFlight").define("freeFlight", false);
-        MISC_FREE_FLIGHT_ITEMS = BUILDER.comment("仿创造飞行·资格物品表（默认空）：命中的物品让她获得飞行资格。\n\n四种写法：① 物品 id（如 modid:item）② #命名空间:标签 认整条物品标签 ③ @命名空间:组件 有该数据组件就算格 ④ @命名空间:组件~文本 组件值里含这段文本才算格（还有一种 @*~文本 = 任意组件含该文本，最宽）。\n\n【为什么要有组件那两路（实测六百七十六）】很多整合包用数据组件授予能力而不是换物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给胸甲挂 neoforge:creative_flight 修饰符——物品 id 没变、物品标签也匹配不到（#neoforge:creative_flight 是修饰符 id 不是物品标签）。这种就写：@apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight\n\n扫描范围：双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）。")
+        MISC_FREE_FLIGHT_ITEMS = BUILDER.comment("仿创造飞行·资格物品表（默认空）：命中的物品让她获得飞行资格。\n\n四种写法：① 物品 id（如 modid:item）② #命名空间:标签 认整条物品标签 ③ @命名空间:组件 有该数据组件就算格 ④ @命名空间:组件~文本 组件值里含这段文本才算格（还有一种 @*~文本 = 任意组件含该文本，最宽）。\n\n【为什么要有组件那两路】很多整合包用数据组件授予能力而不是换物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给胸甲挂 neoforge:creative_flight 修饰符——物品 id 没变、物品标签也匹配不到（#neoforge:creative_flight 是修饰符 id 不是物品标签）。这种就写：@apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight\n\n扫描范围：双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）。")
                 .translation("config.promaid.misc.freeFlightItems")
                 .defineListAllowEmpty("freeFlightItems", List.of(), () -> "", o -> o instanceof String);
         MISC_FREE_FLIGHT_EFFECTS = BUILDER.comment("仿创造飞行·资格效果表（默认空）：命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）。")
@@ -3094,7 +3403,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineListAllowEmpty("freeFlightEffects", List.of(), () -> "", o -> o instanceof String);
         MISC_FREE_FLIGHT_GRAVITY = BUILDER.comment("仿创造飞行·重力归零也算资格（默认开）：她的重力属性 ≈ 0 时自动获得飞行资格——通用启发式，覆盖任何「重力归零」型来源（不需要点名模组）。她本来就在飘，我们只是把飘变成可控飞行。")
                 .translation("config.promaid.misc.freeFlightGravity").define("freeFlightGravity", true);
-        MISC_FREE_FLIGHT_IDLE = BUILDER.comment("仿创造飞行·智能待命（默认开，实测六百七十八）：主人停下不动满【下面那条秒数】后，她**软着陆到你脚边站好**（同高度、约 2 格），你再一动她自动重新起飞。\n\n【为什么需要】原来的行为是「够资格就一直悬在主人身后 3.5 格 + 高 2 格」（≈4 格），而**原版实体交互距离只有 3 格**——喂金苹果/药水、TLM 的摸头/抱抱（G/H）、右键交互全都会打不到。智能待命让她「赶路时飞、你停下来时落到你身边待命」。\n\n关掉 = 始终悬停（旧行为：够资格就一直飘着）。")
+        MISC_FREE_FLIGHT_IDLE = BUILDER.comment("仿创造飞行·智能待命（默认开）：主人停下不动满【下面那条秒数】后，她**软着陆到你脚边站好**（同高度、约 2 格），你再一动她自动重新起飞。\n\n【为什么需要】原来的行为是「够资格就一直悬在主人身后 3.5 格 + 高 2 格」（≈4 格），而**原版实体交互距离只有 3 格**——喂金苹果/药水、TLM 的摸头/抱抱（G/H）、右键交互全都会打不到。智能待命让她「赶路时飞、你停下来时落到你身边待命」。\n\n关掉 = 始终悬停（旧行为：够资格就一直飘着）。")
                 .translation("config.promaid.misc.freeFlightIdle").define("freeFlightIdle", true);
         MISC_FREE_FLIGHT_IDLE_SECONDS = BUILDER.comment("仿创造飞行·主人静止多久后落地待命（秒，默认 3）：主人的水平移动速度低于阈值并持续这么久 → 软着陆；期间主人一动就取消。")
                 .translation("config.promaid.misc.freeFlightIdleSeconds")
@@ -3102,21 +3411,41 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MISC_FREE_FLIGHT_NEAR_DIST = BUILDER.comment("仿创造飞行·落地待命的贴近距离（格，默认 2）：软着陆时机头对着主人漂过去，最终停在他身边这个距离内——留 1 格余量给原版 3 格交互距离。")
                 .translation("config.promaid.misc.freeFlightNearDist")
                 .defineInRange("freeFlightNearDist", 2, 1, 6);
-        MISC_FREE_FLIGHT_TRAVEL = BUILDER.comment("仿创造飞行·走路的活也交给飞（默认开，实测六百八十八）\n\n【需求方口径】\"本来就走过去应该交给创造\"——她已经会飞了，那些**本来要走路过去**的活（挖矿 / 伐木 / 农活这些直连寻路的目标）就不该再靠两条腿：够远或者要上下，就直接飞过去，落地干活，到地方把控制权交还给她自己的任务。上一批已经把**搭路**（垫方块过沟 / 上坡）整段让位，这一条是它的对偶面：**不搭路，也不绕路**。\n\n【接管条件】她的直连寻路目标与她之间：水平超过下面那条距离，或者高差超过 2 格；且她此刻**在非战斗的工作任务上**。近处挪一步照旧走路（飞过去又慢又吵）。\n\n【不接管的情况】自保逃跑（它的落点是贴着地面的安全点）、战斗走位、刷怪笼插火把（那条链自己拥有走位）、站桩工作（建筑 / 烹饪 / 酿造）、idle / 跟随（跟随有它自己那套飞行跟随）；目标格底下落不下去（沟上 / 虚空上 / 水面上方）也不接管——那种路她原来怎么走现在还怎么走。\n\n【顺带修掉的一个往复】\"在主人身边干活\"时不再做跟随起飞（否则会「落到工位 → 主人走两步她起飞去追 → 挖矿驱动又把她飞回工位」来回摆）；主人真走远（> 16 格）或上天（高差 > 8 格）照旧跟。\n\n注意：只有 1.21.1 树有这一条（仿创造飞行本身只有那边的实现）。日志搜「赶路」。")
+        MISC_FREE_FLIGHT_TRAVEL = BUILDER.comment("仿创造飞行·走路的活也交给飞（默认开）\n\n【需求方口径】\"本来就走过去应该交给创造\"——她已经会飞了，那些**本来要走路过去**的活（挖矿 / 伐木 / 农活这些直连寻路的目标）就不该再靠两条腿：够远或者要上下，就直接飞过去，落地干活，到地方把控制权交还给她自己的任务。上一批已经把**搭路**（垫方块过沟 / 上坡）整段让位，这一条是它的对偶面：**不搭路，也不绕路**。\n\n【接管条件】她的直连寻路目标与她之间：水平超过下面那条距离，或者高差超过 2 格；且她此刻**在非战斗的工作任务上**。近处挪一步照旧走路（飞过去又慢又吵）。\n\n【不接管的情况】自保逃跑（它的落点是贴着地面的安全点）、战斗走位、刷怪笼插火把（那条链自己拥有走位）、站桩工作（建筑 / 烹饪 / 酿造）、idle / 跟随（跟随有它自己那套飞行跟随）；目标格底下落不下去（沟上 / 虚空上 / 水面上方）也不接管——那种路她原来怎么走现在还怎么走。\n\n【顺带修掉的一个往复】\"在主人身边干活\"时不再做跟随起飞（否则会「落到工位 → 主人走两步她起飞去追 → 挖矿驱动又把她飞回工位」来回摆）；主人真走远（> 16 格）或上天（高差 > 8 格）照旧跟。\n\n注意：只有 1.21.1 树有这一条（仿创造飞行本身只有那边的实现）。日志搜「赶路」。")
                 .translation("config.promaid.misc.freeFlightTravel").define("freeFlightTravel", true);
         MISC_FREE_FLIGHT_TRAVEL_DIST = BUILDER.comment("仿创造飞行·超过多远就改飞（格，默认 8）：直连寻路的目标与她水平距离超过这个值 → 起飞飞过去；调大 = 更多路用走的（比如 32：只有跨半个工作区才飞），0 = 只要不是同一格就飞（不建议）。")
                 .translation("config.promaid.misc.freeFlightTravelDist")
                 .defineInRange("freeFlightTravelDist", 8.0, 0.0, 64.0);
-        MISC_GLIDE_ELYTRA_ANIM = BUILDER.comment("滑翔时改用模型自己的鞘翅动画（默认关，实测六百七十五）：\n\n【背景】作者给滑翔套的是**游泳动作**——TLM 的 swim 状态只认 isVisuallySwimming()，而作者用一个 mixin 在滑翔时把它顶成 true（兼容性最好：官方包与第三方包普遍都有 swim，但**几乎没有 elytra_fly**）。\n\n【这一项做什么】打开后不再顶游泳位，改为注册一个与模型包/YSM 同名的 elytra_fly 状态——模型包里做了这条动画（如圣女酒狐）的女仆滑翔时就会播它。\n\n注意：模型包**没做** elytra_fly 时，这一档会落到下一档（没有则回到站立/待机姿态）——所以默认关，只有确认你的模型包有这条动画时再打开。")
+        MISC_GLIDE_ELYTRA_ANIM = BUILDER.comment("滑翔时改用模型自己的鞘翅动画（默认关）：\n\n【背景】作者给滑翔套的是**游泳动作**——TLM 的 swim 状态只认 isVisuallySwimming()，而作者用一个 mixin 在滑翔时把它顶成 true（兼容性最好：官方包与第三方包普遍都有 swim，但**几乎没有 elytra_fly**）。\n\n【这一项做什么】打开后不再顶游泳位，改为注册一个与模型包/YSM 同名的 elytra_fly 状态——模型包里做了这条动画（如圣女酒狐）的女仆滑翔时就会播它。\n\n【模型没这条动画时自动退回游泳动作】旧版把「开关开着」当成了「一定播鞘翅动画」，于是模型包没做 elytra_fly 时，那一档取不出动画、模型直接掉回**绑定姿势**（半立着没动作），再叠上一直生效的展翅与俯冲前倾，看起来就是「飞行姿势散架了」。现在每个模型各自判定：**只有它真有 elytra_fly 才用，没有就自动退回游泳动作**（判据取自 TLM 自己的动画表，客户端查一次，服务端不参与）——所以这个开关开着也安全了，不会再出现姿势碎掉。想真正用上鞘翅动画，仍然需要你的模型包里有同名动画（可看 logs/promaid.log 的「滑翔动画」分类确认哪些模型命中）。")
                 .translation("config.promaid.misc.glideElytraAnimation").define("glideElytraAnimation", false);
     MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
                 .translation("config.promaid.misc.followTighten").define("followTighten", true);
+        // 实测八百一十四：干活时把移速压回 0 好感档（战斗/空闲保持原样）
+        MISC_WORK_SPEED_LEVEL0 = BUILDER.comment("干活时移速压回 0 好感档（默认开）：工作/生产任务的女仆，不论好感度多高，移动速度都按「0 好感档」走；战斗任务 / 空闲 / 跟随 / 骑乘一律保持原样（照需求：战斗任务/空闲时还是 3 级加成）。\n\n【先纠正一个前提】TLM 1.5.3 其实**没有**「好感度越高移速越快」这条加成——官方 jar、整合包里那份 [国创] 分支 jar、服务器 jar 都逐类扫过：FavorabilityManager 只把 攻击/血量 写进属性（好感度档位表里没有任何 SPEED 项），TLM 自己的游戏内手册也只写「更高好感度提升血量与攻击」。\n\n【那「高好感就乱窜」是怎么来的】是**间接**的：①好感度档位决定饰品栏格数（0~1 级 10 格 / 2 级 20 格 / 3 级 30 格），好感高的女仆能挂更多带移速/加速的饰品；②本模组「空闲散步倍率」（移动与跟随 → 散步速度倍率）默认乘在她 0.7 的基础移速上，服务器配置若还停在旧默认 0.7，就是约 8 格/秒（比玩家跑步 5.61 还快）；③本模组还刻意去掉了原版走路的刹车窗口，速度看着「不停」。\n\n【这一项做什么】干活时把她的移速**有效值钳到基础值**（0.7 = 0 好感、无饰品的裸值）。做法照搬本模组「骑乘指挥棒」给坐骑赋速那一套：每 tick 挂一笔自纠正的加法修改器，令有效值恒等于基础值——不写存档属性、幂等、别的来源（饰品/药水）怎么变都自动补偿；切回战斗/空闲时把这一笔摘掉，真实移速立刻恢复。\n\n【不干预的情况】坐着 / 当乘客 / 骑乘时（她本来就不靠自己的腿走）；战斗类任务（含第三方 IAttackTask）；idle / 跟随。关掉 = 完全不挂修改器，与旧版逐字节一致。")
+                .translation("config.promaid.misc.workSpeedLevel0").define("workSpeedLevel0", true);
+        // 实测八百一十五：干活时闲逛必须待在圈里（罗盘/工位画的圈）
+        MISC_WORK_STAY_IN_CIRCLE = BUILDER.comment("干活时不许出圈（默认开）：需求：女仆工作的时候喜欢乱窜——不停地在多个地方以极高的速度移动，似乎是在找任务目标；观感很差，而且很容易跑出玩家用罗盘画的圈。\n\n【为什么会在圈外乱窜】烧制/酿造/宰杀这三种任务在「没炉子/没台子/没牲畜」时会进「闲逛等活」分支（每 2 秒在周围 8 格随机挑一点走过去，边走边找活）。选点本身会过一遍「工作圈」（home 模式不许出圈）；但**跟随模式（非 home）下圈形同不存在**——老代码直接放行，于是她每 2 秒换一个随机方向、满地图乱窜找活。\n\n【这一项做什么】跟随模式下也给闲逛定一个圈：以**主人身边**为圆心（跟随的语义就是待在他附近）、半径取「排班活动半径」（设置里那一项，默认 12 格；调小=更老实待在原地附近），闲逛点必须落在这个圈里；并且取点锚点从「她此刻位置」改成这个固定圆心——否则「围绕自己每 2 秒随机挪 8 格」等于一场没有回复力的随机游走，几十步就漂出去几十格（这正是「乱窜」的机制）。home 模式照旧用玩家画的圈（罗盘/工位）。\n\n【不影响的】战斗/跟随/空闲/建造（建造是站桩按蓝图放，不闲逛）；关掉 = 跟随模式完全不限（与旧版逐字节一致）。")
+                .translation("config.promaid.misc.workStayInCircle").define("workStayInCircle", true);
+        // 实测八百一十五：河童的罗盘优先
+        MISC_COMPASS_PRIORITY = BUILDER.comment("罗盘圈优先（默认开）：需求：我们需要与罗盘做好配合——排班表这种打开的 home 也需要读取之前用罗盘弄出来的设计，并且罗盘具有更高的优先级。女仆干活不允许出圈，休息睡觉之类的都按圈内行为准则。\n\n【圈是谁在画】河童的罗盘（右键方块记工位/休闲/睡眠三点 → 右键女仆写入）与潜行+中键工位标记，写的都是同一份 TLM 排班锚点；排班表/建造行为则会在「没配过锚点」时拿她**当前站的地方**当锚点（自动锚定 home）。三种来源里，只有罗盘/中键是玩家**亲手画**的。\n\n【这一项做什么】给「玩家画过圈」这件事记一个标记（罗盘中键任一写锚点时落上）。此后：①排班表的自动锚定不再拿当前位置覆盖它；②建造行为不再用「当前坐标」把它顶掉；③关排班（或别的路径）也不会把圈清成零。一句话——**玩家画的圈，除了玩家自己再画一次（或在 TLM GUI 里改），谁都不许动**。\n\n【不影响的】中键标记与罗盘之间仍然是「谁后写谁生效」（需求：目前没有性价比更高的方案了，保持现在的先后手就行）；关掉 = 自动锚定照旧可能覆盖玩家画的圈（旧行为）。")
+                .translation("config.promaid.misc.compassPriority").define("compassPriority", true);
+        // 实测八百一十六：非战斗模式下女仆移速硬上限（不许比玩家快）
+        MISC_NONCOMBAT_SPEED_CAP = BUILDER.comment("非战斗模式下移速硬上限（默认开）：需求：本模组在非战斗模式下，女仆的速度不能比玩家快。哪怕是寻找任务目标也一样。默认速度最多也只能跟玩家奔跑速度持平。我得看一下我们这个模组对于女仆寻找任务目标做了哪些魔改。这些可能是到处乱窜的元凶。\n\n【女仆「寻找任务目标」走的是哪条速度链路——javap 逐层实证】①Brain 写 WALK_TARGET（或任务直接调 PathNavigation.moveTo）→ 原版 MoveToTargetSink 把它变成一条 Path；②PathNavigation 每 tick 把下一个路径点喂给 MoveControl.setWantedPosition(x,y,z,speedModifier)；③TLM 的 MaidMoveControl.tick 在 MOVE_TO / STRAFE 分支里算「速度 = speedModifier × getAttributeValue(MOVEMENT_SPEED)」，然后调 Mob.setSpeed；④Mob.setSpeed 只有两行——LivingEntity.setSpeed(value)（写 speed 字段）+ setZza(value)（写前向输入 zza），而 travel 用的正是这两个值去算这一 tick 的位移。\n\n【结论很硬】女仆靠腿走的一切速度最后都必然经过 Mob.setSpeed 这一个口子——导航走路、直连 moveTo、闲逛 WALK_TARGET、农活、跟随、挖矿赶路，一条都绕不开。（唯二不经过它的是「直接 setDeltaMovement 施加速度矢量」的那几处：搭路推一步、自保逃跑、飞行/扫帚——那些不是「走路」，本项一律不碰。）\n\n【为什么默认就是玩家奔跑速度】六百二十 在本模组专用服务器上量过一张表（女仆 MOVEMENT_SPEED = 0.7 就是她的裸值），把 speedModifier 记作倍率，对照格/秒：0.3 → 1.9｜0.4 → 3.3（默认散步）｜0.5 → 4.9｜0.6 → 6.0｜0.7 → 8.2｜1.0 → 14（玩家走路 4.32、奔跑 5.61 格/秒；同一档换地形/机器约 ±20% 波动）。也就是说 TLM 给女仆的默认倍率（跟随/攻击走位多为 1.0，本模组挖矿赶路是 0.6×1.5 = 0.9）都在 8~14 格/秒，本来就比玩家奔跑还快——需求：的「以极高的速度到处移动」看到的就是这个数。按这张表插值：0.5 → 4.9、0.6 → 6.0，玩家奔跑 5.61 落在两者之间 → 约 0.56 倍率，这就是默认上限「5.61 格/秒 = 玩家奔跑」的由来（0.4 只到 3.3，比玩家走路 4.32 还慢，所以上限不能取 0.4——那是「散步」的档，不是上限的档）。\n\n【这一项做什么】非战斗时，把送进 Mob.setSpeed 的那个数硬钳到不超过「上限」那一项（默认 0.56，单位与「散步速度倍率」/「挖矿移速」同一套；只往下钳、绝不往上抬）。这是绝对上限——哪怕饰品把她的 MOVEMENT_SPEED 抬高一倍，钳的是「最终送进去的那个数」，所以她照样不会比玩家快。\n\n【什么时候不钳】战斗（攻击类任务含第三方 IAttackTask / 参战中 / 单兵战术接管——需求：非战斗模式下，战斗要走位躲技能不能压）；自保逃跑（低血/逃跑/逃离险境，压速等于送死）；飞行 / 扫帚腾空（此刻不靠腿走）；坐着 / 乘客 / 睡觉；无主女仆（与跟随收紧/移动抑制/814 同一条规矩）。\n\n【关掉】完全不碰 Mob.setSpeed，与旧版逐字节一致（本模组自己的挖矿赶路 1.5×、砍树、宰杀追击等原样恢复）。")
+                .translation("config.promaid.misc.nonCombatSpeedCap").define("nonCombatSpeedCap", true);
+        MISC_NONCOMBAT_MAX_SPEED = BUILDER.comment("非战斗移速上限（默认 0.56，范围 0.05~1.5）：与「散步速度倍率」「挖矿移速」同一套单位（乘在她 0.7 的裸移速上的倍率）。\n\n【为什么默认 0.56】对照表：0.3 → 1.9、0.4 → 3.3、0.5 → 4.9、0.6 → 6.0、0.7 → 8.2、1.0 → 14（格/秒）。玩家走路 4.32、奔跑 5.61——插值到「与玩家奔跑持平」就是 0.56 上下，所以默认取 0.56。\n\n【怎么调】填大（如 0.6~1.0）= 放宽，接近旧版的狂奔；填小（如 0.3）= 更老实，干活慢悠悠。注意 0.2 以下几乎不走（她一步一顿）。这一项只在「非战斗移速硬上限」开着时生效。")
+                .translation("config.promaid.misc.nonCombatMaxSpeed").defineInRange("nonCombatMaxSpeed", 0.56, 0.05, 1.5);
         // v1.1.0 实测一百五十二：有增益也喂牛奶（装备/饰品永久增益不再阻止解负面）
         MISC_MILK_FEED_WITH_BUFF = BUILDER.comment("有增益也喂牛奶（默认开）：女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）")
                 .translation("config.promaid.misc.milkFeedWithBuff").define("milkFeedWithBuff", true);
         // v1.1.0 实测八十九：寻路危险方块避让——女仆绕开岩浆/火/仙人掌等
         MISC_DANGER_AVOID = BUILDER.comment("寻路危险方块避让（默认开）：女仆规划路径时自动绕开危险表中的方块（岩浆/火/仙人掌/甜浆果丛/细雪等），宁可停下等过远传送兜底也不往里走；已身处险境时仍保留逃出路径")
                 .translation("config.promaid.misc.dangerAvoid").define("dangerAvoid", true);
+        // v1.5.395 实测八百二十一：营火/灵魂营火补进默认危险表——它们【每 tick 直接造成
+        // 火焰伤害但不会点燃她】（CampfireBlock.entityInside 直接 hurt(inFire)，不调 ignite），
+        // 所以 isOnFire() 恒为 false：旧表下既不会被险境脱离救走、也进不了自保的「着火」软危险
+        // （那里要求 isOnFire），她只会站着持续掉血——正是"站在营火上反应迟钝、不主动跑开"。
+        // 加进表后：寻路绕开（malus 已把营火映射成 DAMAGE_FIRE 归入不可通行）+ 险境脱离挪走
+        // + 自保兜底三路一起管。旧档由 runConfigMigration 一次性补齐（只补还停在旧默认的档）。
         MISC_DANGER_BLOCKS = BUILDER.comment("危险方块表（完整注册名，一行一个；命中站立格或脚下方块即视为危险）")
                 .translation("config.promaid.misc.dangerBlocks")
                 .defineList("dangerBlocks", List.of(
@@ -3124,14 +3453,22 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                         "minecraft:fire",
                         "minecraft:soul_fire",
                         "minecraft:magma_block",
+                        "minecraft:campfire",
+                        "minecraft:soul_campfire",
                         "minecraft:cactus",
                         "minecraft:sweet_berry_bush",
                         "minecraft:wither_rose",
                         "minecraft:powder_snow",
                         "minecraft:pointed_dripstone"), o -> o instanceof String s && !s.isEmpty());
         // v1.1.0 实测九十：险境脱离——已身处险境的女仆自动挪到最近安全格
-        MISC_DANGER_ESCAPE = BUILDER.comment("险境脱离（默认开）：女仆已站在危险方块上（岩浆/火/岩浆块等）时，每 0.5 秒巡检并自动挪到最近的安全格+应急灭火——不等血量跌破自保线白挨伤害。坐姿/骑乘中的不处理（由椅子/载具系统负责），自保中让位（有专属珍珠/放水链路）；0.5 秒一轮、每女仆 1.5 秒冷却防振荡")
+        MISC_DANGER_ESCAPE = BUILDER.comment("险境脱离（默认开）：女仆已站在危险方块上（岩浆/火/岩浆块等）时，每 0.5 秒巡检并自动挪到最近的安全格+应急灭火——不等血量跌破自保线白挨伤害。坐姿/骑乘中的不处理（由椅子/载具系统负责），自保中让位（有专属珍珠/放水链路）；0.5 秒一轮、每女仆 1.5 秒冷却防振荡。本项独立于「寻路危险方块避让」：关掉避让（让她照常踩过）不影响这里的脱离救人，两者共用同一张危险表")
                 .translation("config.promaid.misc.dangerEscape").define("dangerEscape", true);
+        // v1.5.395 实测八百二十一：营火/灵魂营火补进默认危险表的一次性迁移标记。
+        // 【为什么必须迁】只改 defineList 的默认值对老档毫无作用（老 toml 里已写着旧那份
+        // 不含营火的列表，NeoForge 不会再取默认值）。判据与前面几次同款：只有当危险表还【不含】
+        // 营火时把两条追加进去（按注册名去重，玩家自己删/改过的表不覆盖），标记落盘后不再碰。
+        DANGER_CAMPFIRE_MIGRATED = BUILDER.comment("内部标记：营火/灵魂营火补入默认危险表是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.misc.dangerCampfireMigrated").define("dangerCampfireMigrated", false);
         // v1.1.0 实测七十九：受困救援——死亡瞬间的坏落点（下界基岩顶等）已被
         // "主人非存活不追"挡住，这里兜底捞回历史上已经受困的女仆
         MISC_MAID_RESCUE = BUILDER.comment("受困救援（默认开）：女仆被困在下界基岩顶层（高度≥126）或掉出世界底部时，自动安全传送到存活的主人身边（跨维度通用；在家模式的女仆也救——基岩顶不是家）；已在主人身边 8 格内不触发")
@@ -3139,6 +3476,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测九十四：运行日志——状态迁移事件落盘 logs/promaid.log，方便事后验查
         MISC_LOG_ENABLED = BUILDER.comment("运行日志（默认开）：把排班段应用、战斗参战/还原/僵局阀/任务被接管、险境脱离挪格与应急灭火、跨维跟随传送、自保标记自愈等状态变化写入 游戏目录/logs/promaid.log（满 4MB 自动轮换为 promaid.log.old，并镜像到 latest.log）——出问题后按时间线对账；关闭后完全静默")
                 .translation("config.promaid.misc.logEnabled").define("logEnabled", true);
+        // 实测八百三十五：模式预设（手册首页「DIY / 默认模式」页切换）。本项只记录/展示，不动任何行为。
+        MISC_PRESET_MODE = BUILDER.comment("模式预设（手册首页「DIY / 默认模式」页切换）：default = 默认模式（本模组的出厂推荐配置，全功能可用）；diy = DIY 模式（把一切「介入女仆行为」的开关全部关掉，像 TLM 原版一样，玩家再自己挑要加强的开关打开）。本项只记录上一次点的是哪个模式，切模式的实际动作在手册那一页里做")
+                .translation("config.promaid.misc.presetMode").define("presetMode", "default");
         // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随；1.20.1 无实体发光机制，
         // 用隐形 minecraft:light 光块产出真实方块光）
         MISC_HELD_LIGHT_ENABLED = BUILDER.comment("手持光源发实光（默认开）：女仆主手/副手持有光源类物品（火把/灯笼/萤石/菌光体/灵魂火把等——亮度取自身方块光强）时，她脚底自动跟随一个隐形光块，周围的方块被真实照亮（与所持光源亮度一致）；不拿光源或关闭后光块自动移除。与其他环境光源同等待遇，插火把判定不受读写影响（亮处本就不该插）")
@@ -3156,7 +3496,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // v1.2.4 实测六百三十六：精妙背包适配（issue #20）——"发现自己背包满了之后，再检索一下
     // 有没有精妙背包。有的话就装进去。" 走 TLM 现成的额外容器 API（javap 实证两版本签名一致），
     // 不自己去反射精妙背包（它给的是 CapabilityBackpackWrapper，不是 ITEM_HANDLER）
-    MISC_BACKPACK_OVERFLOW = BUILDER.comment("背包满时装进精妙背包（默认开，v1.2.4 实测六百三十六）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的\"额外容器\"——饰品栏里的精妙背包 / 旅行者背包（TLM 本体的 compat.extracontainer 体系，精妙背包坐 curios 的 back 槽）。\n\n【生效条件】需要 Curios 在场 + TLM 的「女仆饰品」功能开启 + 背包真的戴在她饰品栏里（拿在手上/放在别处不算，TLM 也不认）；一件都不满足时行为与旧版一字不差。\n\n【绝不吞物品】额外容器再塞不下才落地——最坏情况仍是「掉在地上」")
+    MISC_BACKPACK_OVERFLOW = BUILDER.comment("背包满时装进精妙背包（默认开）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的\"额外容器\"——饰品栏里的精妙背包 / 旅行者背包（TLM 本体的 compat.extracontainer 体系，精妙背包坐 curios 的 back 槽）。\n\n【生效条件】需要 Curios 在场 + TLM 的「女仆饰品」功能开启 + 背包真的戴在她饰品栏里（拿在手上/放在别处不算，TLM 也不认）；一件都不满足时行为与旧版一字不差。\n\n【绝不吞物品】额外容器再塞不下才落地——最坏情况仍是「掉在地上」")
             .translation("config.promaid.misc.backpackOverflow").define("backpackOverflow", true);
     // 超越维度（BeyondDimensions）存储联动（默认关）：配套命令 /maid_smart bd_*。
     // 默认关的理由：它**会真实搬动物品**（从她背包/掉落物里扣除、插进维度网络），且依赖第三方存储模组。
@@ -3193,7 +3533,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     MISC_SCHEDULE_RESTORE_GRACE = BUILDER.comment("战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班")
             .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
     // v1.1.0 实测一百三十三：切换前可用性检测 + 反向抑制三件套
-    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认开，实测二百零二同步为你当前配置值）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭 = 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（实测一百七十档案：旧默认的\"没活不切\"曾把女仆钉死在原地、任务不随段切换——若发现排班任务不切换，先把本项关掉）")
+    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认开）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭 = 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（旧档案：旧默认的\"没活不切\"曾把女仆钉死在原地、任务不随段切换——若发现排班任务不切换，先把本项关掉）")
             .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", true);
     MISC_SCHEDULE_REVERSE_WINDOW_TICKS = BUILDER.comment("排班反向切换窗口（tick，默认 200=10 秒）：两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳；正常时段切换相隔约 2000 tick，天然不会被误判")
             .translation("config.promaid.misc.scheduleReverseWindowTicks").defineInRange("scheduleReverseWindowTicks", 200, 20, 1200);
@@ -3213,6 +3553,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // "不跟随女仆工作区域走乱"的观感放大器；32 变成明确的大范围选项（迁移只迁旧默认）
     SCHEDULE_ACTIVITY_RANGE = BUILDER.comment("排班活动半径（格，默认 12）：排班/在家模式下女仆的工作区域半径下限——这是 TLM home 模式的「工作区域」圈（工位/休闲锚点 ± 本值），任务选点、散步、巡逻都被钳在圈内；本项取 max(本值, TLM 设置) 生效，想让她大范围干活就调大（8~512）")
             .translation("config.promaid.misc.scheduleActivityRange").defineInRange("scheduleActivityRange", 12, 8, 512);
+    MISC_SCHEDULE_RANGE_FLOOR = BUILDER.comment("排班活动半径下限生效（默认开）：开 = 工作区域的半径取「max(排班活动半径, TLM 设置)」，本模组那个数只是下限（TLM 调更大时听 TLM 的）；关 = 完全用 TLM 自己的设置（工作/休闲/睡眠三个半径），本模组一个数都不掺")
+            .translation("config.promaid.misc.scheduleRangeFloor").define("scheduleRangeFloor", true);
     BUILDER.pop();
 
         // ---- 语音（v1.5.198：TTS 音量倍率 / 系统消息朗读 / 系统语音包 / 语音缓存）----
@@ -3233,14 +3575,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("cacheMaxFiles", 200, 10, 2000);
         // v1.1.0 实测四百二十：内置日语语音包（要求——训练日语系统消息语音打进 jar，
         // 触发系统消息自动播放；可在手册/面板调开关、音量、最小间隔；播放时暂压 TLM 原生语音包）
-        TTS_JAR_PACK_ENABLED = BUILDER.comment("内置日语语音包（默认开）：随 mod 附带的女仆日语语音（122 条：67 条系统消息 + 49 条排班气泡 + 6 条拥抱/摸头亲昵台词），触发系统消息时自动播放——优先级高于 TLM 原生语音包与 TTS 合成；关掉则只走磁盘语音包/TTS。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制——同一位女仆的两条参考音频 + 语速区分，不再一律平淡")
+        TTS_JAR_PACK_ENABLED = BUILDER.comment("内置日语语音包（默认开）：随 mod 附带的女仆日语语音（122 条：67 条系统消息 + 49 条排班气泡 + 6 条拥抱/摸头亲昵台词），触发系统消息时自动播放——优先级高于 TLM 原生语音包与 TTS 合成；关掉则只走磁盘语音包/TTS。已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制——同一位女仆的两条参考音频 + 语速区分，不再一律平淡")
                 .translation("config.promaid.voice.jarPackEnabled").define("jarPackEnabled", true);
-        TTS_JAR_PACK_VOLUME = BUILDER.comment("内置语音包音量倍率（默认 1.0，范围 0.1-20.0）：只作用于内置日语语音包的播放音量，与上面的「TTS 语音播放音量倍率」相乘。实测四百二十七：语音素材已做峰值归一化（响度约 +11 dB），1.0~2.0 一般就够；仍嫌小可调到最高 20")
+        TTS_JAR_PACK_VOLUME = BUILDER.comment("内置语音包音量倍率（默认 1.0，范围 0.1-20.0）：只作用于内置日语语音包的播放音量，与上面的「TTS 语音播放音量倍率」相乘。语音素材已做峰值归一化（响度约 +11 dB），1.0~2.0 一般就够；仍嫌小可调到最高 20")
                 .translation("config.promaid.voice.jarPackVolume")
                 .defineInRange("jarPackVolume", 1.0, 0.1, 20.0);
-        TTS_JAR_PACK_MIN_INTERVAL_S = BUILDER.comment("内置语音包最小间隔（秒，默认 5）：同一女仆两次播放内置语音之间的最小间隔，防连续系统消息刷屏轰炸。"
-                        + "实测四百七十五：8 → 5 秒——支援/互助类语音与系统消息共用这道门，间隔太长时一场战斗里只播得出一两句，听感上像「支援语音没做」。"
-                        + "调小 = 语音更密（可能重叠），调 0 = 不限制")
+        TTS_JAR_PACK_MIN_INTERVAL_S = BUILDER.comment("内置语音包最小间隔（秒，默认 5）：同一女仆两次播放内置语音之间的最小间隔，防连续系统消息刷屏轰炸。8 → 5 秒——支援/互助类语音与系统消息共用这道门，间隔太长时一场战斗里只播得出一两句，听感上像「支援语音没做」。调小 = 语音更密（可能重叠），调 0 = 不限制")
                 .translation("config.promaid.voice.jarPackMinIntervalS")
                 .defineInRange("jarPackMinIntervalS", 5, 0, 60);
         TTS_JAR_PACK_MUTE_NATIVE = BUILDER.comment("播放时暂压原生语音包（默认开）：内置语音播放期间，TLM 原生语音包（女仆音效/语音）暂时静音，播放结束自动解除——避免两套语音重叠")

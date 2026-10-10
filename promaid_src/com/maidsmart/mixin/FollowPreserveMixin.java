@@ -40,6 +40,10 @@ public abstract class FollowPreserveMixin {
 
     @Inject(method = "checkExtraStartConditions", at = @At("HEAD"), cancellable = true)
     private void maidSmartPreserveFollow(ServerLevel level, EntityMaid maid, CallbackInfoReturnable<Boolean> cir) {
+        // 实测八百三十五：本 mixin 的两条"跟随不启动"共用一道总闸（DIY 预设会关掉它 = 完全 TLM 原版）
+        if (!com.maidsmart.config.MaidSmartConfig.TLM_TELEPORT_EXEMPT.get()) {
+            return;
+        }
         // v1.1.0 实测八十三：主人死亡（尸体等待重生）→ 跟随不启动（瞬移同样不会发生）。
         // home 模式不在此拦——见上「回退 home 门」。
         net.minecraft.world.entity.LivingEntity owner = maid.m_269323_();

@@ -62,7 +62,7 @@ robocopy "promaid-mod\promaid_src_neo" "maidmods\promaid_src_neo" /MIR /L /NFL /
 robocopy "promaid-mod\promaid_src"     "maidmods\promaid_src"     /MIR /NFL /NDL /NJH /NP
 robocopy "promaid-mod\promaid_src_neo" "maidmods\promaid_src_neo" /MIR /NFL /NDL /NJH /NP
 :: 构建脚本与文档：build_promaid*.py tools/build/compile_promaid.bat gen_compile*.py run_javac_neo.py
-::                  deploy*.py tools/test/test_server.py tools/verify/verify_jar_classes.py CHANGELOG.md README.md 等
+::                  deploy*.py tools/test/test_server.py tools/verify/verify_jar_classes.py README.md 等
 ```
 
 > `sync_to_git.bat` 目前**只覆盖 `promaid_src` 与四个构建脚本，不含 `promaid_src_neo`**，
@@ -112,5 +112,5 @@ call tools/build/compile_neo.bat              rem 期望 EXITCODE=0 / 只有 not
 - `maidmods/promaid_src` 修正前那 7 个文件（`MaidDimensionFollow`、
   `RelationshipMemoryAdapter`、`CallResponseChatSpamMixin`、`HomingPotionMixin`、
   `LoveLoatheHungerGateMixin`、`MaidDebugPanelMixin`、`MixinInteractionSittingAllow`）
-  均已被 v1.2.0 **有意移除或合并**（见 `CHANGELOG.md`），
+  均已被 v1.2.0 **有意移除或合并**（见 `rounds/` 与 `_cleanup_backup/version_changelog_legacy_full.md`），
   快照留在 `maidmods/_backup_promaid_src_v1.1.0_20260917/`。

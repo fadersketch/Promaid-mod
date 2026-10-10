@@ -62,12 +62,20 @@ public final class AiMemoryStore {
     private final AiMemoryIndexStore indexStore;
     /** 跳表时间索引（游戏 tick → 段落 hash，O(log n) 范围查询；load 后重建） */
     private final AiMemorySkipList timeIndex = new AiMemorySkipList();
+    /** 实测八百二十九c：结构化画像条目（移植自 maidsoulcore v3 UserProfile$ProfileItem） */
+    private final List<AiMemoryModels.ProfileItem> profileItems = new ArrayList<>();
+    /** 对话续写队列（崩溃安全，移植自 ConversationContinuityStore） */
+    private final AiMemoryContinuityStore continuityStore;
+    /** 向量索引（语义检索，移植自 MemoryVectorIndex；按需开启） */
+    private final AiMemoryVectorIndex vectorIndex;
 
     private AiMemoryStore(Path dir, String worldId) {
         this.dir = dir;
         this.worldId = worldId;
         this.indexStore = new AiMemoryIndexStore(dir);
         this.indexStore.setDirtyCallback(this::markDirty); // 审计优化5：add 即标脏
+        this.continuityStore = new AiMemoryContinuityStore(dir);
+        this.vectorIndex = new AiMemoryVectorIndex(dir);
         this.load();
     }
 
@@ -115,6 +123,7 @@ public final class AiMemoryStore {
         this.relations.clear();
         this.episodes.clear();
         this.profiles.clear();
+        this.profileItems.clear();
         try {
             if (Files.isDirectory(this.dir)) {
                 for (String line : readLines(this.dir.resolve("paragraphs.jsonl"))) {
@@ -144,6 +153,13 @@ public final class AiMemoryStore {
                 }
                 for (String line : readLines(this.dir.resolve("profiles.jsonl"))) {
                     this.profiles.add(AiMemoryModels.GSON.fromJson(line, AiMemoryModels.Profile.class));
+                }
+                for (String line : readLines(this.dir.resolve("profile_items.jsonl"))) {
+                    AiMemoryModels.ProfileItem pi =
+                            AiMemoryModels.GSON.fromJson(line, AiMemoryModels.ProfileItem.class);
+                    if (pi != null) {
+                        this.profileItems.add(pi);
+                    }
                 }
                 Path metaPath = this.dir.resolve("meta.json");
                 if (Files.exists(metaPath)) {
@@ -175,9 +191,12 @@ public final class AiMemoryStore {
             writeLines(this.dir.resolve("relations.jsonl"), this.relations);
             writeLines(this.dir.resolve("episodes.jsonl"), this.episodes);
             writeLines(this.dir.resolve("profiles.jsonl"), this.profiles);
+            writeLines(this.dir.resolve("profile_items.jsonl"), this.profileItems);
             Files.writeString(this.dir.resolve("meta.json"),
                     AiMemoryModels.GSON.toJson(this.meta), StandardCharsets.UTF_8);
             this.indexStore.save();
+            // 实测八百二十九c：索引清单——记录本份段落集合指纹，供归档器判断索引是否过期
+            AiMemoryAudit.writeManifest(this.dir, factsFingerprint(), this.indexStore.all().size());
             this.dirty = false; // 全部写盘成功后再清脏标记，失败保留重试
         } catch (Exception e) {
             org.slf4j.Logger log = com.mojang.logging.LogUtils.getLogger();
@@ -439,6 +458,95 @@ public final class AiMemoryStore {
         }
         this.profiles.add(p);
         this.markDirty();
+    }
+
+    /**
+     * upsert 结构化画像条目（实测八百二十九c）：同类同 key 合并——保留更高置信度、刷新时间、
+     * 内容取新的非空值。同类同 key 视为同一条（"偏好|drink" 只会有一条，不会越堆越多）。
+     */
+    public synchronized void upsertProfileItem(AiMemoryModels.ProfileItem item) {
+        if (item == null || item.content() == null || item.content().isBlank()) {
+            return;
+        }
+        for (int i = 0; i < this.profileItems.size(); i++) {
+            AiMemoryModels.ProfileItem old = this.profileItems.get(i);
+            if (old.mergeKey().equals(item.mergeKey())) {
+                this.profileItems.set(i, new AiMemoryModels.ProfileItem(
+                        old.category(), old.key(),
+                        item.content().isBlank() ? old.content() : item.content(),
+                        Math.max(old.confidence(), item.confidence()),
+                        item.evidenceHash().isBlank() ? old.evidenceHash() : item.evidenceHash(),
+                        Math.max(old.updatedAt(), item.updatedAt())));
+                this.markDirty();
+                return;
+            }
+        }
+        this.profileItems.add(item);
+        this.markDirty();
+    }
+
+    /** 结构化画像条目快照（注入/检索用）。 */
+    public synchronized List<AiMemoryModels.ProfileItem> profileItems() {
+        return new ArrayList<>(this.profileItems);
+    }
+
+    /**
+     * 实测八百二十九c：纠错——把某条记忆替换成修正版（移植自 maidsoulcore MemoryV3Store.correct）。
+     * 旧段落标 deleted（不再注入/检索），新内容作为一条新段落写入并打 corrected 标记，
+     * 同时追加审计日志（谁、何时、改了什么）。返回新段落 hash；旧 hash 不存在返回 null。
+     */
+    public synchronized String correct(String oldHash, String newContent, String reason) {
+        if (oldHash == null || newContent == null || newContent.isBlank()) {
+            return null;
+        }
+        AiMemoryModels.Paragraph old = null;
+        for (int i = 0; i < this.paragraphs.size(); i++) {
+            AiMemoryModels.Paragraph p = this.paragraphs.get(i);
+            if (!p.deleted() && p.hash().equals(oldHash)) {
+                old = p;
+                this.paragraphs.set(i, markDeleted(p));
+                break;
+            }
+        }
+        if (old == null) {
+            return null;
+        }
+        long now = System.currentTimeMillis();
+        AiMemoryModels.Paragraph np = AiMemoryModels.Paragraph.create(
+                old.sourceType(), old.role(), newContent,
+                mergeTags(old.tags(), "corrected"),
+                old.salience(), old.permanent(), now, old.eventTimeStart());
+        this.paragraphs.add(np);
+        this.timeIndex.insert(np.eventTimeStart(), np.hash());
+        this.profiles.removeIf(pr -> pr.evidenceIds().contains(oldHash));
+        this.markDirty();
+        AiMemoryAudit.append(this.dir, "correct", oldHash, reason == null ? "" : reason);
+        return np.hash();
+    }
+
+    /** 段落集合指纹（写索引清单用；供归档器判断索引是否过期）。 */
+    public synchronized String factsFingerprint() {
+        return AiMemoryAudit.fingerprint(this.paragraphs);
+    }
+
+    /** 对话续写队列（崩溃安全；提取器在发请求前 enqueue、回调成功后 complete）。 */
+    public AiMemoryContinuityStore continuity() {
+        return this.continuityStore;
+    }
+
+    /** 向量索引（语义检索；按需开启）。 */
+    public AiMemoryVectorIndex vector() {
+        return this.vectorIndex;
+    }
+
+    /** 记忆快照文本（第一人称"心里话"，≤200 字；无则空串）。 */
+    public String snapshotText() {
+        return AiMemorySnapshotStore.load(this.dir);
+    }
+
+    /** 写入记忆快照。 */
+    public void saveSnapshot(String text) {
+        AiMemorySnapshotStore.save(this.dir, text);
     }
 
     // ---------- 生命周期维护（对齐 v2：结构合并 + 衰减 + 淘汰） ----------
@@ -937,9 +1045,13 @@ public final class AiMemoryStore {
         this.relations.clear();
         this.episodes.clear();
         this.profiles.clear();
+        this.profileItems.clear();
         this.meta = AiMemoryModels.Meta.empty();
         this.indexStore.clear();
         this.timeIndex.rebuild(List.of());
+        this.continuityStore.clear();
+        this.vectorIndex.clear();
+        AiMemorySnapshotStore.clear(this.dir);
         this.dirty = true;
         this.save();
         AiMemoryArchiver.invalidateState(this); // 同步丢弃归档器状态缓存（文件已删）

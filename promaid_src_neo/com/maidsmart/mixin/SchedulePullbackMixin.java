@@ -25,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
     /**
      * v1.3.0(beta) 实测六百六十四：豁免口径收到一处——非战斗的活儿 + **扫帚模式**。
      *
-     * <p>玩家原话：「开着 home 的扫帚模式，女仆不应该响应排班表的传送」。扫帚模式要飞来飞去，
+     * <p>。扫帚模式要飞来飞去，
      * 切班时被 restrictTo 收紧半径 + setWalkAndLookTarget 拽回工位一次，她就得重新起飞一次。
      * 与 {@code SchedulePosTickMixin} 同一口径（那边管每 2 秒的周期拉回，这边管切班那一拍）。
      */

@@ -404,6 +404,19 @@ public final class MaidResyncCommand {
     }
 
     /**
+     * 【实测七百九十九·issue #36】给**任意一个指定的**客户端重建一次她的实体
+     * （就是既有的 {@link #resyncTo}：删 → 生成 → 全量数据 → 属性 → 装备 → 乘客 → 饰品）。
+     *
+     * <p>与 {@link #resyncToOwner} 的差别只有两处：① 收件人是调用方指定的（传送重建要发给
+     * **每一个正在追踪她**的玩家，不只是主人）；② 不判 {@code guiOpening}——那条判定由调用方
+     * （{@code MaidTeleportRebuild}）统一处理，因为它的处理方式是"推迟到界面关掉再补"，
+     * 而不是简单的拒绝。
+     */
+    public static void resyncToViewer(ServerPlayer viewer, EntityMaid maid) {
+        resyncTo(viewer, maid);
+    }
+
+    /**
      * v1.3.0(beta) 实测七百一十七【issue #27：远距/跨维传送后血上限掉回 20】。
      *
      * 只补**属性表**这一包（{@code ClientboundUpdateAttributesPacket}），不做"删+生成"。
@@ -568,8 +581,8 @@ public final class MaidResyncCommand {
             // 又骑上扫帚"的女仆在客户端是一具**没有载具的孤儿实体**：服务端她是扫帚的乘客，
             // 而原版对乘客**不发她自己的位置包**（{@code ServerEntity#sendChanges} 的 isPassenger
             // 那一支只用载具坐标），于是客户端把她钉在 AddEntity 那一拍的落点上不动，
-            // 扫帚（服务端驱动）照飞 —— 玩家原话：「重生以后的女仆在坐上扫帚以后有的时候会做着
-            // 做着自己身体就停了下来，停在原地，但是扫帚在进行飞行。」
+            // 扫帚（服务端驱动）照飞 ——
+            //
             //
             // 【为什么只有复活过的女仆会中招】本方法只在两条链路上被调：① 复活后那三枪强制补包
             // （{@link #scheduleForcedResync}，实测六百九十七）；② 入世界自动补包。而 ② 对"新实体"

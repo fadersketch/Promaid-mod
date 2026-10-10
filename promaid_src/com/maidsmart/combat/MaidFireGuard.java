@@ -66,8 +66,9 @@ public class MaidFireGuard {
             return;
         }
         for (ServerLevel level : event.getServer().m_129785_()) {
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                if (!(e instanceof EntityMaid maid) || !maid.m_6084_() || maid.m_20094_() <= 0) {
+            // 实测八百三十九：来源改 MaidRoster（只收女仆、按 20 tick 复用）；零女仆时零成本
+            for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(event.getServer(), level)) {
+                if (!maid.m_6084_() || maid.m_20094_() <= 0) {
                     continue; // 只看烧着的女仆
                 }
                 if (!(maid.m_269323_() instanceof ServerPlayer owner) || owner.m_21224_()) {

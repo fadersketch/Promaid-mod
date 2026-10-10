@@ -10,8 +10,8 @@ import net.minecraftforge.client.event.sound.PlaySoundEvent;
 /**
  * v1.1.0 实测四百二十：内置日语语音包的客户端播放标记 + 「播放期间暂压 TLM 原生语音包」。
  *
- * 需求原话：「播放此语音时会暂时卡掉 tlm 原来的语音包，播放完成后解除，
- * 有比原生语音包更高的优先级。」
+ * 需求
+ *
  *
  * 实现：
  * - 播放：客户端 {@code PromaidVoiceSoundInstance.playFromPacket} 在播放前调用

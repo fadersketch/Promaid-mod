@@ -81,8 +81,8 @@ public final class NeutralThreatDriver {
     private static final double STRIKE_DIST = 3.1;
     /** 攻击间隔（tick）——≈ 玩家平A 节奏（自保近身反击同款 12 tick） */
     private static final int ATTACK_COOLDOWN = 12;
-    /** 走向目标速度 */
-    private static final float CHASE_SPEED = 1.1f;
+    /** 走向目标速度（实测八百二十八：1.1 → 1.0——本 mod 不再给女仆额外速度加成） */
+    private static final float CHASE_SPEED = 1.0f;
 
     /** v1.1.0 实测三百四十四：每女仆攻击冷却（maidId → 到期 tick） */
     private static final java.util.Map<java.util.UUID, Long> ATTACK_CDS =
@@ -108,12 +108,11 @@ if (++this.throttle < 10) {
             // 桶 bug 与 ±∞ 溢出均已绕开，HomeWorkMovementDriver 同款口径）
             for (ServerLevel level : server.getAllLevels()) {
                 // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                    if (e instanceof EntityMaid maid) {
-                        try {
-                            drive(level, maid);
-                        } catch (Throwable ignored) {
-                        }
+                // 实测八百三十九：只收女仆的来源改 MaidRoster（按 20 tick 复用）；零女仆时零成本
+                for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, level)) {
+                    try {
+                        drive(level, maid);
+                    } catch (Throwable ignored) {
                     }
                 }
             }
@@ -127,6 +126,12 @@ if (++this.throttle < 10) {
         }
         if (!maid.isAlive() || maid.isBaby() || maid.isMaidInSittingPose()) {
             return; // 死亡/幼年/坐下不参战
+        }
+        // 实测八百二十四【睡觉就睡死，与原版一致】：睡着的女仆不写目标、不挥刀、不导航——
+        // 本驱动是事件级兜底（直调 doHurtTarget，绕过 BRAIN 活动层），若不在此拦，她睡着也会
+        // 从床上物理还手，与"睡觉=睡觉"的原版观感不符。
+        if (maid.isSleeping()) {
+            return;
         }
         // 排班中：不写目标、不打、不触发参战（任务全由日程表管理）
         if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
@@ -190,16 +195,44 @@ if (++this.throttle < 10) {
         // 表精确判断：命中才清 ATTACK_TARGET/LOOK_TARGET，不碰 TLM 自己写的目标
         //（战斗任务的女仆由 TLM 传感器写目标，本表无记录）。
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
-            boolean mine = ASSIGNED_TARGETS.remove(maid.getUUID()) != null;
-            ATTACK_CDS.remove(maid.getUUID());
-            if (mine) {
-                try {
-                    maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
-                    maid.getBrain().eraseMemory(MemoryModuleType.LOOK_TARGET);
-                } catch (Throwable ignored) {
-                }
-            }
+            retractOurTarget(maid);
             return; // 关了主动参战 → ②写目标 / ③挥砍 一律不做（只挨打不还手）
+        }
+
+        // ── v1.3.9 实测七百九十六【"拿雪球也会主动参战"根因】：「真能打」闸 ──
+        //
+        // 【反馈】"有
+        //  我实际测试下来，如果女仆拿着雪球的话，那也会主动参战打怪。"
+        //
+        // 【根因：①②③ 里只有 ① 过了武器闸】①（切战斗任务）经 AutoCombatPools——候选池
+        //  只收 isWeapon 认可的任务，而 TLM `TaskAttack.isWeapon` = 主手装备带
+        //  `ATTACK_DAMAGE` 属性（javap 实证），雪球没有 → 池空 → **不切任务**。而
+        //  ②（写 ATTACK_TARGET）此前**一个武器判据都没读**。目标一旦写进 brain：
+        //    · TLM 空闲任务 `TaskIdle` 注册的 `MaidSnowballTargetTask`（优先级 7）只要
+        //      「brain 里有 ATTACK_TARGET ＋ 主/副手是雪球**或空手** ＋ 看得见目标 ＋
+        //      在活动圈内」就朝它扔雪球。**它的门槛里没有"雪地"这一条**——雪地只约束
+        //      "凭空造目标"的 `MaidStartSnowballAttacking`（优先级 6），所以任何生物
+        //      群系都成立；且它 `start()` 会主动给空手塞一颗雪球——玩家看到的"她拿着
+        //      雪球"往往就是这个行为塞的，不是玩家给的。
+        //    · 单兵战术行为（230）`isActive` 只查"有存活目标 + 非友方 + 在接战距离内"，
+        //      同样不查武器 → 拿雪球也跳劈（按主手 `ATTACK_DAMAGE × 1.5` 结算，雪球 =
+        //      基础值，观感就是"空手也在打"）。
+        //  两条支链都建立在"②喂了目标"之上——闸住 ②，从源头断开。
+        //
+        // 【口径】与既有 `COMBAT_UNARMED_SKIP`（"手上完全没有攻击性物品的女仆，就不应该
+        //  触发自主战斗、维持原任务"）以及 ① 的武器闸**完全一致**：她身上（主手或背包）
+        //  没有任何参战任务认的武器 → 不喂目标、不挥砍。她有武器（含背包里待装备的）时，
+        //  ① 早已把她切进战斗任务并装备好，②③ 照常生效——原设计意图（把 TLM 传感器选
+        //  不到的魔改怪直接喂给她）不受影响。
+        //
+        // 【顺手收回】她原本有武器（我们喂过目标）、武器被拿走改拿雪球时，脑里的旧目标
+        //  还在 → 打雪仗行为照旧。用 ASSIGNED_TARGETS（只登记我们写过的）精确判断：命中
+        //  才清 ATTACK_TARGET/LOOK_TARGET，不碰 TLM 自己写的目标。
+        // 【只在动作点判】canFight 走的是候选池（O(任务×背包)）——仅在"要写目标"或
+        //  "我们写过的目标还挂在脑里"这两个动作点调用，不在每 10 tick 的空转路径上调用。
+        if (ASSIGNED_TARGETS.containsKey(maid.getUUID()) && !canFight(maid)) {
+            retractOurTarget(maid);
+            return; // 武器被拿走（改拿雪球/空手）→ 收回我们写过的目标
         }
 
         // ② 索敌写目标：战斗任务的女仆写了目标就有攻击行为执行（TLM 索敌
@@ -207,6 +240,9 @@ if (++this.throttle < 10) {
         boolean hasBrainTarget = maid.getBrain()
                 .getMemory(MemoryModuleType.ATTACK_TARGET).isPresent();
         if (!hasBrainTarget) {
+            if (!canFight(maid)) {
+                return; // 无战斗力（雪球/空手等）→ 不喂目标（打雪仗/战术链从源头断开）
+            }
             try {
                 // ATTACK_TARGET 泛型是 LivingEntity（javap 实证 ATTACK_TARGET 类型）——
                 // 直接写实体本体（StartAttacking 同款：setMemory(type, Optional.of)）
@@ -283,7 +319,9 @@ if (++this.throttle < 10) {
             // 【隔墙不罚站】这里只在"挥砍"这一步拦——下面导航照常，她仍会朝怪走过去、
             // 绕到能看见的位置再打，追击欲望不受影响。
             if (!com.maidsmart.combat.SelfPreservationBehavior.hasSight(maid, threat)) {
-                navigateTo(maid, threat); // 看不见 → 不挥空刀，继续走近找视线
+                if (!com.maidsmart.combat.MaidSpawnerTorchBehavior.isBreakingSpawner(maid)) {
+                    navigateTo(maid, threat); // 看不见 → 不挥空刀，继续走近找视线
+                }
                 return;
             }
             boolean hit = maid.doHurtTarget(threat);
@@ -295,7 +333,12 @@ if (++this.throttle < 10) {
                 com.maidsmart.combat.AutoCombatSwitch.touchContactPublic(maid);
             }
         } else {
-            navigateTo(maid, threat);
+            // 实测八百二十二【拆刷怪笼 > 战斗·不追怪】：她正在拆刷怪笼时**不追**——够不着就
+            // 只挨着，钉在刷怪笼前把这一镐刨完（走位归 SPAWNER_BREAK，NavGuard 本就掐掉导航，
+            // 这里显式跳过免得白发起）。血量跌破自保线时自保(250)接管逃跑/回血。
+            if (!com.maidsmart.combat.MaidSpawnerTorchBehavior.isBreakingSpawner(maid)) {
+                navigateTo(maid, threat);
+            }
         }
     }
 
@@ -326,6 +369,34 @@ if (++this.throttle < 10) {
      *  攻击间隙而已）；40 tick 内有过动作就视为"TLM 链路健康" */
     private static final java.util.Map<java.util.UUID, Long> LAST_TLM_SWING =
             new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * v1.3.9 实测七百九十六：她身上有没有【任何一个参战任务认的武器】——直接问
+     * {@link AutoCombatPools#hasAnyCombatWeapon}（与"切战斗任务"的候选池同源同实现，
+     * 不另写一份武器判定）。无武器（空手/雪球等）→ ②不喂目标、③不挥砍。
+     */
+    private static boolean canFight(EntityMaid maid) {
+        try {
+            return com.maidsmart.combat.AutoCombatPools.hasAnyCombatWeapon(maid);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** v1.3.9 实测七百九十六：收回【我们写过的】ATTACK_TARGET/LOOK_TARGET——
+     *  用 ASSIGNED_TARGETS（只登记本驱动写过的）精确判断：命中才清，不碰 TLM
+     *  自己写的目标（战斗任务的女仆由 TLM 传感器写目标，本表无记录）。 */
+    private static void retractOurTarget(EntityMaid maid) {
+        boolean mine = ASSIGNED_TARGETS.remove(maid.getUUID()) != null;
+        ATTACK_CDS.remove(maid.getUUID());
+        if (mine) {
+            try {
+                maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+                maid.getBrain().eraseMemory(MemoryModuleType.LOOK_TARGET);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
 
     /** v1.1.0 实测三百四十七：主手是否带攻击力属性（剑/斧/镐/模组武器等）——
      *  空手（没武器）不挥刀（空手伤害高频率快，实测失衡） */
@@ -367,7 +438,7 @@ if (++this.throttle < 10) {
      * target==主人；模组把牛/羊改成中立攻击性生物，攻击时同样写 target。
      * 不认 Enemy/NeutralMob/Tamable 接口 = 不依赖原版类型体系。
      *
-     * ── 实测六百一十九【看得见才算威胁】（用户反馈）──
+     * ── 实测六百一十九【看得见才算威胁】（
      * 原文："在地面下面有空洞里面有僵尸，酒狐隔着方块就感知到了，但是因为没有可以
      * 下去的入口，所以就会开始原地打转。或许改成有方块遮挡的怪不能被感知到会好一些？"
      *

@@ -33,20 +33,103 @@ public final class BlueprintStructureCodec {
 
     static volatile int noItemCells = 0;
 
+    /**
+     * 「二次半块」= 门的上半扇。放置下半扇后由放置侧补全（{@code ensureDoorUpper}），
+     * 蓝图里的上半扇步骤直接跳过——**一件门物品只对应两格**，两扇都从计划里放会吞两份料。
+     *
+     * <p>【v1.3.0 实测八百一十五：床不再走这里】旧版这条还顺带把 {@code part=head}
+     * 的床也当二次半块跳过（注释写着"MC 自动补全"），可床根本没有补全的代码——
+     * 于是蓝图只落下了 foot 半扇，而原版床的掉落表只在 {@code part=head} 时才给物品
+     * （掉落表实证）→ 玩家看到的"床只剩半张、挖了也不掉"。床现在由
+     * {@link BlueprintLib#parseStructure} 按"配对半扇在不在计划里"单独判，
+     * 见 {@link #isRedundantBedHalf}。
+     */
     static boolean isSecondaryHalf(net.minecraft.nbt.CompoundTag stateTag) {
         try {
             if (stateTag.m_128425_("Properties", 10)) {
-                net.minecraft.nbt.CompoundTag props = stateTag.m_128469_("Properties");
-                if ("upper".equals(props.m_128461_("half"))) {
-                    return true;
-                }
-                if ("head".equals(props.m_128461_("part"))) {
-                    return true;
-                }
+                return "upper".equals(stateTag.m_128469_("Properties").m_128461_("half"));
             }
         } catch (Exception ignored) {
         }
         return false;
+    }
+
+    /** 是不是床方块（注册名以 {@code _bed} 结尾）。 */
+    static boolean isBedState(net.minecraft.nbt.CompoundTag stateTag) {
+        try {
+            return stateTag.m_128461_("Name").endsWith("_bed");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** 床的 part 属性（{@code head} / {@code foot}；读不到返回空串）。 */
+    static String bedPart(net.minecraft.nbt.CompoundTag stateTag) {
+        try {
+            return stateTag.m_128469_("Properties").m_128461_("part");
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    /** 床的朝向（facing 属性字符串；读不到返回空串）。头/脚配对关系：
+     *  {@code foot.relative(facing) == head}（原版 {@code getNeighbourDirection} 字节码实证）。 */
+    static String bedFacing(net.minecraft.nbt.CompoundTag stateTag) {
+        try {
+            return stateTag.m_128469_("Properties").m_128461_("facing");
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    /** 计划里所有「床脚」（{@code part=foot}）的位置键——**原始坐标**（旋转前）。
+     *  用来判定某个床头的配对半扇在不在计划里（旋转是等距变换，配对关系不变）。 */
+    static java.util.Set<Long> bedFootKeys(net.minecraft.nbt.ListTag blocks,
+                                           java.util.List<net.minecraft.nbt.CompoundTag> palette) {
+        java.util.Set<Long> out = new HashSet<>();
+        try {
+            for (int i = 0; i < blocks.size(); i++) {
+                net.minecraft.nbt.CompoundTag cell = blocks.m_128728_(i);
+                int si = cell.m_128451_("state");
+                if (si < 0 || si >= palette.size()) {
+                    continue;
+                }
+                net.minecraft.nbt.CompoundTag st = palette.get(si);
+                if (!isBedState(st) || !"foot".equals(bedPart(st))) {
+                    continue;
+                }
+                net.minecraft.nbt.ListTag pos = cell.m_128437_("pos", 3);
+                out.add(key3(pos.m_128763_(0), pos.m_128763_(1), pos.m_128763_(2)));
+            }
+        } catch (Exception ignored) {
+        }
+        return out;
+    }
+
+    /**
+     * 这一格床是不是「多余的半扇」——配对的另一半也在计划里，只该保留一格。
+     *
+     * <p>规则：**留 foot**（与玩家摆放同序——先落脚、{@code setPlacedBy} 补头），
+     * {@code head} 只有在"配对 foot 不在计划里"时才保留。放置侧会为留下的那一格
+     * 补全配对半扇（{@code ensureBedHalf}），所以一件床物品仍然只占一格计划。
+     */
+    static boolean isRedundantBedHalf(net.minecraft.nbt.CompoundTag stateTag, int x, int y, int z,
+                                      java.util.Set<Long> footKeys) {
+        try {
+            if (!isBedState(stateTag) || !"head".equals(bedPart(stateTag))) {
+                return false; // foot 一律保留
+            }
+            net.minecraft.core.Direction f = BlueprintLegacyIds.dirByName(bedFacing(stateTag));
+            if (f == null) {
+                return false; // 朝向读不到 → 保守保留（放置侧补全自会兜底）
+            }
+            // head 的配对 foot 在 facing 的反方向
+            net.minecraft.core.BlockPos paired =
+                    new net.minecraft.core.BlockPos(x, y, z).m_121945_(f.m_122424_());
+            return footKeys.contains(key3(paired.m_123341_(), paired.m_123342_(), paired.m_123343_()));
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     static net.minecraft.nbt.CompoundTag fromLitematic(net.minecraft.nbt.CompoundTag root) {

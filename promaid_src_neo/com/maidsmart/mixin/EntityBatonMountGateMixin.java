@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * v1.3.0(beta) 实测七百二十二【骑乘指挥棒·独占右击二期：在"登乘"这一个源头上一刀切】
  * （1.21.1 版）。
  *
- * <h2>玩家原话</h2>
+ * <h2>
  * 「拿着骑乘棒右击卓越前线的载具会直接坐上去，而不是绑定。」
  *
  * <h2>为什么 720/721 那两道闸还不够（实机日志实证）</h2>

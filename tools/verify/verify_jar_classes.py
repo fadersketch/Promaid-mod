@@ -113,5 +113,169 @@ if _no_source:
 print("verify_jar_classes: mixin 包登记 OK — %d 个类全部登记，无未登记的「鸭子接口」"
       % len(_in_pkg))
 
+# ---------------------------------------------------------------------------
+# v1.5.394 实测八百零五【本次 Bootstrap 崩溃的判据，从此每次打包都挡一道】：
+# Mixin 的 @Inject/@Redirect 里 method= 若**只写方法名不带描述符**，而目标类里那个名字有
+# **多个重载**，Mixin 会挑到其中一个；一旦挑错，处理函数的参数表与目标方法对不上，运行期
+# 抛 InvalidInjectionException → Bootstrap 阶段直接崩、游戏起不来。
+#
+# 本次就是这么死的：neo 树 BuildHomeInertMixin 写 method="isWithinRestriction"，而 TLM 的
+# EntityMaid 有 isWithinRestriction() 与 isWithinRestriction(BlockPos) 两个重载，Mixin 挑中
+# 无参那个 → (BlockPos, CallbackInfoReturnable) 对 ()Z → 崩。
+#
+# **javac 完全看不见这个错**（注解值只是字符串），编译 EXITCODE=0、jar 也打得出来，
+# 只有真进游戏才炸。所以判据只能放在这里：拿目标类的真实方法表比对。
+#
+# 判据（保守，只报"一定有问题"与"很可能有问题"，不误杀）：
+#   A. method= 不带描述符，目标类里该名字有 >1 个重载     → FATAL（本次崩的就是这条）
+#   B. method= 带描述符，目标类里根本没有该方法           → FATAL（注错名字）
+# 目标类取自 @Mixin(XXX.class)，从 jar 的类字节码读方法表（不依赖源码、不依赖外部依赖）。
+# 目标类不在本 jar 里（MC/TLM 等外部类）时跳过——那类重载风险由"必须带描述符"的约定兜底。
+# ---------------------------------------------------------------------------
+def _class_methods(cp, fqcn):
+    """用 javap 读某个类的 {方法名: [描述符...]}（javap 是全仓已验证的取法，别再手搓 class 解析）。
+
+    classpath 里找不到这个类时返回 None（可选模组等）。"""
+    import subprocess
+    javap = _javap_path()
+    if not javap:
+        return None
+    r = subprocess.run([javap, "-p", "-s", "-classpath", cp, fqcn],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    out = r.stdout or ""
+    if not out.strip() or "Error" in out[:80] or "错误" in out[:80]:
+        return None
+    meths = {}
+    lines = out.splitlines()
+    cur = None
+    import re as _rr
+    for idx, ln in enumerate(lines):
+        t = ln.strip()
+        m = _rr.match(r"^[\w<>$\.\[\], ]*\s([\w$<>]+)\((.*)\);$", t)
+        if m and not t.startswith("descriptor:"):
+            cur = m.group(1)
+            continue
+        if t.startswith("descriptor:") and cur:
+            meths.setdefault(cur, []).append(t.split("descriptor:")[1].strip())
+            cur = None
+    return meths
+
+
+def _javap_path():
+    """找 javap：优先 JAVA_HOME，其次仓库里既有注释记下的那个 JDK 路径，最后 PATH。"""
+    import shutil
+    cands = []
+    jh = os.environ.get("JAVA_HOME")
+    if jh:
+        cands.append(os.path.join(jh, "bin", "javap.exe"))
+        cands.append(os.path.join(jh, "bin", "javap"))
+    cands.append(os.path.join(
+        r"C:\Users\Sketch\AppData\Local\Programs\Microsoft\jdk-25.0.4.7-hotspot",
+        "bin", "javap.exe"))
+    for c in cands:
+        if c and os.path.isfile(c):
+            return c
+    return shutil.which("javap")
+
+
+import re as _re  # noqa: E402
+
+_INJ_RE = _re.compile(
+    r"@(Inject|Redirect)\s*\(([^;]*?)\)", _re.S)
+_MIXIN_RE = _re.compile(r"@Mixin\(\s*(?:value\s*=\s*)?([\w\.$]+)\.class", _re.S)
+
+_mix_src_dirs = []
+# 只审「产出这个 jar 的那棵树」：out_promaid_neo → promaid_src_neo，out_promaid → promaid_src。
+# 审两棵树会把另一侧的 Mojmap 目标名拿去对本 jar 的类表，纯属自找噪音。
+_out_norm = OUT.replace("\\", "/").rstrip("/")
+if _out_norm.endswith("out_promaid_neo"):
+    _trees = ["promaid_src_neo"]
+    _cp_file = "compile_neo.txt"
+elif _out_norm.endswith("out_promaid"):
+    _trees = ["promaid_src"]
+    _cp_file = "compile_promaid.txt"
+else:
+    _trees = ["promaid_src", "promaid_src_neo"]
+    _cp_file = None
+for _cand in _trees:
+    _p = os.path.join(BASE, _cand, "com", "maidsmart", "mixin")
+    if os.path.isdir(_p):
+        _mix_src_dirs.append(_p)
+
+# v1.5.394：光读本 jar 不够——**本次崩掉的目标类 EntityMaid 住在 TLM 的 jar 里**，
+# 本 jar 里根本没有它，于是"读本 jar 类表"的判据会正好漏掉出事的那个类。
+# 所以把编译用的那份 classpath 也打开：本 jar 内没有的类，去依赖 jar 里找。
+# （compile_*.txt 是 gen_compile 生成的编译参数，第 -classpath 项就是那份依赖清单。）
+_cp_entries = []
+if _cp_file:
+    _cptxt = os.path.join(BASE, _cp_file)
+    if os.path.isfile(_cptxt):
+        _raw = open(_cptxt, encoding="utf-8", errors="replace").read().replace("\n", " ")
+        _cm = _re.search(r'-classpath["\']?\s*["\']?([^"\']+?)["\']?\s+(?:-d|-nowarn|-Xmaxerrs|--release)', _raw) \
+            or _re.search(r'-classpath"\s*"([^"]+)"', _raw)
+        if _cm:
+            for _e in _cm.group(1).split(";"):
+                _e = _e.strip().replace("\\", "/")
+                if _e.lower().endswith(".jar") and os.path.isfile(_e):
+                    _cp_entries.append(_e)
+_cp_entries.append(JAR)     # 依赖优先，最后才是本 jar
+
+# javap 吃的是"一个 classpath 串"，直接用它自己的分隔符拼——不要去猜某个类在哪个 jar 里。
+_CP_STR = ";".join(_cp_entries)
+
+
+def _lookup_methods(fqcn):
+    return _class_methods(_CP_STR, fqcn)
+
+
+_inj_problems = []
+_cp_ok = bool(_cp_entries)
+if _mix_src_dirs:
+    for _dir in _mix_src_dirs:
+        for _f in glob.glob(os.path.join(_dir, "*.java")):
+            _s = open(_f, encoding="utf-8", errors="replace").read()
+            _mt = _MIXIN_RE.search(_s)
+            if not _mt:
+                continue
+            _simple = _mt.group(1)
+            # 解析 import 到全限定名
+            _fq = None
+            for _im in _re.finditer(r"import\s+([\w\.$]+)\.%s\s*;" % _re.escape(_simple), _s):
+                _fq = _im.group(1) + "." + _simple
+            if _fq is None:
+                # 同包类（com.maidsmart.mixin.*）
+                _fq = "com.maidsmart.mixin." + _simple
+            _internal = _fq.replace(".", "/")
+            _meths = _lookup_methods(_internal)
+            if _meths is None:
+                continue          # 依赖清单里也没有（可选模组等）：跳过
+            for _m in _INJ_RE.finditer(_s):
+                _kind, _args = _m.group(1), _m.group(2)
+                _mm = _re.search(r'method\s*=\s*"([^"]+)"', _args)
+                if not _mm:
+                    continue
+                _spec = _mm.group(1)
+                _name = _spec.split("(")[0].strip()
+                _cands = _meths.get(_name, [])
+                if "(" not in _spec:
+                    if len(_cands) > 1:
+                        _inj_problems.append((os.path.basename(_f), _kind, _spec,
+                                              "目标类 %s 有 %d 个同名重载 %s —— 必须写全描述符"
+                                              % (_simple, len(_cands), _cands)))
+                elif not _cands:
+                    _inj_problems.append((os.path.basename(_f), _kind, _spec,
+                                          "目标类 %s 里没有这个方法" % _simple))
+
+if _inj_problems:
+    print("MIXIN_INJECTION_SIGNATURE(%d):" % len(_inj_problems))
+    for _b, _k, _sp, _why in _inj_problems:
+        print("  [%s] %s  @%s method=%s" % (_why.split("——")[0][:60], _b, _k, _sp))
+        print("      %s" % _why)
+    print("  这类错 javac 看不见、只在启动期炸（InvalidInjectionException → Bootstrap 崩）。")
+    print("  修法：把 method= 写成带描述符的全签名，例如 "
+          "'isWithinRestriction(Lnet/minecraft/core/BlockPos;)Z'。")
+    sys.exit(1)
+print("verify_jar_classes: mixin 注入签名 OK — 无歧义/错名注入点")
+
 print("verify_jar_classes: OK — out %d 个 class 全部在 jar 里，jar 无多余 class" % len(out_classes))
 sys.exit(0)

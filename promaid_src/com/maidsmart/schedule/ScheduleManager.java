@@ -188,11 +188,18 @@ public final class ScheduleManager {
         // （玩家在 TLM GUI 配过 home 的保留原锚点不动；锚定后走位/越界拉回全部激活）。
         var maidSchedulePos = maid.getSchedulePos();
         if (maidSchedulePos != null && !maidSchedulePos.isConfigured()) {
-            maidSchedulePos.setHomeModeEnable(maid, maid.m_20183_());
-            maidSchedulePos.setConfigured(true);
-            com.maidsmart.tool.PromaidLog.log("排班", who + " 排班启用：自动锚定 home（"
-                    + maid.m_20183_().m_123341_() + "," + maid.m_20183_().m_123342_()
-                    + "," + maid.m_20183_().m_123343_() + "），homeMode=true");
+            // 实测八百一十五【罗盘优先】：玩家亲手画的圈不许被"拿当前位置自动锚定"顶掉
+            if (!com.maidsmart.schedule.PlayerCircle.mayAutoAnchor(maid)) {
+                diag(maid, "player-circle", who + " 玩家画过圈（罗盘/中键）——排班不自动锚定，"
+                        + "沿用玩家画的圈", level);
+            } else {
+                maidSchedulePos.setHomeModeEnable(maid, maid.m_20183_());
+                maidSchedulePos.setConfigured(true);
+                com.maidsmart.schedule.PlayerCircle.markAutoAnchor(maid);
+                com.maidsmart.tool.PromaidLog.log("排班", who + " 排班启用：自动锚定 home（"
+                        + maid.m_20183_().m_123341_() + "," + maid.m_20183_().m_123342_()
+                        + "," + maid.m_20183_().m_123343_() + "），homeMode=true");
+            }
         }
         long nowTick = level.m_46467_();
         long grace = maid.getPersistentData().m_128454_(ScheduleData.GRACE_TAG);

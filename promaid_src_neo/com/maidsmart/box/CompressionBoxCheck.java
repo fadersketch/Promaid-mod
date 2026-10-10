@@ -682,9 +682,9 @@ public final class CompressionBoxCheck {
         }
 
         // ④ 六百四十五【用户要求：开关与自定义清单都删掉】——那两个配置字段必须已经
-        //    从 MaidSmartConfig 上消失（反射取不到 = 删干净了）。用户原话：「把压缩盒
-        //    禁止加入附魔物品的开关和选项关掉，我们始终不允许附魔物品装进压缩盒。
-        //    随后是自定义哪个不允许装进去这个功能给删掉了。」
+        //    从 MaidSmartConfig 上消失（反射取不到 = 删干净了）。用户
+        //
+        //
         boolean noSwitch = fieldGone("COMPRESSION_BOX_REFUSE_ENCHANTED");
         boolean noList = fieldGone("COMPRESSION_BOX_REFUSE_LIST");
         out.add(noSwitch && noList

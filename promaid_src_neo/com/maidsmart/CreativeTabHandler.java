@@ -45,6 +45,8 @@ public class CreativeTabHandler {
             event.accept(ProMaidMod.RIDE_BATON);
             // v1.3.8：巡逻航图（管理道具，只进工具页）
             event.accept(ProMaidMod.PATROL_CHART);
+            // v1.5.393 实测八百零四：饰品「大运」（佩戴用道具，只进工具页）
+            event.accept(ProMaidMod.DA_YUN);
         }
     }
 }

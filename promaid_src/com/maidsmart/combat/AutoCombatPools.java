@@ -78,7 +78,34 @@ public final class AutoCombatPools {
                              List<IMaidTask> rangedPool, List<Double> rangedWeights) {
     }
 
+    /**
+     * v1.3.9 实测七百九十六：她身上有没有【任何一个参战任务认的武器】——与 {@link #buildPools}
+     * 候选判据**同源同实现**（直接问它），供 {@code NeutralThreatDriver} 的「真能打」闸
+     * 复用，杜绝"两处各写一份武器判定、日后走偏"。
+     *
+     * <p>用途：把"喂 ATTACK_TARGET"这一步也过一遍 ①（切战斗任务）早就有的武器闸。
+     * 反馈"女仆拿着雪球也会主动参战打怪"的根因就是 ② 此前一个武器判据都没读——目标写进
+     * brain 后，TLM 空闲任务 `TaskIdle` 的打雪仗行为会照着它扔雪球、单兵战术行为会照着
+     * 它跳劈，而雪球没有 {@code ATTACK_DAMAGE}（javap 实证 TLM 的 {@code TaskAttack.isWeapon}
+     * 就是查这个属性）→ 两池全空 → ① 本来就不会切她。现在 ② 也据此不喂目标。
+     *
+     * <p>两池全空 ⇔ {@code pickCombatTask} 返回 null ⇔ ① 不会发生——因此本闸不会误伤
+     * 任何"① 真的会参战"的场景（近战/远程/模组武器女仆照常）。
+     */
+    public static boolean hasAnyCombatWeapon(EntityMaid maid) {
+        try {
+            TaskPools pools = buildPools(maid, false);
+            return !pools.meleePool().isEmpty() || !pools.rangedPool().isEmpty();
+        } catch (Throwable ignored) {
+            return false; // 判定本身异常 → 按"无武器"处理（宁可少喂一次目标，也不要让雪球触发参战）
+        }
+    }
+
     private static TaskPools buildPools(EntityMaid maid) {
+        return buildPools(maid, true);
+    }
+
+    private static TaskPools buildPools(EntityMaid maid, boolean diagnose) {
         List<IMaidTask> meleePool = new ArrayList<>();
         List<Double> meleeWeights = new ArrayList<>();
         List<IMaidTask> rangedPool = new ArrayList<>();
@@ -205,31 +232,36 @@ public final class AutoCombatPools {
         // v1.1.0 实测一百六十九：候选池内容诊断（每 5 秒/女仆一条，latest.log 搜
         // "combat pools"）——确认模组武器任务（ef_tlm/拔刀剑/truepower 等）有没有进池；
         // 池里只有原版任务 = 模组武器没被 isWeapon 认到；池里有模组任务 = 权重随机问题
-        try {
-            long nowT = maid.m_9236_().m_46467_();
-            Long poolLast = AutoCombatSwitch.POOL_DIAG_SINCE.get(maid.m_20148_());
-            if (poolLast == null || nowT - poolLast >= 100L) {
-                AutoCombatSwitch.POOL_DIAG_SINCE.put(maid.m_20148_(), nowT);
-                StringBuilder mp = new StringBuilder();
-                for (IMaidTask t : meleePool) {
-                    mp.append(t.getUid()).append(',');
+        // v1.3.9 实测七百九十六：只在本方法**以诊断身份**被调用时打（选任务/换战术那条路），
+        // 新加的「真能打」闸（hasAnyCombatWeapon，每 10 tick 全图扫）走 diagnose=false，
+        // 否则会把这条日志的节流表刷爆（每只女仆每 10 tick 一次）。
+        if (diagnose) {
+            try {
+                long nowT = maid.m_9236_().m_46467_();
+                Long poolLast = AutoCombatSwitch.POOL_DIAG_SINCE.get(maid.m_20148_());
+                if (poolLast == null || nowT - poolLast >= 100L) {
+                    AutoCombatSwitch.POOL_DIAG_SINCE.put(maid.m_20148_(), nowT);
+                    StringBuilder mp = new StringBuilder();
+                    for (IMaidTask t : meleePool) {
+                        mp.append(t.getUid()).append(',');
+                    }
+                    StringBuilder rp = new StringBuilder();
+                    for (IMaidTask t : rangedPool) {
+                        rp.append(t.getUid()).append(',');
+                    }
+                    // v1.2.4 实测六百二十五：池里有法术任务时，把"是哪件东西让她算会用法术"
+                    // 一并打出来——专门回答"她明明没有法术书，为什么会被切去法术"。
+                    String gear = "-";
+                    if (containsSpellTask(meleePool) || containsSpellTask(rangedPool)) {
+                        String d = com.maidsmart.combat.MaidSpellCompat.spellGearDetail(maid);
+                        gear = d == null ? "无" : d;
+                    }
+                    com.mojang.logging.LogUtils.getLogger().info(
+                            "combat pools: maid={} melee=[{}] ranged=[{}] spellGear={}",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid), mp, rp, gear);
                 }
-                StringBuilder rp = new StringBuilder();
-                for (IMaidTask t : rangedPool) {
-                    rp.append(t.getUid()).append(',');
-                }
-                // v1.2.4 实测六百二十五：池里有法术任务时，把"是哪件东西让她算会用法术"
-                // 一并打出来——专门回答"她明明没有法术书，为什么会被切去法术"。
-                String gear = "-";
-                if (containsSpellTask(meleePool) || containsSpellTask(rangedPool)) {
-                    String d = com.maidsmart.combat.MaidSpellCompat.spellGearDetail(maid);
-                    gear = d == null ? "无" : d;
-                }
-                com.mojang.logging.LogUtils.getLogger().info(
-                        "combat pools: maid={} melee=[{}] ranged=[{}] spellGear={}",
-                        com.maidsmart.tool.PromaidLog.nameOf(maid), mp, rp, gear);
+            } catch (Throwable ignored) {
             }
-        } catch (Throwable ignored) {
         }
         return new TaskPools(meleePool, meleeWeights, rangedPool, rangedWeights);
     }

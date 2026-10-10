@@ -71,7 +71,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      *  **没有任何炉子配方**——两份客户端 jar 的 {@code data/minecraft/recipes}
      *  逐个查过（smelting / smoking / blasting 全找遍）：这五个一条都没有，
      *  而同清单里的 potato / kelp / 生肉 / 鱼都查得到。
-     *  清单里多这五个的直接后果是"女仆会烧胡萝卜"（玩家反馈）。
+     *  清单里多这五个的直接后果是"女仆会烧胡萝卜"（
      *  删掉之后：模组/数据包**自己给这些物品补了配方**时照样能烧——那条路走
      *  {@link #extractAnySmeltable} 与 {@link #pickFurnaceKind} 的通用分支，
      *  它们查的是真实配方而不是这张表，所以这里是"白名单说法变准"，不是"功能变少"。 */
@@ -361,17 +361,21 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             return;
         }
         this.wanderCooldown = 40; // 2 秒换一个闲逛点
-        int r = 8;
-        int dx = maid.m_217043_().m_188503_(r * 2 + 1) - r;
-        int dz = maid.m_217043_().m_188503_(r * 2 + 1) - r;
-        BlockPos base = maid.m_20183_();
-        BlockPos spot = new BlockPos(base.m_123341_() + dx, base.m_123342_(), base.m_123343_() + dz);
-        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, spot)) {
+        // 实测八百一十五【乱窜根治】：取点锚点从"她此刻位置"改为固定锚点
+        //（home=玩家画的圈心 / 跟随=主人身边）。旧版每 2 秒"在她当前位置周围 8 格"取点
+        // = 无回复力的随机游走，每步都可能同方向多走一点 → 几十步就漂出去几十格。
+        BlockPos spot = com.maidsmart.follow.WorkAreaClamp.pickWanderSpot(
+                maid, com.maidsmart.follow.WorkAreaClamp.wanderRadius(maid), maid.m_217043_());
+        if (spot == null) {
+            return;
+        }
+        if (!com.maidsmart.follow.WorkAreaClamp.allowsWander(maid, spot)) {
             return; // 本轮不闲逛（下轮再选），绝不逛出工作圈
         }
         try {
             maid.m_6274_().m_21879_(MemoryModuleType.f_26370_,
-                    new WalkTarget(new BlockPosTracker(spot), 0.7f, 1));
+                    new WalkTarget(new BlockPosTracker(spot),
+                            (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 1)); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
         } catch (Throwable ignored) {
         }
     }

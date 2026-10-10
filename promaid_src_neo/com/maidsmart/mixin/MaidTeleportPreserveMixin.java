@@ -24,6 +24,10 @@ public abstract class MaidTeleportPreserveMixin {
 
     @Inject(method = "teleportToOwner", at = @At("HEAD"), cancellable = true)
     private void maidSmartPreserveTeleport(LivingEntity owner, CallbackInfoReturnable<Boolean> cir) {
+        // 实测八百三十五：下面所有"不拉她"的分支共用一道总闸（DIY 预设会关掉它 = 完全 TLM 原版）
+        if (!com.maidsmart.config.MaidSmartConfig.TLM_TELEPORT_EXEMPT.get()) {
+            return;
+        }
         EntityMaid maid = (EntityMaid) (Object) this;
         // 实测四百四十二：重锤跃起中禁止 TLM 跟随瞬移——她跳到半空被 teleportToOwner
         // 拽回主人身边，猛击白跳、战位全乱（反馈："重锤状态下空中禁止传送，否则很
@@ -67,7 +71,7 @@ public abstract class MaidTeleportPreserveMixin {
                 return;
             }
             // v1.2.0【实测四百八十七】：飞行作战进行中禁止 TLM 跟随瞬移——她正扑向敌人，
-            // 主人一远就被 teleportToOwner 拽回主人身边 = 这一轮攻击白费（用户反馈：
+            // 主人一远就被 teleportToOwner 拽回主人身边 = 这一轮攻击白费（
             // "飞向敌人离地面较近的时候，如果主人离得太远会触发自动传送，导致本次攻击
             // 被卡掉"）。与 1.20.1 同款豁免；旧版这棵树定义了 isFlightAirborne 却从未接线。
             // 注意：本判定含"收翅猛击"阶段（那一刻滑翔位是清的），一轮打完即恢复。
@@ -78,7 +82,7 @@ public abstract class MaidTeleportPreserveMixin {
             // 【v1.3.0(beta) 实测六百六十四：扫帚模式补上同一道闸】滑翔那条早就豁免了，扫帚漏了
             //  ——原版 teleportToOwner 走 {@code Entity.teleportTo}，而它第一件事就是 unRide()：
             //  把她从扫帚上踹下来再传回主人身边，一趟飞行当场白费（她只有 20 血，摔下来更糟）。
-            //  玩家原话「开着 home 的扫帚模式，女仆不应该响应排班表的传送」在这里落地。
+            //  在这里落地。
             if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 cir.setReturnValue(false);
                 return;
@@ -91,12 +95,12 @@ public abstract class MaidTeleportPreserveMixin {
             // 【实测七百二十四】但"悬空鞍位"（冰火传说的龙）那条**必须补一道**：她**不是乘客**
             //  （降级方案里我们不 startRiding），上面 isPassenger() 拦不住她——于是 TLM 原版
             //  teleportToOwner 会把她从龙背鞍位上拽走，下一拍距离超线就被判定"断开链路"
-            //  （玩家原话「动不动就传送和断开乘坐」）。这里与坐垫/骑乘/蹲下同口径：停放，不拉。
+            //  （）。这里与坐垫/骑乘/蹲下同口径：停放，不拉。
             //  玩家要的"她能被传送过来"走本模组自己那条"悬空鞍位：只传她不传龙"。
             //
             // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）：
-            //  玩家原话「对于卓越前线以及龙这两个特殊的载具……并不会去主动产生传送。所有的
-            //  传送方面的行为必须由玩家来。」卓越前线的载具那条她一定是乘客（上面 isPassenger
+            //
+            //
             //  已拦），这里把判据统一成 isSpecialMountRider，语义只有一处、将来漏判也只会漏在
             //  这一格。TLM 原生 teleportToOwner 是"自动传送"的一种，特殊载具上一律不生效。
             if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {

@@ -17,7 +17,7 @@ BASE = _find_repo_root(__file__)
 STAGING = os.path.join(BASE, 'staging_promaid_neo')
 OUT = os.path.join(BASE, 'out_promaid_neo')
 SRC = os.path.join(BASE, 'promaid_src_neo')
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.0-neoforge-1.21.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.1-neoforge-1.21.1.jar')
 
 # 实测六百六十八：mixin 注入点审计闸门（只读）——javac 只保证注解字符串是合法 Java，**不保证
 # "目标类真的自己声明了这个方法"**；那种错要等游戏启动时 Mixin 才报，直接崩在 Bootstrap
@@ -112,7 +112,13 @@ with zipfile.ZipFile(JAR_OUT, 'w', zipfile.ZIP_DEFLATED) as z:
         for f in sorted(files):
             full = os.path.join(root, f)
             rel = os.path.relpath(full, STAGING).replace('\\', '/')
-            z.write(full, rel)
+            # 固定归档时间戳：打包时间不再进 jar 字节 → 同一份源码必出同一个 sha256，
+            # patched/、桌面快照、四个部署目标的 hash 就永远对得上（不再"重建即漂移"）。
+            zi = zipfile.ZipInfo(rel, date_time=(2020, 1, 1, 0, 0, 0))
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zi.external_attr = 0o644 << 16
+            with open(full, 'rb') as fh:
+                z.writestr(zi, fh.read())
 
 # 6. verify
 with zipfile.ZipFile(JAR_OUT) as z:
@@ -141,3 +147,16 @@ import subprocess, sys
 rc = subprocess.call([sys.executable, os.path.join(BASE, 'tools/verify/verify_jar_classes.py'), JAR_OUT, OUT])
 if rc != 0:
     raise SystemExit('FATAL: jar 与 out 目录内容不一致（缺 class，发布前必须修）')
+
+# 文案/注释护栏（DEV_GUIDE §6）：当前历史存量未清零，先以告警形式跑，不清零也不阻断出包。
+# 存量清零后把 --warn 去掉即可改为阻断。
+for _g in ('tools/verify/check_comment_style.py',
+           'tools/verify/check_preset.py', 'tools/verify/check_workflow.py'):
+    _p = os.path.join(BASE, _g)
+    if os.path.isfile(_p):
+        subprocess.call([sys.executable, _p, '--warn'])
+
+# 桌面快照自动同步（DEV_GUIDE §3 步骤 6）：源码镜像 + 两个 jar + 说明.txt，免手动刷。
+_sync = os.path.join(BASE, 'tools/deploy/sync_desktop_snapshot.py')
+if os.path.isfile(_sync):
+    subprocess.call([sys.executable, _sync, '--quiet'])

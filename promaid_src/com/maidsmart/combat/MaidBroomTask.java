@@ -31,7 +31,7 @@ import java.util.List;
  * </pre>
  * 也就是说实现这个接口 = 拿到"她用手上的远程武器开火"这条通道，而武器的分支处理
  * （弓/弩/御币弹幕/弩射烟花/三叉戟）**整段在 {@link MaidFlightRangedTask#fireRangedWeapon}
- * 里现成**——扫帚模式委托同一个方法即可，不抄第二份。这正是玩家说的
+ * 里现成**——扫帚模式委托同一个方法即可，不抄第二份。这正是
  * "手上武器的运作直接照搬远程空袭模式"。
  */
 public class MaidBroomTask implements IRangedAttackTask {

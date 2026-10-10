@@ -50,8 +50,8 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  * ── 触发口径 ──
  * `MaidFlightKit.isFlightVisual(maid) && !onGround()`——原本是
  * `isFlightTask(maid) && !onGround()`，与鞘翅图层的展翅口径完全一致（`LayerMaidElytra` 同款）。
- * **实测六百一十一 把它放宽成"飞行任务 或 正在滑翔"**：用户反馈"飞行跟随……动作没有换成空袭
- * 飞行的动作"，而飞行跟随的女仆并不是飞行任务 → 她俯冲/滑翔时这一段前倾一点没跟上。放宽之后
+ * **实测六百一十一 把它放宽成"飞行任务 或 正在滑翔"**：
+ *
  * 空袭那边一字不变（它本来就滑翔），跟着飞的她也认。
  *
  * **刻意不认 `isFallFlying()`**：收翅猛击那段 `tickSmash`

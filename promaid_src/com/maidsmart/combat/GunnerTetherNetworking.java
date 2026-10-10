@@ -19,8 +19,8 @@ import java.util.function.Supplier;
  * {@link GunnerTetherManager#SYNCED_PAIRS} 供 mixin 定位（挂下方）与绳子渲染，
  * 只能由服务端说了算。
  *
- * 【实测六百七十四：包里多了 state（相位）】玩家原话："此机制没有引用到空袭状态，而且现在玩家
- * 会直接坐到空袭女仆的头上。明明说好的是挂在身下的。" 根因是**牵绳 → 起飞挂载**那一跳没重发包
+ * 【实测六百七十四：包里多了 state（相位）】
+ *
  * （发的是 attach 时刻的，那时玩家还不是乘客 → riderId 记 -1 → 客户端把这一对清掉），
  * 于是客户端不认那个枪手、悬挂定位 mixin 不生效。现在：
  * <ul>

@@ -12,7 +12,7 @@ description:
       box, brewing and Goety.
 source:
   - {path: promaid_src_neo/com/maidsmart/follow, line: 1}
-revision: 491ba927ffa91889b679f800817dd48763aabd62
+revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 9234df80e491bd13fd7e75f64f1677513c792338249aa648a37300693dbb4316
 state: active

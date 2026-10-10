@@ -977,13 +977,15 @@ MODULES = [
  [("promaid_src_neo/com/maidsmart/client/CompressionBoxScreen.java", 1, None)], ["client", "ui"], [], []),
 
 ("promaid.guide", "详细介绍手册", "In-Game Guide",
- "手册物品的「详细介绍」子界面：36 章（35 正文加更新日志），章节目录到正文按像素换行分页阅读；每章末尾"
- "自动附可点击「配置入口」跳转到配置面板对应行。手册只讲当前行为，更新日志另存。",
- "The guide item's 'in detail' sub-screen: 36 chapters (35 content plus the changelog), a chapter list into "
+ "手册物品的「详细介绍」子界面：35 章，章节目录到正文按像素换行分页阅读；每章末尾"
+ "自动附可点击「配置入口」跳转到配置面板对应行。手册只讲当前行为（游戏内更新日志已撤掉，"
+ "版本更新内容改记在桌面 Promaid文本 目录）。",
+ "The guide item's 'in detail' sub-screen: 35 chapters, a chapter list into "
  "pixel-wrapped paged text. Each chapter ends with a clickable 'config entry' link jumping to the matching row "
- "of the config panel. The guide documents only current behavior; the changelog is kept separate.",
- [("promaid_src_neo/com/maidsmart/guide/GuideContent.java", 1, 207),
-  ("promaid_src_neo/com/maidsmart/guide/GuideScreen.java", 1, 826),
+ "of the config panel. The guide documents only current behavior (the in-game changelog was retired; release "
+ "notes are written in a desktop folder instead).",
+ [("promaid_src_neo/com/maidsmart/guide/GuideContent.java", 1, 197),
+  ("promaid_src_neo/com/maidsmart/guide/GuideScreen.java", 1, 784),
   ("promaid_src_neo/com/maidsmart/guide/GuideChaptersFlight.java", 1, 1282)], ["guide", "ui"], [],
  [("call", "promaid.core.config-panel", "配置跳转", "Config jump")]),
 ]

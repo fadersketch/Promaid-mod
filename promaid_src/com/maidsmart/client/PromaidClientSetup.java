@@ -124,4 +124,30 @@ public final class PromaidClientSetup {
                         com.maidsmart.combat.RideBindManager.clearSyncedSeats());
     }
 
+    /**
+     * v1.5.394 实测八百零五：「大运」BGM 的客户端两件东西——
+     * ① ClientTickEvent：推进 {@link com.maidsmart.client.DaYunMusicPlayer} 的心跳/重建/选谁响；
+     * ② LoggingOut：退出世界时清空名单（避免跨世界残留）。
+     * 客户端专属（声音实例与 {@code Minecraft} 都是客户端类型，服务端不加载本类）。
+     */
+    public static void registerDaYunMusicHooks() {
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                (net.minecraftforge.event.TickEvent.ClientTickEvent e) -> {
+                    if (e.phase == net.minecraftforge.event.TickEvent.Phase.END) {
+                        com.maidsmart.client.DaYunMusicPlayer.onClientTick();
+                    }
+                });
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                (net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) ->
+                        com.maidsmart.client.DaYunMusicPlayer.clear());
+    }
+
+    /** v1.5.394 实测八百零五：S2C 收到「某佩戴者的 BGM 开始/停止」→ 交给客户端播放器。 */
+    public static void handleDaYunMusic(int wearerId, int track, boolean playing) {
+        try {
+            com.maidsmart.client.DaYunMusicPlayer.handle(wearerId, track, playing);
+        } catch (Throwable ignored) {
+        }
+    }
+
 }

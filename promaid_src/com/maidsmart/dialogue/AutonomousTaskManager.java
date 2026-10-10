@@ -49,10 +49,13 @@ public class AutonomousTaskManager {
 
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
-        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_AUTONOMOUS.get()) {
+        // 实测八百三十九：phase 判断提到配置读取之前——旧版第一句就是读配置，而这个事件
+        // 每 tick 会发两遍（START + END），等于每 tick 白读两遍 ForgeConfigSpec
+        //（开发者给的采样报告里 ForgeConfigSpec$IntValue.getRaw 就挂在每 tick 路径上）
+        if (event.phase != TickEvent.Phase.END) {
             return;
         }
-        if (event.phase != TickEvent.Phase.END) {
+        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_AUTONOMOUS.get()) {
             return;
         }
         if (!AIConfig.LLM_ENABLED.get()) {

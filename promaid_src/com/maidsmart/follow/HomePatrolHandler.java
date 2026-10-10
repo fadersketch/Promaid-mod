@@ -111,7 +111,8 @@ public final class HomePatrolHandler {
             // 目标与女仆同一高度层（脚部方块），寻路器自动落地
             BlockPos target = new BlockPos(center.m_123341_() + dx,
                     maid.m_20183_().m_123342_(), center.m_123343_() + dz);
-            brain.m_21879_(MemoryModuleType.f_26370_, new WalkTarget(target, 0.7f, 2));
+            brain.m_21879_(MemoryModuleType.f_26370_, new WalkTarget(target,
+                    (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 2)); // 实测八百一十六：漫游速度走「散步速度倍率」（默认 0.4）
         } catch (Exception ignored) {
         }
     }

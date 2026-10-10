@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * TLM 的女仆容器**每 tick** 都要过一遍 {@code AbstractMaidContainer.stillValid}
  * （forge 树 = SRG {@code stillValid}），其中一条是「玩家到她 ≤ 3 格」（1.21.1 是 4 格）。
  * 玩家在排班表里点「女仆配置」时人可能站在几十上百格外，于是服务端**下一 tick 就把界面关掉**
- * ——客户端看到的就是"点进去一下、立刻闪退"。玩家原话：「我想要真正的远程开界面。」
+ * ——客户端看到的就是"点进去一下、立刻闪退"。
  *
  * ── 这个登记处管的是「例外」，不是「规则」 ──
  * 只有**从排班表那条路开出来的**界面才登记（{@link SchedulePacketsMaid.OpenMaidConfigPacket}），

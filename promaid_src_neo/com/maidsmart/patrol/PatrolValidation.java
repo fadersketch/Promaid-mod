@@ -15,8 +15,8 @@ import java.util.List;
  * 只作为一句**提示**放进 {@code notes}（见 {@link #validate}）。能不能飞过去交给运行时：
  * {@link PatrolAdapt} 抬一抬，{@code MaidBroomDrive.steerTo} 的卡墙脱困与危险绕行再兜一道。
  *
- * <p>【v1.3.9.3：连接 / 绑定也不再有门槛】玩家原话：「连接方面就不要再加入门禁了，强制连接，
- * 后果由玩家自己负责。原来那些门禁可以作为一个提醒，触犯了以后就提醒一下。」⇒ 连接与绑定
+ * <p>【v1.3.9.3：连接 / 绑定也不再有门槛】
+ *
  * **一律照做**（{@code PatrolNetworking} 里不再有 return 型拒绝），
  * {@link PatrolGeometry.Report#problems()} 里的每一项（标记不够 / 陡坡 / 自交 / 未闭环）都由
  * {@link #warnings} 渲染成一句 ⚠ 提醒；半径超限在调用方单独提醒。{@link #lines} 仍是给
@@ -55,8 +55,8 @@ public final class PatrolValidation {
                 PatrolClearance.Result cres = PatrolClearance.check(level, poly, route.clearance());
                 clearanceOk = cres.ok();
                 if (!cres.ok()) {
-                    // 【v1.3.9.2】挡路方块**不再是门槛**（玩家原话："不要把它做一个门槛了，交给女仆
-                    // 自己的寻路"）。它只作一句**黄色提示**：连接照样成功，飞的时候 PatrolAdapt 会把
+                    // 【v1.3.9.2】挡路方块**不再是门槛**（
+                    //
                     // 航线抬一抬、steerTo 的脱困与危险绕行再兜一道。
                     PatrolClearance.Hit h = cres.hits().get(0);
                     notes.add(String.format(
@@ -79,7 +79,7 @@ public final class PatrolValidation {
 
     /**
      * 【v1.3.9.3】把原来的"门禁问题"渲染成**提醒**：连接 / 绑定不再被这些拦住，只是照实说一声
-     * （玩家原话：「原来那些门禁可以作为一个提醒，触犯了以后就提醒一下」）。空列表 = 没有要提醒的。
+     * （）。空列表 = 没有要提醒的。
      *
      * <p>半径超限不在 {@code problems} 里（它来自 {@link PatrolCommand#radiusAllowed}），
      * 由调用方自己补一句。

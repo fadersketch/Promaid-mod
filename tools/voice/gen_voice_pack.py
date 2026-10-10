@@ -69,8 +69,9 @@ STYLE_OF = {
                # v1.3.0 实测六百七十四：武装拴绳·新加气泡（battle 档）
              'leash_liftoff',
              'ready_dual',
-               'totem_peer', 'totem_self', 'totem_give', 'attack_ok'],
-    'care': ['aid_food', 'aid_sister_help', 'aid_potion_incoming', 'aid_potion_given',
+               'totem_peer', 'totem_self', 'totem_give', 'attack_ok',
+             'heat_away'],
+    'care': ['aid_food', 'aid_sister_help', 'aid_ally_help', 'aid_undead_help', 'aid_potion_incoming', 'aid_potion_given',
              'aid_drink',
              'aid_bag_full', 'aid_eat_something', 'aid_honey_poison', 'aid_milk_debuff',
              'resurrect_back', 'death_teleport', 'owner_looking',
@@ -123,6 +124,7 @@ STYLE_OF = {
 
 # 日语台词（按中文 key 的情境重写；sched_* 是排班闲聊，走俏皮档）
 JP = {
+    'heat_away.ogg': '熱っ、ちょっと離れるね〜',
     # -------- 骑乘指挥棒（实测七百一十四 / 七百一十六 / 七百一十八 新增，本批补语音）--------
     'ride_pick.ogg': 'うん、鞍を付けた乗り物をもう一匹指してね～',
     'ride_ready.ogg': 'しっかり掴まって、出発するよ～',
@@ -203,6 +205,12 @@ JP = {
     # -------- care --------
     'aid_food.ogg': 'ご主人様、お腹空いたでしょ？食べ物持ってきたよ',
     'aid_sister_help.ogg': '姉妹、頑張って、今助けるからね',
+    # v1.3.0 实测八百：女仆支援友方（非女仆、非主人）的气泡「我来帮你！」此前只有文本没有语音,
+    # 走关心档；manifest 条目排在 aid_sister_help 之后（contains），姐妹那条更长、优先命中
+    'aid_ally_help.ogg': '助けるよ、ちょっと待っててね',
+    # v1.3.0 实测八百一十三：亡灵友军专属支援气泡「我知道这在对你有用！」——同样是关心档，
+    # 语气带一点「我懂你」的笃定（伤害药水/后门金苹果对亡灵才是真回血，见 MaidAidOwnerBehavior）
+    'aid_undead_help.ogg': 'うん、これがあなたに効くって知ってるから',
     'aid_potion_incoming.ogg': 'ポーション持ってきたよ',
     'aid_potion_given.ogg': 'ポーション、カバンに入れたよ、飲んでね',
     'aid_bag_full.ogg': 'ご主人様のカバンが一杯で、渡せないの',

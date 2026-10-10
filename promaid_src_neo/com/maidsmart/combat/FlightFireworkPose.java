@@ -47,13 +47,21 @@ import java.util.UUID;
  *    这符合原版玩家拿弩装普通烟花的行为，不再是需要规避的意外。
  * 6. **只在空袭链路调用**：调用点是 `MaidFlightCombatBehavior` 的两处真实发射
  *    （近战空袭起飞 / 远程空袭掉高补推），与飞行机制同生命周期。
+ *
+ * ── 实测七百九十九【issue #19 同族：展示改为"只发给客户端"】──
+ * 与 {@link BombPose} 同一处收口。旧版把烟花用 {@code setItemInHand(OFF_HAND, 烟花)} 写进
+ * **真实副手槽**：那件是复制品，但就在槽里，于是"把副手搬进背包"的链路（施肥换手
+ * {@code MaidPlanting.equipBoneMeal} 会把副手旧物 {@code insertItemStacked} 进背包、
+ * 递物/换装同理）可能把这枚烟花当真物品搬进她背包 → 净 +1。
+ * 现在**服务端副手槽一个字都不动**：展示只经 {@link #syncOffhand} 发给追踪她的客户端，
+ * 10 tick 后再发一包真实副手还原。观感不变，服务端槽里始终是玩家的真东西。
  */
 public final class FlightFireworkPose {
 
     /** 烟花在副手停留的 tick 数（0.5 秒——够看清"她掏了烟花"，又不至于像换了武器） */
     private static final int HOLD_TICKS = 10;
 
-    /** maidId → [剩余 tick, 原副手物品, 我们放进去的展示品]（第三项用于判断副手有没有被玩家动过） */
+    /** maidId → [剩余 tick, 展示给客户端的那件]（第二项用于还原时判断客户端是否还看着我们的展示） */
     private static final Map<UUID, Object[]> ACTIVE = new HashMap<>();
 
     private FlightFireworkPose() {
@@ -72,21 +80,23 @@ public final class FlightFireworkPose {
         }
         try {
             UUID id = maid.getUUID();
-            // 已经在显示中 → 只续期，不覆盖原物快照（否则会把"烟花"当成原物存下来）
-            Object[] cur = ACTIVE.get(id);
-            if (cur != null) {
-                cur[0] = HOLD_TICKS;
-                return;
-            }
-            ItemStack original = maid.getOffhandItem().copy(); // 副手整栈快照（含组件）
             ItemStack display = (consumedFw != null && !consumedFw.isEmpty())
                     ? consumedFw.copy()                     // 用实际那枚（模型与它完全一致）
                     : new ItemStack(Items.FIREWORK_ROCKET); // 兜底（理论上不会走到）
             display.setCount(1); // 只显示一枚
-            maid.setItemInHand(InteractionHand.OFF_HAND, display);
-            // v1.2.2 实测五百九十五：连"我们放进去的那件"一起记——归还时要靠它判断副手
-            // 是否还保持着我们的展示品（玩家中途放进别的东西就不能覆盖，见 restore）
-            ACTIVE.put(id, new Object[]{HOLD_TICKS, original, display.copy()});
+            // 已经在显示中 → 只续期并换新展示件，不重复动别的东西
+            Object[] cur = ACTIVE.get(id);
+            if (cur != null) {
+                cur[0] = HOLD_TICKS;
+                cur[1] = display;
+                syncOffhand(maid, display);
+                return;
+            }
+            // 实测七百九十九：**服务端副手槽一个字都不动**——只把烟花发给追踪她的客户端
+            // （旧版这里是 setItemInHand(OFF_HAND, display)，那件复制品会被"搬副手进背包"
+            //  的链路当真物品收走 → 净 +1，见类注释）
+            ACTIVE.put(id, new Object[]{HOLD_TICKS, display});
+            syncOffhand(maid, display);
         } catch (Throwable ignored) {
         }
     }
@@ -128,23 +138,17 @@ public final class FlightFireworkPose {
     }
 
     /**
-     * v1.2.2 实测六百〇九：**我们借走的那件副手物品**的只读查询（没借走就返回空栈）。
+     * 实测七百九十九：展示件不再写进服务端槽位，所以没有"被借走的那一件"可查——恒空栈。
      *
-     * 与 {@link BombPose#savedOffhand} 同一用途：展示窗口里那件东西不在任何槽位里
-     * （原栈已被 {@code setItemInHand} 顶掉，快照就在本类的记录里），"她身上有没有某件东西"
-     * 的判定若只看槽位，就会在**那件东西明明在她身上**的十几 tick 里得到 false。
-     * 判定口径修在 {@link com.maidsmart.combat.MaidFlightKit#borrowedOffhand}。
+     * <p>旧版这里返回被顶掉的原副手快照，供 {@link com.maidsmart.combat.MaidFlightKit#borrowedOffhand}
+     * 把"借走的那件"算作仍在她身上。现在原物**一直在副手槽里**，那些就绪判定走槽位那一支
+     * 本就看得见它，不需要本方法兜底。
+     *
+     * @deprecated 展示不再借走副手槽，恒返回空栈（保留仅因 {@code MaidFlightKit} 仍引用）。
      */
+    @Deprecated
     public static ItemStack savedOffhand(EntityMaid maid) {
-        try {
-            Object[] cur = maid == null ? null : ACTIVE.get(maid.getUUID());
-            if (cur == null || cur.length < 2 || !(cur[1] instanceof ItemStack s)) {
-                return ItemStack.EMPTY;
-            }
-            return s;
-        } catch (Throwable ignored) {
-            return ItemStack.EMPTY;
-        }
+        return ItemStack.EMPTY;
     }
 
     /** 立即归还并清记录（行为收尾 / 强杀兜底） */
@@ -174,20 +178,31 @@ public final class FlightFireworkPose {
     }
 
     /**
-     * 归还：副手还是我们的展示品（或空着）→ 原物写回；已被玩家换成别的 → 原物走
-     * {@link com.maidsmart.tool.MaidGiveBack}（进背包/落地），绝不覆盖玩家的东西。
-     * v1.2.2 实测五百九十五：旧版无条件写回，会把展示窗口里玩家放进去的装备顶掉。
+     * 归还：把**服务端真实副手**重新发给客户端。
+     *
+     * 实测七百九十九：本类不再改服务端槽位，所以"归还"只是把真东西发回去——不存在旧版
+     * "覆盖玩家刚放进去的东西 / 原物走 MaidGiveBack"的问题（服务端槽里始终是玩家的真东西）。
      */
     private static void restore(EntityMaid maid, Object[] cur) {
-        ItemStack original = (cur[1] instanceof ItemStack s) ? s : ItemStack.EMPTY;
-        ItemStack shown = (cur.length > 2 && cur[2] instanceof ItemStack d) ? d : ItemStack.EMPTY;
-        ItemStack now = maid.getOffhandItem();
-        boolean untouched = now.isEmpty()
-                || (!shown.isEmpty() && ItemStack.isSameItemSameComponents(now, shown));
-        if (untouched) {
-            maid.setItemInHand(InteractionHand.OFF_HAND, original);
-        } else if (!original.isEmpty()) {
-            com.maidsmart.tool.MaidGiveBack.give(maid, original, "副手展示烟花期间被换下的原物");
+        syncOffhand(maid, maid.getOffhandItem());
+    }
+
+    /**
+     * 实测七百九十九：把要展示的那一栈**只发给正在追踪她的客户端**（服务端槽位不动）。
+     *
+     * {@code broadcastAndSend} 只发给正在追踪该实体的玩家；渲染女仆手部模型读的正是这包
+     * 装备数据——观感与旧版一模一样，而服务端副手槽里始终是玩家的真东西。
+     */
+    private static void syncOffhand(EntityMaid maid, ItemStack toShow) {
+        try {
+            if (maid.level() instanceof net.minecraft.server.level.ServerLevel sl) {
+                ItemStack send = toShow == null ? ItemStack.EMPTY : toShow.copy();
+                sl.getChunkSource().broadcastAndSend(maid, new net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket(
+                        maid.getId(),
+                        java.util.List.of(com.mojang.datafixers.util.Pair.of(
+                                net.minecraft.world.entity.EquipmentSlot.OFFHAND, send))));
+            }
+        } catch (Throwable ignored) {
         }
     }
 }

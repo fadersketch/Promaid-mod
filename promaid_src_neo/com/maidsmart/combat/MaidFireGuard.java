@@ -63,8 +63,9 @@ if (++this.throttle < 10) {
             return;
         }
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                if (!(e instanceof EntityMaid maid) || !maid.isAlive() || maid.getRemainingFireTicks() <= 0) {
+            // 实测八百三十九：来源改 MaidRoster（只收女仆、按 20 tick 复用）；零女仆时零成本
+            for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(event.getServer(), level)) {
+                if (!maid.isAlive() || maid.getRemainingFireTicks() <= 0) {
                     continue; // 只看烧着的女仆
                 }
                 if (!(maid.getOwner() instanceof ServerPlayer owner) || owner.isDeadOrDying()) {

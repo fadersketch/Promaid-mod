@@ -76,6 +76,10 @@ if (!com.maidsmart.config.MaidSmartConfig.AFFECT_ENABLE.get()) {
             return;
         }
         this.tick = 0;
+        // 实测八百三十九：零女仆直接返回（名册按 20 tick 复用，O(1)）——下面整段只为女仆服务
+        if (!com.maidsmart.tool.MaidRoster.any(server)) {
+            return;
+        }
         for (ServerLevel level : server.getAllLevels()) {
             for (ServerPlayer player : level.players()) {
                 level.getEntitiesOfClass(EntityMaid.class, player.getBoundingBox().inflate(128.0)).forEach(maid -> {

@@ -77,6 +77,10 @@ public class ScheduleBookScreen extends Screen {
     private String coordDim = "";
     private boolean coordGone = false;
     private int coordTick = 0;
+    /** 实测八百二十八：快捷页「站立/坐下」键要显示当前姿态并判断是否禁用（骑乘）——
+     *  由每秒一次的 MaidCoordPacket 回包顺带带回（见 onCoord）。 */
+    private boolean maidSitting = false;
+    private boolean maidRiding = false;
     private static ScheduleBookScreen instance;
 
     private static final String[] MODE_NAMES = {"早班", "晚班", "全天"};
@@ -177,6 +181,12 @@ public class ScheduleBookScreen extends Screen {
      * gone=true 时把坐标标记为"不在场"并停止后续刷新。
      */
     public static void onCoord(String uuid, boolean gone, String dim, int x, int y, int z) {
+        onCoord(uuid, gone, dim, x, y, z, false, false);
+    }
+
+    /** 实测八百二十八：带姿态的坐标回包（sitting=坐姿、riding=骑乘/乘客）。 */
+    public static void onCoord(String uuid, boolean gone, String dim, int x, int y, int z,
+                               boolean sitting, boolean riding) {
         ScheduleBookScreen cur = instance;
         if (cur == null || uuid == null || !uuid.equals(cur.selUuid)) {
             return;
@@ -186,6 +196,13 @@ public class ScheduleBookScreen extends Screen {
         cur.coordX = x;
         cur.coordY = y;
         cur.coordZ = z;
+        boolean changed = cur.maidSitting != sitting || cur.maidRiding != riding;
+        cur.maidSitting = sitting;
+        cur.maidRiding = riding;
+        // 姿态变了就重建界面（按钮文案/禁用态跟着变）；否则不动，免得每秒重建一次按钮
+        if (changed && !gone) {
+            cur.init();
+        }
     }
 
     private ScheduleBookScreen(Screen parent, List<String[]> maids, List<String> taskUids) {
@@ -259,8 +276,8 @@ public class ScheduleBookScreen extends Screen {
         int y = 52;
         for (int i = start; i < end; i++) {
             String[] m = shown.get(i);
-            // v1.3.3【列表行改版：显示状态、去掉血量百分比】——玩家反馈"这个界面里最好显示女仆
-            // 的一些基本状态：目前处于什么模式、是不是在家、有没有排班；把原来的血量百分比去掉"。
+            // v1.3.3【列表行改版：显示状态、去掉血量百分比】——
+            //
             // 现在的行 = 名字 + 当前任务 + 工作模式 + 排班(+段数) + 维度 + 在家。
             // 任务名走 taskCn（翻译键 task.<ns>.<path>），工作模式就是 TLM 的早班/晚班/全天
             // （MODE_NAMES，与详情页、批量行同一个数组）。
@@ -572,8 +589,8 @@ public class ScheduleBookScreen extends Screen {
         // v1.1.0 实测二百零八：单独传送按键——只把这一只女仆传到身边（跨维度查找）
         // 【实测七百九十·点2】豁免口径与「一键集合」**不再相同**：指名道姓地要她过来时只留
         // 一个豁免——守家（home）。坐着的、骑在船/矿车/坐骑上的，一律"只拽人不拽载具"把她
-        // 拽过来（玩家原话：「召她过来应该要少几个豁免（指名道姓地要她过来），比如可以把
-        // 骑乘/坐下来女仆直接拽过来（但是只拽人不拽载具），只有 home 模式不会」）。
+        // 拽过来（
+        //
         // 一键集合仍是老口径（坐/骑/家都保持原位），两者的手感差异正在这里。
         // v1.2.0：这一行拆成两个方向——「召她过来」是她过来，「去她身边」是我过去
         // （反向需求：想知道她在哪、想直接过去找她）。两键同宽并排，纵向不多占一行
@@ -620,6 +637,24 @@ public class ScheduleBookScreen extends Screen {
         // 右边整片空着。为什么不占正文行：正文第 5 行（改名）已经排到 y=182，而 240 高
         // 最小窗口的内容下沿是 h-56=184，再插一行会压住底部提示文字（同一段注释在
         // 「去她身边」那行已经记过一次）。右侧对齐、离右下角按钮位只有快捷页占用。
+        // 实测八百二十八【站立 / 坐下 键】
+        //
+        // 放在底部按钮行（h-24）"女仆配置"左侧——姿态由每秒一次的 MaidCoordPacket
+        // 回包带回（maidSitting / maidRiding）；骑乘（乘客）时禁用并显示"§8骑乘中"。
+        boolean canSitBtn = this.selUuid != null && !this.selUuid.isEmpty() && !this.maidRiding;
+        String sitLabel = this.maidRiding ? "\u00a78\u25a0 骑乘中"
+                : (this.maidSitting ? "\u00a7e\u25b2 让她站起" : "\u00a7b\u25bc 让她坐下");
+        this.addRenderableWidget(Button.builder(Component.literal(sitLabel),
+                        b -> {
+                            if (canSitBtn) {
+                                PacketDistributor.sendToServer(
+                                        new SchedulePacketsMaid.MaidSitTogglePacket(this.selUuid,
+                                                !this.maidSitting));
+                                this.maidSitting = !this.maidSitting; // 乐观更新，回包再校正
+                                this.init();
+                            }
+                        })
+                .bounds(Math.max(4, w - 202), h - 24, 92, 20).build());
         this.addRenderableWidget(Button.builder(
                         Component.literal(canSummon
                                 ? "\u00a7b\u2699 女仆配置"

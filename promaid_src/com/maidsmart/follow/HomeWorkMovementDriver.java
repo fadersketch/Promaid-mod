@@ -33,9 +33,9 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  *       <b>完全回原版</b>——原版自己会走去收成熟作物，不再需要一个"随机巡逻"替她找活。</li>
  * </ul>
  *
- * <p>现在农场这条链路的口径与用户对"正常"的定义一致（六百四十六 原话："车万女仆本体
- * 对农场工作选项的支持，正常来说就是……平常就是跟着走或者站着，只有作物成熟了才跑过去
- * 收割"）：<b>本驱动不再给农场女仆注入任何移动</b>——闲着时走的是
+ * <p>现在农场这条链路的口径与用户对"正常"的定义一致（六百四十六
+ *
+ *
  * {@code MaidStrollBehavior}（空闲散步，自带"已有移动目标就不打扰"的门禁，不会抢
  * TLM 的路径），忙时走的是原版农场任务自己。宰杀保持原样（TLM 那边没有"自己找活"的
  * 能力，无牲畜可杀时会永久站桩，必须由本驱动兜着）。</p>
@@ -77,11 +77,10 @@ public final class HomeWorkMovementDriver {
         }
         try {
             // 有限 AABB（±∞ 经 blockToSection 溢出收敛 → 扫描恒空，实测三百三十二）
+            // 实测八百三十九：来源改 MaidRoster（只攒女仆、每游戏刻一份）；零女仆时零成本
             for (ServerLevel level : server.m_129785_()) {
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                    if (e instanceof EntityMaid maid) {
-                        drive(level, maid);
-                    }
+                for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, level)) {
+                    drive(level, maid);
                 }
             }
         } catch (Throwable ignored) {
@@ -121,7 +120,8 @@ public final class HomeWorkMovementDriver {
             // 直连导航（m_26519_ = moveTo(x,y,z,speed)）——不走 MoveToTargetSink，
             // 站桩标记/移动抑制拦不住（自保逃跑验证过的通道）
             maid.m_21573_().m_26519_(target.m_123341_() + 0.5,
-                    target.m_123342_(), target.m_123343_() + 0.5, 0.7f);
+                    target.m_123342_(), target.m_123343_() + 0.5,
+                    (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get()); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
             // 实测六百四十六：落一行限频日志——"她没有牲畜可杀时才由本驱动带着走"
             // 这件事要能从日志里直接对账（本驱动不再碰农场女仆）
             long now = level.m_46467_();

@@ -85,6 +85,9 @@ public final class SchedulePacketsMaid {
                     sp.setIdlePos(pos);
                     sp.setConfigured(true);
                     sp.restrictTo(maid);
+                    // 实测八百一十五：中键是玩家亲手画的圈 → 落「玩家圈」标记，此后本模组的
+                    // 自动锚定（排班/建造拿当前位置兜底）一律让位，不再顶掉这个圈
+                    com.maidsmart.schedule.PlayerCircle.markPlayerCircle(maid);
                     n++;
                 }
                 String at = "(" + pkt.x + ", " + pkt.y + ", " + pkt.z + ")";
@@ -142,8 +145,9 @@ public final class SchedulePacketsMaid {
                             + " 名女仆已阵亡——正在自动复活，会在你的重生点醒来（稍候排班表里就能看到她们）");
                 }
                 if (r.failStand() > 0) {
-                    // v1.2.0 实测五百四十六：集合已改强制 + 无视地块，这条不再是"无可站立点"
-                    parts.add("§7" + r.failStand() + " 名传送失败（状态异常，稍后再试）");
+                    // v1.2.0 实测五百四十六：集合已改强制 + 无视地块，这条不再是"无可站立点"；
+                    // 实测八百三十三起 = 到达校验没过（见 MaidChunkLoadManager.teleportCoreTo）
+                    parts.add("§7" + r.failStand() + " 名没传到位（传送没生效，稍后再点一次）");
                 }
                 if (r.kept() > 0) {
                     parts.add("§7" + r.kept() + " 名坐着/骑乘/在家模式保持原位");
@@ -195,8 +199,11 @@ public final class SchedulePacketsMaid {
                 } else if (r == 2) {
                     // v1.2.0 实测五百四十六：人工传送已改**强制 + 无视地块**（找不到可站立格
                     // 就直接落在你所在的位置，空中也行），所以这条"你身边无可站立点"的
-                    // 旧拒绝路径不再存在；走到这里只剩状态异常（维度不可达/实体异常）。
-                    msg = "§7女仆没有传送：她当前状态异常，稍后再试一次";
+                    // 旧拒绝路径不再存在。
+                    // 实测八百三十三：r==1 现在要过**到达校验**（她真落在你身边才算数），
+                    // 走到这里的真实含义是"传送没生效"——旧文案断言"她状态异常"，是错的
+                    // （她多半好好的，只是被载具/别的系统拽着或没送过去）。照实说这一句。
+                    msg = "§e没传到位（传送没生效）——她可能正被载具或别的系统拉着，稍后再点一次";
                 } else if (r == 3) {
                     // 【实测七百九十·点2】坐姿/骑乘不再是豁免（点名要她就拽人，只拽人不拽载具），
                     // 走到这里的只剩守家（home）这一条。
@@ -380,7 +387,8 @@ public final class SchedulePacketsMaid {
                 BlockPos p = maid.blockPosition();
                 PacketDistributor.sendToPlayer(player,
                         new MaidCoordPacket(pkt.uuid, false, ScheduleNetworking.dimName(maid.level()),
-                                p.getX(), p.getY(), p.getZ()));
+                                p.getX(), p.getY(), p.getZ(),
+                                maid.isMaidInSittingPose(), maid.isPassenger()));
             });
         }
 
@@ -396,14 +404,24 @@ public final class SchedulePacketsMaid {
         public final int x;
         public final int y;
         public final int z;
+        /** 实测八百二十八：姿态（快捷页「站立/坐下」键用）——坐姿 / 骑乘（乘客）。 */
+        public final boolean sitting;
+        public final boolean riding;
 
         public MaidCoordPacket(String uuid, boolean gone, String dim, int x, int y, int z) {
+            this(uuid, gone, dim, x, y, z, false, false);
+        }
+
+        public MaidCoordPacket(String uuid, boolean gone, String dim, int x, int y, int z,
+                               boolean sitting, boolean riding) {
             this.uuid = uuid;
             this.gone = gone;
             this.dim = dim == null ? "" : dim;
             this.x = x;
             this.y = y;
             this.z = z;
+            this.sitting = sitting;
+            this.riding = riding;
         }
 
         public static void encode(MaidCoordPacket pkt, FriendlyByteBuf buf) {
@@ -413,11 +431,13 @@ public final class SchedulePacketsMaid {
             buf.writeInt(pkt.x);
             buf.writeInt(pkt.y);
             buf.writeInt(pkt.z);
+            buf.writeBoolean(pkt.sitting);
+            buf.writeBoolean(pkt.riding);
         }
 
         public static MaidCoordPacket decode(FriendlyByteBuf buf) {
             return new MaidCoordPacket(buf.readUtf(64), buf.readBoolean(), buf.readUtf(64),
-                    buf.readInt(), buf.readInt(), buf.readInt());
+                    buf.readInt(), buf.readInt(), buf.readInt(), buf.readBoolean(), buf.readBoolean());
         }
 
         public static void handle(MaidCoordPacket pkt, IPayloadContext ctx) {
@@ -426,7 +446,8 @@ public final class SchedulePacketsMaid {
                 return;
             }
             ctx.enqueueWork(() -> com.maidsmart.schedule.ScheduleBookScreen
-                    .onCoord(pkt.uuid, pkt.gone, pkt.dim, pkt.x, pkt.y, pkt.z));
+                    .onCoord(pkt.uuid, pkt.gone, pkt.dim, pkt.x, pkt.y, pkt.z,
+                            pkt.sitting, pkt.riding));
         }
 
         @Override
@@ -545,7 +566,7 @@ public final class SchedulePacketsMaid {
                     return;
                 }
                 // v1.3.4 实测六百五十九 / v1.3.5 实测六百六十【真正的远程开界面】
-                // （玩家原话：「我想要真正的远程开界面」）两条修缺一不可：
+                // （）两条修缺一不可：
                 // ① 容器侧：TLM 的 AbstractMaidContainer.stillValid（= stillValid）**每 tick** 都要问
                 //    一遍「玩家到她 ≤ 3 格」（字节码实证），人一站远服务端下一 tick 就 closeContainer，
                 //    客户端看到的就是"点进去一下、立刻闪退"。这一条由 MaidContainerRemoteOpenMixin
@@ -610,6 +631,67 @@ public final class SchedulePacketsMaid {
                         + "先用「召她过来」/「传送到我身边」把她叫过来（或者你自己过去）再开";
             }
             return null;
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    /**
+     * 实测八百二十八【站立 / 坐下】：排班表快捷页的「让她站起 / 让她坐下」键。
+     *
+     *
+     *
+     * <p>服务端把 maid 的坐姿设为 {@code sit}（TLM 的 setInSittingPose，它同时写入
+     * orderedToSit 命令位——与右键指挥她坐下是同一个入口）。<b>骑乘（乘客）时拒绝</b>：
+     * 她正坐在船上/坐骑上，改坐姿没有意义也会打架（客户端按钮同样置灰，这里是服务端兜底）。
+     */
+    public static class MaidSitTogglePacket implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<MaidSitTogglePacket> TYPE =
+                new CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation
+                        .fromNamespaceAndPath("maid_smart", "maid_sit_toggle"));
+        public final String uuid;
+        public final boolean sit;
+
+        public MaidSitTogglePacket(String uuid, boolean sit) {
+            this.uuid = uuid == null ? "" : uuid;
+            this.sit = sit;
+        }
+
+        public static void encode(MaidSitTogglePacket pkt, FriendlyByteBuf buf) {
+            buf.writeUtf(pkt.uuid, 64);
+            buf.writeBoolean(pkt.sit);
+        }
+
+        public static MaidSitTogglePacket decode(FriendlyByteBuf buf) {
+            return new MaidSitTogglePacket(buf.readUtf(64), buf.readBoolean());
+        }
+
+        public static void handle(MaidSitTogglePacket pkt, IPayloadContext ctx) {
+            ctx.enqueueWork(() -> {
+                net.minecraft.server.level.ServerPlayer player =
+                        (net.minecraft.server.level.ServerPlayer) ctx.player();
+                if (player == null) {
+                    return;
+                }
+                EntityMaid maid = ScheduleNetworking.findMaid(
+                        (net.minecraft.server.level.ServerLevel) player.level(), pkt.uuid);
+                if (maid == null || !ScheduleNetworking.allowed(player, maid)) {
+                    player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                            "§7没找到她——可能已被收进魂符或不在已加载区块"), false);
+                    return;
+                }
+                if (maid.isPassenger()) {
+                    player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                            "§7她正骑在坐骑/船上——先让她下来才能调整站/坐"), false);
+                    return;
+                }
+                // TLM 的 setInSittingPose：同时写坐姿位与 orderedToSit 命令位（同右键入口）
+                maid.setInSittingPose(pkt.sit);
+                player.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                        (pkt.sit ? "§a已让她坐下" : "§a已让她站起") + "「"
+                                + (maid.getName() != null ? maid.getName().getString() : "女仆") + "」"), false);
+            });
         }
 
         @Override

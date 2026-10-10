@@ -60,6 +60,10 @@ public abstract class MaidPickupPriorityMixin {
      *  原版低价值物品（权重 0.5）排后；同权保持原顺序（距离近优先） */
     @Inject(method = "getItems", at = @At("RETURN"), cancellable = true)
     private void promaid$reorderPickupItems(EntityMaid maid, CallbackInfoReturnable<List<Entity>> cir) {
+        // 实测八百三十五：价值重排自己的开关（DIY 预设会关掉它——那才是 TLM 原版顺序）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_PICKUP_VALUE_REORDER.get()) {
+            return;
+        }
         List<Entity> list = cir.getReturnValue();
         if (list == null || list.size() <= 1) {
             return;
