@@ -6424,6 +6424,35 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         return Math.max(minX, Math.min(preferredX, maxX));
     }
 
+    /**
+     * 实测八百五十七：把一行文本按屏幕可用宽度折好（放得下就原样一行）。
+     * 供 {@link #drawCenteredLines} 用——旧版各子页的长提示行直接单行居中画，
+     * 文本比屏幕宽时 {@link #clampCenterX} 的区间倒挂（minX &gt; maxX），圆心被夹到
+     * {@code 8 + 半宽}：左端贴 8、右端照样冲出屏幕（玩家截图：支援分栏的标题与底部
+     * 两行说明左右两端都被裁）。
+     */
+    private List<String> wrapFit(String text) {
+        int avail = Math.max(40, this.width - 16);
+        return this.font.width(text) > avail
+                ? this.wrapToWidth(text, avail)
+                : java.util.Collections.singletonList(text);
+    }
+
+    /**
+     * 实测八百五十七：逐行居中画（每行保证落在屏幕内）；{@code lastLineY} 是**最后一行**的 y，
+     * 多出来的行往上长——用于底部提示区，折行后只会朝上占位、不会压到底部按钮。
+     */
+    private void drawCenteredLines(GuiGraphics g, List<String> lines, int lastLineY, int color) {
+        int y = lastLineY - (lines.size() - 1) * 10;
+        for (String line : lines) {
+            if (line != null && !line.isEmpty()) {
+                g.drawString(this.font, Component.literal(line),
+                        this.clampCenterX(line, this.width / 2), y, color, false);
+            }
+            y += 10;
+        }
+    }
+
     /** 左对齐文本：起点向右钳制，右缘不超屏（长文本顶到右缘，短文本保持原位置） */
     private int clampLeftX(String text, int preferredX) {
         int textW = this.font.width(text);
@@ -6905,15 +6934,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             String wHint = "\u00a77候选 " + wTotal + " 项，白名单 " + this.countDrinkables()
                     + " 项；留空 = 不喂水（potion 只认纯净水）；带「#次数」的条目只认那一档，"
                     + "裸 id 条目 = 该物品任意次数";
-            g.drawCenteredString(this.font, Component.literal(wHint),
-                    this.clampCenterX(wHint, cx), this.height - 50, 0x888888);
+            // 实测八百五十七：折行画（同支援分栏），窄屏不越界
+            this.drawCenteredLines(g, this.wrapFit(wHint), this.height - 44, 0x888888);
         } else if (this.supportTable) {
             // 实测八百一十七：支援物品分类子页（◆对策 ▲增益 ♥回复 ✖禁用 ·自动）
             String sTitle = "\u00a7e" + (this.supportMode == 1 ? "亡灵支援" : "通用支援")
-                    + "——点图标循环切换「自动 \u00b7 \u25c6对策 \u00b7 \u25b2增益 \u00b7 \u2665回复 \u00b7 \u2716禁用」"
-                    + "\u00a77；带效果的食物/药水会按效果自动推断";
-            g.drawCenteredString(this.font, Component.literal(sTitle),
-                    this.clampCenterX(sTitle, cx), 10, 0xFFFFFF);
+                    + "——点图标循环切换「自动 \u00b7 \u25c6对策 \u00b7 \u25b2增益 \u00b7 \u2665回复 \u00b7 \u2716禁用」";
+            // 实测八百五十七：标题折行画（窄屏不越界）；"带效果的食物/药水按效果自动推断"
+            // 那句并进下面的汇总行（它本来就说了"留空 = 全部按效果自动推断"）
+            this.drawCenteredLines(g, this.wrapFit(sTitle), 10, 0xFFFFFF);
             int sPanelLeft = Math.max(8, cx - 280);
             int sPanelWidth = Math.min(560, w - 16);
             int sLeft = sPanelLeft + 10;
@@ -6995,18 +7024,18 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     + "支援表已分类 " + this.supportEntriesNow().size()
                     + " 条；留空 = 全部按效果自动推断（与旧版一致）";
             // 实测八百一十七续：四类说明放在这里（固定位置，不占悬停框、不会压图标）
+            // 实测八百五十七：图例/汇总改折行画——末行分别钉在 h-58 / h-44，多出来的行往上长，
+            // 窄屏（GUI 缩放小 / 窗口模式）下不再左右越界，也不会压到底部按钮
             String sLegend = "\u00a77对策=只在对应处境/debuff 出现时用 · 增益=战局开始就能用 · 回复=血低于「治疗触发血量」才用 · 禁用=完全不用";
-            g.drawString(this.font, Component.literal(sLegend),
-                    this.clampCenterX(sLegend, cx), this.height - 62, 0xAAAAAA, false);
-            g.drawString(this.font, Component.literal(sHint),
-                    this.clampCenterX(sHint, cx), this.height - 50, 0x888888, false);
+            this.drawCenteredLines(g, this.wrapFit(sLegend), this.height - 58, 0xAAAAAA);
+            this.drawCenteredLines(g, this.wrapFit(sHint), this.height - 44, 0x888888);
         } else if (this.altTable) {
             // v1.5.254：替代品名单子页（建造板块）——交互与矿表同款
             String[] modeNames = {"半格高（台阶类）", "一格高（整方块）", "竖两格（门/高植物等）",
                     "横两格（床）", "无碰撞（花/火把/地毯等）"};
             String title = "\u00a7e替代品——" + modeNames[Math.min(this.altTableMode, 4)]
                     + "——点击方块图标加入（再点取消）";
-            g.drawCenteredString(this.font, Component.literal(title), cx, 10, 0xFFFFFF);
+            this.drawCenteredLines(g, this.wrapFit(title), 10, 0xFFFFFF);
             int panelLeft = Math.max(8, cx - 280);
             int panelWidth = Math.min(560, w - 16);
             int left = panelLeft + 10;
@@ -7064,13 +7093,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             }
             String chkHint = "\u00a77✓ = 已加入替代品表（" + modeNames[Math.min(this.altTableMode, 4)]
                     + "），缺料时女仆按序使用，再点一次取消";
-            g.drawCenteredString(this.font, Component.literal(chkHint),
-                    this.clampCenterX(chkHint, cx), this.height - 50, 0x888888);
+            this.drawCenteredLines(g, this.wrapFit(chkHint), this.height - 44, 0x888888);
         } else if (this.buildBlackTable) {
             // v1.3.0(beta) 实测六百八十：搭方块禁用名单子页（搭路板块）
             String title = "\u00a7e搭方块禁用名单——点击方块图标切换（\u00a7c\u2716 禁止\u00a7e / "
                     + "\u00a7a\u2714 允许\u00a7e）";
-            g.drawCenteredString(this.font, Component.literal(title), cx, 10, 0xFFFFFF);
+            this.drawCenteredLines(g, this.wrapFit(title), 10, 0xFFFFFF);
             int panelLeft = Math.max(8, cx - 280);
             int panelWidth = Math.min(560, w - 16);
             int left = panelLeft + 10;
@@ -7133,8 +7161,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     + (onlyNat ? "只许原版天然方块（共 " + com.maidsmart.tool.NaturalBlocks.size()
                             + " 种），模组方块默认全禁"
                             : "除禁用名单外都放行——想恢复默认把上面那条点回开的");
-            g.drawCenteredString(this.font, Component.literal(chkHint),
-                    this.clampCenterX(chkHint, cx), this.height - 50, 0x888888);
+            this.drawCenteredLines(g, this.wrapFit(chkHint), this.height - 44, 0x888888);
         } else if (this.cookTable) {
             this.renderCookGrid(g, mouseX, mouseY, w, h, cx);
         } else if (this.bdRules) {

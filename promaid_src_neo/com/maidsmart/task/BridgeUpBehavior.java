@@ -279,6 +279,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (!MaidSmartConfig.BRIDGE_ENABLED.get()) {
             return false;
         }
+        // 实测八百五十七【落地水闸】：她刚放过落地缓冲（水/雪，2 秒内）→ 不搭路。
+        // 搭路垫的方块正好占掉缓冲的落点，会让她踩在方块上照常吃摔落伤害 = 落地水白放。
+        if (com.maidsmart.combat.WaterClutchBehavior.clutchedWithin(
+                maid, level.getGameTime(), com.maidsmart.combat.WaterClutchBehavior.BRIDGE_GATE_TICKS)) {
+            return false;
+        }
         // v1.2.2 实测六百〇八【给飞行跟随让位】：她正在"飞行跟随"（core 246 压着本行为）
         // 时绝不搭路——她此刻是要背鞘翅去追主人，垫方块既没意义、又会把刚起的飞打断。
         // 方位与"飞行任务让位"同一套写法：只挡本状态，别的都不动。
@@ -454,6 +460,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
+        // 实测八百五十七【落地水闸·每 tick 入口】：刚放过落地缓冲的 2 秒内一块都不垫。
+        // 四条腿（tryDescendStep / tryAirBridgeStep / tryDiagStep / placeStep）都在本方法内，
+        // 入口 return 即整条链路这 2 秒静默。放在这里而不是 canStillUse：后者返回 false 会让
+        // Brain 直接 doStop()，缓冲期内反复 start/stop 反而抖动；这里保持行为 RUNNING 只是不动手。
+        if (com.maidsmart.combat.WaterClutchBehavior.clutchedWithin(
+                maid, gameTime, com.maidsmart.combat.WaterClutchBehavior.BRIDGE_GATE_TICKS)) {
+            return;
+        }
         // 每 tick 防窒息 + 防掉落钳制（照挖矿 pillarGuard/antiSuffocate）
         this.antiSuffocate(maid);
         if (this.guardTicks > 0) {

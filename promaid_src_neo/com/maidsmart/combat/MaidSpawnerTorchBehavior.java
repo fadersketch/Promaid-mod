@@ -540,7 +540,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             return; // 手上一件灯都没有：整条链路不启动（）
         }
         int[] occluded = new int[1];
-        BlockPos found = scan(level, maid, occluded);
+        BlockPos found = scan(level, maid, occluded, aim, gameTime);
         if (found == null) {
             if (occluded[0] > 0) {
                 // 实测八百三十七：以前这种情况只报"附近没扫到刷怪笼"（因为 scan 里对"隔着方块"的
@@ -770,28 +770,33 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 实测八百三十 + 八百三十七：{@code null} = 该拆；否则返回**一整句"不拆 + 为什么"**（直接进日志）。
+     * 实测八百三十 + 八百三十七 + 八百五十七：{@code null} = 该拆；否则返回**一整句"不拆 + 为什么"**（直接进日志）。
      *
-     * <p>三种原因**各自成句**（旧版合成一句「空笼子 / 只刷牛羊猪 / 没在出货」，玩家与开发都分不出）：
-     * ① 旁边就有敌对生物 → 拆；② 不在激活窗口（没玩家在 16 格内，或光照已压住）→ 没在出货；
-     * ③ 看 NBT 刷怪表：敌对 → 拆 / 只有和平生物 → 不拆 / 空空如也 → 不拆 /
-     * **有表但 id 读不出来（模组笼子）→ 拆**（宁可多拆不可漏拆）。句尾附"到底读到了什么"。
+     * <p>【实测八百五十七·判据顺序改了：先读刷怪表】旧顺序把"此刻在不在出货"的旁证排在最前
+     * （12 格内有敌对生物 / 16 格内有玩家），读表排在最后。结果是**刷怪表里明明白白写着敌对生物**
+     * 的笼子也常常不拆：她刚把刷出来的怪清掉、或玩家在 16 格外（典型：她在矿道深处拆笼、主人在上面）
+     * → 判"没在出货" → 每 10 秒重判一次、每次同样拒绝（开发者反馈"拆除意愿特别低"）。
+     * 现在：**表里是敌对 → 就该拆**，只保留"光照已经把它压住且旁边也没有怪"这一种例外
+     * （那是玩家特意打亮保存的笼子）；**读不出表**（模组笼子）才回落到原来的旁证链。
+     *
+     * <p>各原因**各自成句**（旧版合成一句「空笼子 / 只刷牛羊猪 / 没在出货」，玩家与开发都分不出）：
+     * ① 刷怪表 = 敌对 且压不住 → 拆；② 表里只有和平生物 / 表是空的 → 不拆；
+     * ③ 表读不出来（模组笼子）→ 旁证：旁边就有敌对生物 → 拆；否则看"玩家在不在 16 格内 + 光照压没压住"；
+     * ④ 表里有 id 但一个都解析不出（模组笼子）→ 按在出货处理（宁可多拆不可漏拆）。句尾附"到底读到了什么"。
      */
     private static String spawnSkipReason(ServerLevel level, BlockPos spawner) {
         try {
-            if (hostileNear(level, spawner, THREAT_MOB_RADIUS)) {
-                return null; // ① 直接证据：它旁边就有敌对生物 = 它正在出货 → 拆
-            }
-            boolean activeWindow = playerNear(level, spawner, VANILLA_ACTIVATION_RANGE)
-                    && stillNeedsTorch(level, spawner);
-            if (!activeWindow) {
-                return "现在没在出货（附近 12 格内没有敌对生物；也没有玩家在 16 格内，"
-                        + "或它旁边那圈的光照已经够亮、把它压住了） → 不拆，留着（你可能要收走它）"
-                        + spawnEvidence(level, spawner);
-            }
             SpawnThreat t = spawnThreat(level, spawner);
             if (t == SpawnThreat.HOSTILE) {
-                return null; // ② 它写的刷怪表里就是敌对生物 → 拆
+                // 实测八百五十七：刷怪表里就是敌对生物 + 光照压不住（或旁边就在出货）→ 拆。
+                // 不再要求"玩家在 16 格内"——她在矿道深处拆笼时主人多半在上面，旧口径等于永远不拆。
+                if (stillNeedsTorch(level, spawner)
+                        || hostileNear(level, spawner, THREAT_MOB_RADIUS)) {
+                    return null;
+                }
+                return "它的刷怪表里是敌对生物，但它旁边那圈的光照已经够亮、把它压住了，"
+                        + "附近 12 格内也没有敌对生物 → 不拆，留着（看起来是你特意打亮保存的笼子）"
+                        + spawnEvidence(level, spawner);
             }
             if (t == SpawnThreat.BENIGN) {
                 return "它的刷怪数据里只有和平生物 → 不拆，留着（你可能是要刷动物 / 收走它）"
@@ -801,7 +806,19 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 return "它的刷怪数据是空的（读得出方块实体，但里面一个实体都没配 → 永远刷不出东西）"
                         + " → 不拆，留着（你可能要收走它）" + spawnEvidence(level, spawner);
             }
-            return null; // ③ UNKNOWN：有刷怪表但实体 id 一个都解析不出来（模组笼子）→ 按在出货处理
+            // UNKNOWN：有刷怪表但实体 id 一个都解析不出来（模组笼子）/ 读取异常 →
+            // 才用"此刻在不在出货"的旁证兜底（旧口径）。
+            if (hostileNear(level, spawner, THREAT_MOB_RADIUS)) {
+                return null; // 直接证据：它旁边就有敌对生物 = 它正在出货 → 拆
+            }
+            boolean activeWindow = playerNear(level, spawner, VANILLA_ACTIVATION_RANGE)
+                    && stillNeedsTorch(level, spawner);
+            if (!activeWindow) {
+                return "刷怪表读不出内容（模组笼子），且现在没在出货（附近 12 格内没有敌对生物；"
+                        + "也没有玩家在 16 格内，或它旁边那圈的光照已经够亮、把它压住了） → 不拆，留着"
+                        + "（你可能要收走它）" + spawnEvidence(level, spawner);
+            }
+            return null;
         } catch (Throwable t) {
             noteThreatFail(spawner, t);
             return null; // 判不出来时按"在刷"处理（保证不会因异常而漏拆）
@@ -1620,6 +1637,19 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
 
     /** 她附近最近的刷怪笼（水平 ±半径、垂直 ±{@link #SCAN_DY}；没有则 null） */
     private static BlockPos scan(ServerLevel level, EntityMaid maid, int[] occludedOut) {
+        return scan(level, maid, occludedOut, null, 0L);
+    }
+
+    /**
+     * 实测八百五十七：扫描"最近的、看得见的、**且不在冷却里**的"刷怪笼。
+     *
+     * <p>【为什么加冷却过滤】旧版只挑最近的一只；一只"暂时不该拆"的笼子（空笼 / 和平笼 / 光照已压住 /
+     * 在家圈里 / 冷却中）被判完后就占住了 {@code aim.coolPos}，而它**还是最近的** → 每次扫描
+     * 都选到它、每次都被冷却挡回 → 半径内**别的笼子永远轮不到**。玩家看到的就是"她就在笼子边上，
+     * 就是不去拆"。现在把冷却中的位置直接从候选里剔掉，选下一个最近的。
+     */
+    private static BlockPos scan(ServerLevel level, EntityMaid maid, int[] occludedOut,
+                                 Aim aim, long gameTime) {
         try {
             int r = (int) Math.round(radiusCfg());
             BlockPos base = maid.blockPosition();
@@ -1630,6 +1660,11 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                     for (int dy = -SCAN_DY; dy <= SCAN_DY; dy++) {
                         BlockPos p = base.offset(dx, dy, dz);
                         if (!isSpawnerBlock(level.getBlockState(p))) {
+                            continue;
+                        }
+                        // 实测八百五十七：刚判过"这次不动它"的那只不再当选——否则它会一直
+                        // 挡在"最近的"这个位置上，把半径内其它笼子全遮住（见方法注释）
+                        if (aim != null && p.equals(aim.coolPos) && gameTime < aim.coolUntil) {
                             continue;
                         }
                         // 实测八百三十b【隔墙就视为没看见】：她和它之间挡着方块 → 这一只不当目标

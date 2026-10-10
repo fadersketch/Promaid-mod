@@ -59,6 +59,50 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
      */
     private static final long FLIGHT_CLUTCH_CD = 40L;
 
+    /**
+     * 实测八百五十七：**搭路闸**——放缓冲（水/雪）之后的这段时间内搭路一律不动作（tick）。
+     * 2 秒 = 40 tick（开发者口径：「使用落地水之后的两秒内不能搭路」）。
+     *
+     * 【为什么需要它】落地水与搭路两个行为判据完全独立，而搭路的三条腿
+     * （{@code tryAirBridgeStep} / {@code tryDiagStep} / {@code placeStep} / {@code tryDescendStep}）
+     * 干的恰恰就是"在她脚边/脚下垫方块"——方块占掉落点，她踩在方块上照常吃摔落伤害
+     * → 本次落地水（以及落地雪的雪垫）直接失效。搭路优先级 245 高于落地水 240，
+     * 所以必须由搭路侧让路。
+     */
+    public static final long BRIDGE_GATE_TICKS = 40L;
+
+    /** 搭路闸表：女仆 UUID → 最近一次放缓冲的 gameTime。LRU 上限 {@link #GATE_MAP_CAP}，
+     *  防长存档里逐只女仆无限累积（只影响"刚放过缓冲"这一瞬，过期条目留着也无害）。 */
+    private static final int GATE_MAP_CAP = 512;
+    private static final java.util.Map<java.util.UUID, Long> LAST_CLUTCH =
+            java.util.Collections.synchronizedMap(
+                    new java.util.LinkedHashMap<java.util.UUID, Long>(64, 0.75f, true) {
+                        @Override
+                        protected boolean removeEldestEntry(
+                                java.util.Map.Entry<java.util.UUID, Long> eldest) {
+                            return size() > GATE_MAP_CAP;
+                        }
+                    });
+
+    /** 记下"刚放过缓冲"（{@link #placeFluid} 里调；水与细雪都记——搭路垫块对两者同样是干扰） */
+    public static void markClutch(EntityMaid maid, ServerLevel level) {
+        try {
+            LAST_CLUTCH.put(maid.m_20148_(), level.m_46467_());
+        } catch (Throwable ignored) {
+            // 记账失败不影响落地水本身：最坏只是这一轮的搭路闸没生效
+        }
+    }
+
+    /** 该女仆是否刚放过缓冲（搭路闸查询）：0 ≤ gameTime − 上次 < window 即真；时钟回退按不拦处理 */
+    public static boolean clutchedWithin(EntityMaid maid, long gameTime, long window) {
+        try {
+            Long t = LAST_CLUTCH.get(maid.m_20148_());
+            return t != null && gameTime - t >= 0 && gameTime - t < window;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 已放的缓冲方块（水=落点+所在格 2 处；细雪=落点平面 1×1 雪垫，追踪漂移会补块） */
     private final java.util.ArrayList<BlockPos> placedList = new java.util.ArrayList<>();
     /** v1.1.0：本次放的是细雪（true）还是水（false）——收回时按类型移除 */
@@ -390,6 +434,8 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             maid.getChatBubbleManager().addTextChatBubble("落地水！");
         }
         this.placedTick = level.m_46467_();
+        // 实测八百五十七：记"刚放过缓冲"——搭路在 BRIDGE_GATE_TICKS 内不动作（见类的闸表说明）
+        markClutch(maid, level);
     }
 
     /**
