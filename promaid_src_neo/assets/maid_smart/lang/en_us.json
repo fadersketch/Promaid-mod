@@ -433,7 +433,7 @@
   "item.maid_smart.da_yun.desc1": "§7While gliding with an §felytra§7 it instantly destroys blocks within §f5×5×5§7 around you",
   "item.maid_smart.da_yun.desc2": "§7Blocks with hardness §f≥ obsidian (50)§7 or §f< 0§7 (bedrock/barrier/command block...) are never touched",
   "item.maid_smart.da_yun.desc3": "§7Anything with a block entity — §fcontainers§7 (chest/furnace/hopper/shulker/spawner...) — is skipped entirely; normal blocks §fdrop as in vanilla",
-  "item.maid_smart.da_yun.desc4": "§7Maid: put it in §fher own bauble slot§7 and it works §fonly in air-raid mode§7. Player: put it in a §fCurios slot§7 and it works while you glide (requires Curios). Craft: 4 iron blocks + 4 diamonds + 2 redstone blocks + 1 minecart",
+  "item.maid_smart.da_yun.desc4": "§7Maid: put it in §fher own bauble slot§7 and it works §fonly in air-raid mode§7. Player: put it in a §fCurios slot§7 and it works while you glide (requires Curios). Craft: 4 iron blocks + 4 diamond blocks + 2 redstone blocks + 1 minecart",
   "config.promaid.accessory": "Dayun Accessory Settings",
   "config.promaid.accessory.daYun.enable": "Dayun master switch",
   "config.promaid.accessory.daYun.playerEnable": "Dayun player side",

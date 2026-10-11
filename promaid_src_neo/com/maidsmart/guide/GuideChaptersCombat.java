@@ -1007,7 +1007,7 @@ public final class GuideChaptersCombat {
                         + "贴着山壁滑翔就是一条隧道，掠过树林就是一条走廊。",
                 // 实测八百一十三：合成表整块画出来（物品图标 + 产物），不再只是文字配方
                 "\u00a7e合成\u00a7r（工作台）："
-                        + "[[#shaped;IDI;RMR;IDI;I=minecraft:iron_block;D=minecraft:diamond;R=minecraft:redstone_block;M=minecraft:minecart;>maid_smart:da_yun;@铁块×4 + 钻石×4 + 红石块×2 + 矿车×1]]",
+                        + "[[#shaped;IDI;RMR;IDI;I=minecraft:iron_block;D=minecraft:diamond_block;R=minecraft:redstone_block;M=minecraft:minecart;>maid_smart:da_yun;@铁块×4 + 钻石块×4 + 红石块×2 + 矿车×1]]",
                 "\u00a7e一、两种佩戴方式（同一个物品，戴在谁身上就给谁开路）\u00a7r",
                 "\u00a7e女仆\u00a7r：把「大运」放进\u00a7e她自己的饰品栏\u00a7r（TLM 的饰品格，就是放头饰、"
                         + "背包那排格子）。她戴着它时\u00a7e只有在空袭模式下\u00a7r（飞行作战 / 飞行远战这两种"
