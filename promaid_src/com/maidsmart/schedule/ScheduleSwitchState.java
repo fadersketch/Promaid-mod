@@ -22,14 +22,11 @@ public final class ScheduleSwitchState {
 
     /**
      * 判断这一次 from→to 是否应被抑制。
-     *
      * @param maidUuid  宿主女仆
      * @param from      当前任务 UID（未被识别时为 "null" 字符串）
      * @param to        目标任务 UID
      * @param tick      当前游戏时间 tick
-     * @param window    反向窗口（tick）：上一次切换与本次切换间隔 <= window 才算"来回"
-     * @param threshold 达到多少次反向才压制（与 TLM-Sincerely 同语义）
-     * @param cooldown  压制后的冷却时长（tick）
+     * @param window    反向窗口（tick）：上一次切换与本次切换间隔 <= window 才算"来回" @param threshold 达到多少次反向才压制（与 TLM-Sincerely 同语义） @param cooldown  压制后的冷却时长（tick）
      */
     public static boolean shouldSuppressReverseSwitch(UUID maidUuid, String from, String to, long tick,
                                                       int window, int threshold, int cooldown) {

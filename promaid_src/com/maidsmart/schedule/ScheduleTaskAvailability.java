@@ -22,11 +22,9 @@ import java.util.Set;
 /**
  * 目标任务的"有活可干"可用性检测（v1.1.0 实测一百三十三，借鉴 TLM-Sincerely 的
  * 环境驱动探测思想，做了务实裁剪）。
- *
  * 排班是【按时间】驱动：该时段该上什么任务由日程表说了算。但直接把女仆切到一个
  * "现在根本没事可做"的任务上，女仆就会原地呆站，表现为"排班失效"。所以段应用前
  * 先问一句：目标现在真的能干活吗？
- *
  * 两条分层判定：
  *  ① 硬闸（始终执行）：{@code IMaidTask.isEnable(maid)} —— TLM 任务自己的"当前
  *     可用"开关（钓鱼没杆 / 任务被关 / 配置不满足等），false 直接判不可用。
@@ -34,12 +32,7 @@ import java.util.Set;
  *     mine      附近有没有可挖矿（mine.oreValues 表）
  *     woodcut   附近有没有可砍木材（wood.values + 原版 logs/bamboo_blocks tag）
  *     cook      附近有没有熔炉
- *     brew      附近有没有酿造台
- *     farm      附近有没有可收作物 / 可种空地（IFarmTask 接口判定）
- *
- * 其余任务（战斗 / 待机 / 跟随 / 第三方附属任务）不做软探测，只查 isEnable——
- * 战斗可能是"夜间守家"这类本意就歇着压阵的安排，第三方任务我们无从判别，
- * 一律保守放行，绝不误伤其它附属工作模式（要求兼容）。
+ *     brew      附近有没有酿造台 farm      附近有没有可收作物 / 可种空地（IFarmTask 接口判定） 其余任务（战斗 / 待机 / 跟随 / 第三方附属任务）不做软探测，只查 isEnable—— 战斗可能是"夜间守家"这类本意就歇着压阵的安排，第三方任务我们无从判别， 一律保守放行，绝不误伤其它附属工作模式（要求兼容）。
  */
 public final class ScheduleTaskAvailability {
     private static final ResourceLocation MINE = ResourceLocation.parse("maid_smart:mine");

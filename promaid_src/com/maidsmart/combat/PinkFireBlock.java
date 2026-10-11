@@ -32,12 +32,9 @@ import net.minecraftforge.registries.RegistryObject;
 import org.joml.Vector3f;
 
 /**
- * v1.2.2 实测五百九十七【粉色火焰】（纯表现 + 一层伤害豁免）。
- *
  * ── 需求原文 ──
  * "同时将重生锚，末影水晶，床爆炸渲染出来的火焰变成粉色。不需要有其他的文字描述。
  * 玩家和女仆会免疫这个火焰造成的伤害。配置里面可以关闭这个火焰的渲染或者伤害保护。"
- *
  * ── 为什么必须是"真的一个方块" ──
  * 需求说的是**火焰本身**（原版那种在地面上跳动的火），不是粒子特效。原版火的外观来自方块模型
  * （{@code block/fire_floor0/1 + fire_side0/1 + fire_side_alt0/1 + fire_up0/1 + fire_up_alt0/1}，
@@ -46,43 +43,8 @@ import org.joml.Vector3f;
  * 火焰贴图的蓝通道几乎为 0，乘任何颜色都只能变暗、乘不出粉色。所以只有两条路——改贴图，
  * 或者加一个自定义方块。这里选后者：继承 {@link FireBlock}（属性、连接逻辑、点燃 AABB 全部照原版），
  * 只把**贴图换成粉色**、把**行为收紧**（不蔓延、几秒后自灭、对玩家与女仆不生效）。
- *
  * 贴图怎么来的：把原版 {@code block/fire_0.png} / {@code fire_1.png} 做**色相映射**到粉色
- * （保持明度与 alpha，火焰形状、32 帧动画、{@code .mcmeta} 帧表全部沿用原版），
- * 于是形状就是玩家熟悉的那团火，只是颜色换成粉色。
- *
- * ── 谁把它放下来 ──
- * **只有 {@link MaidBombing} 自己那一炸**：爆炸前后开一段同步窗口（{@link #beginWindow()}），
- * 窗口内原版每点着一格火都会经过 {@code BaseFireBlock.getState}，mixin 就把返回值换成这个方块
- * ——那一炸点着的**每一格**都是粉色火，与距离无关（实测日志：`粉色火焰：这一炸点着的 119 格火
- * 直接生成为粉色火`）。
- * <p>
- * 实测六百〇一【范围收紧，反馈："你这样等于直接开挂了呀"】：实测六百 曾经把这条改成"开关开着
- * 就把世界里每一格新火都换掉"，那等于顺手关掉了全世界的火蔓延（含玩家自己点的火）——
- * <b>已经收回</b>：窗口之外的火一概不碰，谁点的还是谁的（打火石 / 闪电 / 岩浆 / 别的模组 /
- * 世界里早就存在的原版火都不受影响）。
- * 每一格连着哪几面照抄原版状态（{@link #fromVanillaFire}）——外观位置与原版一模一样。
- *
- * ── 三条行为收紧（这是"女仆自己放的火"，不该像野火一样烧掉她的家）──
- * ① {@link #m_213897_}（tick）：**不蔓延**。原版 {@code FireBlock.tick} 会按可燃度往四向 + 上方
- *    传火（那才是"一把火烧掉整片森林"的来源），这里整段替换成"数秒后自己熄灭"，一个邻居都不点。
- *    **v1.2.2 实测六百〇二【一定会灭】**：这条路依赖方块 tick 链，而链只在"区块正在 tick"时才会走
- *    ——实测玩家世界里残留的 70 格粉火 AGE 全是 0/1、每格都还挂着计划 tick，说明它们的区块在老化
- *    之前就停了 tick（远处战斗 / 玩家走开 / 区块卸载），于是"粉色的火又不会熄灭了"。
- *    现在由 {@link PinkFireSweep} 补两条不依赖 tick 的兜底（登记表到期抹除 + 区块加载即清），
- *    tick 链本身保持不动。
- * ② {@link #m_7892_}（entityInside）：**玩家与女仆免伤**（开关 {@code bombing.fireProtect}）。
- *    原版这一处既点燃（{@code remainingFireTicks + 1}、归零那一下 {@code setSecondsOnFire(8)}）
- *    又掉血（{@code damageSources().inFire()}），所以豁免要**整个跳过**——只挡伤害不挡点燃
- *    等于"跑出火圈还在烧"，那不算免疫。
- * ③ {@link #m_214162_}（animateTick）：原版火星是**按"火下面那块方块"选粒子**的
- *    （灵魂沙/灵魂土 → 灵魂火粒子，其它 → 橙色焰火粒子），这里换成**粉色尘粒**
- *    （{@code DustParticleOptions}，与贴图同一个粉色），否则粉色火会冒橙色火星。
- *
- * ── 渲染开关 ──
- * {@code bombing.fireRender} 关掉时 {@link #m_7514_} 返回 {@code INVISIBLE}：方块**还在**那一格
- * （熄灭逻辑、按 {@code fireProtect} 决定的伤害判定照旧），只是不画出来。想彻底不要火，
- * 关 {@code bombing.pinkFire} 那一条——那时 {@link MaidBombing} 根本不换火，保持旧版原版橙色火。
+ * （保持明度与 alpha，火焰形状、32 帧动画、{@code .mcmeta} 帧表全部沿用原版）， 于是形状就是玩家熟悉的那团火，只是颜色换成粉色。 ── 谁把它放下来 ── **只有 {@link MaidBombing} 自己那一炸**：爆炸前后开一段同步窗口（{@link #beginWindow()}）， 窗口内原版每点着一格火都会经过 {@code BaseFireBlock.getState}，mixin 就把返回值换成这个方块 ——那一炸点着的**每一格**都是粉色火，与距离无关（实测日志：`粉色火焰：这一炸点着的 119 格火 直接生成为粉色火`）。 <p> 就把世界里每一格新火都换掉"，那等于顺手关掉了全世界的火蔓延（含玩家自己点的火）—— <b>已经收回</b>：窗口之外的火一概不碰，谁点的还是谁的（打火石 / 闪电 / 岩浆 / 别的模组 / 世界里早就存在的原版火都不受影响）。 每一格连着哪几面照抄原版状态（{@link #fromVanillaFire}）——外观位置与原版一模一样。 ── 三条行为收紧（这是"女仆自己放的火"，不该像野火一样烧掉她的家）── ① {@link #m_213897_}（tick）：**不蔓延**。原版 {@code FireBlock.tick} 会按可燃度往四向 + 上方 传火（那才是"一把火烧掉整片森林"的来源），这里整段替换成"数秒后自己熄灭"，一个邻居都不点。 **v1.2.2 实测六百〇二【一定会灭】**：这条路依赖方块 tick 链，而链只在"区块正在 tick"时才会走 ——实测玩家世界里残留的 70 格粉火 AGE 全是 0/1、每格都还挂着计划 tick，说明它们的区块在老化 之前就停了 tick（远处战斗 / 玩家走开 / 区块卸载），于是"粉色的火又不会熄灭了"。 现在由 {@link PinkFireSweep} 补两条不依赖 tick 的兜底（登记表到期抹除 + 区块加载即清）， tick 链本身保持不动。 ② {@link #m_7892_}（entityInside）：**玩家与女仆免伤**（开关 {@code bombing.fireProtect}）。 原版这一处既点燃（{@code remainingFireTicks + 1}、归零那一下 {@code setSecondsOnFire(8)}） 又掉血（{@code damageSources().inFire()}），所以豁免要**整个跳过**——只挡伤害不挡点燃 等于"跑出火圈还在烧"，那不算免疫。 ③ {@link #m_214162_}（animateTick）：原版火星是**按"火下面那块方块"选粒子**的 （灵魂沙/灵魂土 → 灵魂火粒子，其它 → 橙色焰火粒子），这里换成**粉色尘粒** （{@code DustParticleOptions}，与贴图同一个粉色），否则粉色火会冒橙色火星。 ── 渲染开关 ── {@code bombing.fireRender} 关掉时 {@link #m_7514_} 返回 {@code INVISIBLE}：方块**还在**那一格 （熄灭逻辑、按 {@code fireProtect} 决定的伤害判定照旧），只是不画出来。想彻底不要火， 关 {@code bombing.pinkFire} 那一条——那时 {@link MaidBombing} 根本不换火，保持旧版原版橙色火。
  */
 public final class PinkFireBlock extends FireBlock {
 
@@ -104,44 +66,23 @@ public final class PinkFireBlock extends FireBlock {
 
     /**
      * v1.2.2 实测五百九十八【"又粉又橙"的根因与改法】。
-     *
      * 旧做法是"爆炸前把这一带已有的火扫一遍、爆炸后把新出现的原版火逐个换成粉色"，两个洞：
      * <ul>
      *   <li><b>盒子永远不够大</b>：原版点火的位置来自 {@code Explosion.finalizeExplosion} 里那个
      *       {@code toBlow} 集合，而它是**射线**扫出来的——空气的爆炸阻力是 0，射线每步只花
-     *       0.09 能量，于是"功率 5"的一炸，射线能穿过空气跑到 {@code 5 × 1.3 ÷ 0.09 × 0.3}
-     *       ≈ <b>20 格开外</b>。旧版按 {@code ceil(power)+2 = 7} 扫，盒子外的那些火自然还是
-     *       原版的——实测反馈"爆炸的时候又产生粉色火焰又产生普通火焰"就是这个；</li>
-     *   <li><b>顺序不对</b>：换的动作发生在爆炸之后，那一瞬间火仍是原版火（受重力/蔓延规则影响）。</li>
-     * </ul>
-     * 现在改成<b>在它点火那一刻就把状态换掉</b>：{@link MaidBombing} 在 {@code level.explode(...)}
-     * 前后开/关这个窗口，{@code BaseFireBlockPinkMixin} 在窗口内把 {@code BaseFireBlock.getState}
-     * 的返回值翻译成粉色火——于是原版点出来的**每一格**直接就是粉色火，与距离无关，
-     * 也没有"先橙后粉"的中间态。窗口之外（打火石 / 闪电 / 火焰弹点的火）一概不动，
-     * 主人自己的火堆更不会受影响（它压根不走点火路径）。
+     *       0.09 能量，于是"功率 5"的一炸，射线能穿过空气跑到 {@code 5 × 1.3 ÷ 0.09 × 0.3} ≈ <b>20 格开外</b>。旧版按 {@code ceil(power)+2 = 7} 扫，盒子外的那些火自然还是 原版的——实测反馈"爆炸的时候又产生粉色火焰又产生普通火焰"就是这个；</li> <li><b>顺序不对</b>：换的动作发生在爆炸之后，那一瞬间火仍是原版火（受重力/蔓延规则影响）。</li> </ul> 现在改成<b>在它点火那一刻就把状态换掉</b>：{@link MaidBombing} 在 {@code level.explode(...)} 前后开/关这个窗口，{@code BaseFireBlockPinkMixin} 在窗口内把 {@code BaseFireBlock.getState} 的返回值翻译成粉色火——于是原版点出来的**每一格**直接就是粉色火，与距离无关， 也没有"先橙后粉"的中间态。窗口之外（打火石 / 闪电 / 火焰弹点的火）一概不动， 主人自己的火堆更不会受影响（它压根不走点火路径）。
      */
     private static boolean window = false;
     /** 本次爆炸点着的火有几格（关窗口时取走并清零，只用于日志） */
     private static int windowCount = 0;
 
     /**
-     * v1.2.2 实测六百〇一【范围收回到"她那一炸"】。
-     *
-     * 实测六百 曾经把这里改成"开关开着 → 世界里每一格新火都换成粉色"（为了兜住窗口之外那些
      * 把玩家烧着的火）。反馈
-     *
      * "全都换"实际上等于顺手把整个世界的火蔓延关掉了（你自己点的火也一样），
      * 那已经超出这个功能的边界。现在收回成**只认她自己那一炸**：
-     *
      * <ul>
      *   <li>换的时机 = {@link MaidBombing} 爆炸前后开的那一段窗口（{@link #inWindow()}）——
-     *       原版点火的每一格都在这个同步调用链里拿到粉色火，一炸点着多少格就换多少格
-     *       （实测日志：`粉色火焰：这一炸点着的 119 格火直接生成为粉色火`）；</li>
-     *   <li>窗口之外（打火石 / 闪电 / 火焰弹 / 岩浆 / 别的模组 / 世界里早就存在的原版火）
-     *       <b>一概不碰</b>——那些火是谁的就是谁的，本模组既不换也不灭；</li>
-     *   <li>{@link #pinkEnabled()} 只作为"这一炸要不要换"的判据（半路把开关关掉 → 之后的炸
-     *       照原版口径留橙色火）。</li>
-     * </ul>
+     *       原版点火的每一格都在这个同步调用链里拿到粉色火，一炸点着多少格就换多少格 （实测日志：`粉色火焰：这一炸点着的 119 格火直接生成为粉色火`）；</li> <li>窗口之外（打火石 / 闪电 / 火焰弹 / 岩浆 / 别的模组 / 世界里早就存在的原版火） <b>一概不碰</b>——那些火是谁的就是谁的，本模组既不换也不灭；</li> <li>{@link #pinkEnabled()} 只作为"这一炸要不要换"的判据（半路把开关关掉 → 之后的炸 照原版口径留橙色火）。</li> </ul>
      */
     public static boolean pinkEnabled() {
         try {
@@ -256,9 +197,7 @@ public final class PinkFireBlock extends FireBlock {
             // ① 方块只在原版 onPlace 排的那一拍动过一次（AGE 0→1），之后**永远不再 tick**，
             //    AGE 到不了 MAX_AGE_TICKS，火就那样烧到天荒地老（实测反馈原文）；
             // ② 那次"假设置"还把状态写回默认值 + 用了个 15~24 的奇怪 flag（含 16 =
-            //    UPDATE_KNOWN_SHAPE），等于每次 tick 顺手把火的外形重置一遍。
-            // 现在照原版 FireBlock.tick 的口径：先改 AGE（flag 4，与 `p_221161_.m_7731_(pos, state, 4)`
-            // 同一个值：只发变化、不惊动邻居），再排下一拍。
+            //    UPDATE_KNOWN_SHAPE），等于每次 tick 顺手把火的外形重置一遍。 现在照原版 FireBlock.tick 的口径：先改 AGE（flag 4，与 `p_221161_.m_7731_(pos, state, 4)` 同一个值：只发变化、不惊动邻居），再排下一拍。
             level.m_7731_(pos, state.m_61124_(FireBlock.f_53408_, age + 1), 4);
             level.m_186460_(pos, this, 15 + random.m_188503_(10));
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
@@ -377,21 +316,11 @@ public final class PinkFireBlock extends FireBlock {
 
     /**
      * v1.2.2 实测六百〇二【"又出现橙火焰"与"火不灭"的真正根因——就在这两处转发】。
-     *
      * 原版 {@code FireBlock.m_7417_}（updateShape）在**任何邻居变化**时都会把火重算一遍：
      * {@code canSurvive ? m_53437_(level, pos, AGE) : AIR}，而那个私有助手算出来的是
      * **原版火**的状态——它内部走 {@code BaseFireBlock.getState(level, pos)}，里面写死
      * {@code (FireBlock) Blocks.f_50083_}。于是粉火只要旁边动一下（爆炸、方块变化、水流、别的火…）
-     * 就会被打回 {@code minecraft:fire}。
-     *
-     * 【实测证据】专用服务器：命令放下粉火 → 旁边放一块石头 → 探针 `if block … maid_smart:pink_fire`
-     * 立刻为假；存档 NBT 里那一格是 {@code minecraft:fire age=1..3}，整段调色板里根本没有
-     * {@code maid_smart:pink_fire}。玩家看到的两个现象因此都能对上：
-     * ① "爆炸的时候又产生粉色火焰又产生普通火焰"（橙色那些就是被打回原版的）；
-     * ② **原版火在不燃物上是永不熄灭的**（粉火会自灭，橙火不会）——"粉色的火又不会熄灭了"。
-     *
-     * 现在把这一步翻回粉色，并且**保留它自己当前的 AGE**：否则每次邻居更新都会把自灭计时清零，
-     * 频繁更新等于给它反复续命。
+     * 就会被打回 {@code minecraft:fire}。 立刻为假；存档 NBT 里那一格是 {@code minecraft:fire age=1..3}，整段调色板里根本没有 {@code maid_smart:pink_fire}。玩家看到的两个现象因此都能对上： ① "爆炸的时候又产生粉色火焰又产生普通火焰"（橙色那些就是被打回原版的）； ② **原版火在不燃物上是永不熄灭的**（粉火会自灭，橙火不会）——"粉色的火又不会熄灭了"。 现在把这一步翻回粉色，并且**保留它自己当前的 AGE**：否则每次邻居更新都会把自灭计时清零， 频繁更新等于给它反复续命。
      */
     @Override
     public BlockState m_7417_(BlockState state, Direction dir, BlockState neighborState, LevelAccessor level,

@@ -13,7 +13,6 @@ import java.util.List;
 
 /**
  * 压缩盒的存档格式与内容搬运（v1.2.2 实测六百一十六）。
- *
  * ── 为什么不用原版那一套 ──
  * 用户要的是「一格能堆 114514 个」，而原版 ItemStack 的**序列化**装不下这个数：
  * 1.20.1 侧 javap 实证 {@code FriendlyByteBuf.writeItem} 把数量写成
@@ -25,27 +24,7 @@ import java.util.List;
  * 被压回 64：
  * <ul>
  *   <li>界面里玩家一次最多拿走 64（{@link #TAKE_PER_CLICK}）；</li>
- *   <li>女仆那一侧更严——{@link #MAID_VIEW_CAP}：她对盒子格子的**视野**永远只有
- *       64 个，所以「把整格拿走」这种代码最多也只拿到 64，不会把 114514 个塞进
- *       她的手/背包格（那会在她存档时被截断，等于凭空蒸发）；</li>
- *   <li>要塞进盒子则相反：向盒子写入的堆会**并**进已有的那一格，一格最多
- *       {@link #maxStack()} 个。</li>
- * </ul>
- *
- * ── 存档格式 ──
- * 物品标签 {@code CompressionBox} 下的 {@code Items} 列表：
- * <pre>
- * Items: [ { Slot: 0, Count: 114514, Item: {id: "minecraft:cobblestone", count: 1} } ]
- * </pre>
- * {@code Item} 里固定是 **1 个**的物品（用 {@code ItemStack.SINGLE_ITEM_CODEC} 编，
- * 保留附魔/耐久/自定义名等全部组件，但数量恒为 1），真正的数量在 {@code Count}
- * ——这样原版那套数量口径就碰不到它，同时手写命令
- * {@code /give ... [custom_data={CompressionBox:{Items:[{Slot:0,Count:114514,Item:{id:"..."}}]}}]}
- * 也能直接喂进来。
- *
- * 【1.21.1 与 1.20.1 的唯一差异】物品本体的编解码：这里用
- * {@code ItemStack.SINGLE_ITEM_CODEC} + NbtOps；1.20.1 侧是
- * {@code ItemStack.copyWithCount(1).save(tag)} / {@code ItemStack.of(tag)}。
+ *   <li>女仆那一侧更严——{@link #MAID_VIEW_CAP}：她对盒子格子的**视野**永远只有 64 个，所以「把整格拿走」这种代码最多也只拿到 64，不会把 114514 个塞进 她的手/背包格（那会在她存档时被截断，等于凭空蒸发）；</li> <li>要塞进盒子则相反：向盒子写入的堆会**并**进已有的那一格，一格最多 {@link #maxStack()} 个。</li> </ul> ── 存档格式 ── 物品标签 {@code CompressionBox} 下的 {@code Items} 列表： <pre> Items: [ { Slot: 0, Count: 114514, Item: {id: "minecraft:cobblestone", count: 1} } ] </pre> {@code Item} 里固定是 **1 个**的物品（用 {@code ItemStack.SINGLE_ITEM_CODEC} 编， 保留附魔/耐久/自定义名等全部组件，但数量恒为 1），真正的数量在 {@code Count} ——这样原版那套数量口径就碰不到它，同时手写命令 {@code /give ... [custom_data={CompressionBox:{Items:[{Slot:0,Count:114514,Item:{id:"..."}}]}}]} 也能直接喂进来。 【1.21.1 与 1.20.1 的唯一差异】物品本体的编解码：这里用 {@code ItemStack.SINGLE_ITEM_CODEC} + NbtOps；1.20.1 侧是 {@code ItemStack.copyWithCount(1).save(tag)} / {@code ItemStack.of(tag)}。
  */
 public final class CompressionBoxData {
 
@@ -60,19 +39,11 @@ public final class CompressionBoxData {
 
     /**
      * 这一个堆最多能「看见」多少（v1.2.2 实测六百一十八）。
-     *
      * ── 为什么不能一律 64 ──
      * 盒子一格能堆 114514 个，而**不可堆叠的物品**（附魔书、附魔工具/武器/盔甲、药水、
      * 船……原版 {@code getMaxStackSize()} 就是 1）一格也能存好几个：两个同名同附魔的
      * 附魔书存进同一格，那一格的堆就是 {@code ×2}。六百一十六起这条路的视野封顶只按
-     * 64 算，于是**把一个「2 个的附魔书」这种非法堆交给了原版**——原版任何一处
-     * 「插进背包/手里」的代码都会按 {@code getMaxStackSize()=1} 只收下 1 个并把剩下的
-     * **作为返回值退回**，而 TLM 那几十处调用点大多不看返回值（它们的入参在正常世界里
-     * 永远不可能装不下）——那 1 个就这样凭空消失。用户报的「附魔类物品存进去会消失」
-     * 与这条完全吻合（普通物品的视野本来就是 64 = 合法堆，所以只有附魔这一类出问题）。
-     *
-     * 所以口径改成 {@code min(64, 物品自己的堆叠上限)}：**交给原版的每一个堆都必须是
-     * 合法堆**，大数量只活在盒子的数据组件与界面里的那行数字上。
+     * 64 算，于是**把一个「2 个的附魔书」这种非法堆交给了原版**——原版任何一处 「插进背包/手里」的代码都会按 {@code getMaxStackSize()=1} 只收下 1 个并把剩下的 **作为返回值退回**，而 TLM 那几十处调用点大多不看返回值（它们的入参在正常世界里 永远不可能装不下）——那 1 个就这样凭空消失。用户报的「附魔类物品存进去会消失」 与这条完全吻合（普通物品的视野本来就是 64 = 合法堆，所以只有附魔这一类出问题）。 所以口径改成 {@code min(64, 物品自己的堆叠上限)}：**交给原版的每一个堆都必须是 合法堆**，大数量只活在盒子的数据组件与界面里的那行数字上。
      */
     public static int viewCap(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
@@ -225,7 +196,6 @@ public final class CompressionBoxData {
 
     /**
      * 深拷一份内容（v1.2.2 实测六百一十八）。
-     *
      * 【为什么必须有这一步】六百一十八把界面改成了箱子式鼠标取放，一次点击可能**同时**
      * 改「盒子里那一格」和「玩家背包那一格」。这两处只要有一处先动了、另一处抛异常，
      * 东西就没了（用户报的「存进去会消失」正是在这类路径上最疼）。所以现在的口径是：
@@ -266,17 +236,10 @@ public final class CompressionBoxData {
     /**
      * 把 {@code in} 尽量并进盒子的**指定那一格**（并到上限为止），返回没塞进去的部分。
      * 只动这一格——女仆背包侧的 insertItem(盒格子) 就是它。
-     *
      * <b>压缩盒不许装压缩盒</b>（v1.2.2 实测六百一十七修的那个 bug）：把盒子塞进盒子，
      * 玩家既看不见里面那一层（女仆那一侧的视野也是只读外层），又能把自己装进去——
      * 界面里 Shift+点自己那一格，服务端会先把它从背包取出来再写标签，于是**整个盒子
-     * （连里面的东西）**就这样从世界里消失了。拒绝点放在这里（所有入口都走这个方法：
-     * 玩家界面存入、女仆背包插入、溢出回退），比在每个调用点各写一遍可靠。
-     *
-     * <b>六百二十起这一道交给 {@link CompressionBoxFilter}</b>：压缩盒本身与带附魔的
-     * 物品（附魔书/附魔武器等）都在这里被原样退回（v1.2.4 实测六百四十五 起这两条写死，
-     * 不再有配置开关与自定义清单）。判据还是只有一处——全库任何一条「往盒子里放东西」
-     * 的路都得先过它。
+     * （连里面的东西）**就这样从世界里消失了。拒绝点放在这里（所有入口都走这个方法： 玩家界面存入、女仆背包插入、溢出回退），比在每个调用点各写一遍可靠。 <b>六百二十起这一道交给 {@link CompressionBoxFilter}</b>：压缩盒本身与带附魔的 物品（附魔书/附魔武器等）都在这里被原样退回（v1.2.4 实测六百四十五 起这两条写死， 不再有配置开关与自定义清单）。判据还是只有一处——全库任何一条「往盒子里放东西」 的路都得先过它。
      */
     public static ItemStack mergeInto(List<ItemStack> items, int slot, ItemStack in) {
         if (slot < 0 || slot >= items.size() || in.isEmpty()

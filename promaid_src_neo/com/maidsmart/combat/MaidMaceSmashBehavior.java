@@ -27,8 +27,6 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * v1.1.0（1.21.1 专属）：女仆重锤猛击——参考 vanilla_mob_remake 的 ZombieMaceAttackGoal。
- *
  * 机制（与原 mod 僵尸同款）：
  * - 女仆【主手持有重锤】且有存活敌对目标；
  * - 目标进入【起跳距离】（默认 3 格）→ 朝目标方向起跳（水平 0.15 + 垂直 1.2，
@@ -36,38 +34,12 @@ import java.util.UUID;
  * - 下落途中贴地（或已落地）时若目标仍在 4 格内 → 出手猛砸，按原版
  *   MaceItem 的 fallDistance 加成结算（4f / 12+2(f-3) / 22+(f-8) 三段），
  *   然后清零坠落距离（同原版 postHurtEnemy：猛击免摔伤）。
- *
  * 【为什么必须自己算加成】1.21.1 原版只有 Player.attack 会调
  * Item.getAttackDamageBonus（字节码实证：全 jar 仅 Player 引用），
  * Mob.doHurtTarget 走的是 ATTACK_DAMAGE 属性——所以生物拿重锤挥砍【没有】
  * 下落加成。这里显式复刻 Player.attack 的那一步：
  * EnchantmentHelper.modifyDamage → Item.getAttackDamageBonus → hurt。
- *
- * 【与落地水的平衡】猛击跃起会坠落 8 格以上，若落地水/雪在落点放桶会清零
- * fallDistance（猛击加成全丢）。实测四百四十二改为【重锤专属落地水】：
- * - 跃起全过程（LEAPING）通用落地水/雪【完全让位】——不再有"目标还在范围内就
- *   抑制、跑出去就放开"的半吊子状态（旧版 suppressFallClutch 会让水在冲刺段
- *   提前清零 fallDistance，或该放的时候来不及放）；
- * - 落地帧（本行为结算完猛击之后）置位 FORCED_CLUTCH，由 WaterClutchBehavior 在
- *   同一 tick 于落点【强制】放一格水（有水桶）/细雪（只有细雪桶）——落地摔不着，
- *   而猛击加成已经在放水之前算完，两者不再互相干扰。
- *   （顺序依赖 brain 优先级：本行为 235 先 tick，落地水 240 后 tick。）
- *
- * 【空中禁传送】跃起期间（isAirborne）禁止自动传送——跟随过远瞬移（TLM
- * teleportToOwner）、同维度远距拉回（含 Y 轴"搭太高"拉回）、跨维度跟随、
- * 自保归位传送全部让位；否则她刚飞到高空就被拽回主人身边，猛击白跳、战位全乱。
- * 玩家手动"一键集合/救援"与主人死亡传送不在此列（那是玩家/紧急意图）。
- * 跃起最长 MAX_AIR_TICKS=100 tick（5 秒）自动收尾，不会长期禁传。
- *
- * 【重锤 + 风弹，缺一不可】要求（1.21.1）：只有同时持有重锤与风弹、并消耗
- * 1 枚风弹时才起跳猛击；没有风弹就交还原版（TLM 正常持锤平砍）——旧版"不用
- * 风弹也能直接起飞"太超标，已移除。起跳垂直初速 1.7。
- * （开关 combat.maceWindCharge 关掉 = 恢复旧的不消耗风弹自由起跳，不推荐。）
- *
- * 【附魔与玩家挥锤一致】伤害走 EnchantmentHelper.modifyDamage（锋利/亡灵杀手/
- * 节肢杀手）+ Item.getAttackDamageBonus（重锤下落三段 + 密度），火焰附加等走
- * doPostAttackEffects，耐久走 hurtAndBreak（含耐久附魔），【击退附魔】另行补算
- * modifyKnockback——原版这一步在 Mob.doHurtTarget 里，我们直接 hurt 会绕过它。
+ * 【与落地水的平衡】猛击跃起会坠落 8 格以上，若落地水/雪在落点放桶会清零 fallDistance（猛击加成全丢）。实测四百四十二改为【重锤专属落地水】： - 跃起全过程（LEAPING）通用落地水/雪【完全让位】——不再有"目标还在范围内就 抑制、跑出去就放开"的半吊子状态（旧版 suppressFallClutch 会让水在冲刺段 提前清零 fallDistance，或该放的时候来不及放）； - 落地帧（本行为结算完猛击之后）置位 FORCED_CLUTCH，由 WaterClutchBehavior 在 同一 tick 于落点【强制】放一格水（有水桶）/细雪（只有细雪桶）——落地摔不着， 而猛击加成已经在放水之前算完，两者不再互相干扰。 （顺序依赖 brain 优先级：本行为 235 先 tick，落地水 240 后 tick。） 【空中禁传送】跃起期间（isAirborne）禁止自动传送——跟随过远瞬移（TLM teleportToOwner）、同维度远距拉回（含 Y 轴"搭太高"拉回）、跨维度跟随、 自保归位传送全部让位；否则她刚飞到高空就被拽回主人身边，猛击白跳、战位全乱。 玩家手动"一键集合/救援"与主人死亡传送不在此列（那是玩家/紧急意图）。 跃起最长 MAX_AIR_TICKS=100 tick（5 秒）自动收尾，不会长期禁传。 【重锤 + 风弹，缺一不可】要求（1.21.1）：只有同时持有重锤与风弹、并消耗 1 枚风弹时才起跳猛击；没有风弹就交还原版（TLM 正常持锤平砍）——旧版"不用 风弹也能直接起飞"太超标，已移除。起跳垂直初速 1.7。 （开关 combat.maceWindCharge 关掉 = 恢复旧的不消耗风弹自由起跳，不推荐。） 【附魔与玩家挥锤一致】伤害走 EnchantmentHelper.modifyDamage（锋利/亡灵杀手/ 节肢杀手）+ Item.getAttackDamageBonus（重锤下落三段 + 密度），火焰附加等走 doPostAttackEffects，耐久走 hurtAndBreak（含耐久附魔），【击退附魔】另行补算 modifyKnockback——原版这一步在 Mob.doHurtTarget 里，我们直接 hurt 会绕过它。
  */
 public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
 
@@ -252,9 +224,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         // **抢在空袭起飞之前**起跳（GUST + WIND_CHARGE_BURST），贴地那一帧 smashHit 再甩出一发
         // 重锤风爆（她自己的风爆刻意不被风免拦，见 FriendlyWindGuard），于是"还没起飞就先炸一次
         // 风暴"，那一下的击退还会给她叠上竖直速度（① 的"配合重锤弹射起跳飞出 100 格"）。
-        // 现在：**空袭任务 + 三件套齐**（= 她本来就要起飞）时本行为不抢跑，那一轮的重锤猛击交给
-        // 空袭自己的收翅俯冲（{@code MaidFlightCombatBehavior.hitOne} 会强制写 fallDistance，
-        // 风爆照炸、伤害照算）。三件套不齐（她飞不了）时一切照旧，猛击仍是她在地面上的战斗手段。
+        // 现在：**空袭任务 + 三件套齐**（= 她本来就要起飞）时本行为不抢跑，那一轮的重锤猛击交给 空袭自己的收翅俯冲（{@code MaidFlightCombatBehavior.hitOne} 会强制写 fallDistance， 风爆照炸、伤害照算）。三件套不齐（她飞不了）时一切照旧，猛击仍是她在地面上的战斗手段。
         if (MaidFlightKit.isFlightTask(maid) && MaidFlightKit.isModeActive(maid)) {
             noteGate(maid, "空袭任务进行中（让位给空袭起飞/俯冲猛击）", level.getGameTime());
             return false;

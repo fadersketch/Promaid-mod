@@ -4,13 +4,11 @@ package com.maidsmart.memory;
  * 世界事件持久化策略（移植自 maidsoulcore v3 {@code WorldEventMemoryPolicy} 的
  * {@code shouldPersist / shouldWakePlanner}）。
  *
- * <p>旧版所有 EVENT 行一律按模型给的 salience 存下——于是"路上遇到僵尸"这类原版背景噪音会反复
- * 进记忆、反复被注入。本策略在**写入前**过一道闸：
+ * <p>在**写入前**过一道闸（否则"路上遇到僵尸"这类原版背景噪音会反复进记忆、反复被注入）：
  * <ul>
  *   <li>{@link #shouldPersist}：过滤纯背景噪音（无危险/承诺/关系/发现线索、且重要度低）；</li>
- *   <li>{@link #escalateSalience}：把"危及主人/女仆""明确承诺""关系转折"这类事件的 salience
- *       抬到高位（对应 maidsoulcore 的 shouldWakePlanner：这些事要"叫醒规划器"，在本模组里
- *       就是"必须以高重要度写进记忆"）；</li>
+ *   <li>{@link #escalateSalience}：把"危及主人/女仆""明确承诺""关系转折"这类事件的 salience 抬到高位
+ *       （对应 shouldWakePlanner：必须以高重要度写进记忆）；</li>
  *   <li>{@link #isUrgent}：紧急线索（供调用方决定是否额外播报/主动开口）。</li>
  * </ul>
  *

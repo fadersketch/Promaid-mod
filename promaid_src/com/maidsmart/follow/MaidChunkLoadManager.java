@@ -20,8 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * v1.1.0 实测四十四：女仆区块强制加载（"约等于玩家"）。
- *
  * 背景（反馈两条）：
  * ① 跨维度跟随不是真传送——旧 MaidDimensionFollow 用
  *   setRemoved(CHANGED_DIMENSION)+setPos+addFreshEntity 手动搬家：实体不重新
@@ -30,27 +28,11 @@ import java.util.concurrent.ConcurrentHashMap;
  *   冲突），部分联动（魂符、追踪表）会把它当"已移除"。
  * ② 主人走远后女仆所在区块卸载 → 跨维度跟随扫描（遍历已加载实体）根本
  *   找不到她 → 永远不传送。
- *
  * 方案：每 5 秒对所有【有主且处于活动状态】的女仆所在区块挂
  * "unknown" TicketType 强制加载票（2 级 = 实体正常 ticking，与玩家同等待遇），
  * 实体离开（传送走/收回魂符/死亡）自动撤票。区块保持加载 ⇒
  * - 跨维度跟随扫描每轮都能找到她（问题②根治）；
- * - 传送改用原版 Entity.teleportTo(m_264318_)，走完整跨维度流程（问题①根治）。
- *
- * v1.1.0 实测八十八【持续加载】：票务范围从"仅异维度"扩大到全部有主活动女仆
- * （同维度跟随女仆落后主人超过模拟距离时区块会卸载、AI 冻结，TLM 的过远传送
- * 永远无法触发）。
- * v1.1.0 实测八十八b：home/坐姿/骑乘不豁免【加载】——三态只豁免传送；停放
- * 女仆的区块同样保持 ticking（周边农场/熔炉照常运转，随时可被找到）。
- *
- * 票生命周期：以女仆 UUID 为 key 维护 当前持有的票，每轮刷新时对比——
- * 女仆跨区块 → 撤旧票挂新票；女仆消失/转入停放态 → 撤票。服务器停止清空。
- *
- * v1.1.0 实测一百三十一：跨维度跟随 "home 不拦"——home 只拦同维度跟随 (TLM
- * MaidFollowOwnerTask 照旧)，跨维度（玩家过 portal/传到他维度）一直传。
- * 根源：实测七十给排班启用女仆自动 home，home 挡调 = 排班女仆不永远在
- * 下界/任何地方。语义：玩家要她守家，在 TLM GUI 主动点 home（SummonPacket
- * 一键召集保留 home 拦停）。
+ * - 传送改用原版 Entity.teleportTo(m_264318_)，走完整跨维度流程（问题①根治）。 （同维度跟随女仆落后主人超过模拟距离时区块会卸载、AI 冻结，TLM 的过远传送 永远无法触发）。 女仆的区块同样保持 ticking（周边农场/熔炉照常运转，随时可被找到）。 票生命周期：以女仆 UUID 为 key 维护 当前持有的票，每轮刷新时对比—— 女仆跨区块 → 撤旧票挂新票；女仆消失/转入停放态 → 撤票。服务器停止清空。 MaidFollowOwnerTask 照旧)，跨维度（玩家过 portal/传到他维度）一直传。 根源：实测七十给排班启用女仆自动 home，home 挡调 = 排班女仆不永远在 下界/任何地方。语义：玩家要她守家，在 TLM GUI 主动点 home（SummonPacket 一键召集保留 home 拦停）。
  */
 public final class MaidChunkLoadManager {
     private static final org.slf4j.Logger LOGGER =
@@ -75,32 +57,20 @@ public final class MaidChunkLoadManager {
     private static final Map<UUID, TicketKey> ACTIVE_TICKETS = new ConcurrentHashMap<>();
 
     /**
-     * 实测七百〇八【共享票引用计数——修"同区块邻居撤票把她的加载一起撤掉"】。
-     *
      * <p>原版 {@code addRegionTicket} 对"同类型 + 同等级"的票会**去重**：{@code Ticket}
      * 的 {@code compareTo} 只比等级/类型/比较器，而 {@code MAID_TICKET} 的比较器恒为 0，
      * 于是两只女仆落在**同一区块**时，实际只有【一张】票。旧版撤票却是**按女仆逐个撤**
      * （{@code m_8438_} → {@code remove}）：撤掉 A 的那张 = 撤掉共用的那张 → **B 的区块
      * 当场卸载** → 下一轮 5 秒扫描里 B 已不在实体表 → B 也被判"不要票" → 她从此没有任何
-     * 东西在加载她：排班表看不见、一键集合召不回（玩家症状）。且症状"时好时坏、找不到
-     * 规律"正因为触发条件是"同区块的邻居先走一步"，不是距离。
-     *
-     * <p>修法：票的**挂/撤全部过这一层引用计数**——只有【最后一个想要它的女仆】走了才真正
-     * 撤票。这同时就是"覆盖重叠不重复挂载"的优化：多只女仆的覆盖落在同一区块时自动合并成
-     * 一张票，开销是覆盖范围的**并集**，不是"每只女仆各开一片"。
-     *
-     * <p>两个 {@code MAID_TICKET} 的消费者（女仆会话票 + 待召回强载票）共用同一张区块网格，
-     * 所以必须一起计数，否则又会互相撤票——持有者标识见 {@link #ownerKey}。
+     * 东西在加载她：排班表看不见、一键集合召不回（玩家症状）。且症状"时好时坏、找不到 规律"正因为触发条件是"同区块的邻居先走一步"，不是距离。 <p>修法：票的**挂/撤全部过这一层引用计数**——只有【最后一个想要它的女仆】走了才真正 撤票。这同时就是"覆盖重叠不重复挂载"的优化：多只女仆的覆盖落在同一区块时自动合并成 一张票，开销是覆盖范围的**并集**，不是"每只女仆各开一片"。 <p>两个 {@code MAID_TICKET} 的消费者（女仆会话票 + 待召回强载票）共用同一张区块网格， 所以必须一起计数，否则又会互相撤票——持有者标识见 {@link #ownerKey}。
      */
     private static final Map<TicketKey, java.util.Set<String>> CHUNK_WANTERS = new ConcurrentHashMap<>();
 
     /**
-     * 实测七百〇八：票龄表（区块 → 首挂时刻，overworld gameTime）。5 秒对账撤票前先看一眼：
      * **刚挂的票（<100 tick）不撤**。护栏来自复活落点那场事故——{@code addFreshEntity} 往
      * 未加载区块放实体时，她【不在实体表里】（PersistentEntitySectionManager 反编译实证：
      * 区块可见性不可达就不 startTracking），要等区块异步载完才现身；这 5 秒对账扫不到她就会
      * 把刚挂的票当"无人要"撤掉，区块放弃加载 → 她【永远】进不了实体表。
-     *
      * <p>实测七百〇八：护栏从"按女仆记"改成"按区块记"——票是**区块级**资源，撤不撤要看这张票
      * 自己挂了多久，而不是某个女仆挂了多久。
      */
@@ -465,7 +435,6 @@ public final class MaidChunkLoadManager {
                             stayPut, homeOnly, com.maidsmart.tool.PromaidLog.nameOf(maid)), server);
                     // v1.1.0 实测七十九：受困救援——下界基岩顶层/虚空中的女仆自动传回
                     // 存活主人身边（跨维度通用；已在主人 8 格内不触发，防屋顶住户循环）
-                    // v1.1.0 实测三百零七（反馈："地狱基岩层猪人塔女仆传送不受控制，
                     // 拉开一点距离就不停传送声……蹲下、坐垫、home 模式全都固定会这样"）：
                     // 根因——救援判定只有 needsRescue（下界 y≥126 一刀切）+ 距离，没有
                     // home/坐垫/骑乘豁免（summon 系列都有，唯独救援漏了）。猪人塔女仆
@@ -626,20 +595,12 @@ public final class MaidChunkLoadManager {
     }
 
     /**
-     * 【实测六百九十八 幽灵建模 / 骑扫帚悬空】持票"**即时跟人**"——票原先只在
      * {@link #tick} 里每 100 tick（5 秒）重新对账一次，于是她**飞着换了区块、或被复活/
      * 召回落到别的区块**之后，最长 5 秒里她的新区块是"没有票"的。落在那 5 秒里的区块只
      * 按玩家视距加载（{@code Visibility.TRACKED}，即"已加载但没在 entity-ticking"）：
      * <ul>
      *   <li>服务端这边她**不 tick** —— 客户端眼里她就是"骑在扫帚上定在空中不动"；</li>
-     *   <li>一旦那一档继续掉到 {@code HIDDEN}（区块卸载），原版 {@code ChunkMap.removeEntity}
-     *       会给客户端发删包，而"新实体不补包"（实测五百九十六）又拦着我们自己补
-     *       —— 客户端永远没有她 = 。</li>
-     * </ul>
-     * 修法：每 tick 拿我们**自己持票表里的 UUID**（量很小）去 {@code level.getEntity(uuid)}
-     * 问一句"她现在还在不在这个区块"，换了就当场撤旧票、挂新票。全量扫描（LAST_SEEN/
-     * 受困救援/持久票）仍然留在 {@link #tick} 的 5 秒节奏里，一个字节没动。
-     * <p>空表直接返回，平时零成本。
+     *   <li>一旦那一档继续掉到 {@code HIDDEN}（区块卸载），原版 {@code ChunkMap.removeEntity} 会给客户端发删包，而"新实体不补包"（实测五百九十六）又拦着我们自己补 —— 客户端永远没有她 = 。</li> </ul> 修法：每 tick 拿我们**自己持票表里的 UUID**（量很小）去 {@code level.getEntity(uuid)} 问一句"她现在还在不在这个区块"，换了就当场撤旧票、挂新票。全量扫描（LAST_SEEN/ 受困救援/持久票）仍然留在 {@link #tick} 的 5 秒节奏里，一个字节没动。 <p>空表直接返回，平时零成本。
      */
     public static void followTickets(MinecraftServer server) {
         if (ACTIVE_TICKETS.isEmpty()) {
@@ -779,24 +740,11 @@ public final class MaidChunkLoadManager {
     }
 
     /**
-     * v1.5.142：女仆跟随主人跨维度传送（实测四十四重做传送本体）。
-     *
      * 每 5 秒扫描一次全服女仆——存活、未坐下、未骑乘、与主人不在同一维度 →
      * teleportTo(m_264318_) 原版跨维度传送
-     * （替代旧版 setRemoved+addFreshEntity 手动搬家：不走 Forge 维度事件链、
-     * 实体不重新注册，属于"假传送"）。
-     * 落点取主人身边第一个"脚下实心、站立格空气"的位置（向下最多 16 格）；
-     * 找不到可站格（主人在高空/虚空飞行）→ 本次不传，等主人落地后再跟。
-     *
-     * 坐着的女仆不拉（建造模式强制坐下 = 玩家明确想让她留在原地，见
-     * MaidBuildBehavior.tickBuildSit）。
-     * v1.1.0 实测一百八十五（反馈："排班中的女仆和处于 home 模式的女仆仍然会
-     * 响应跨维度传送"）：在家/排班模式【拦截】跨维度跟随——一百三十一"home 不拦"
-     * 的旧口径反转：home = 守家，主人过门/换维度也不跟（与同维度拉回、一键集合
-     * 的口径一致）；想召回先解除她的排班/在家模式（见 summonAll）。
+     * （替代旧版 setRemoved+addFreshEntity 手动搬家：不走 Forge 维度事件链、 实体不重新注册，属于"假传送"）。 落点取主人身边第一个"脚下实心、站立格空气"的位置（向下最多 16 格）； 找不到可站格（主人在高空/虚空飞行）→ 本次不传，等主人落地后再跟。 坐着的女仆不拉（建造模式强制坐下 = 玩家明确想让她留在原地，见 MaidBuildBehavior.tickBuildSit）。 响应跨维度传送"）：在家/排班模式【拦截】跨维度跟随——一百三十一"home 不拦" 的旧口径反转：home = 守家，主人过门/换维度也不跟（与同维度拉回、一键集合 的口径一致）；想召回先解除她的排班/在家模式（见 summonAll）。
      */
     /**
-     * 实测五百六十五（PR #10 移植）：空中让位计时起点（女仆 → 首次因"空中"被拦下的 gameTime）。
      * 键用实体本体，随女仆卸载自动回收；releaseAll 时整表清空。
      */
     private static final Map<EntityMaid, Long> AIR_DEFER_SINCE =
@@ -805,13 +753,10 @@ public final class MaidChunkLoadManager {
     private static final long MAX_AIR_DEFER = 300L;
 
     /**
-     * 实测五百六十五（PR #10 移植）：空中让位是否继续生效。
-     *
      * 让位的本意是"别打断这一轮攻击"，而空袭女仆整个作战期间都在空中；不设上限时，
      * 这道闸对"被卡在远处/别的维度"的女仆就是永久禁传（社区实测：45 分钟每 60 秒一条
      * 「飞行作战进行中…不传」，客户端连实体都没有）。超过窗口就作废这一轮让位并清干净
      * 空袭状态，让调用方继续往下走强拉。
-     *
      * @return true = 已超时，调用方继续往下走（强拉）；false = 继续让位，调用方直接 return
      */
     private static boolean airDeferAllows(EntityMaid maid, String logKey, String logText) {
@@ -848,11 +793,6 @@ public final class MaidChunkLoadManager {
             // 【实测七百一十六·点4】先于"骑乘中豁免"判定：她骑的是**本模组棍子绑上的坐骑**
             //  → 连人带坐骑一起处理（她同样是乘客，但玩家明确要她能跟过来；与扫帚那条同口径）。
             //  跨维度与同维度分别走各自那条既有链路（都不与"乘客不单独拉"冲突）。
-            //
-            // 【实测七百二十六·点1：特殊载具（卓越前线载具 / 冰火传说龙）**一切自动传送都不生效**】
-            //
-            //
-            //
             //  特殊载具上的她既不跨维跟随、也不连载具搬——自动链路一个字节都不碰，交还原地。
             //  （玩家手动排班表传送仍可用，走 summonOne/summonMaidTo：只传人 + 解除绑定。）
             if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
@@ -881,7 +821,6 @@ public final class MaidChunkLoadManager {
             }
             // v1.2.0【实测四百八十七】：飞行作战进行中不跨维度跟随——她正在扑向敌人，
             // 跨维传送会把这一轮攻击直接打断。
-            // 实测五百六十五（PR #10 移植）【滞空超时兜底——修"空袭女仆被困在异维度"】：
             // 这道闸的语义是"别打断这一轮攻击"，不是"永远别传"。空袭女仆整个作战期间
             // 都在空中，一旦她落在别的维度，这里就是永久禁传（社区实测：45 分钟每 60 秒
             // 一条「飞行作战进行中…不传」，客户端连实体都没有）。口径：确认她确实与主人
@@ -907,9 +846,7 @@ public final class MaidChunkLoadManager {
             // v1.1.0 实测一百八十五：排班/在家模式 → 跨维度也不传（旧版漏判——
             // 一百三十一口径是"home 不拦跨维"；home 女仆被拉到主人新维度，
             // 守家/排班锚点全废）。本扫描每 5 秒跑全服，节流日志防刷屏。
-            // v1.1.0 实测一百九十六【自保 vs 自动传送矛盾根治】（反馈："自保逃跑禁用
             // 传送跟跨维度传送、跨区块传送，远距离传送会有矛盾吗？"）：PRESERVE 标记
-            // 旧版只拦了 TLM 原生传送 / 跟随拉近（FollowPreserveMixin、MaidTeleport
             // PreserveMixin），我们自己的跨维度跟随与同维度拉回链路没读它——低血/逃跑
             // 中的女仆会被跨维或远距自动传送拉回主人身边（威胁点）送死 = 矛盾。
             // 自保中一律不被自动拉回；玩家【主动一键集合】不受影响（人工意图优先）。
@@ -1007,12 +944,9 @@ BlockPos stand = findStand(newLevel,
                 seen.add(md.m_20148_());
                 // v1.1.0 实测七十八：home（在家）模式恢复豁免——看家的不该被一键
                 // 集合拽走（排班自动 home 的同理：想召回先关排班）
-                // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可被召回
                 //（召回后瞬移回工地继续建，见 isBuildingMaid 注释）
-                // v1.3.6 实测六百六十一：骑扫帚的女仆**不再按"骑乘中"豁免**——她永远是乘客，
                 // 旧口径会把她永远留在原地（）。
                 // 她走连人带扫帚那条路（见 recallBroomRider）；其余豁免口径一字不改。
-                // 【实测七百一十六·点4】同理：骑坐骑的女仆也走"连人带坐骑"那条路——
                 // 她同样是乘客，不豁免（）。
                 boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
                 boolean rideRider = com.maidsmart.combat.RideBindManager.isRideRider(md);
@@ -1218,7 +1152,6 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.1.0 实测七十九：受困判定；实测八十一按 1.20.1 维度真实特性修正——
      * 主世界 y∈[-64,319]、下界 y∈[0,255]（y=127 整层基岩天花板，站面 y≥128）、
      * 末地 y∈[0,255]。旧版虚空判定硬编码 y<-60 会误伤超平坦世界——默认超平坦
      * 的草方块顶面恰好就是 y=-60（站在地表的女仆被当成"掉出世界"反复救援）。
@@ -1244,7 +1177,6 @@ BlockPos stand = findStand(newLevel,
 
     /**
      * 从主人所在格附近找"站立格空气 + 脚下实心不悬空"的位置。
-     * v1.1.0 实测八十三：旧版只从主人脚下一路【向下】扫 16 格——下界桥面/
      * 熔岩海高架/悬崖地形正下方常无地面（悬空 100 格），直接判"无可站立点"
      * → 一键集合报"N 名因身边无可站立点未动"、跨维度跟随也卡住。现在：
      * ①原点柱向下 16（保留旧语义，落点贴主人脚下）；②再向上 12
@@ -1375,11 +1307,9 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.1.0 实测二百零八：日程表详情页「传送到我身边」——只召唤指定 UUID 这一只
      * 女仆（跨维度查找任意已加载世界）。豁免口径与一键集合一致：死亡/骑乘/坐着/
      * 在家模式（排班自动 home）保持原位——想强制召回先关闭她的排班；玩家主动操作
      * 不受"干活中不拉/搭路中不拉"等自动拉回限制（人工意图优先）。
-     *
      * @return 0=不在已加载区块且无登记/不是主人的女仆；1=已传回；2=主人身边无可站立点；
      *         3=状态豁免（坐/骑/家/死亡）；4=她已阵亡待自动复活（实测六百九十九）；
      *         5=已按登记位置强载区块进待召回队列（实测六百九十九）
@@ -1465,23 +1395,11 @@ BlockPos stand = findStand(newLevel,
 
     /**
      * 【实测七百九十·点2】点名单召（「召她过来」）的完整阶梯：**只拽人、绝不搬走别人绑好的载具**。
-     *
      * <p>
-     *
-     *
      * <p>与 {@link #summonMaidTo}（一键集合同口径）的差别只有一处：**坐姿与普通载具乘客
      * 不再豁免**。优先级顺序与 {@code summonMaidTo} 逐条对齐，只有最后那一关换掉：
      * <ol>
-     *   <li>home（守家）→ 不传（唯一保留的豁免）；</li>
-     *   <li>骑扫帚 → 连人带扫帚（她永远是乘客，走 661 那一档）；</li>
-     *   <li>特殊载具（卓越前线载具 / 冰火传说龙）→ 先干净解绑、只传人（726）；</li>
-     *   <li>她自己坐上去的模组载具 → 先请她下来、只传人（741）；</li>
-     *   <li>指挥棒绑的坐骑 → 连人带坐骑（716，玩家自己绑的配对，不算"随手坐上去"）；</li>
-     *   <li><b>坐姿 / 普通载具乘客（船、矿车、椅子这类没有我们标记的载体）→ 请她下来
-     *       后只传她一个人</b>，载体留在原地——这一关就是本批新增的"只拽人不拽载具"。</li>
-     * </ol>
-     *
-     * @return true = 她已落在主人身边
+     *   <li>home（守家）→ 不传（唯一保留的豁免）；</li> <li>骑扫帚 → 连人带扫帚（她永远是乘客，走 661 那一档）；</li> <li>特殊载具（卓越前线载具 / 冰火传说龙）→ 先干净解绑、只传人（726）；</li> <li>她自己坐上去的模组载具 → 先请她下来、只传人（741）；</li> <li>指挥棒绑的坐骑 → 连人带坐骑（716，玩家自己绑的配对，不算"随手坐上去"）；</li> <li><b>坐姿 / 普通载具乘客（船、矿车、椅子这类没有我们标记的载体）→ 请她下来 后只传她一个人</b>，载体留在原地——这一关就是本批新增的"只拽人不拽载具"。</li> </ol> @return true = 她已落在主人身边
      */
     private static boolean summonNamed(EntityMaid maid, LivingEntity owner) {
         if (maid == null || owner == null || !owner.m_6084_()) {
@@ -1517,13 +1435,10 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.1.0 实测六十：一键集合——把女仆传送到主人身边（跨维度/同维度通用）。
      * 排班表列表页「一键集合」按钮调用；复用 followIfCrossDimension 的真传送链路
      * （m_264318_ 原版 teleportTo + 摔落/导航/速度清理 + 末影人音效）。
-     *
      * v1.2.0 实测五百四十六：人工传送走**强制**口径（findStand 失败就落在主人所在格，
      * 无视地块、可空中）——见 teleportCore 的 force 注释。
-     *
      * @return true = 传送成功；false = 女仆状态异常 / 主人不可达
      */
     public static boolean summonMaidTo(EntityMaid maid, LivingEntity owner) {
@@ -1574,17 +1489,12 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.2.0 实测五百四十七【空袭牵引绳】的传送入口：飞行任务下"主人跑出 N 格"的立即召回
      * （调用方 = {@code com.maidsmart.combat.MaidFlightRecall}，挂在 core 行为上每 tick 一次）。
-     *
      * 效力与人工传送完全一致：{@link #teleportCore} 的 {@code force = true}——强制
      * （主人身边找不到可站立格就直接落在主人所在格）+ 无视地块 + 可空中。
      * 与 {@link #summonMaidTo} 的唯一差别是**不查 home（在家）模式**：本入口只在她
      * "正在空中"时被调用（MaidFlightRecall 把关），停放的语义已经被"她飞起来了"这件事
-     * 本身打破；而我们的排班表会自动给女仆锚定 home，若照抄那道门，结果恰恰是
-     * "用了排班的那批女仆永远召不回"——正是用户报的场景。
-     *
-     * @return true = 传送成功
+     * 本身打破；而我们的排班表会自动给女仆锚定 home，若照抄那道门，结果恰恰是 "用了排班的那批女仆永远召不回"——正是用户报的场景。 @return true = 传送成功
      */
     public static boolean recallFromFlight(EntityMaid maid, LivingEntity owner) {
         if (maid == null || owner == null) {
@@ -1606,17 +1516,12 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * 【实测六百九十二】"把她送回**她的工作区**"那一档（守家时的空袭牵引绳）。
-     *
      * <p>
      * 守家的语义是"待在家里"，所以守家期间这条绳的距离基准与落点都换成她的工作区圈心
      * （口径 = {@code com.maidsmart.follow.WorkAreaClamp.homeAnchor}），主人走多远都不再是
      * 把守家女仆拽走的理由。落点算法与 {@link #recallFromFlight} 完全同一支（{@link #standSpotAt}），
      * 只是锚点从"主人"换成"圈心"。
-     *
-     * <p>在这里**不查主人存活性**：这一档根本不需要主人——圈心是实体数据里的坐标，
-     * 主人死了/下线了，守家的她也该回到岗位上（旧版那一句 {@code owner.isAlive()} 是给
-     * "传到主人身边"把关的，对"传回岗位"没有意义）。
+     * <p>在这里**不查主人存活性**：这一档根本不需要主人——圈心是实体数据里的坐标， 主人死了/下线了，守家的她也该回到岗位上（旧版那一句 {@code owner.isAlive()} 是给 "传到主人身边"把关的，对"传回岗位"没有意义）。
      */
     public static boolean recallFromFlightTo(EntityMaid maid, BlockPos anchor) {
         if (maid == null || anchor == null) {
@@ -1640,28 +1545,12 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.3.6 实测六百六十一【连人带扫帚的传送】：把骑着扫帚的女仆送到主人身边，**扫帚跟着一起走**。
-     *
      * <p>
-     *
-     *
      * 不能一起传送，就用上面这个来。而不是直接反馈，没有办法传送。」
-     *
      * <p>── 为什么不能"直接传送她" ──
      * {@code Entity.teleportTo(ServerLevel, …)}（{@link #teleportCore} 用的那一支）内部第一件事就是
      * {@code unRide()}：她当场被从扫帚上踹下来，扫帚留在原地漂着、人落到主人身边——玩家看到的是
-     * "传送一下扫帚就没了"（那把扫帚还记在 {@code MaidBroomDrive} 的欠账表里，要等收工才回背包）。
-     * 所以顺序必须是四步：**解开乘客关系 → 搬扫帚 → 搬她 → 重新落座**，四步在同一个 tick 内做完
-     * （中间不 tick，客户端只看到一次瞬移）。
-     *
-     * <p>── 一起搬不动时（跨维度 / 落座失败）──
-     * 玩家给的那条兜底正好派上用场：**就地收工**（{@code MaidBroomDrive.dismount(maid)} 把扫帚精确
-     * 还回她背包）→ 只传送她一个人 → 下一 tick 扫帚模式自己再从背包里取出来骑上。任务**始终不换**
-     * （所以玩家设想的"先切空闲、搬完再切回来"并不需要：换任务会重建 brain、还会把扫帚收进背包，
-     * 而这条兜底路径已经天然做出了那件事的结果）。这一段与「一键集合」对普通女仆的口径一致：
-     * 先尽力，实在不行也要把人弄回来——绝不回一句"没办法传送"。
-     *
-     * @return true = 她已经（连扫帚或收工后）落在主人身边
+     * "传送一下扫帚就没了"（那把扫帚还记在 {@code MaidBroomDrive} 的欠账表里，要等收工才回背包）。 所以顺序必须是四步：**解开乘客关系 → 搬扫帚 → 搬她 → 重新落座**，四步在同一个 tick 内做完 （中间不 tick，客户端只看到一次瞬移）。 <p>── 一起搬不动时（跨维度 / 落座失败）── 玩家给的那条兜底正好派上用场：**就地收工**（{@code MaidBroomDrive.dismount(maid)} 把扫帚精确 还回她背包）→ 只传送她一个人 → 下一 tick 扫帚模式自己再从背包里取出来骑上。任务**始终不换** （所以玩家设想的"先切空闲、搬完再切回来"并不需要：换任务会重建 brain、还会把扫帚收进背包， 而这条兜底路径已经天然做出了那件事的结果）。这一段与「一键集合」对普通女仆的口径一致： 先尽力，实在不行也要把人弄回来——绝不回一句"没办法传送"。 @return true = 她已经（连扫帚或收工后）落在主人身边
      */
     public static boolean recallBroomRider(EntityMaid maid, LivingEntity owner) {
         if (maid == null || owner == null || !owner.m_6084_()) {
@@ -1682,14 +1571,11 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * 【实测六百九十二】"连人带扫帚送回**她的工作区**"那一档（守家时的扫帚牵引绳）。
-     *
      * <p>
      * 与 {@link #recallFromFlightTo} 同一取舍：守家的语义是"待在家里"，所以守家期间这条绳
      * 的距离基准与落点都换成她的工作区圈心。四步搬运（解开乘客关系 → 搬扫帚 → 搬她 →
      * 重新落座）与 {@link #recallBroomRider} **同一段代码**（{@link #broomRiderTo}），
      * 只有落点算的锚点不同。
-     *
      * @return true = 她已经（连扫帚）落在工作区里
      */
     public static boolean recallBroomRiderTo(EntityMaid maid, BlockPos anchor) {
@@ -1796,14 +1682,9 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * 【实测七百一十六·点4】"连人带坐骑一起传送"——
-     *
-     *
-     *
      * <p>结构照搬 {@link #broomRiderTo}（四步在同一个 tick 内做完）：**解开乘客关系 → 搬坐骑 →
      * 搬她 → 重新落座**。原因与扫帚完全同一条：{@code Entity.teleportTo} 内部第一件事是
      * {@code unRide()}——直接传她 = 她当场被从坐骑上踹下来，坐骑留在原地成孤儿。
-     *
      * <p>与扫帚版的唯一差别：扫帚是"任务在包里/世界里"的特殊实体，这里坐骑就是**世界里一只普通
      * 生物**——所以搬完按 UUID 重新取回它、清速度、再 {@code startRiding(force)} 落座。坐骑跨维度
      * 会走 {@code changeDimension}（同 UUID 新实例），所以一律按 UUID 取回，不缓存旧引用。
@@ -1902,15 +1783,12 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.1.0 实测七十九：传送本体（不含豁免判定）——救援路径复用。受困女仆即使是
      * home 模式也要能被捞回来（基岩顶不是家）；主人存活性由调用方保证。
-     *
      * @param force v1.2.0 实测五百四十六【强制 + 无视地块】：主人身边找不到可站立格时，
      *              不再拒绝，而是把女仆直接放在**主人当前所在格**（主人飞在高空 /
      *              悬在虚空 / 站在岩浆边也照传）。排班表的人工传送（「传送到我身边」/
      *              「一键集合」）走 true —— 玩家点这个按钮就是要她**立刻**出现在身边，
-     *              被"无可站立点"顶回来是最恼人的；自动路径（受困救援 / 远距拉回）走
-     *              false，保持"宁可她走路归队也不冒半空坠落风险"的老口径。
+     *              被"无可站立点"顶回来是最恼人的；自动路径（受困救援 / 远距拉回）走 false，保持"宁可她走路归队也不冒半空坠落风险"的老口径。
      */
     private static boolean teleportCore(EntityMaid maid, LivingEntity owner, boolean force) {
         try {
@@ -1945,7 +1823,6 @@ BlockPos stand = findStand(newLevel,
 
     /**
      * 【实测六百九十二】落点口径的"按坐标"版本：主人身边那一条（{@link #standSpot}）现在直接委托到这里。
-     *
      * <p>为什么需要它：守家女仆的两条牵引绳（空袭 / 扫帚）拉回来的**不是她主人、是她的工作区**
      * （见 {@code MaidBroomRecall.tick} / {@code MaidFlightRecall.tick} 里那段因果），而工作区圈心
      * 是个 {@code BlockPos}、没有实体可以问。落点算法一个字没变（{@link #findStand} 找一个可站立的
@@ -2037,19 +1914,12 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送的真正补丁）。
-     *
      * 背景：跨区块（同维度距离过远）的自动传送此前【完全依赖 TLM 自带机制】——
      * MaidFollowOwnerTask 的 teleportToOwner 只对 非 home + 可脑动 + 主人同维度 的
      * 跟随女仆触发，且 10 次 ±3 随机试探可能全部落空（悬崖/窄道/主人飞行）而静默
      * 失败；排班自动 home 的女仆同维度更是永远不被 TLM 拉。这就是"修了五六次
      * 修不好"的实质：每次修的都是跨维度或区块保载，同维度远距拉回要么不存在、
-     * 要么是 TLM 的随机静默失败。
-     *
-     * 本方法用与跨维度同款的可靠链路（findStand + teleportTo 真传送）补同维度兜底：
-     * 距离超过阈值、非守家、非坐/骑、没在干重活（挖矿/伐木/建造未暂停/烹饪酿造站桩）
-     * 就拉回主人身边。守家/干活中不拉，但会落日志说明原因（60 秒限频）——"为什么不
-     * 传"从此可见。
+     * 要么是 TLM 的随机静默失败。 本方法用与跨维度同款的可靠链路（findStand + teleportTo 真传送）补同维度兜底： 距离超过阈值、非守家、非坐/骑、没在干重活（挖矿/伐木/建造未暂停/烹饪酿造站桩） 就拉回主人身边。守家/干活中不拉，但会落日志说明原因（60 秒限频）——"为什么不 传"从此可见。
      */
     private static void trySameDimPull(EntityMaid maid, LivingEntity owner) {
         try {

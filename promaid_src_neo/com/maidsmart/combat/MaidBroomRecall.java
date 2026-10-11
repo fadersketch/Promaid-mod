@@ -11,14 +11,9 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * v1.3.6 实测六百六十一【扫帚牵引绳】：扫帚模式期间，以她为圆心、半径 N 格（默认 100，
  * 配置 {@code combat.broom.recallDistance}，0 = 关闭）的球内找不到**参照点** → 立刻**连人带扫帚**
  * 传送回参照点：非守家时参照点 = 主人；**守家时参照点与落点都是她的工作区圈心**（实测六百九十二）。
- *
  * <p>
- *
- *
- *
  * <h2>为什么必须另立一条（不能直接复用「空袭牵引绳」）</h2>
  * {@link MaidFlightRecall} 的第一道门就是 {@link MaidFlightKit#isFlightTask}（只管两种**鞘翅**
  * 空袭任务），而它自己后面还紧跟着一句 {@code if (maid.isPassenger()) return;}——「骑乘中 = 被别的
@@ -26,38 +21,9 @@ import java.util.WeakHashMap;
  * 放宽，她也会被那道"骑乘豁免"顶回来。空袭那份代码一个字都不该改（它管的是另一件事），
  * 所以这里另开一条，判据与结构照抄，改的只有两处：**任务判据**与**"骑乘"的含义**
  * （骑扫帚不是"被带走的豁免"，而是"必须连扫帚一起搬"的理由）。
- *
  * <h2>「连人带扫帚一起传送」是怎么做到的（那块硬骨头）</h2>
  * 关键事实：{@code Entity.teleportTo(ServerLevel, …)} 内部会先 {@code unRide()} —— 直接传送她
- * = 她当场被从扫帚上踹下来，落地后成了一把漂在原地的孤儿扫帚 + 一个站在地上的女仆。所以
- * 传送顺序必须是「先解开乘客关系 → 搬扫帚 → 搬她 → 重新落座」，四步都在**同一个 tick** 里
- * 做完（见 {@code MaidChunkLoadManager.recallBroomRider}）。玩家提到的"先切空闲再切回来"
- * 那条路**没有被用到**：它会把一次瞬时搬运变成两次任务切换（任务一换，{@code MaidBroomTask}
- * 的 brain 会重建、她的扫帚会被收进背包），只在"连人带扫帚搬不过去"时才退化成
- * "就地收工 → 传送她 → 下一 tick 她自己重新骑上"。所以那条兜底路径仍然存在，只是排在后面。
- *
- * <h2>生效口径</h2>
- * <ul>
- *   <li><b>只在骑着扫帚时生效</b>（{@code ridingBroom != null}）：她已经落地、或正走在去捡扫帚的
- *       路上时，距离问题交给 {@code MaidChunkLoadManager.trySameDimPull} 那套更保守的规则
- *       （它查 home / 坐姿 / 干活豁免）。这也正是「空袭牵引绳」那句 {@code onGround} 的同一用意；</li>
- *   <li><b>距离按 3D 算</b>（水平 + 竖直）：所以「飞太高」本身就触发——那是"回不来"的字面含义；</li>
- *   <li><b>主人跨维度时不抢</b>：那种情况由 {@code followIfCrossDimension} 那一路负责，
- *       在这里立刻抢会与"另一条链路正在处理"打架。要跨维度叫她回来，用排班表的
- *       「召她过来」/「一键集合」——那条路已经认识扫帚了（见 {@code recallBroomRider}）；</li>
- *   <li><b>【实测六百九十二】守家时拉回的是「家」，不是主人</b>：
- *
- *       主人跑出 100 格就被连人带扫帚搬到主人那边，随后几分钟回不到圈里（实测日志 01:32:22 那一串
- *       「被方块顶住 → 飘到最近的空气格」）。守家的语义是"待在家里"，所以守家期间**距离基准与落点
- *       都换成工作区圈心**（{@code com.maidsmart.follow.WorkAreaClamp.homeAnchor}）：主人走多远
- *       都不再是把守家女仆拽走的理由，而"飞太远回不来"照旧由这条绳兜住——拉回家。
- *       非守家（跟随）时仍按主人算，口径一字未改。想彻底关掉就 {@code combat.broom.recallDistance}=0。</li>
- * </ul>
- *
- * <h2>调用点</h2>
- * {@link MaidBroomBehavior#tick} 的**第一行**（⓪ 相位，每 tick 一次，且是 ①..⑥ 全部之前）
- * ——扫帚模式的行为每 tick 都在跑（她骑着扫帚时 TLM 的 brain 照常 tick，只有 guiOpening 会挡），
- * 所以这条牵引绳是"立即"的，不用另挂 core 行为。
+ * = 她当场被从扫帚上踹下来，落地后成了一把漂在原地的孤儿扫帚 + 一个站在地上的女仆。所以 传送顺序必须是「先解开乘客关系 → 搬扫帚 → 搬她 → 重新落座」，四步都在**同一个 tick** 里 做完（见 {@code MaidChunkLoadManager.recallBroomRider}）。玩家提到的"先切空闲再切回来" 那条路**没有被用到**：它会把一次瞬时搬运变成两次任务切换（任务一换，{@code MaidBroomTask} 的 brain 会重建、她的扫帚会被收进背包），只在"连人带扫帚搬不过去"时才退化成 "就地收工 → 传送她 → 下一 tick 她自己重新骑上"。所以那条兜底路径仍然存在，只是排在后面。 <h2>生效口径</h2> <ul> <li><b>只在骑着扫帚时生效</b>（{@code ridingBroom != null}）：她已经落地、或正走在去捡扫帚的 路上时，距离问题交给 {@code MaidChunkLoadManager.trySameDimPull} 那套更保守的规则 （它查 home / 坐姿 / 干活豁免）。这也正是「空袭牵引绳」那句 {@code onGround} 的同一用意；</li> <li><b>距离按 3D 算</b>（水平 + 竖直）：所以「飞太高」本身就触发——那是"回不来"的字面含义；</li> <li><b>主人跨维度时不抢</b>：那种情况由 {@code followIfCrossDimension} 那一路负责， 在这里立刻抢会与"另一条链路正在处理"打架。要跨维度叫她回来，用排班表的 「召她过来」/「一键集合」——那条路已经认识扫帚了（见 {@code recallBroomRider}）；</li> <li><b>【实测六百九十二】守家时拉回的是「家」，不是主人</b>： 主人跑出 100 格就被连人带扫帚搬到主人那边，随后几分钟回不到圈里（实测日志 01:32:22 那一串 「被方块顶住 → 飘到最近的空气格」）。守家的语义是"待在家里"，所以守家期间**距离基准与落点 都换成工作区圈心**（{@code com.maidsmart.follow.WorkAreaClamp.homeAnchor}）：主人走多远 都不再是把守家女仆拽走的理由，而"飞太远回不来"照旧由这条绳兜住——拉回家。 非守家（跟随）时仍按主人算，口径一字未改。想彻底关掉就 {@code combat.broom.recallDistance}=0。</li> </ul> <h2>调用点</h2> {@link MaidBroomBehavior#tick} 的**第一行**（⓪ 相位，每 tick 一次，且是 ①..⑥ 全部之前） ——扫帚模式的行为每 tick 都在跑（她骑着扫帚时 TLM 的 brain 照常 tick，只有 guiOpening 会挡）， 所以这条牵引绳是"立即"的，不用另挂 core 行为。
  */
 public final class MaidBroomRecall {
 
@@ -115,16 +81,11 @@ public final class MaidBroomRecall {
             if (com.maidsmart.patrol.PatrolFlight.effective(maid) != null) {
                 return false;
             }
-            // 【实测六百九十二：守家的时候拉回的是「她的工作区」，不是主人】
-            //
-            //  实测日志实证（2026-09-27 01:32:22）：她正「home=true 沿工作范围盘旋」，主人跑出 100 格
-            //  → 这条绳当场把连人带扫帚的她搬到主人那边 100 格外，随后整整 5 分钟回不到圈里
-            //  （一路「被方块顶住 → 飘到最近的空气格」，高度从 y=15 一路被垫到 40 多）。
-            //  守家的语义就是"待在家里"，所以这一档：**距离基准 = 圈心、落点 = 圈心**，
-            //  主人走多远都不再是把守家女仆拽走的理由；"她飞太远回不来"照旧由这条绳兜住，只是拉回家。
-            //  口径复用 WorkAreaClamp.homeAnchor（= home 模式 + 圈心有效），别在这里重写一份。
-            // 【v1.3.9 巡逻航迹不再进这一档】巡逻的女仆在上面就 `return false` 了——她不受牵引绳影响，
-            //  所以这里只剩两档，参照点不再有"航迹中心"那一支。
+            // 守家时拉回的是**她的工作区**，不是主人：实测（01:32:22）她沿工作范围盘旋、主人跑出 100 格
+            // → 这条绳把她连人带扫帚搬到主人那边 100 格外，随后 5 分钟回不到圈里（一路被方块顶、高度被垫到 40+）。
+            // 守家的语义是"待在家里"，所以这一档：**距离基准 = 圈心、落点 = 圈心**，主人走多远都不再是把
+            // 守家女仆拽走的理由；"飞太远回不来"照旧由这条绳兜住，只是拉回家。口径复用
+            // WorkAreaClamp.homeAnchor，别重写一份。（巡逻女仆在上面就 return false 了，不受牵引绳影响。）
             net.minecraft.core.BlockPos home = com.maidsmart.follow.WorkAreaClamp.homeAnchor(maid);
             LivingEntity owner = maid.getOwner();
 

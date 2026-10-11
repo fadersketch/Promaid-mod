@@ -543,17 +543,10 @@ public final class SchedulePacketsPlan {
                         // 批量覆盖她们的任务会打断保命流程、污染战斗还原链（还原到被
                         // 批量改过的"原任务"）。单女仆快捷设置同样不检查，但批量是
                         // 一改一整队，必须兜住
-                        // v1.1.0 实测一百六十三：真实战斗判定（残留标记不再挡批量应用）
-                        // v1.1.0 实测二百六十五/二百六十六（反馈："满血的时候全员模式
                         // 也没用"）：旧版用 isReallyCombatActive 跳过——排班关闭时它含
                         // IAttackTask 兜底（当前任务是任意攻击任务即判"战斗中"），玩家
                         // 手动安排攻击任务的女仆（满血、无排班）被永久跳过。批量应用是
-                        // 玩家明确意图，只跳过【真本系统战斗】（ASSIGNED 匹配当前任务）
-                        // 的女仆；残留标记由 isRealCombatActive 顺带清掉。
-                        // v1.1.0 实测二百六十七（反馈："剪刀模式女仆解除排班满血，全员
-                        // 模式不响应"）：跳过/失败完全静默——加逐只诊断日志（latest.log
-                        // 搜 "batch-apply"）+ 应用后读回校验（TLM setSchedule/setTask 有
-                        // 守卫会静默拒绝）+ 单只 try/catch 隔离（一只异常不再中断整队）。
+                        // 玩家明确意图，只跳过【真本系统战斗】（ASSIGNED 匹配当前任务） 的女仆；残留标记由 isRealCombatActive 顺带清掉。 模式不响应"）：跳过/失败完全静默——加逐只诊断日志（latest.log 搜 "batch-apply"）+ 应用后读回校验（TLM setSchedule/setTask 有 守卫会静默拒绝）+ 单只 try/catch 隔离（一只异常不再中断整队）。
                         String mName = m.getDisplayName() != null ? m.getDisplayName().getString() : m.getUUID().toString();
                         if (((net.neoforged.neoforge.common.extensions.IEntityExtension) m).getPersistentData().getBoolean(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
                             com.mojang.logging.LogUtils.getLogger().info(

@@ -11,34 +11,19 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 【实测七百九十八】"这条轨道已经被删掉了"的**全服账本**——玩家把轨道从航图里删掉之后，
  * 女仆脑中那一份副本必须跟着作废，她回到默认状态（扫帚=守家盘旋 / 直升机=悬停 / 陆地载具=跟主人）。
- *
  * <h2>问题出在哪（本类为什么必须存在）</h2>
  * 巡逻航迹是**两份**：物品（航图里的书）与女仆（{@code persistentData} 里的深拷）。
  * 绑定那一刻是**快照**语义——，所以两份之后各走各的。
  * 于是 {@code BookOpPacket} 的 {@code delete} 只动了物品那一份：航图上那条轨道没了，
  * 女仆身上那份深拷**一个字节都没动**，她照旧沿那条"已经不存在"的轨道一圈圈飞
  * （实测七百九十八的的根因。
- *
  * <h2>为什么不能只在删除那一瞬间扫一遍已加载的女仆</h2>
  * 她多半**不在已加载区块里**（在跑巡逻的往往离玩家很远，甚至跨维度）。删除那一刻扫不到她，
  * 等她的区块下次加载时，身上那份深拷还在，就又会自己飞起来。所以撤销这件事必须**落盘**：
  * 删除时记一笔 id，之后她在任何时刻被读到时都判得出"这条已经删了"——
  * 判据放在 {@link PatrolChartData#readMaid} 这一个收口处，运行时链路
- * （{@link PatrolFlight}）与界面名单一并受益。
- *
- * <h2>为什么按 id 而不是按"书名"</h2>
- * id 是创建轨道时生成的 48 位短随机串（见 {@link PatrolRoute#newId}），一条轨道一个，
- * 稳定不变（改名/换选中都不影响）。同一条轨道的 id 在物品与女仆两侧一字不差，
- * 所以"删了 id=X 的轨道"这件事能精确地落到所有绑着 X 的女仆身上。
- *
- * <h2>存哪儿 / 会不会膨胀</h2>
- * 存主世界（{@code data/maid_smart_patrol_revoked.dat}），与 {@code BuildArchive} /
- * {@code AutoResurrectStore} 同款 SavedData。序列化照 {@code BuildArchive} 的先例走
- * **字符串**而不是 ListTag（那边注释写明：避免 ListTag.add 的 SRG 不确定性）。
- * 一个 id 约 12 字节、删一条轨道才记一笔，且删除是玩家的明确动作——不做上限裁剪，
- * 宁可账本长一点，也不能让一条删掉的轨道在很久以后又"复活"。
+ * （{@link PatrolFlight}）与界面名单一并受益。 <h2>为什么按 id 而不是按"书名"</h2> id 是创建轨道时生成的 48 位短随机串（见 {@link PatrolRoute#newId}），一条轨道一个， 稳定不变（改名/换选中都不影响）。同一条轨道的 id 在物品与女仆两侧一字不差， 所以"删了 id=X 的轨道"这件事能精确地落到所有绑着 X 的女仆身上。 <h2>存哪儿 / 会不会膨胀</h2> 存主世界（{@code data/maid_smart_patrol_revoked.dat}），与 {@code BuildArchive} / {@code AutoResurrectStore} 同款 SavedData。序列化照 {@code BuildArchive} 的先例走 **字符串**而不是 ListTag（那边注释写明：避免 ListTag.add 的 SRG 不确定性）。 一个 id 约 12 字节、删一条轨道才记一笔，且删除是玩家的明确动作——不做上限裁剪， 宁可账本长一点，也不能让一条删掉的轨道在很久以后又"复活"。
  */
 public final class PatrolRevocation extends SavedData {
 
@@ -68,10 +53,8 @@ public final class PatrolRevocation extends SavedData {
      * 一次（撤销判据的唯一收口）。{@code computeIfAbsent(new Factory<>(...))} 每次调用都要
      * **新建一个 Factory 对象**——于是把工厂静态存一份（它是无状态的，跨世界复用安全），
      * 剩下的就是一次普通的 map 查表。
-     *
      * <p>【为什么不顺手把账本本身也缓存】那样就得按服务端实例做键，于是静态字段会一直
-     * 攥着上一个世界的 SavedData（单人换存档 = 一处小泄漏）。账本查表本来就是 O(1)，
-     * 不值得为这点开销引入跨世界的失效与泄漏风险，所以只缓存工厂。
+     * 攥着上一个世界的 SavedData（单人换存档 = 一处小泄漏）。账本查表本来就是 O(1)， 不值得为这点开销引入跨世界的失效与泄漏风险，所以只缓存工厂。
      */
     private static net.minecraft.world.level.saveddata.SavedData.Factory<PatrolRevocation> FACTORY;
 

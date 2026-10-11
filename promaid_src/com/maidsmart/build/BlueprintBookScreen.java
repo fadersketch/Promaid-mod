@@ -21,9 +21,6 @@ import java.util.List;
  *   右上角全部暂停/继续
  * - 实时进度：客户端每 2 秒轮询 SHOW_PROGRESS，服务端回发 ProgressUpdatePacket，
  *   进度/速度/女仆状态自动刷新（无需按键、无需退出手册）
- *
- * v1.5.71 布局重构（修复小窗口"完全混乱"）：
- * 旧版所有行数/坐标按大窗口固定（目录 10 行/页、女仆 10 行/页、材料列宽下限 200px），
  * 854×480 窗口 + GUI 自动缩放（虚拟分辨率 427×240）时列表压出屏幕、与底部控制区互相重叠。
  * 新版改为【自适应】：内容区 = 屏幕高 - 顶部标题区 - 底部控制区，每页行数按可用高度动态
  * 计算（大窗口自动变多、小窗口自动变少，永不越界）；材料 2 列规则保留，列宽自适应。
@@ -2190,8 +2187,7 @@ public class BlueprintBookScreen extends Screen {
      *    方块投影）+ 系统提示 → 退出手册在世界里走位选点；
      * 2. 再次点击（重开手册）：先把金色预览刷新到当前脚下（取消弹窗重新选位后
      *    再点也一样），再弹确认框——明确告知会摧毁周边障碍物；确认才创建区块
-     *   （SelectBlueprintPacket），金色框关闭、红色区块框+橙色幽灵投影由每秒
-     *    同步接管，并重置"看过预览"标记（下一轮建造仍先看范围）。
+     *   （SelectBlueprintPacket），金色框关闭、红色区块框+橙色幽灵投影由每秒 同步接管，并重置"看过预览"标记（下一轮建造仍先看范围）。
      */
     private void startBuildFlow(String vid) {
         boolean previewed = com.maidsmart.build.BlueprintAreaPreview.wasShown();

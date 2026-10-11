@@ -6,20 +6,15 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * v1.5.393 实测八百零四：「大运」的**玩家侧**驱动——自己戴着它鞘翅滑翔时，同样开出 5×5×5
  * 通道。
- *
  * <p>【为什么玩家侧要单开一条】女仆侧走 TLM 的 {@code IMaidBauble#onTick}（TLM 每 tick 回调
  * 装了饰品的女仆）；玩家的 Curios 饰品栏没有那条回调，本模组也没有"玩家饰品 tick"入口，
  * 所以在自己的 ServerTick 里扫一遍在线玩家。
- *
  * <p>【识别方式（全反射，零硬依赖）】玩家佩没佩戴「大运」问
  * {@link com.maidsmart.combat.CuriosElytraCompat#hasCurio}——与女仆饰品栏同一套反射链路，
  * 只认 Curios 槽位。没装 Curios 的一律跳过（物品照旧可用，只是玩家侧不生效）。
- *
  * <p>【成本】每 tick 对每个在线玩家先判滑翔，不飞的人一个反射都不做；真在飞且戴着才进破坏，
  * 块数上限由 {@code accessory.daYun.maxPerTick} 兜着。
- *
  * <p>本类两树各一份：Neo 树用 Mojmap 名（本文件），Forge 树用 SRG 名。
  */
 public final class DaYunPlayerHook {
@@ -77,11 +72,8 @@ public final class DaYunPlayerHook {
     }
 
     /**
-     * v1.5.394 实测八百零五：玩家侧 BGM——戴着「大运」滑翔就起播，落地就停。
-     *
      * <p>与女仆侧同一个状态机（{@link DaYunMusic} 内部做边沿触发），所以这里每 tick 无条件
      * 调一次就够了：状态没变时它一个包都不发。
-     *
      * <p>v1.5.396 实测八百零九：判据补上"戴着才谈得上响"——调用点改成"戴着就调本方法"，
      * 于是**摘掉饰品**（或把 BGM 配置改成 0）也能走 {@link DaYunMusic#stop} 真正停下来，
      * 而不是留着一条响到曲终。

@@ -23,22 +23,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * 床铺互通·方向二（v1.1.0 实测四百一十八，反馈："让女仆床和玩家床的代码互通。
  * 女仆和玩家可以互相使用对方的床"）。1.20.1 Forge 版。
- *
  * TLM 的女仆床对玩家是"死"的，堵点有两处：
  * ① {@code BlockMaidBed.isBed(...)} 只在 {@code entity instanceof EntityMaid} 时返回
  *    true，玩家（以及重生点解析时传的 null）走到 super（= instanceof BedBlock）恒 false
  *    ——所以玩家既睡不进去，也没法把它设成重生点；
  * ② 它的 use 方法只处理染料，非染料直接 PASS，从不调 player.startSleepInBed。
- *
  * 本 mixin 把这两道门打开（不改 TLM 源码）：
  * - isBed：玩家 / null（重生点解析）/ 女仆都认，其余走原逻辑；
  * - use：手持可染色染料仍走 TLM 原逻辑（染色优先）；否则服务端调
  *   player.startSleepInBed(head)——原版睡眠/占床/重生点设置全部由既有逻辑接管
  *   （BlockMaidBed 的 OCCUPIED/PART 与 BedBlock 是同一 Property 实例，FACING 来自
- *   HorizontalDirectionalBlock，Forge 的 setBedOccupied/getRespawnPosition 默认
- *   实现直接可用）。
- *
- * 开关 MISC_BED_INTEROP 关掉后 isBed 恢复原状（玩家不能睡女仆床）。
+ *   HorizontalDirectionalBlock，Forge 的 setBedOccupied/getRespawnPosition 默认 实现直接可用）。 开关 MISC_BED_INTEROP 关掉后 isBed 恢复原状（玩家不能睡女仆床）。
  */
 @Mixin(BlockMaidBed.class)
 public abstract class MaidBedBlockInteropMixin {

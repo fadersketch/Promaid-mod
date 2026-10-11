@@ -47,7 +47,6 @@ public class GuideScreen extends Screen {
 
     /**
      * 当前章节的**渲染元素**列表（换行后）。
-     *
      * <p>元素只有两种：{@link RLine}（一行正文，高 {@link #LINE_H}）与
      * {@link Recipe}（一整块合成表，高 {@link Recipe#height()}）。
      * 实测八百一十三之前这里只有 {@code List<String>}、分页按「每页几行」算；
@@ -181,13 +180,11 @@ public class GuideScreen extends Screen {
 
     /**
      * 把一个 {@code [[#…]]} token 解析成 {@link Recipe}；解析失败返回 null（跳过，绝不崩界面）。
-     *
      * <p>格式（{@code ;} 分段，顺序固定：形状在前、{@code 别名=id} 与 {@code >产物}、
      * {@code @说明}在后、其余段是网格行）：
      * <pre>
      * [[#shaped;IDI;RMR;IDI;I=minecraft:iron_block;D=minecraft:diamond_block;R=minecraft:redstone_block;M=minecraft:minecart;>maid_smart:da_yun;@铁块×4 + 钻石块×2 + 红石块×2 + 矿车×1]]
-     * [[#shapeless;minecraft:book;minecraft:paper;>maid_smart:blueprint_book;@书 + 纸]]
-     * </pre>
+     * [[#shapeless;minecraft:book;minecraft:paper;>maid_smart:blueprint_book;@书 + 纸]] </pre>
      */
     private static Recipe parseRecipe(String token) {
         try {

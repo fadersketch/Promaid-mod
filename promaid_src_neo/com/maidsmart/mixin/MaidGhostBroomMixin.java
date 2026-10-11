@@ -11,27 +11,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.3.0 实测六百七十四【半透明二期·扫帚本体】：**扫帚**也一起半透明——只对"骑着它的那位玩家的
- * 第一人称"。
+ * 【半透明二期·扫帚本体】：**扫帚**也一起半透明——只对"骑着它的那位玩家的第一人称"。
  *
- * ── 为什么拦这个类、这个方法 ──
- * TLM 的扫帚渲染器 {@code EntityBroomRender extends LivingEntityRenderer<EntityBroom, BroomModel>}
- * **没有覆写 render**（javap 实证：那个类里只有构造器、shouldShowName、getTextureLocation），
- * 所以它的渲染入口就是 {@code LivingEntityRenderer} 自己声明的那一个 —— 注入到**基类**，
- * 再用 {@code instanceof EntityBroom} 把世上所有别的生物放行（同类前例：{@code EntityGunnerHangMixin}
- * 注入 {@code Entity} 的 positionRider）。
- *
- * <p>【描述符为什么是 LivingEntity】javap -s 实证：{@code LivingEntityRenderer} 里这个方法声明的
- * 描述符是 {@code (Lnet/minecraft/world/entity/LivingEntity;FF...)V}（泛型 T 的 erasure），
- * 另外那个 {@code (Lnet/minecraft/world/entity/Entity;...)V} 是编译器生成的桥接方法。
- * **不能**写 Mob —— 那个描述符在这个类里不存在，注入点会解析不到（启动期直接报错）。
- *
- * <p>【为什么不会误伤女仆】TLM 的 {@code EntityMaidRenderer} **自己声明**了 {@code render(Mob, …)}
- * （javap 实证），调度器的调用会先落到它自己的那一层、不会走到基类这里 —— 女仆那条链路
- * （由 {@code MaidGhostTetherMixin} 拦 {@code EntityMaidRenderer.render}）与这里互不干扰。
- *
- * <p>【两侧无关】判定全在客户端（第一人称 + 本地玩家 + 是不是骑着这把扫帚），服务端一行不改；
- * 本 mixin 挂在 mixins 配置的 client 列表里，专用服务器上不会被加载。
+ * 【为什么拦这个类、这个方法】TLM 的扫帚渲染器 {@code EntityBroomRender extends
+ * LivingEntityRenderer<EntityBroom, BroomModel>} **没有覆写 render**（javap 实证：只有构造器、
+ * shouldShowName、getTextureLocation），所以它的渲染入口就是 {@code LivingEntityRenderer} 自己声明的
+ * 那一个——注入到**基类**，再用 {@code instanceof EntityBroom} 把世上别的生物放行（同类前例：
+ * {@code EntityGunnerHangMixin} 注入 {@code Entity} 的 positionRider）。
+ * 【描述符必须是 {@code LivingEntity}}javap -s 实证：该方法声明的描述符是 {@code (…LivingEntity;FF…)V}
+ * （泛型 T 的 erasure），{@code (…Entity;…)V} 是编译器生成的桥接方法。**不能**写 Mob——那个描述符在这个类
+ * 里不存在，注入点会解析不到（启动期直接报错）。
+ * 【不误伤女仆】{@code EntityMaidRenderer} **自己声明**了 {@code render(Mob, …)}，调度先落到它自己那层、
+ * 不走基类这里——女仆那条链路（{@code MaidGhostTetherMixin} 拦它）与这里互不干扰。判定全在客户端，本 mixin
+ * 挂在 client 列表，专用服务器不加载。
  */
 @Mixin(LivingEntityRenderer.class)
 public abstract class MaidGhostBroomMixin {

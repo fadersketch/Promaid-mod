@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * v1.3.0「扫帚模式」：让**没有玩家驾驶**的扫帚听女仆的——唯一改动 TLM 扫帚飞行的地方。
- *
  * ── 为什么非得动 TLM 的扫帚（而不是用它的 {@code IBroomControl} API）──
  * TLM 的扫帚确实是可扩展的（{@code IBroomControl} + {@code BroomControlManager}），但把
  * {@code EntityBroom.travel}/{@code tickRidden} 的字节码逐条读下来，它的每个回调**都要一个
@@ -24,53 +23,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *       if (controlling instanceof Player p &amp;&amp; second instanceof EntityMaid m) {
  *           for (IBroomControl c : broomControls) if (c.inControl(p, m)) { c.travel(p, m); break; }
  *           this.move(MoverType.SELF, this.getDeltaMovement());
- *           return;
- *       }
- *       // ← 没有玩家驾驶时走这里：自由落体
- *       ...
- *   }
- *   public LivingEntity getControllingPassenger() {
- *       Entity first = this.getFirstPassenger();
- *       return first instanceof Player p ? p : null;   // ← 女仆当第一乘客时恒为 null
- *   }
- * </pre>
- * 结论：`IBroomControl` 是给"**玩家驾驶、女仆搭乘**"设计的（它的整套语义是"玩家开着扫帚时，
- * 我们插一手改改谁说了算"）。**女仆单骑**这条路上根本没有回调点——她一个人骑上去，
- * `getControllingPassenger()` 是 null，扫帚直接自由落体。所以"女仆无需玩家独立骑扫把"
- * 只能在这一处接管。
- *
- * ── 接管条件（**三条**全中才动，任何一条不中都是原版行为一字不改）──
- * <ol>
- *   <li>{@code getPassengers().get(0)} 是 {@code EntityMaid}——注意这同时排除了
- *       "玩家当第一乘客"（那样第一乘客是 Player，这里直接返回 null）；</li>
- *   <li>该女仆是**本模组所有**（{@code MaidScope.owned}，无主女仆一律不干预）且当前任务
- *       就是扫帚模式（{@code maid_smart:broom}）——别的任务骑在扫帚上时照旧原版；</li>
- *   <li>{@code getControllingPassenger() == null}（没有玩家在驾驶）——双保险，语义自证；</li>
- * </ol>
- * 【实测六百八十二】679 曾加过第四条"武装拴绳在用（主人握着绳子 / 她正被拴着）"，
- * 本批撤掉：那条闸让扫帚模式在"没拿绳子"时**整段失效**（原版对"女仆单骑"只有自由落体，
- * 见上），玩家实测就是"有时正常、有时坐着扫帚掉在地上动也不动"。防冲突的目的一直由
- * 上面这三条保证——不满足就一个字节都不动。
- *
- * ── 接管后做什么 ──
- * 读本 tick 的推进意图（{@link com.maidsmart.combat.MaidBroomDrive} 写的）→ 写进
- * {@code deltaMovement} → 自己 {@code move(MoverType.SELF, v)} → 转向 → cancel 掉原版。
- * **没有意图的 tick 就是"零速悬停"**（仍然 cancel）：不然她会在两拍之间掉一下，看着一颠一颠。
- *
- * 【转向为什么在这儿】没有 Player 时 {@code tickRidden} 根本不会被调用（它只由
- * "控制乘客是 Player"的那条链路触发），所以朝向也没人管了——由这里按驱动给的 yaw 设。
- *
- * ── 【v1.3.2 修正：只让服务端驱动】客户端也会被 {@code aiStep} 调到 travel（实证）──
- * {@code LivingEntity.aiStep} 里那次 travel 调用**没有 {@code isControlledByLocalInstance}
- * 门槛**：{@code getControllingPassenger() instanceof Player ? travelRidden(...) : travel(...)}
- * ——是"谁在控制"二选一，不是"哪一侧说了算"。对比一下原版 {@code travelRidden} 内部：
- * 它把 {@code setSpeed + travel} 那一对**包在 {@code if (this.isControlledByLocalInstance())} 里**，
- * 也就是说"玩家驾驶"这条路上，原版**刻意只让一侧真正施加位移**。
- * 我们旧版没有这个门槛，于是**客户端和服务端各驱动一次**，而推进意图是"取走即清"的一格
- * 队列（{@link com.maidsmart.combat.MaidBroomDrive#takeThrust}）——两边抢同一份意图，
- * 谁先读到谁动，另一侧读到空 → 归零悬停。表现就是实测反馈的那三条：
- * 「原地左右鬼畜晃动（客户端动了、服务端同步又把它拽回来）」「被反复拉回」「没有上升高度」。
- * 现在跟原版同款口径：**客户端一律不驱动，位置等服务端权威同步下来**。
+ *           return; } // ← 没有玩家驾驶时走这里：自由落体 } public LivingEntity getControllingPassenger() { Entity first = this.getFirstPassenger(); return first instanceof Player p ? p : null;   // ← 女仆当第一乘客时恒为 null } </pre> 结论：`IBroomControl` 是给"**玩家驾驶、女仆搭乘**"设计的（它的整套语义是"玩家开着扫帚时， 我们插一手改改谁说了算"）。**女仆单骑**这条路上根本没有回调点——她一个人骑上去， `getControllingPassenger()` 是 null，扫帚直接自由落体。所以"女仆无需玩家独立骑扫把" 只能在这一处接管。 ── 接管条件（**三条**全中才动，任何一条不中都是原版行为一字不改）── <ol> <li>{@code getPassengers().get(0)} 是 {@code EntityMaid}——注意这同时排除了 "玩家当第一乘客"（那样第一乘客是 Player，这里直接返回 null）；</li> <li>该女仆是**本模组所有**（{@code MaidScope.owned}，无主女仆一律不干预）且当前任务 就是扫帚模式（{@code maid_smart:broom}）——别的任务骑在扫帚上时照旧原版；</li> <li>{@code getControllingPassenger() == null}（没有玩家在驾驶）——双保险，语义自证；</li> </ol> 本批撤掉：那条闸让扫帚模式在"没拿绳子"时**整段失效**（原版对"女仆单骑"只有自由落体， 见上），玩家实测就是"有时正常、有时坐着扫帚掉在地上动也不动"。防冲突的目的一直由 上面这三条保证——不满足就一个字节都不动。 ── 接管后做什么 ── 读本 tick 的推进意图（{@link com.maidsmart.combat.MaidBroomDrive} 写的）→ 写进 {@code deltaMovement} → 自己 {@code move(MoverType.SELF, v)} → 转向 → cancel 掉原版。 **没有意图的 tick 就是"零速悬停"**（仍然 cancel）：不然她会在两拍之间掉一下，看着一颠一颠。 【转向为什么在这儿】没有 Player 时 {@code tickRidden} 根本不会被调用（它只由 "控制乘客是 Player"的那条链路触发），所以朝向也没人管了——由这里按驱动给的 yaw 设。 ── 【v1.3.2 修正：只让服务端驱动】客户端也会被 {@code aiStep} 调到 travel（实证）── {@code LivingEntity.aiStep} 里那次 travel 调用**没有 {@code isControlledByLocalInstance} 门槛**：{@code getControllingPassenger() instanceof Player ? travelRidden(...) : travel(...)} ——是"谁在控制"二选一，不是"哪一侧说了算"。对比一下原版 {@code travelRidden} 内部： 它把 {@code setSpeed + travel} 那一对**包在 {@code if (this.isControlledByLocalInstance())} 里**， 也就是说"玩家驾驶"这条路上，原版**刻意只让一侧真正施加位移**。 我们旧版没有这个门槛，于是**客户端和服务端各驱动一次**，而推进意图是"取走即清"的一格 队列（{@link com.maidsmart.combat.MaidBroomDrive#takeThrust}）——两边抢同一份意图， 谁先读到谁动，另一侧读到空 → 归零悬停。表现就是实测反馈的那三条： 「原地左右鬼畜晃动（客户端动了、服务端同步又把它拽回来）」「被反复拉回」「没有上升高度」。 现在跟原版同款口径：**客户端一律不驱动，位置等服务端权威同步下来**。
  */
 @Mixin(EntityBroom.class)
 public abstract class EntityBroomMaidTravelMixin {
@@ -95,12 +48,9 @@ public abstract class EntityBroomMaidTravelMixin {
             return;
         }
         // 【实测六百八十二：679 那道「武装拴绳没在用就让位」的闸**撤掉了**】
-        //
-        //
         //  正被拴着"，不满足就 `travel` 走原版。而**原版对"女仆单独骑扫帚"根本没有驱动**
         //  （见类注释：`getControllingPassenger()` 对女仆恒为 null → 原版那支是自由落体），
         //  于是不拿着绳子时她必然"坐着扫帚掉在地上、动也不动"。
-        //  实测日志（1.21.1，2026-09-26）里那两行「扫帚让位」正好落在
         //  （14:39:27、14:50:37），中间 40 多秒没有任何「扫帚模式」的飞行/爬升日志。
         //  玩家当初那句"不拿则走原版"的本意是不想让我们**改写 TLM 的扫帚链路**（防别的 mod
         //  冲突）——这一条由上面的三道接管条件（第一乘客是她 / 她的任务就是扫帚模式 /

@@ -92,9 +92,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static boolean customOresLoaded = false;
 
     /**
-     * v1.5.88：从配置面板的"可挖掘方块表"（mine.oreValues：modid:block=价值）加载
      * 自定义矿表——适配其他 mod 的矿石。首次扫描/配置保存后调用。
-     * v1.0.3.1：先 clear 再按配置重建——旧版只 put 不 remove，界面取消勾选矿物后
      * ORE_VALUE 残留该方块 → 女仆仍继续挖（"取消勾选不生效"根因）。
      * 配置 oreValues 是唯一事实源：从配置删除的矿（含曾 add 的模组矿如银矿石、
      * 以及从默认列表删掉的内置矿）立即从 ORE_VALUE 消失；删光矿 = 女仆不挖矿，
@@ -345,15 +343,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.87：软方块判定（徒手可挖：硬度 0~1，如草/土/沙）——
      * 开路不耗镐子耐久、穿透预算不计阻挡；硬方块（矿/石头/箱子/基岩）反之。
      */
     /**
-     * v1.5.139：软方块判定 = "镐不是正确工具"的方块（草/土/沙/粘土——铲或徒手挖）。
      * 旧判定 hardness ≤ 1 会把低硬度的 mod 矿物（如匠魂/魔法 mod 的 1 硬度矿石）
      * 误判为"软方块"→ softNoDurability=true 时挖矿物也不扣耐久（反馈
-     * "就算挖的是矿物也不会掉耐久"的根因）。改为按"镐是否为正确工具"判定：
-     * 镐是正确工具的方块（原版+mod 全部矿物/石头/深板岩，无论硬度）一律算硬，必扣。
+     * "就算挖的是矿物也不会掉耐久"的根因）。改为按"镐是否为正确工具"判定： 镐是正确工具的方块（原版+mod 全部矿物/石头/深板岩，无论硬度）一律算硬，必扣。
      */
     private static boolean isSoft(ItemStack pick, BlockState st) {
         if (pick.m_41619_() || !(pick.m_41720_() instanceof net.minecraft.world.item.DiggerItem d)) {
@@ -1291,11 +1286,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.172：连锁采集【同时破坏】——把 refillChainQueue 填好的队列（相连同族矿）
      * 一次性全部破坏：掉落物直接进女仆背包（放不下落地，与单块自动收集一致），
      * 音效/粒子只在目标矿播（连锁块静默，防 16 连爆音刷屏）。
      * <p>【耐久口径】历史上"镐耐久只扣目标矿一次"（本方法不扣，由单块那一处扣 1 点）。
-     * v1.3.0(beta) 实测七百一十七【issue #29】加了开关 {@code mine.chainFullDurability}：
      * 打开后这里**每破坏一块也扣 1 点**（并沿用单块那套"碎裂清主手槽"回调），关着时一字不动。
      * 破坏后队列自然清空（下一 tick 取队列时 isOre 校验失败被 poll 掉，不残留）。
      */
@@ -1466,12 +1459,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.116：设置移动目标——目标没变 且 导航仍在行进 → 不重设。
      * 导航每次收新目标都要停下重新寻路（PathNavigation.recomputePath），
-     * 旧版 walkToOreBase 每 8 tick 无条件重设 → 女仆"走一下顿一下"鬼畜。
-     * v1.5.121：±1 容差（相邻站立格抖动不重设）——但去掉 !isDone 条件导致
      * 女仆到达站立点后永远不再重设 = "完全不会走路"卡死（回归，v1.5.122 修复）。
-     * v1.5.122：容差 + 导航行进中（!isDone）才跳过；导航到达/失败（isDone）时
      * 重设以重新激活寻路，女仆不会停在原地。
      */
     private void setWalkTarget(EntityMaid maid, BlockPos stand, float speed) {
@@ -1490,9 +1479,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 直接 moveTo 后走路全程无中断；到达/搭路判定由行为自己的 distSq 控制（不变）。
         // 注意：m_26519_ 内部同目标寻路有缓存（f_26496_ 复用），配合上面的
         // "目标未变且导航行进中跳过"，不会每 tick 重新寻路。
-        // 寻路范围：PathNavigation 的搜索盒 = followRange + 1（女仆约 16~17 格），
-        // 目标更远时 createPath 返回 null → 直接 moveTo 会失败原地不动——超过
-        // 14 格就先朝目标方向走 12 格的中间点（导航到达后再重设，自然接力）。
+        // 寻路范围：PathNavigation 的搜索盒 = followRange + 1（女仆约 16~17 格）， 目标更远时 createPath 返回 null → 直接 moveTo 会失败原地不动——超过 14 格就先朝目标方向走 12 格的中间点（导航到达后再重设，自然接力）。
         double hd = Math.sqrt(
                 (stand.m_123341_() + 0.5 - maid.m_20185_()) * (stand.m_123341_() + 0.5 - maid.m_20185_())
                         + (stand.m_123343_() + 0.5 - maid.m_20189_()) * (stand.m_123343_() + 0.5 - maid.m_20189_()));
@@ -1653,7 +1640,6 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.161：连锁采集——从刚挖掉的位置 BFS（6 方向）找相连的同族矿排队。
      * 匹配规则（借鉴 FTB Ultimine 的 BlockMatcher：同 Block 判定）：
      * - 方块类型与刚挖掉的矿相同（chainBlock）
      * - 在矿表内（isOre，含自定义矿表）——只连锁矿，不连锁石头/泥土
@@ -1967,15 +1953,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0【下方矿逐级下降】——目标比自己低时，在朝目标方向的前方一格【向下垫一格】
      * 形成下行台阶（比 slopeStep 的垫块低一层），女仆踩下去后高度降低 1 格；反复执行
      * 即可逐级下降接近矿物。其余逻辑（取料/摆臂/音效/冷却/回收）与 slopeStep 完全一致。
-     *
      * 触发条件（缺一不可）：
      *  - 前方一格【落脚层 y-1】为空气（能站）且【身体层 y】为空气（身体过得了）；
      *  - 落脚层脚下 (y-2) 无支撑（空气/水）→ 需要垫一块才能踩下去；
-     *    已有支撑（纯落差）→ 不垫，交给行走兜底（自然走下去）。
-     * 只垫"该垫"的一格，不破坏任何既有方块；危险格（岩浆/火等）不垫不踩。
+     *    已有支撑（纯落差）→ 不垫，交给行走兜底（自然走下去）。 只垫"该垫"的一格，不破坏任何既有方块；危险格（岩浆/火等）不垫不踩。
      */
     private boolean descendStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
         if (com.maidsmart.tool.MaidPlaceGuard.seatedBlocked(maid)) {
@@ -2329,9 +2312,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.113（B1/B2）：滑动锚点迁移——框内确认挖空后，把锚点朝主人方向滑动
      * 一个搜索环宽（新框与旧框错开一半以上），女仆无需走路、马上能挖新框的矿。
-     * 旧版"朝主人走、走出旧框才重埋"有两个致命问题：
      * ① 被墙/悬崖堵住走不动 → 30 秒停滞就地重埋 → 新框与旧框重合 → 又空 → 又迁移
      *    （死循环）；② 迁移期纯走路零产出。
      * 每 5 秒最多滑一次（SLIDE_SINCE 节流），空旷地形也不会高速漂移。
@@ -2492,20 +2473,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.47：找最优矿石（以【锚点】为中心，杜绝"越挖越远"漂移）：
      * score = 距离平方 + 深度惩罚 - 价值加成，取最低分。
      * 穿透预算：女仆到矿之间实心挡路方块 ≤MAX_BREAK_BUDGET 可选（借鉴 maidmining）；
-     * 刚弃置的目标跳过一次。
-     *
-     * v1.5.113（A1/A3/B4）：性能与行为优化——
-     * - 全量扫描（8.9 万格）每 5 秒一次（ORE_CACHE_TTL），期间缓存轮只校验
-     *   已记录的矿（存在性/框内/可挖性），廉价得多（旧版每 3 tick 全量扫）；
-     * - 挡路预算按矿坐标缓存（缓存轮复用），不再对每个候选重算视线；
-     * - 镐能力判定：主手先查（零开销），主手不够才查背包最高级镐（一次遍历）；
-     * - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
+     * 刚弃置的目标跳过一次。 - 全量扫描（8.9 万格）每 5 秒一次（ORE_CACHE_TTL），期间缓存轮只校验 已记录的矿（存在性/框内/可挖性），廉价得多（旧版每 3 tick 全量扫）； - 挡路预算按矿坐标缓存（缓存轮复用），不再对每个候选重算视线； - 镐能力判定：主手先查（零开销），主手不够才查背包最高级镐（一次遍历）； - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
      */
     /**
-     * 实测八百六十八：弃置一块矿/开路块——记 30 秒短排（地形变了可能又能挖）**并**记本锚点排除表
      * （换锚点才清）。三处弃置（锁定超时 / 视线被挡 / 走路卡死 3 次）与看门狗重置统一走这里。
      */
     private void abandon(EntityMaid maid, BlockPos p, long gameTime) {
@@ -2769,19 +2741,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static final double EYE_HEIGHT = 1.5;
 
     /**
-     * v1.0.4：视线感知（透视感知开关默认关时启用）——女仆像玩家一样只能发现视线无阻的矿物。
      * 从眼睛到矿物中心采样（每 0.5 格，与 countBlocking 同一口径），到达矿物前碰到任何
      * 【非空气、非流体】方块即判定视线被挡 → 不可见。除水/岩浆外一律挡视线：
      * - 泥土/石头/矿石/箱子等自不必说；
      * - 玻璃/半砖/树叶等透明或半格方块也挡——它们不是矿洞天然生成物，玩家手动把矿
      *   裹起来说明不想破坏里面的矿（半格高按一格高算）；
-     * - 水/岩浆是矿洞常见液体，女仆要能挖水下/岩浆旁的矿（岩浆旁的目标另有危险规避）。
-     * 注意与 countBlocking 的区别：那是"挖不挖得过去"（穿透预算），这里是"看不得看见"
-     * （发现层过滤）——关闭透视后视线被挡的矿不进候选，也不产生任何播报。
-     * v1.0.5：眼睛高度改 1.5（按玩家的大正酒狐模型）；判定改多点——矿的中心/顶面/
-     * 底面任一可见即算可见（贴地矿顶面可见、悬空矿底面可见，玩家能看到矿的任何一个
-     * 面就算看见）。凹槽里的矿仍须视线从开口进入：开口顶面低于眼睛时三条线都撞墙，
-     * 依旧不可见（与玩家站在同一位置一致）。
+     * - 水/岩浆是矿洞常见液体，女仆要能挖水下/岩浆旁的矿（岩浆旁的目标另有危险规避）。 注意与 countBlocking 的区别：那是"挖不挖得过去"（穿透预算），这里是"看不得看见" （发现层过滤）——关闭透视后视线被挡的矿不进候选，也不产生任何播报。 底面任一可见即算可见（贴地矿顶面可见、悬空矿底面可见，玩家能看到矿的任何一个 面就算看见）。凹槽里的矿仍须视线从开口进入：开口顶面低于眼睛时三条线都撞墙， 依旧不可见（与玩家站在同一位置一致）。
      */
     private boolean hasClearSight(ServerLevel level, EntityMaid maid, BlockPos target) {
         double sx = maid.m_20185_();

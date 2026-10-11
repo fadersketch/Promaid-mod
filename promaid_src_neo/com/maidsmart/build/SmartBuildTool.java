@@ -21,18 +21,12 @@ import java.util.Map;
 /**
  * smart_build：让女仆建造建筑。
  *
- * blueprint 参数两种格式：
- * 1. 内置蓝图 id：maid_smart:hut（小木屋）/ maid_smart:gazebo（凉亭）/ maid_smart:fountain（喷泉）——离线可用
- * 2. JSON 蓝图（LLM 现场生成，联网知识）：
- *    {"name":"小屋","blocks":[{"x":0,"y":0,"z":0,"block":"minecraft:oak_planks"}, ...]}
- *    注意：仅允许建筑白名单方块；块数 1~200；平面坐标 ±12；高度 0~8
- *
- * mode 参数（材料不足时的处理策略）：
- * - full（默认）：材料不足时【不开始建造】，返回缺失清单，
- *   由 LLM 询问玩家选择"先建一部分"（再用 mode=partial 调用）还是"放弃建造"
- * - partial：只把"当前材料够用"的前缀步骤加入计划（顺序截断，
- *   不会出现"墙中间缺一块"的悬空建筑），缺的部分等玩家补料后由建造行为继续提示
- *
+ * {@code blueprint} 两种格式：① 内置蓝图 id（{@code maid_smart:hut/gazebo/fountain}，离线可用）；
+ * ② JSON 蓝图（LLM 现场生成）：{@code {"name":...,"blocks":[{"x":..,"y":..,"z":..,"block":"..."}]}}，
+ * 仅允许白名单方块、块数 1~200、平面 ±12、高度 0~8。
+ * {@code mode}（材料不足时）：{@code full}（默认）= 材料不足**不开始**、返回缺失清单，由 LLM 问玩家
+ * "先建一部分"（再以 partial 调用）还是放弃；{@code partial} = 只把"材料够用的**前缀**步骤"加入计划
+ * （顺序截断，不会出现"墙中间缺一块"的悬空建筑），缺的部分等补料后由建造行为继续提示。
  * 流程：解析校验 → 材料预检 → 按 mode 决策 → 记录建造计划 → 自动切建筑任务。
  */
 public class SmartBuildTool implements ITool<SmartBuildTool.Result> {

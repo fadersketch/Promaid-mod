@@ -106,14 +106,10 @@ public final class BuildHudTracker {
     }
 
     /**
-     * 【联机·服务端】只把建造 HUD 发给**与该区块有关的人**：站在区块范围内、
-     * 或区块里绑着ta（已加载）的女仆的玩家。
-     *
-     * <p>旧版是 {@code PacketDistributor.ALL}——多人在线时**每个玩家**每秒都会收到
-     * **全服务器所有人**的建造进度（区块名/进度/速度/ETA）。既把别人的工地进度泄露给无关玩家，
-     * 又让无关玩家屏幕上无条件挂出别人的建造 HUD。这里改成"谁的事发给谁"。
-     *
-     * <p>{@code planIds == null} = 计划结束那次补发的空快照 / 兜底路径（发给所有人）。
+     * 【联机·服务端】只把建造 HUD 发给**与该区块有关的人**：站在区块范围内、或区块里绑着ta（已加载）的
+     * 女仆的玩家。旧版是发给**所有玩家**——多人在线时每人每秒都收到全服所有人的建造进度（区块名/进度/
+     * 速度/ETA），既泄露别人的工地又让无关玩家屏幕上无条件挂 HUD；这里改成"谁的事发给谁"。
+     * 【兜底】{@code planIds == null}（计划结束那次补发的空快照 / 取不到计划）退回发给所有人。
      */
     private static void sendToInvolved(net.minecraft.server.MinecraftServer server,
                                        java.util.List<String[]> allEntries,

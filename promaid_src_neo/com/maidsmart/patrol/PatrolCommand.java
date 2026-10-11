@@ -14,19 +14,14 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 
 /**
- * v1.3.8【巡逻航迹 · 指令】{@code /maid_smart broom_goto <x> <y> <z> [女仆]}
  * + {@code /maid_smart broom_patrol status|off [女仆]}。
- *
  * <p>──
- *
  * ⇒ 所以"飞到某处"**不做进编辑器**，照 {@code MaidFreeFlightGotoCommand} 的
  * {@code freeflight_goto} 口径来：坐标参数 + 可选实体选择器 + 只做一件事（给一个目标点）。
- *
  * <p>── {@code broom_goto} 怎么落地 ──
  * 不新开状态机。扫帚的位移原语只有一个：{@link MaidBroomDrive#steerTo}。所以这里把目标点写进
  * 一张**外部目标表**（{@link #GOTO}），由 {@code MaidBroomBehavior} 的平时档优先消费一次、
  * 到达或超时就摘掉——"一次性"这条与 {@code elytra_goto} 完全一致。
- *
  * <p>权限：{@code hasPermission(2)}，与 {@code MaidArmyCommand} / {@code freeflight_goto} 同口径
  * （少了它任何玩家都能把别人的女仆开走）。
  */

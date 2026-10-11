@@ -135,7 +135,6 @@ public final class IndexStonePreviewClient {
         }
         if (locked) {
             // v1.2.0 实测四百八十五【锁定期间不可改选】：锁定的语义 = 期间只能操作这一格。
-            // 旧版（实测四百八十四）虽已做到"右击别处不解锁"，但仍会把右键当作【换锁定点】，
             // 等于锁定期间还能改选别的方块 —— 与用户要求不符。现在改为：
             //  ① 右击的就是那个锁定方块 → 解除锁定；
             //  ② 右击任何【别的方块 / 空气】→ 一律无效（锁定保持不变），只提示怎么解锁；
@@ -192,12 +191,9 @@ public final class IndexStonePreviewClient {
     }
 
     /**
-     * v1.2.0 实测四百八十四：长射线命中的方块，**不做距离过滤**。
-     *
      * 与 {@link #farPick} 的区别：已锁定时要判断"我右击的是不是就是那个锁定方块"，
      * 而这个判断对**近处方块同样成立**（锁定的方块常常就在眼前）。
      * `farPick` 会把 ≤ 触及距离的命中过滤成 null，拿它判断会漏掉近处的锁定格。
-     *
      * @return 命中的非空气方块；未命中/空气 → null
      */
     private static BlockPos pickAnyBlock(Minecraft mc) {

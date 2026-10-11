@@ -14,22 +14,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 实测七百〇二【仿创造飞行 · 1.20.1 精简版 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 →
- * 「创造飞行：开/关」。
+ * 【仿创造飞行 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 → 「创造飞行：开/关」。
  *
- * <p>【为什么能这么做】TLM 的女仆配置界面确实是**硬编码**的（8 行 {@code MaidConfigButton}，
- * 没有注册表可插），但 {@code AbstractMaidContainerGui.initAdditionWidgets()} 是 protected 的
- * 扩展点、按钮是公开控件——所以第三方可以**追加自己的一行**。
- *
- * <p>【实测八百零五：位置全交给 {@link com.maidsmart.client.MaidConfigRowLayout}】原实现把按钮
- * 按屏幕绝对坐标 {@code (screenWidth-174, 26)} 摆，窗口一窄就压住 TLM 自己的开关、
- * 还和「飞行聚晶」那一行重叠 3px（）。
- * 现在统一由 {@code MaidConfigRowLayout} 按**面板相对坐标**算位置——它在面板左边的
- * 外边距里竖排一列窄按钮，整列在面板之外，不遮任何 TLM 控件，彼此也不重叠。
- * 详见那个类的注释。
- *
- * <p>【无 refmap 注意】{@code addRenderableWidget} 是继承自 Screen 的 protected 方法——
- * 无 refmap 时 {@code @Shadow} 定位不到（会崩），照记忆开关的做法改反射调用。
+ * <p>【为什么能这么做】TLM 的女仆配置界面是**硬编码**的（8 行 {@code MaidConfigButton}，没有注册表可插），
+ * 但 {@code AbstractMaidContainerGui.initAdditionWidgets()} 是 protected 扩展点、按钮是公开控件——第三方
+ * 可以**追加自己的一行**，不需要改 TLM 本体。
+ * <p>【位置全交给 {@link com.maidsmart.client.MaidConfigRowLayout}】按**面板相对坐标**排在面板左侧外边距
+ * 里竖着一列（曾按屏幕绝对坐标摆，窗口一窄就压住 TLM 自己开关、还和别的行重叠）——整列在面板之外，不遮
+ * 任何 TLM 控件、彼此不重叠。详见那个类的注释。
+ * <p>【为什么不用 TLM 的 {@code TaskData} 存这个开关】它的 {@code TaskDataRegister.writeSyncData} 会把编码
+ * 结果强转 CompoundTag，一点开关就 ClassCastException 崩服——我们存 per-maid persistentData + 磁盘备份，
+ * 客户端靠 S2C 缓存显示。
+ * <p>【无 refmap 注意】{@code addRenderableWidget} 是继承自 {@code Screen} 的 protected 方法——无 refmap 时
+ * {@code @Shadow} 定位不到（会崩），照记忆开关的做法改反射调用（Forge 用 SRG 名、Neo 用 Mojmap 名）。
  */
 @Mixin(MaidConfigContainerGui.class)
 public abstract class MaidConfigFreeFlightMixin {

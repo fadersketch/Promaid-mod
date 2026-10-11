@@ -18,37 +18,18 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 战斗感知自检（v1.2.2 实测六百一十九）——{@code /maid_smart combat check [女仆]} 干活的地方。
+ * 战斗感知自检——{@code /maid_smart combat check [女仆]} 干活的地方。本批两条需求验的都是**判据**：
+ * ① "有方块遮挡的怪不能被感知到"（判据在 {@link NeutralThreatDriver#perceivable}）；② "战斗状态临时
+ * 扩圈、回常态用正常范围"（判据在 {@link CombatWorkRange#radius}，由 {@code CombatWorkRangeMixin}
+ * 挂在 {@code getRestrictRadius} 上）。两条都依赖**在线主人**（专用服务器上结构上触发不了），所以照
+ * 先例：摆真场景、**调真方法**、把判据取值打进日志，由测试脚本逐条断言。
  *
- * ── 为什么要有它 ──
- * 本批两条需求验的都是**判据**，而不是"某个动作发生没发生"：
- * <ol>
- *   <li>"有方块遮挡的怪不能被感知到"——判据在 {@link NeutralThreatDriver#perceivable}；</li>
- *   <li>"战斗状态临时扩圈、回常态用正常范围"——判据在 {@link CombatWorkRange#radius}
- *       （由 {@code CombatWorkRangeMixin} 挂在 {@code EntityMaid.getRestrictRadius} 上）。</li>
- * </ol>
- * 两条都依赖**在线主人**（我们的威胁驱动要求主人实体在线上，专用服务器上没有玩家、
- * 结构上触发不了），所以照 实测五百四十五/六百〇八 的先例：把真场景摆出来、**调真方法**、
- * 把判据的取值打进日志，由 {@code test_target619.py} 逐条断言。
- *
- * ── 验什么（三段，每段都配一条"反向对照"）──
- * <ol>
- *   <li><b>遮挡门</b>：她正前方 2 格砌一堵 2 格高的石墙、墙后 4 格放一只锁定了她的僵尸 →
- *       {@code perceivable=false}、扫描也找不到它；<b>把墙拆掉</b> → 三个判据一起翻成
- *       true/找到它（证明判据不是恒 false）；<b>僵尸不再锁定我方</b> → 又变 false
- *       （证明判据是"锁定 + 看得见"的合取，不是"只要看得见就算威胁"）；</li>
- *   <li><b>战斗扩圈</b>：把她的圈设成 8 格（{@code restrictTo}）→ 常态半径读数 8、
- *       离圈心 10 格在圈外；**往脑里真写一条 ATTACK_TARGET**（模拟接战，走的是
- *       TLM/我们战斗链路同一条记忆）→ 半径读数变成配置的 32、10 格进圈；清掉目标 →
- *       立刻落回 8 / 圈外。顺带把 TLM 那条"半径 + 4 就传送回工位"的阈值算出来
- *       （12 → 36），test_target619.py 断言的就是这几个数；</li>
- *   <li><b>金苹果冷却读数</b>：把 {@code maid_smart_golden_apple_cd} 剩余 tick 打出来
- *       ——吃了之后必须 &gt; 0（test_apple619.py 在烧完之后读这一行）。</li>
- * </ol>
- *
- * ── 不许留痕 ──
- * 摆场景用的方块逐格记原状态、结束时复位；僵尸用完 discard；真圈心/半径、home 模式开关、
- * ATTACK_TARGET 记忆也都原样还原（自检不该改变她的任何状态）。
+ * 验什么（每段配反向对照）：① 遮挡门——正前方砌 2 格高石墙、墙后放锁定她的僵尸 → {@code perceivable=
+ * false}；拆墙 → 三判据一起翻 true（证明非恒 false）；僵尸不再锁定我方 → 又变 false（证明是"锁定 +
+ * 看得见"的合取）。② 战斗扩圈——圈设 8 格 → 常态半径 8、10 格外在圈外；往脑里真写 ATTACK_TARGET →
+ * 半径读数变配置的 32、10 格进圈；清目标 → 立刻落回 8/圈外（顺带算 TLM"半径+4 传送回工位"阈值 12→36）。
+ * ③ 金苹果冷却读数——打出 {@code maid_smart_golden_apple_cd} 剩余 tick（吃了必须 > 0）。**不许留痕**：
+ * 摆场景的方块逐格记原状态并复位、僵尸用完 discard、圈心/半径与 ATTACK_TARGET 记忆原样还原。
  */
 public final class CombatSenseCheck {
 

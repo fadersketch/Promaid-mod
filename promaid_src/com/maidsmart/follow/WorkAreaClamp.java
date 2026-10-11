@@ -35,21 +35,12 @@ public final class WorkAreaClamp {
     }
 
     /**
-     * 【实测八百一十五·罗盘优先】「干活不允许出圈」的选点闸——比 {@link #allows} 多认一条：
      * **玩家用罗盘/中键画过圈时，即使她此刻不在 home 模式（跟随中），干活的选点也被钳在这个圈里**。
-     *
      * <p>【为什么】
-     *
      * 而 TLM 的圈只在 {@code isHomeModeEnable} 为真时才生效（{@code hasRestriction} 就是它）——
      * 玩家用罗盘画好圈、但排班没开 / 她把 home 关了时，这个圈在 TLM 侧是**完全无效**的。
      * 挖矿/伐木/宰杀/农活的选点因此会跟着主人满地图跑。
-     *
-     * <p>【口径】home 模式 → 与 {@link #allows} 完全一致（TLM 自己的圈）；非 home 但存在
-     * **玩家画的圈**（{@link com.maidsmart.schedule.PlayerCircle#isPlayerCircle}）→ 钳到该圈
-     * （圈心 = {@link #playerCircleCenter}，半径 = {@link #playerCircleRadius}）；两者都不是 → 放行。
-     *
-     * <p>【只管干活】本方法只用在"任务选点"（挖矿/伐木/宰杀的目标扫描）——空闲散步/跟随/战斗
-     * 仍走 {@link #allows}（放行），不会把跟着主人的女仆拴住。
+     * <p>【口径】home 模式 → 与 {@link #allows} 完全一致（TLM 自己的圈）；非 home 但存在 **玩家画的圈**（{@link com.maidsmart.schedule.PlayerCircle#isPlayerCircle}）→ 钳到该圈 （圈心 = {@link #playerCircleCenter}，半径 = {@link #playerCircleRadius}）；两者都不是 → 放行。 <p>【只管干活】本方法只用在"任务选点"（挖矿/伐木/宰杀的目标扫描）——空闲散步/跟随/战斗 仍走 {@link #allows}（放行），不会把跟着主人的女仆拴住。
      */
     public static boolean allowsWork(EntityMaid maid, BlockPos pos) {
         try {
@@ -111,21 +102,12 @@ public final class WorkAreaClamp {
     }
 
     /**
-     * 【实测八百一十五】干活闲逛的选点圈——**比 {@link #allows} 更严**：home 模式照旧读玩家画的圈，
      * 非 home（跟随）模式改用「主人身边 / 她自己」当锚点、半径 = 排班活动半径。
-     *
      * <p>【为什么要有它】
-     *
      * 宰杀在「没活可干」时的闲逛分支（每 2 秒换一个周围 8 格的随机点）。它选点过的是
      * {@link #allows}，而这条在**跟随模式（非 home）下恒放行**——圈形同不存在，于是每 2 秒换一个
      * 方向、越走越远。{@code WorkAreaClamp#allows} 保持原口径不动（它是"目标能不能到"的通用闸，
-     * 战斗追击等也依赖它放行跟随模式）；闲逛这种"没事找事走两步"才用本方法，跟随模式下也给它一个
-     * 临时圈，让找活的范围不再无限扩张。
-     *
-     * <p>【圆心与半径】home → {@link #circleCenter}（玩家画的圈心，罗盘/工位写的锚点）+ 半径
-     * {@code maid.getRestrictRadius()}；跟随 → 主人身边（跟随语义就是待在他附近）+ 半径
-     * {@code config 排班活动半径}。锚点取不到 → 退回"她自己此刻位置"，绝不放行到无限。
-     * 开关 {@code misc.workStayInCircle}；关掉 = 与 {@link #allows} 完全一致。
+     * 战斗追击等也依赖它放行跟随模式）；闲逛这种"没事找事走两步"才用本方法，跟随模式下也给它一个 临时圈，让找活的范围不再无限扩张。 <p>【圆心与半径】home → {@link #circleCenter}（玩家画的圈心，罗盘/工位写的锚点）+ 半径 {@code maid.getRestrictRadius()}；跟随 → 主人身边（跟随语义就是待在他附近）+ 半径 {@code config 排班活动半径}。锚点取不到 → 退回"她自己此刻位置"，绝不放行到无限。 开关 {@code misc.workStayInCircle}；关掉 = 与 {@link #allows} 完全一致。
      */
     public static boolean allowsWander(EntityMaid maid, BlockPos pos) {
         try {
@@ -151,14 +133,11 @@ public final class WorkAreaClamp {
 
     /**
      * 【实测八百一十五】干活闲逛的**锚点**——闲逛选点必须围绕它取，不能围绕她自己。
-     *
      * <p>【为什么不能用"她自己"】每 2 秒在"她此刻位置周围 8 格"取随机点，等于一场**没有回复力的
      * 随机游走**：每步都可能朝同一方向多走一点，几十步下来就走出去几十格。这正是玩家看到的
      * "不停地在多个地方以极高的速度移动、似乎是在找任务目标"。把取点锚定在一个**固定点**上，
      * 她才是在这一点附近来回转，而不是一路漂走。
-     *
-     * <p>home → 玩家画的圈心（罗盘/工位锚点，{@link #circleCenter}）；跟随 → **主人**身边
-     * （跟随语义就是待在他附近），没主人时退回她自己。
+     * <p>home → 玩家画的圈心（罗盘/工位锚点，{@link #circleCenter}）；跟随 → **主人**身边 （跟随语义就是待在他附近），没主人时退回她自己。
      */
     public static BlockPos wanderAnchor(EntityMaid maid) {
         try {
@@ -270,15 +249,11 @@ public final class WorkAreaClamp {
 
     /**
      * 【实测六百九十二】这只女仆的「家」= 守家锚点（home 模式且圈心有效时返回圈心，否则 null）。
-     *
      * <p>口径就是 {@link #circleCenter}（连"排班锚点兜底"那一层一起），只是把"她此刻是不是在守家"
      * 也一起判掉——两条牵引绳（空袭 {@code MaidFlightRecall} / 扫帚 {@code MaidBroomRecall}）
      * 用它回答"该把她拉回哪儿"。
-     *
      * <p>【为什么必须有这一条】
-     *
-     * **工作区圈心**，而不是主人：主人跑多远都不该把守家女仆拽走；而"她飞太远回不来"这个原始
-     * 问题照旧解决——拉回来的是家。口径只留一处，别在两条绳里各写一遍。
+     * **工作区圈心**，而不是主人：主人跑多远都不该把守家女仆拽走；而"她飞太远回不来"这个原始 问题照旧解决——拉回来的是家。口径只留一处，别在两条绳里各写一遍。
      */
     public static BlockPos homeAnchor(EntityMaid maid) {
         try {

@@ -51,20 +51,12 @@ public final class MaidWorkTags {
             "gun_attack");
 
     /**
-     * v1.1.0：是否为攻击类任务——直接问任务对象【是不是 IAttackTask】。
-     *
      * 为什么改接口判定：整合包生态（万法皆通 / 史诗战斗 / 真正的力量等）给女仆
      * 注册的第三方攻击任务 UID 各不相同（maidspell:xxx、eftlm:xxx…），UID 名单
      * 永远枚举不全。TLM 任务体系里"攻击任务"的官方契约就是实现 IAttackTask：
      * 近战 TaskAttack 直实现；弓/弩/三叉戟/弹幕/枪械（TaskGunAttack）以及万法
      * 皆通的两个法术战斗任务走子接口 IRangedAttackTask（字节码实证 extends
-     * IAttackTask）；史诗战斗 FightModeTask 也直实现 IAttackTask——一个
-     * instanceof 全覆盖。
-     *
-     * 兜底链：任务对象接口判定 → UID path 名单（防极个别没实现接口但语义上
-     * 是战斗的任务漏网；名单内任务在原版 TLM 都实现了接口，正常走不到）。
-     * 反编译实证：IAttackTask 默认 enablePanic()=false——战斗任务不吃恐慌，
-     * 与本判定口径天然一致。
+     * IAttackTask）；史诗战斗 FightModeTask 也直实现 IAttackTask——一个 instanceof 全覆盖。 兜底链：任务对象接口判定 → UID path 名单（防极个别没实现接口但语义上 是战斗的任务漏网；名单内任务在原版 TLM 都实现了接口，正常走不到）。 反编译实证：IAttackTask 默认 enablePanic()=false——战斗任务不吃恐慌， 与本判定口径天然一致。
      */
     public static boolean isAttackTask(EntityMaid maid) {
         if (maid.getTask() == null) {
@@ -77,16 +69,12 @@ public final class MaidWorkTags {
     }
 
     /**
-     * v1.5.129：是否"非战斗干活中"——任务不属于战斗类即视为干活
      * （Promaid 挖矿/建筑/烹饪/酿造 + TLM 原生 farm/挤奶/钓鱼/剪毛/蜂蜜等
      * 全部命中；idle/跟随/战斗类不命中）。用于"干活不被打断"系列闸门
      * （吃饭/偷吃/恐慌/切班拉回），战斗女仆不受影响。
-     *
-     * v1.5.134 修复：getNamespace 是 getNamespace（返回 touhou_little_maid），
      * 与 COMBAT_UIDS（path 名）永远不匹配 → isNonCombatWork 恒 true →
      * 战斗女仆也吃"干活不打断"闸门（战斗时不吃饭/不恐慌）。改为 getPath
      * （= getPath，返回 attack/ranged_attack 等）——MaidToolAutoEquip 注释实证。
-     * v1.1.0：战斗判定升级为 isAttackTask（接口 instanceof，第三方攻击任务一并豁免）。
      */
     public static boolean isNonCombatWork(EntityMaid maid) {
         if (maid.getTask() == null) {
@@ -119,15 +107,12 @@ public final class MaidWorkTags {
     }
 
     /**
-     * v1.1.0：是否处于建造强制坐下状态（标记 + 当前任务确为建造，双保险防残留冻结）。
-     *
      * 与 WORK_STILL 的区别：WORK_STILL 由建造/烹饪/酿造【行为】在激活期间设置，
      * 行为未激活的间隙（缺料等待/找区块/暂停）会被清掉；BUILD_SIT 是【任务级】
      * 标记（tickBuildSit 每 tick 维护），覆盖建造任务的全程。玩家在建造中"解除
      * 坐下"后，TLM MaidMoveControl 会用 setDeltaMovement 直接施加速度矢量、
      * 多行为也能直连导航 moveTo——这些通道绕过 tickBuildSit 的事后清理
-     * （清 WALK_TARGET/停导航/清水平速度），出现"坐着走动"。MaidMoveSuppressMixin
-     * 与 MaidStationaryMixin 对本状态启用与 WORK_STILL 同款的移动源头锁。
+     * （清 WALK_TARGET/停导航/清水平速度），出现"坐着走动"。MaidMoveSuppressMixin 与 MaidStationaryMixin 对本状态启用与 WORK_STILL 同款的移动源头锁。
      */
     public static boolean isBuildSitting(EntityMaid maid) {
         if (!((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(BUILD_SIT_TAG)) {
@@ -141,31 +126,15 @@ public final class MaidWorkTags {
     }
     /**
      * 刷怪笼插火把·**走位所有权**标记（v1.3.0(beta) 实测六百六十四）。
-     *
      * <p>【为什么需要它】。
      * 那个「优先」在代码里原本只落在行为优先级 186 上——而 1.20.1 的 Brain 里
      * **CORE 与当前活动（WORK）是两套并发的行为表、互不阻断**：她去插火把的同时，
      * 挖矿/伐木/农活那几条驱动照样每 tick 发自己的寻路（直连 {@code moveTo}），
-     * 谁最后写谁说了算 → 她被一路按在工位上，"优先"名存实亡。
-     *
-     * <p>【怎么用】{@code MaidSpawnerTorchBehavior} 只在"有目标、正在走过去"这段时间置上它：
-     * <ul>
-     *   <li>{@code MaidMoveSuppressMixin}：清 WALK_TARGET + 取消 MoveToTargetSink
-     *       （TLM 原生任务、跟随、远程走位写的 WALK_TARGET 一律不执行）；</li>
-     *   <li>{@code SpawnerTorchNavGuardMixin}：掐掉**别的驱动**发起的直连 {@code moveTo}
-     *       （她自己的那一发走"自标记放行"的窄门）；</li>
-     *   <li>挖矿/伐木/农活驱动不必逐个改——它们的寻路在上面那面闸前就被拦下了。</li>
-     * </ul>
-     *
-     * <p>【什么时候自动让位】打架（攻击类任务）、被骑、坐着、或玩家把
-     * {@code combat.spawnerTorch.priority} 关掉时，本判据恒为 false——**战斗永远优先**，
-     * 而且行为自己在"脑里出现攻击目标"的那一 tick 就会清标记。
+     * 谁最后写谁说了算 → 她被一路按在工位上，"优先"名存实亡。 <p>【怎么用】{@code MaidSpawnerTorchBehavior} 只在"有目标、正在走过去"这段时间置上它： <ul> <li>{@code MaidMoveSuppressMixin}：清 WALK_TARGET + 取消 MoveToTargetSink （TLM 原生任务、跟随、远程走位写的 WALK_TARGET 一律不执行）；</li> <li>{@code SpawnerTorchNavGuardMixin}：掐掉**别的驱动**发起的直连 {@code moveTo} （她自己的那一发走"自标记放行"的窄门）；</li> <li>挖矿/伐木/农活驱动不必逐个改——它们的寻路在上面那面闸前就被拦下了。</li> </ul> <p>【什么时候自动让位】打架（攻击类任务）、被骑、坐着、或玩家把 {@code combat.spawnerTorch.priority} 关掉时，本判据恒为 false——**战斗永远优先**， 而且行为自己在"脑里出现攻击目标"的那一 tick 就会清标记。
      */
     public static final String SPAWNER_TORCH_TAG = "maid_smart_spawner_torch";
 
     /**
-     * 实测八百二十二：刷怪笼**拆除**·走位所有权标记。
-     *
      * <p>【为什么要与插火把分开一枚】模组刷怪笼无视光照，插火把压不住，改为**直接拆掉**。
      * 拆除期间她的走位同样必须独占（否则挖矿/伐木/战斗的直连寻路会把她从刷怪笼前拖走、
      * 一镐都刨不下去），但"拆除"是**默认行为**，不能跟着 {@code spawnerTorch.priority}

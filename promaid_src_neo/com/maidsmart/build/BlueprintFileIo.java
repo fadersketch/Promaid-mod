@@ -451,16 +451,12 @@ public final class BlueprintFileIo {
         try {
             if (".zip".equals(ext)) {
                 String zipName = p.getFileName() != null ? p.getFileName().toString() : p.toString();
-                // v1.5.312：zip 分支失败 WARN 同样只提示一次（与 .nbt 等一致），
-                // 损坏 zip 在目录里反复重扫（即使已节流到 3 秒一次）不再刷屏
-                // v1.5.222：ZIP 打包蓝图——解压 zip 内所有建筑文件
-                // （.schem/.litematic/.nbt/.snbt/.schematic/.json，跳过 .zip 防递归）
-                // 到蓝图目录，返回第一个建筑文件的解析结果；解出的子文件会被
-                // scanExternalBlueprints 各自注册（一次导入多个建筑）。
-                // 防路径穿越：只取纯文件名。
-                // v1.5.223：若 zip 是【世界存档】（含 level.dat/region/*.mca），
-                // 世界文件解压到 蓝图目录/<zip名>/ 子目录，并尝试从中提取完整建筑
-                // （以玩家最后位置为锚点解析区块）——提取成功则作为该 zip 的蓝图。
+                // ZIP 打包蓝图：解压 zip 内所有建筑文件（.schem/.litematic/.nbt/.snbt/.schematic/.json，
+                // 跳过 .zip 防递归）到蓝图目录，返回第一个建筑文件的解析结果；解出的子文件由
+                // scanExternalBlueprints 各自注册（一次导入多个建筑）。防路径穿越：只取纯文件名。
+                // 若 zip 是【世界存档】（含 level.dat/region/*.mca），世界文件解压到「蓝图目录/<zip名>/」
+                // 子目录，并尝试以玩家最后位置为锚点解析区块提取完整建筑——成功则作为该 zip 的蓝图。
+                // 失败 WARN 只提示一次（与 .nbt 等一致），损坏 zip 反复重扫时不刷屏。
                 java.nio.file.Path dir = p.getParent();
                 String zipBase = p.getFileName().toString().replaceFirst("(?i)\\.zip$", "");
                 java.nio.file.Path worldDir = null;

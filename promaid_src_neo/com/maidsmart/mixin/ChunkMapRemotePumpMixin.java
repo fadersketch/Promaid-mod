@@ -12,9 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.3.5 实测六百六十：远程开界面的「同步泵」——每 tick 一次，把该同步给某个玩家的女仆补上，
  * 同步真落地了才替玩家把界面开出来。（本文件是 neo / 1.21.1 树；forge 版见同名文件。）
- *
  * ── 为什么泵要挂在 ChunkMap 自己的 tick 上 ──
  * 两个原因，缺一不可：
  * <ol>
@@ -26,19 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *       必须是前者先到，否则客户端按实体 id 找她找不着，打开的就是个残界面
  *       （字节码实证：{@code AbstractMaidContainer} 构造里 {@code level.getEntity(int)}
  *       + {@code cast EntityMaid}，「玩家背包那一片槽位」只在 {@code maid != null} 时才建）。
- *       在同一个方法里「先强制配对、再把界面开出来」，两条包走同一条连接、同一次 tick 内按序发出
- *       ——TCP 有序，客户端按序处理，不存在抢跑。</li>
- * </ol>
- * 【tick 归属实证】neo 树：{@code ChunkMap.tick()} 由
- * {@code ServerChunkCache.tick(BooleanSupplier, boolean)} 直接调用（javap：两处 invokevirtual
- * 都指向 {@code ChunkMap.tick:()V}），每 tick 一次；forge 树是
- * {@code ServerChunkCache.m_201698_(…)} → {@code m_8490_()} → {@code ChunkMap.m_140421_()}。
- *
- * <p>开销：{@code RemoteMaidGui.pump} 第一行就是"没有登记就直接返回"，
- * 平时（没人点远程开界面）这里是零成本；真开着的时候也只有那几对要处理。
- *
- * 【映射】本树 {@code tick / level / entityMap}，forge 树 {@code m_140421_ / f_140133_ / f_140150_}
- * ——两版 jar 里 javap 逐个核对过。
+ *       在同一个方法里「先强制配对、再把界面开出来」，两条包走同一条连接、同一次 tick 内按序发出 ——TCP 有序，客户端按序处理，不存在抢跑。</li> </ol> 【tick 归属实证】neo 树：{@code ChunkMap.tick()} 由 {@code ServerChunkCache.tick(BooleanSupplier, boolean)} 直接调用（javap：两处 invokevirtual 都指向 {@code ChunkMap.tick:()V}），每 tick 一次；forge 树是 {@code ServerChunkCache.m_201698_(…)} → {@code m_8490_()} → {@code ChunkMap.m_140421_()}。 <p>开销：{@code RemoteMaidGui.pump} 第一行就是"没有登记就直接返回"， 平时（没人点远程开界面）这里是零成本；真开着的时候也只有那几对要处理。 【映射】本树 {@code tick / level / entityMap}，forge 树 {@code m_140421_ / f_140133_ / f_140150_} ——两版 jar 里 javap 逐个核对过。
  */
 @Mixin(ChunkMap.class)
 public abstract class ChunkMapRemotePumpMixin {

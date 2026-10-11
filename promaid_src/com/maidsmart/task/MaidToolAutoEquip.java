@@ -17,7 +17,6 @@ import java.util.function.Predicate;
 
 /**
  * 任务工具自动装备（v1.5.90）。
- *
  * 把"挖矿自动装备镐子"的机制推广到原 mod 的全部战斗任务：女仆主手没有当前
  * 任务需要的工具时，自动从背包（getMaidInv）换到主手：
  * - maid_smart:mine（挖矿）→ 镐（挑等级最高的一把：钻石 &gt; 铁 &gt; 石 &gt; 木/金）
@@ -25,7 +24,6 @@ import java.util.function.Predicate;
  * - touhou_little_maid:ranged_attack（弓）→ 弓
  * - touhou_little_maid:crossbow_attack（弩）→ 弩
  * - touhou_little_maid:trident_attack（三叉戟）→ 三叉戟
- *
  * 【关键修复】v1.5.89 旧版 equipPickaxe 把镐写进了错误的位置：getMaidInv() 是
  * 36 格背包（MaidBackpackHandler），不是主手！女仆的主手/副手是独立的
  * getHandsInvWrapper()（Forge EntityHandsInvWrapper，slot 0 = 主手）。旧版把镐
@@ -125,8 +123,7 @@ public final class MaidToolAutoEquip {
                         // tryEquipFromBackpack，装不上 → MISSING_REQUIRED_ITEM）——排班
                         // 直接 setTask、背包装剪刀后再切任务等路径全漏掉，表现为"剪刀
                         // 模式不拿背包里的剪刀"。补每 tick 词条（与挖矿"保证主手有镐"
-                        // 同构）：主手能剪（forge:shears 标签）→ 不换；不能 → 从背包挑
-                        // 一把。评分走武器评分——剪刀无攻击力自动落到 附魔>耐久 段。
+                        // 同构）：主手能剪（forge:shears 标签）→ 不换；不能 → 从背包挑 一把。评分走武器评分——剪刀无攻击力自动落到 附魔>耐久 段。
                         need = MaidToolAutoEquip::isShearsLike;
                         scorer = MaidToolAutoEquip::weaponScore;
                     }
@@ -136,43 +133,13 @@ public final class MaidToolAutoEquip {
                 }
             } else if (com.maidsmart.combat.MaidSpellCompat.isSpellTask(maid)) {
                 // v1.2.0 实测五百五十九 → v1.2.4 实测六百三十二【法术任务下完全不动主手】。
-                //
                 // 【五百五十九当时改了什么】万法皆通的两个法术任务（近战法术/远程法术）
                 // isWeapon **恒 true**（javap 实证: 方法体只有 iconst_1; ireturn）——走"任务自带
                 // 判据"对我们等于"万物皆武器"，旧路径会把背包里最高 DPS 的冷兵器（剑/斧）塞进
                 // 法术模式的主手。当时收紧为两条：① 她得**真的带着法术装备**才开放切换；
                 // ② 换也只换**法术装备**（附属 provider 认的法术书/法器）。
-                //
                 // 【六百三十二：② 这一条本身就是干涉】反馈原文：「法术战斗模式会把诡厄巫法的
-                // 聚晶袋当作主武器，把剑放主手他会自己换成聚晶袋」。聚晶袋（Goety `FocusBag`）
-                // 正是附属 `GoetyProvider` 认的"法术书"（反编译实证：`isSpellBook = item
-                // instanceof FocusBag`）——于是"只换法术装备"落到 Goety 上就是"每 tick 把玩家的
-                // 剑换成袋子"。为什么这只有坏处：
-                //   ① 施法**不需要**她主手拿东西：Goety 走附属自己的数据
-                //      （`MaidGoetySpellData.getSpellBook()/getCurrentStaff()/getCurrentFocus()`）
-                //      + `FocusBagItemHandler` 读袋内容，法杖由 `findSpellStaff` 扫
-                //      `maid.getAvailableInv(true)` 得到，附属还有 `WandUtilMixin` 把 Goety 的
-                //      `findWand/findFocus` 直接替换成她数据里那两件；ISS 那条我们更早就实证
-                //      "不看主手"（法术书放饰品栏照样放）。⇒ 把袋子塞进主手是**零收益**动作。
-                //   ② 主手却是"近战那一半"的伤害来源：`SimplifiedSpellCaster.executeCombat`
-                //      （近战法术任务每 tick 的入口）施法之后紧跟着 `doHurtTarget` +
-                //      `swing(MAIN_HAND)`——主手拿什么就打什么伤害。换成聚晶袋 = 她的近战掉到
-                //      拳头级，玩家放剑的意图被每 tick 抹掉。
-                //   ③ 主手还是某些 provider 的**施法前提**：`SlashBladeProvider
-                //      .processContinuousCasting` 取 `maid.getMainHandItem()`，不是拔刀剑就直接
-                //      return（现场日志 "continuous aborted: mainHand is not slashblade"），
-                //      `initiateCasting` 也拿主手那把刀做连段。而拔刀剑默认在
-                //      `combat.spellGearIgnore` 里 → 它不符合我们的"法术装备"词条 → 只要她背包里
-                //      还有**别的** provider 的装备，我们就会把刀从她手里换走 → 附属吟唱当场断。
-                //   ④ 附属从不写她的手：整个 jar `setItemInHand` 零引用，只有 4 处**读**主手
-                //      （SlashBladeProvider ×3、SimplifiedSpellCaster ×1）——"主手拿什么"是玩家
-                //      与附属的事，不是我们的。
-                //
-                // 【所以】法术任务下本方法一律返回 false：不换武器、也不介入她的换装节奏。
-                // 这个分支**必须显式留着**——法术任务实现了 `IAttackTask`（`IRangedAttackTask`），
-                // 少了它就会落到下面的"模组战斗任务"分支，走附属恒真的 `isWeapon` → 又变成
-                // "万物皆武器"（五百五十九 之前的老毛病）。`maidHasSpells` 仍由自主参战闸门
-                // （`AutoCombatPools`）使用，不因本条失去消费者。
+                // 聚晶袋当作主武器，把剑放主手他会自己换成聚晶袋」。聚晶袋（Goety `FocusBag`） 正是附属 `GoetyProvider` 认的"法术书"（反编译实证：`isSpellBook = item instanceof FocusBag`）——于是"只换法术装备"落到 Goety 上就是"每 tick 把玩家的 剑换成袋子"。为什么这只有坏处： ① 施法**不需要**她主手拿东西：Goety 走附属自己的数据 （`MaidGoetySpellData.getSpellBook()/getCurrentStaff()/getCurrentFocus()`） + `FocusBagItemHandler` 读袋内容，法杖由 `findSpellStaff` 扫 `maid.getAvailableInv(true)` 得到，附属还有 `WandUtilMixin` 把 Goety 的 `findWand/findFocus` 直接替换成她数据里那两件；ISS 那条我们更早就实证 "不看主手"（法术书放饰品栏照样放）。⇒ 把袋子塞进主手是**零收益**动作。 ② 主手却是"近战那一半"的伤害来源：`SimplifiedSpellCaster.executeCombat` （近战法术任务每 tick 的入口）施法之后紧跟着 `doHurtTarget` + `swing(MAIN_HAND)`——主手拿什么就打什么伤害。换成聚晶袋 = 她的近战掉到 拳头级，玩家放剑的意图被每 tick 抹掉。 ③ 主手还是某些 provider 的**施法前提**：`SlashBladeProvider .processContinuousCasting` 取 `maid.getMainHandItem()`，不是拔刀剑就直接 return（现场日志 "continuous aborted: mainHand is not slashblade"）， `initiateCasting` 也拿主手那把刀做连段。而拔刀剑默认在 `combat.spellGearIgnore` 里 → 它不符合我们的"法术装备"词条 → 只要她背包里 还有**别的** provider 的装备，我们就会把刀从她手里换走 → 附属吟唱当场断。 ④ 附属从不写她的手：整个 jar `setItemInHand` 零引用，只有 4 处**读**主手 （SlashBladeProvider ×3、SimplifiedSpellCaster ×1）——"主手拿什么"是玩家 与附属的事，不是我们的。 【所以】法术任务下本方法一律返回 false：不换武器、也不介入她的换装节奏。 这个分支**必须显式留着**——法术任务实现了 `IAttackTask`（`IRangedAttackTask`）， 少了它就会落到下面的"模组战斗任务"分支，走附属恒真的 `isWeapon` → 又变成 "万物皆武器"（五百五十九 之前的老毛病）。`maidHasSpells` 仍由自主参战闸门 （`AutoCombatPools`）使用，不因本条失去消费者。
                 return false;
             } else {
                 // v1.1.0 实测一百零三：模组战斗任务（拔刀剑/slashblade/ef_tlm/truepower
@@ -211,14 +178,9 @@ public final class MaidToolAutoEquip {
     }
 
     /** 交换工具：主手原物品放回背包腾出的那格，工具换到主手。
-     *  v1.5.102d：主手已有工具但背包里有【更高级】的同种工具时也会换——
-     *  旧版主手是镐就直接 return，导致"石镐装备着、背包里有钻石镐"时遇到
      *  钻石矿直接报"需要钻石镐"而不换装（反馈）
-     *  v1.5.167：评分按任务传入（scorer）——战斗按武器评分（DPS>耐久>附魔），
      *  挖矿按镐评分（耐久>附魔），彻底分离，互不干扰。
-     *  v1.5.168：评分层级调整为 附魔 > 耐久；背包扫描跳过即将用坏的物品
      *  （黑名单保护——剩余耐久 ≤10% 不切换，耐久恢复自动解除）。
-     *  v1.5.169：主手即将用坏 → curScore 视为零分（强制让位给背包可用品）；
      *  背包无合格品时保持现状继续用。 */
     private static boolean equip(EntityMaid maid, Predicate<ItemStack> need,
                                  java.util.function.ToLongFunction<ItemStack> scorer) {
@@ -261,18 +223,12 @@ public final class MaidToolAutoEquip {
     }
 
     /**
-     * v1.5.107：挖矿【按需换镐】——先判目标矿，再按手中镐等级决定是否切换：
      * - 手中镐能挖目标矿且未即将用坏 → 零开销不换（不再无条件切背包最高级镐）——
      *   人工调整不造成影响：玩家亲手放的镐（高耐久/高附魔/高等级都行）
      *   只要能挖目标矿就绝不触发女仆切换
      * - 手中镐能挖但【即将用坏】（≤10%）→ 自动从背包装备下一把能挖的
      * - 手中镐挖不动 → 从背包装备一把【能挖目标】的镐，评分 = 挖掘等级对标
-     *   （最低够用的镐最"贴近"该矿物，最高优先）> 附魔词条数 > 剩余耐久；
-     *   即将用坏的镐由黑名单保护直接跳过
-     * - 手 + 背包都没有能挖的镐 → 返回 false（调用方播报"需要更高镐"）
-     * v1.5.168：例——10 把石镐 + 1 把铁镐挖铁矿 → 石镐（tier 1 恰好对标铁矿）
-     * 优先于铁镐（tier 2 多出 1 级）；其中附魔的石镐再优先；附魔石镐若只剩
-     * 1 点耐久 → 黑名单跳过，换下一把。
+     *   （最低够用的镐最"贴近"该矿物，最高优先）> 附魔词条数 > 剩余耐久； 即将用坏的镐由黑名单保护直接跳过 - 手 + 背包都没有能挖的镐 → 返回 false（调用方播报"需要更高镐"） 优先于铁镐（tier 2 多出 1 级）；其中附魔的石镐再优先；附魔石镐若只剩 1 点耐久 → 黑名单跳过，换下一把。
      */
     public static boolean ensureForTarget(EntityMaid maid, BlockState target) {
         IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
@@ -530,21 +486,12 @@ public final class MaidToolAutoEquip {
     }
 
     /**
-     * v1.5.167：武器评分（战斗任务通用）——严格分层：
      *   ① DPS（最终结算后；算不出 DPS 则用 DPH）② 附魔词条数 ③ 剩余耐久。
      * - DPS = 最终伤害 × 攻速：
      *   最终伤害 = 空手基础 1 + 攻击力属性修饰符 + 附魔最终结算（锋利
      *   1+0.5×(级-1)；亡灵杀手/节肢杀手 2.5×级，三者取最大；火焰附加
      *   4×级 总伤害——1.20.1 原版附魔公式）；
-     *   攻速 = 4.0 基础 + 攻速属性修饰符（剑 1.6、斧 1.0、三叉戟 1.1 等）。
-     * - 算不出 DPS（无攻击力属性修饰符——弓/弩/纯工具）→ 退化为 DPH：
-     *   DPH 同样拿不到 → 0 分段，同白名单内全部 0 分 → 落到附魔/耐久比。
-     *   弓弩伤害取决于箭矢与蓄力，无法从武器本身结算，按附魔/耐久择优合理。
-     * - 附魔 = 词条数目；耐久 = 剩余耐久比例（无限耐久物品按满 1.0）。
-     *   v1.5.168：附魔 > 耐久（玩家推翻——即将用坏由黑名单保护兜底，
-     *   10% 以上的耐久差异不再压过附魔）。
-     * 分层权重：DPS 段 ×1e6（0.001 DPS = 1000 分），附魔段 ×1e4（1 词条 = 1 万分），
-     * 耐久段 ×1（千分比）——任意 DPS 差 > 任意附魔差 > 任意耐久差。
+     *   攻速 = 4.0 基础 + 攻速属性修饰符（剑 1.6、斧 1.0、三叉戟 1.1 等）。 - 算不出 DPS（无攻击力属性修饰符——弓/弩/纯工具）→ 退化为 DPH： DPH 同样拿不到 → 0 分段，同白名单内全部 0 分 → 落到附魔/耐久比。 弓弩伤害取决于箭矢与蓄力，无法从武器本身结算，按附魔/耐久择优合理。 - 附魔 = 词条数目；耐久 = 剩余耐久比例（无限耐久物品按满 1.0）。 10% 以上的耐久差异不再压过附魔）。 分层权重：DPS 段 ×1e6（0.001 DPS = 1000 分），附魔段 ×1e4（1 词条 = 1 万分）， 耐久段 ×1（千分比）——任意 DPS 差 > 任意附魔差 > 任意耐久差。
      */
     private static long weaponScore(ItemStack stack) {
         if (stack.m_41619_()) {
@@ -585,7 +532,6 @@ public final class MaidToolAutoEquip {
     }
 
     /**
-     * v1.5.168：镐评分（有目标矿的对标场景，ensureForTarget 用）——严格分层：
      *   ① 挖掘等级对标：在能挖目标矿的镐里，等级【最低】的最"贴近"该矿物
      *      （恰好够用优先，不浪费高级镐）——例：铁矿前 10 把石镐（tier 1 恰好
      *      对标）+ 1 把铁镐（tier 2 多出 1 级）→ 优先石镐
@@ -779,15 +725,12 @@ public final class MaidToolAutoEquip {
     }
 
     /**
-     * v1.5.142：战斗状态自动装备副手盾牌。
      * - 只在战斗任务（攻击/弓/弩/三叉戟/弹幕）下生效
      * - 副手【空手】时才从背包装盾——副手已有任何非盾物品（包括 mod 的副手
      *   装备）一律不动，尊重玩家/模组的副手搭配
      * - v1.5.169：与主手武器同一规则——副手已装备的盾【即将用坏】（剩余耐久
      *   ≤10%）→ 自动从背包装备下一把；未快坏 → 不触发切换
-     * - 盾牌爆掉后副手变空 → 下个 tick 自动补新盾（与换武器同一轮询节奏）
-     * - 背包扫描统一走黑名单保护（快坏的盾不装）+ 评分 附魔词条数 > 剩余耐久
-     * - 无盾/背包无可用盾 → 零开销返回
+     * - 盾牌爆掉后副手变空 → 下个 tick 自动补新盾（与换武器同一轮询节奏） - 背包扫描统一走黑名单保护（快坏的盾不装）+ 评分 附魔词条数 > 剩余耐久 - 无盾/背包无可用盾 → 零开销返回
      */
     public static void ensureShieldForCombat(EntityMaid maid) {
         try {

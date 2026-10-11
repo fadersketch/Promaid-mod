@@ -10,51 +10,19 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * v1.2.0 实测五百四十七【空袭牵引绳】：空袭期间，以女仆为圆心、半径 N 格（默认 100，可配）
- * 的球内找不到**主人** → 立刻把她传送回主人身边（等效排班表的那次人工传送）。
+ * 空袭牵引绳：空袭期间，以女仆为圆心、半径 N 格（默认 100，可配）的球内找不到**主人** → 立刻把她传送
+ * 回主人身边（等效排班表那次人工传送）。防"飞太高把目标打死后自己回不来"。
  *
- * 需求原文："空袭期间加个机制，如果以自身为圆心，半径100格范围内没有发现主人。
- * 立即执行一次传送到主人身边（等效拿排班表的传送）。防止女仆飞太高把目标打死后，
- * 自己回不来。"
- *
- * 【为什么非要单独做这一条】现有三条"远距拉回"链路全都主动放行空袭：
- * <ul>
- *   <li>{@code MaidChunkLoadManager.trySameDimPull}（同维度远距，默认 48 格）：一见
- *       {@link MaidFlightKit#isFlightAirborne} 就 return——那一条是实测四百八十七 为
- *       "别打断扑击"加的，本身没错，副作用却是"一轮打完还挂在空中时也没人管"；</li>
- *   <li>{@code followIfCrossDimension}（跨维度跟随）：滑翔中同样不传（猛击落地后自然恢复）；</li>
- *   <li>TLM 原版的 {@code teleportToOwner}：被 {@code MaidTeleportPreserveMixin} 在
- *       滑翔/飞行作战空中时直接拦掉。</li>
- * </ul>
- * 于是"放烟花冲上天 → 打完目标 → 主人早已不在脚下"这条路径上谁都不拉她，她只能一路
- * 滑翔到落地，落点可能在几百格外的山头上——用户报的"自己回不来"正是这个。
- *
- * 【生效口径】只在"她确实在空中"（{@code !onGround}）时生效：
- * <ul>
- *   <li>空中 = 空袭正在进行，这正是本条要管的窗口。地面上的距离问题交给
- *       {@code trySameDimPull}（48 格，且守家/坐姿/骑乘/干活都有豁免）那套更保守的规则，
- *       不在这里抢——否则"主人出门 100 格、空袭女仆守家站着不动"会被无条件拽走；</li>
- *   <li><b>【实测七百三十七】守家（home 模式）时这条绳**整条不生效**</b>：
- *
- *       「home 模式下空袭牵引绳不再生效」。守家的语义是"把她停在岗位上"——她自己那条守家回圈
- *       （TLM {@code SchedulePos.tick}，每 2 秒一次）才是正解，这条绳再插一脚就是两股力打架。
- *       所以 home 模式直接返回；非 home 的女仆口径不变（飞太远就拉回主人）。
- *       旧版（实测六百九十二）曾把守家的参照点/落点换成工作区圈心，本版随这道闸一起退场;</li>
- *   <li>主人跨维度时不抢：那一路上有 {@code followIfCrossDimension}（本轮攻击结束即传），
- *       在这里立刻抢会重演实测四百八十七"猛击被传送打断"的老问题。</li>
- * </ul>
- *
- * 【距离口径】3D 距离（水平 + 竖直一起算）。所以"飞太高"本身就会触发：她爬到主人上方
- * 100 格以上时，主人仍在她的球外——那正是"飞太高回不来"的字面含义。
- *
- * 【落点】与排班表的人工传送同一条链路：{@code recallFromFlight} →
- * {@code teleportCore(force = true)} / {@code standSpotAt}——强制（参照点边找不到可站立格
- * 就直接落在参照点所在格）+ 无视地块 + 可空中。
- *
- * 【调用点】挂在 {@code MaidToolAutoEquipBehavior.checkExtraStartConditions} 的飞行任务
- * 分支（core 行为，任何 activity、每 tick 一次）。挂那里的另一个好处：本模组给所有有主
- * 活动女仆挂了 2 级强制加载票（= 实体正常 ticking），所以哪怕她离主人几百格、区块早已
- * 出了模拟距离，她的 brain 照样在跑——这条牵引绳才真的"立即"。
+ * 【为什么非要单做】现有三条"远距拉回"链路全主动放行空袭：{@code trySameDimPull}（同维度远距 48 格）
+ * 一见 {@link MaidFlightKit#isFlightAirborne} 就 return；{@code followIfCrossDimension} 滑翔中不传；
+ * TLM 的 {@code teleportToOwner} 被 {@code MaidTeleportPreserveMixin} 在滑翔/作战空中拦掉。于是"放
+ * 烟花冲上天→打完目标→主人早已不在脚下"这条路径上谁都不拉她，落点可能在几百格外的山头。
+ * 【生效口径】只在"{@code !onGround}"时生效（空中=空袭正在进行，正是本条要管的窗口；地面距离交给
+ * trySameDimPull 那套更保守的规则）。**守家（home）时这条绳整条不生效**——守家语义是"把她停在岗位上"，
+ * 她自己那条守家回圈才是正解，本绳再插一脚就是两股力打架（旧版曾把守家参照点换成工作区圈心，本版随
+ * 这道闸退场）。主人跨维度时不抢（那一路上有 followIfCrossDimension）。【距离按 3D 算】"飞太高"就触发；
+ * 【落点】同排班表人工传送（强制 + 无视地块 + 可空中）；【调用点】{@code MaidToolAutoEquipBehavior
+ * .checkExtraStartConditions} 飞行分支（core 行为每 tick 一次；有主活动女仆挂强制加载票，所以 brain 照跑）。
  */
 public final class MaidFlightRecall {
     /** 传送失败（主人实体不在已加载世界 / 维度异常）后的重试间隔（tick）——防每 tick 硬撞 */

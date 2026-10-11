@@ -11,12 +11,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 实测八百一十二【滑翔动画自动兜底】：「滑翔时用鞘翅动画」这个开关**只对该模型真有
  * {@code elytra_fly} 动画时才生效**，模型没做这条动画就自动退回游泳动作。
- *
  * <p>【为什么必须兜底（玩家实测现场）】
- *
- *
  * <p>根因不在姿势代码，而在**配置与模型不匹配**：玩家的 {@code promaid-common.toml} 里
  * {@code glideElytraAnimation = true}（该开关源码默认 {@code false}），而他的模型包里
  * **一条 {@code elytra_fly} 都没有**（扫遍 63 个动画 json，命中 0；全盘扫描同样为 0）。
@@ -27,31 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *       ——取不到，模型于是**掉回绑定姿势**（各骨骼零旋转）；</li>
  *   <li>而背后展翅与「跟随俯角的前倾」照旧生效（它们只看 {@code isFlightVisual}，
  *       与这个开关无关），俯冲时前倾可达 70 度。</li>
- * </ol>
- * 三层叠在一起，就是玩家看到的"半立着、又被硬掰了一个俯角、还背着展翅"的破碎姿势。
- * 这也解释了为什么 实测八百一十一 改姿势判据毫无作用——他的配置**根本走不进**那一支。
- *
- * <p>【兜底口径】滑翔动画的二选一从「开关开着就用鞘翅动画」改成
- * 「开关开着 **且这个模型真有这条动画** 才用鞘翅动画，否则用游泳动作」。判据取自 TLM
- * 自己的动画表（{@code GeckoLibCache.getAnimations()}），**与 TLM 取动画是同一张表、
- * 同一个键**——我们说是"有"，TLM 就一定取得出；说"没有"就绝不会去取。
- *
- * <p>【为什么键取 {@code getModelId()}}】TLM 的
- * {@code GeckoMaidEntity.getAnimationFileLocation()} 就是拿模型 id 去这张表里查
- * （字节码实证）。模型 id 走 {@code DATA_MODEL_ID} 同步，客户端一定拿得到。
- * **查不到 = 不是 Gecko 模型**（Bedrock 模型不在 gecko 动画表里），而 {@code elytra_fly}
- * 这个状态本来就只注册在 Gecko 的 {@code AnimationRegister} 上、Bedrock 那条链永远走不到它
- * ——所以"查不到"时返回"没有"正是我们要的答案，Bedrock 模型也会正确地退回游泳动作。
- *
- * <p>【为什么不做缓存】查询是「一次 field 读 + 两次 HashMap 查」，比同一个谓词里已有的
- * 工作量小得多；而不缓存就没有"资源包重载后答案过期"的隐患。
- *
- * <p>【服务端安全】本类引用的是客户端类，所以**每个入口都先看 {@code level().isClientSide()}**，
- * 外加 {@code catch (Throwable)} 双保险——专用服务器上这个分支一次都不会执行，
- * 相关的类也就永远不会被加载（JVM 惰性解析），不会把客户端类拖到服务端。
- *
- * <p>本类两树各一份：仅 {@code ResourceLocation} 的取法不同（Neo 树 {@code tryParse}，
- * 1.20.1 没有那个方法、照 {@code ToolKit.rl} 的手写解析）。
+ * </ol> 三层叠在一起，就是玩家看到的"半立着、又被硬掰了一个俯角、还背着展翅"的破碎姿势。 这也解释了为什么 实测八百一十一 改姿势判据毫无作用——他的配置**根本走不进**那一支。 <p>【兜底口径】滑翔动画的二选一从「开关开着就用鞘翅动画」改成 「开关开着 **且这个模型真有这条动画** 才用鞘翅动画，否则用游泳动作」。判据取自 TLM 自己的动画表（{@code GeckoLibCache.getAnimations()}），**与 TLM 取动画是同一张表、 同一个键**——我们说是"有"，TLM 就一定取得出；说"没有"就绝不会去取。 <p>【为什么键取 {@code getModelId()}}】TLM 的 {@code GeckoMaidEntity.getAnimationFileLocation()} 就是拿模型 id 去这张表里查 （字节码实证）。模型 id 走 {@code DATA_MODEL_ID} 同步，客户端一定拿得到。 **查不到 = 不是 Gecko 模型**（Bedrock 模型不在 gecko 动画表里），而 {@code elytra_fly} 这个状态本来就只注册在 Gecko 的 {@code AnimationRegister} 上、Bedrock 那条链永远走不到它 ——所以"查不到"时返回"没有"正是我们要的答案，Bedrock 模型也会正确地退回游泳动作。 <p>【为什么不做缓存】查询是「一次 field 读 + 两次 HashMap 查」，比同一个谓词里已有的 工作量小得多；而不缓存就没有"资源包重载后答案过期"的隐患。 <p>【服务端安全】本类引用的是客户端类，所以**每个入口都先看 {@code level().isClientSide()}**， 外加 {@code catch (Throwable)} 双保险——专用服务器上这个分支一次都不会执行， 相关的类也就永远不会被加载（JVM 惰性解析），不会把客户端类拖到服务端。 <p>本类两树各一份：仅 {@code ResourceLocation} 的取法不同（Neo 树 {@code tryParse}， 1.20.1 没有那个方法、照 {@code ToolKit.rl} 的手写解析）。
  */
 public final class MaidGlideAnimSupport {
 

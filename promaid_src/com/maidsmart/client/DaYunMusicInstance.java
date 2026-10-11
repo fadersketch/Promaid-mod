@@ -39,14 +39,11 @@ public class DaYunMusicInstance extends EntityBoundSoundInstance {
     }
 
     /**
-     * 允许"以 0 音量起播"。
-     *
-     * <p>不这样的话，一条"一出生就该被压住"的 BGM（比如自己正在响、别人又开始了）会被引擎
-     * 直接跳过、压根不建声道，之后想放开也就没东西可放了。
-     *
-     * <p>【SRG 名】1.20.1 {@code SoundInstance} 里默认返回 {@code false} 的那个就是
+     * 允许"以 0 音量起播"。否则一条"一出生就该被压住"的 BGM（比如自己正在响、别人又开始了）会被引擎
+     * 直接跳过、压根不建声道，之后想放开也没东西可放。
+     * 【SRG 名】1.20.1 {@code SoundInstance} 里默认返回 {@code false} 的那个就是
      * {@code canStartSilent()} = {@code m_7784_}（另有一个默认 {@code true} 的是
-     * {@code canPlaySound()} = {@code m_7767_}，别弄反——javap 实证两个默认值）。
+     * {@code canPlaySound()} = {@code m_7767_}，别弄反）。
      */
     @Override
     public boolean m_7784_() {

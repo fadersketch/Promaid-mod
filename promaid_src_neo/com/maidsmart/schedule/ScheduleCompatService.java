@@ -9,21 +9,17 @@ import java.util.Map;
 /**
  * 排班任务兼容分类（v1.1.0 实测一百七十六，移植 TLM-Sincerely AutoWorkCompatService
  * 的精简版——去掉检测器依赖，只保留"这个任务能不能被自动切换"的分类）。
- *
  * 背景：排班是"时间驱动"的自动切换（日程表段写什么就切什么），不像 TLM-Sincerely
  * 那样按环境检测从预设里挑。兼容分类的作用是防【已知会出问题的任务】被自动切过去
  * （反馈："其他附属的工作模式也需要做兼容"）——附魔任务/需要玩家交互的任务/纯 UI
  * 任务等 setTask 后不会干活甚至卡 AI，逐个注册进 BLOCKED/UNSUPPORTED 表即可。
- *
  * 分类语义（纯时间口径）：
  * - SUPPORTED：已知可自动切换的正常工作任务（本模组 + TLM 原生工作任务）——放行。
  * - FALLBACK：未知任务——放行（明确写进日程表就必须切），仅记录到运行日志。
  * - UNSUPPORTED：已知"切了也不会正常干活"的任务——警告但照常切（时间驱动语义：
  *   玩家指定了就得切，日志提醒可考虑换任务）。
  * - BLOCKED：已知绝对不应自动切换的任务（切了会卡 AI/报错）——soft fail，不切。
- *
- * 扩展点：注册表（UID 精确 + 命名空间前缀），后续附属任务按需 addBlocked/addUnsupported
- * 即可，无需改调度器。
+ * 扩展点：注册表（UID 精确 + 命名空间前缀），后续附属任务按需 addBlocked/addUnsupported 即可，无需改调度器。
  */
 public final class ScheduleCompatService {
     public enum Classification {

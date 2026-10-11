@@ -10,52 +10,17 @@ import java.util.List;
 /**
  * 《车万女仆：万法皆通》（Touhou Little Maid: Spell，modid = touhou_little_maid_spell，
  * 作者 yimeng261）的**软兼容层**——让女仆在空袭过程中顺带释放法术。
- *
  * 【为什么走反射，不编译期依赖】本模组的既定口径是"只保留通用武器联动、不做第三方专属
  * 硬联动"（见 CHANGELOG 里删软联动那两条），已有先例 {@link GunCompat}（枪械）、
  * {@link SlashBladeCompat}（拔刀剑）都是"能调就调、调不到就当没有"。法术模组同理：
  * 没装 / 换版本 / 内部改名都不该让 Promaid 起不来。
- *
  * 【法术模组的施法链路（社区 1.8.4-neoforge 源码级实证）】
  * <pre>
  *   {任务行为}.tick → SpellBookManager#castSpell(EntityMaid)          ← 我们接的就是这一层
  *        → ISpellBookProvider#castSpell(maid)
  *        → IronsSpellbooksProvider.initiateCasting → actualCasting
  *              forceLookAtTarget → setupSpellTargetData → checkPreCastConditions
- *              → magicData.initiateCast(...) → onServerPreCast → setCasting(true)
- * </pre>
- * 我们反射调用的六个方法全部是**公开 API**：
- * {@code SpellBookManager#getOrCreateManager(EntityMaid)} / {@code #getProviders()} /
- * {@code #stopAllCasting()}；{@code ISpellBookProvider#setTarget(EntityMaid, LivingEntity)} /
- * {@code #castSpell(EntityMaid)} / {@code #isCasting(EntityMaid)}。
- * {@code castSpell} 的内部口径：**先滤掉冷却中与黑名单里的法术，再从剩下的里随机挑一个**
- * ——没有距离判定，所以"施法距离"这一道闸必须由调用方自己把关。
- * 续施法（吟唱推进 / 连续施法 / 冷却恢复）**不依赖任务**：法术模组自己挂在 TLM 的
- * {@code MaidTickEvent} 上每 tick 调 {@code SpellBookManager#tick()}，
- * 所以"她的任务是不是法术任务"对施法链路没有影响——我们在自己的空袭任务里调
- * {@code castSpell} 是完整合法用法。
- *
- * 【已实证的三条关键事实】
- * <ol>
- *   <li>**空中无门槛**：整个施法链路没有任何 isFallFlying / onGround / isPassenger
- *       判定——鞘翅滑翔中照样能放；</li>
- *   <li>**不看主手**：ISS 路径只要求女仆身上（背包 / curios 饰品栏 / 主手任一）有
- *       {@code ISpellContainer.isSpellContainer(item)} 为真的物品，法术书放在**饰品栏**
- *       完全没问题（这也是需求方的口径：法术书不是武器、不进武器位）；</li>
- *   <li>**没有法力**：女仆走的是自有 MagicData(false)，ISS 的查蓝与扣蓝都不在这条
- *       链路上；她只剩"法术冷却 + 黑名单"两道闸。</li>
- * </ol>
- *
- * 【我们负责什么、不负责什么】
- * - 不负责：选哪个法术（法术模组从她所有法术书里随机挑一个不在冷却、不在黑名单的）、
- *   吟唱推进、冷却计时、目标数据——全交给它；
- * - 负责：**什么时候发起一次施法**（空袭的相位 + 间隔 + 距离），以及把当前空袭目标
- *   同步给法术模组（{@code setTarget}，它的朝向钉定与目标数据都读这份数据）。
- *
- * 【一个必须知道的副作用】法术模组在吟唱期间**每 tick** 把女仆的朝向拧向目标。
- * 原版鞘翅滑翔的转向力来自视线方向，而 TLM 的 MaidTickEvent 早于 brain tick 发出，
- * 所以**吟唱期间我们的盘旋/爬升朝向会被它覆盖**。空袭这边因此只在"本来就该面向目标"
- * 的相位发起施法（见 {@link MaidFlightCombatBehavior#tryCastSpell}），把这份副作用压到最小。
+ *              → magicData.initiateCast(...) → onServerPreCast → setCasting(true) </pre> 我们反射调用的六个方法全部是**公开 API**： {@code SpellBookManager#getOrCreateManager(EntityMaid)} / {@code #getProviders()} / {@code #stopAllCasting()}；{@code ISpellBookProvider#setTarget(EntityMaid, LivingEntity)} / {@code #castSpell(EntityMaid)} / {@code #isCasting(EntityMaid)}。 {@code castSpell} 的内部口径：**先滤掉冷却中与黑名单里的法术，再从剩下的里随机挑一个** ——没有距离判定，所以"施法距离"这一道闸必须由调用方自己把关。 续施法（吟唱推进 / 连续施法 / 冷却恢复）**不依赖任务**：法术模组自己挂在 TLM 的 {@code MaidTickEvent} 上每 tick 调 {@code SpellBookManager#tick()}， 所以"她的任务是不是法术任务"对施法链路没有影响——我们在自己的空袭任务里调 {@code castSpell} 是完整合法用法。 【已实证的三条关键事实】 <ol> <li>**空中无门槛**：整个施法链路没有任何 isFallFlying / onGround / isPassenger 判定——鞘翅滑翔中照样能放；</li> <li>**不看主手**：ISS 路径只要求女仆身上（背包 / curios 饰品栏 / 主手任一）有 {@code ISpellContainer.isSpellContainer(item)} 为真的物品，法术书放在**饰品栏** 完全没问题（这也是需求方的口径：法术书不是武器、不进武器位）；</li> <li>**没有法力**：女仆走的是自有 MagicData(false)，ISS 的查蓝与扣蓝都不在这条 链路上；她只剩"法术冷却 + 黑名单"两道闸。</li> </ol> 【我们负责什么、不负责什么】 - 不负责：选哪个法术（法术模组从她所有法术书里随机挑一个不在冷却、不在黑名单的）、 吟唱推进、冷却计时、目标数据——全交给它； - 负责：**什么时候发起一次施法**（空袭的相位 + 间隔 + 距离），以及把当前空袭目标 同步给法术模组（{@code setTarget}，它的朝向钉定与目标数据都读这份数据）。 【一个必须知道的副作用】法术模组在吟唱期间**每 tick** 把女仆的朝向拧向目标。 原版鞘翅滑翔的转向力来自视线方向，而 TLM 的 MaidTickEvent 早于 brain tick 发出， 所以**吟唱期间我们的盘旋/爬升朝向会被它覆盖**。空袭这边因此只在"本来就该面向目标" 的相位发起施法（见 {@link MaidFlightCombatBehavior#tryCastSpell}），把这份副作用压到最小。
  */
 public final class MaidSpellCastCompat {
 
@@ -129,14 +94,11 @@ public final class MaidSpellCastCompat {
 
     /**
      * 发起一次施法（目标同步 + 交给法术模组自己挑法术）。
-     *
      * 【为什么不用它的 SimplifiedSpellCaster.melee_tick/far_tick】源码实证：那两个方法在
      * 放法术之外**还会替女仆挥一记 doHurtTarget**，而空袭的伤害结算有自己的口径
      * （收翅俯冲那一记 + 无敌帧清零）——多出来的这一挥会打乱那套命中判定。
      * 需求也是"用默认武器的同时施法"，所以这里只触发**法术**这一半。
-     *
-     * @return true = 已经向她下达了施法指令（不代表法术一定成立：法术模组会按
-     *         "有没有法术书 / 是不是在吟唱 / 冷却 / 黑名单"自己决定收不收）
+     * @return true = 已经向她下达了施法指令（不代表法术一定成立：法术模组会按 "有没有法术书 / 是不是在吟唱 / 冷却 / 黑名单"自己决定收不收）
      */
     public static boolean castSpell(EntityMaid maid, LivingEntity target) {
         if (maid == null || target == null || !available()) {
@@ -186,25 +148,13 @@ public final class MaidSpellCastCompat {
     }
 
     // ================= v1.2.0 实测五百七十二：位移类法术（冲刺加速 / 平地起飞） =================
-    //
     // 【需求】位移类法术（如铁魔法的 `irons_spellbooks:burning_dash`「烈焰冲锋」）也用起来：
     // ① **飞行途中加速**；② **平地起飞**（没有烟花也能上天）。
-    //
     // 【机制（ISS 源码实证，两条都是 CastType.INSTANT，直接改施法者速度）】
     // - `BurningDashSpell#onCast`：`entity.setDeltaMovement(旧速度 + 前向脉冲)`——**沿视线方向**冲刺；
     // - `AscensionSpell#onCast`：`motion = 视线水平分量 + (0,5,0)`（再 ×0.125）加进速度——**给向上初速**。
     // 也就是说：法术自己会推她，我们只负责"什么时候放、放之前把朝向摆对"。
-    //
-    // 【为什么不用 castSpell（随机法术）】那条路径从她书里**随机**挑一个不在冷却的法术，
-    // 拿来当"冲刺"用不成立（可能放出一个火球）。所以这里走**指定法术**的施法路径——
-    // 与法术模组自己的 `/maidspell iron_cast <spell> [level]` 命令同一套序列（见
-    // `MaidSpellCommand#castSpellOnMaid`），只是我们全程走反射保持软依赖。
-    //
-    // 【一个必须知道的坑】法术模组的 `actualCasting` 会先 `forceLookAtTarget`（把朝向拧向
-    // 它的 data.target）再施法。**起飞那一枪会因此被掰平**（`AscensionSpell` 取的是
-    // `getLookAngle()`，朝向一平就变成了"向前扑"而不是"窜上天"）。所以起飞前我们
-    // **把它的目标清空**（`setTarget(maid, null)` → `forceLookAtTarget` 里 target==null 直接跳过），
-    // 自己把俯仰角摆到抬头；冲刺那一枪则照常让它对着目标（方向一致，不冲突）。
+    // 【为什么不用 castSpell（随机法术）】那条路径从她书里**随机**挑一个不在冷却的法术， 拿来当"冲刺"用不成立（可能放出一个火球）。所以这里走**指定法术**的施法路径—— 与法术模组自己的 `/maidspell iron_cast <spell> [level]` 命令同一套序列（见 `MaidSpellCommand#castSpellOnMaid`），只是我们全程走反射保持软依赖。 【一个必须知道的坑】法术模组的 `actualCasting` 会先 `forceLookAtTarget`（把朝向拧向 它的 data.target）再施法。**起飞那一枪会因此被掰平**（`AscensionSpell` 取的是 `getLookAngle()`，朝向一平就变成了"向前扑"而不是"窜上天"）。所以起飞前我们 **把它的目标清空**（`setTarget(maid, null)` → `forceLookAtTarget` 里 target==null 直接跳过）， 自己把俯仰角摆到抬头；冲刺那一枪则照常让它对着目标（方向一致，不冲突）。
 
     /** v1.2.0 实测五百七十二：「提供高度」的位移法术默认表——用于**起飞**与**补高**。
      *  ascension（升腾）自带 80 tick 悬浮效果，是"平地起飞并爬上去"的主力；
@@ -221,8 +171,6 @@ public final class MaidSpellCastCompat {
     };
 
     /**
-     * v1.2.2 实测六百一十三【飞行跟随的启动并入位移法术】：取「提供高度」的法术 id 表。
-     *
      * 【为什么提到兼容层】原先取这张表的代码只在空袭里（{@code MaidFlightCombatBehavior
      * .climbSpellIds}），飞行跟随也要用同一张表——表面上是"两处各写四行"，实际的风险在**兜底**：
      * 配置读不出来时回落到 {@link #DEFAULT_CLIMB_SPELLS} 这一步若各写一份，改默认表就会出现
@@ -269,18 +217,12 @@ public final class MaidSpellCastCompat {
     private static final java.util.Set<String> WARNED_IDS = new java.util.HashSet<>();
 
     /**
-     * v1.2.2 实测六百一十四：把配置里**认不出来**的法术 id 报一次（取自粉丝 Roderick32 的
      * 「鞘翅赶路」分支，两树的接入口径由本类统一）。
-     *
      * 【为什么需要】id 写错（少个 s、写成 {@code irons_spellbook:} 少了复数、或者照抄了别的模组
      * 的名字）时，表现是"这张表里排第一的法术永远不被使用、只有第二个在工作"——极难自查：
      * 挑法术的链路对认不出的 id 只是"跳过"，一声不响。这里在每次挑法术之前顺手校验一遍，
      * 认不出的报一条 {@code [法术兼容]} 日志（同一个 id 只报一次）。
-     *
-     * 【判定口径（这条是粉丝用字节码钉出来的）】ISS 的 {@code SpellRegistry.getSpell} 对未知 id
-     * **不返回 null**，而是返回共享的 {@code noneSpell} 实例——所以"判 null"永远不会触发。
-     * 改判"**解析回来的法术 id 与请求的 id 不一致** = 这个 id 认不出来"（本仓
-     * {@link #spellLevelInBooks} 早就在用同一个判据挑她书里的法术）。
+     * 【判定口径（这条是粉丝用字节码钉出来的）】ISS 的 {@code SpellRegistry.getSpell} 对未知 id **不返回 null**，而是返回共享的 {@code noneSpell} 实例——所以"判 null"永远不会触发。 改判"**解析回来的法术 id 与请求的 id 不一致** = 这个 id 认不出来"（本仓 {@link #spellLevelInBooks} 早就在用同一个判据挑她书里的法术）。
      */
     public static void warnUnknownSpellIds(String[] ids) {
         if (ids == null || !dashAvailable()) {
@@ -431,22 +373,11 @@ public final class MaidSpellCastCompat {
 
     /**
      * 某个法术**自身**的冷却（tick）——读 ISS 的 `AbstractSpell#getSpellCooldown()`。
-     *
      * 【为什么要它】"提供速度/提供高度"这两类法术在原版都是有冷却的输出手段（烈焰冲锋 10 秒、
      * 升腾 15 秒）；写回冷却时若只按我们的间隔（默认 2 秒）写，等于让她比玩家频繁好几倍。
      * 默认口径 `max(空袭位移间隔, 法术自身冷却)`；想让她窜得更勤可关掉"尊重法术自身冷却"。
-     *
-     * v1.2.2 实测五百九十七（issues #16）【单处换算修正，无行为分支变化】：旧版这里
      * 把它的返回值当成"秒"、又乘了一次 20（`Math.max(0, i) * 20`）——而 ISS 的
-     * `AbstractSpell#getSpellCooldown()` **返回的本来就是 tick**：
-     * `(int) (SpellConfigManager.getSpellConfigValue(this, COOLDOWN_IN_SECONDS) * 20)`。
-     * 于是烈焰冲锋（真实 10 秒 = 200 tick）被写成 **4000 tick = 200 秒**，"提供速度"
-     * 第一次放过之后两百秒再也不放（面板与日志都看不出来，像是"法术推进偶尔不工作"）；
-     * 这个错误值还会被 `castSpecific` 写回 ISS 冷却表，并让 `findAvailableDashSpell(..., ready)`
-     * 长时间挑不到它。报告者实测：改回原样返回后同一条日志从"每 4000 tick 一记"变成
-     * "每 200 tick 一记"。现在原样返回。
-     *
-     * @return 冷却 tick；读不到返回 0（调用方按自己的间隔处理）
+     * `AbstractSpell#getSpellCooldown()` **返回的本来就是 tick**： `(int) (SpellConfigManager.getSpellConfigValue(this, COOLDOWN_IN_SECONDS) * 20)`。 于是烈焰冲锋（真实 10 秒 = 200 tick）被写成 **4000 tick = 200 秒**，"提供速度" 第一次放过之后两百秒再也不放（面板与日志都看不出来，像是"法术推进偶尔不工作"）； 这个错误值还会被 `castSpecific` 写回 ISS 冷却表，并让 `findAvailableDashSpell(..., ready)` 长时间挑不到它。报告者实测：改回原样返回后同一条日志从"每 4000 tick 一记"变成 "每 200 tick 一记"。现在原样返回。 @return 冷却 tick；读不到返回 0（调用方按自己的间隔处理）
      */
     public static int spellCooldownTicks(String spellId) {
         if (spellId == null || !dashAvailable()) {
@@ -611,10 +542,8 @@ public final class MaidSpellCastCompat {
 
     /**
      * 放一个**指定**法术（瞬发路径）——与法术模组的 `/maidspell iron_cast` 同一序列。
-     *
      * 不在施法前设目标（`IMaidSpellData#setTarget` 由调用方决定）：起飞那一枪必须让她的
      * 视线朝上，一旦有目标，它施法前会把朝向拧平（见类注释里那个坑）。
-     *
      * @param cooldownTicks 写回它自己的冷却表（避免与我们这边节流打架；失败忽略）
      * @return true = 已施放（不代表法术一定产生位移：由所放法术自己决定）
      */

@@ -17,31 +17,19 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * 实测七百〇四【1.20.1 · 第三种飞行 · 手动触发】：
+ * 第三种飞行 · 手动触发（无头测试服没有真玩家/主人，所以这一档的验收入口就是这几条命令）：
  * <pre>
  *   /maid_smart goety_fly &lt;x&gt; &lt;y&gt; &lt;z&gt; [女仆]   —— 用飞行聚晶飞到坐标（巡航→下降→收手）
  *   /maid_smart goety_follow &lt;实体&gt; [女仆]      —— 用飞行聚晶跟着实体飞（近了绕圈伴飞）
- *   /maid_smart goety_combat &lt;目标&gt; [女仆]      —— 【G-3】绕着目标打盘旋：几何全用上游那套
- *                                                接敌机动（CombatOrbit + CombatManeuver 的五种打法）
- *   /maid_smart goety_boost [女仆] [实体]         —— 【G-3】放一发发射聚晶（一次性冲量）：给了实体
- *                                                就朝**背离它**的方向并略抬 20°（脱离用），否则用当前视线
- *   /maid_smart goety_auto &lt;on&gt; [女仆]           —— 【G-4】开/关"她自己判断要不要飞"
+ *   /maid_smart goety_combat &lt;目标&gt; [女仆]      —— 绕着目标打盘旋（几何全用上游那套接敌机动）
+ *   /maid_smart goety_boost [女仆] [实体]         —— 放一发发射聚晶（一次性冲量）：给了实体就朝背离它并略抬 20°，否则用当前视线
+ *   /maid_smart goety_auto &lt;on&gt; [女仆]           —— 开/关"她自己判断要不要飞"
  *   /maid_smart goety_stop [女仆]                —— 收手（她开始自由下落，别在高空用）
  *   /maid_smart goety_status [女仆]              —— 看她现在有没有在推进、有没有法杖
  * </pre>
- * 无头测试服没有真玩家（也就没有"主人"可跟），所以这一档的验收入口就是这几条命令——
- * 与 {@code freeflight_goto} 那套同口径。
- *
- * <p>【非 OP 入口】这一批命令仍 {@code requires(hasPermission(2))}（OP 专属，是给测试/服主用的）。
- * 普通生存玩家走的是**另外两条**：女仆配置界面里的「飞行聚晶」一行 + 快捷键（见
- * {@code MaidConfigGoetyMixin} / {@code MaidGoetyKeysClient} / {@code MaidGoetyNetworking}）。
- *
- * <p>【1.20.1 落法】与 1.21.1 树逐字对应，只把名字换成 SRG（{@code m_82127_} = Commands.literal、
- * {@code m_82129_} = Commands.argument、{@code m_6761_} = hasPermission、
- * {@code m_288197_} = sendSuccess、{@code m_81352_} = sendFailure、{@code m_81372_} = getLevel、
- * {@code m_81371_} = getPosition、{@code m_91449_} = EntityArgument.entity、
- * {@code m_91460_} = EntityArgument.entities、{@code m_91452_} = EntityArgument.getEntity）。
- * 挂载点由 {@code ProMaidExtension.onRegisterCommands} 调 {@link #register}。
+ * 这批命令 {@code requires(hasPermission(2))}（OP 专属）。普通玩家走**另外两条**：女仆配置界面里的
+ * 「飞行聚晶」一行 + 快捷键（{@code MaidGoetyKeysClient} / {@code MaidGoetyNetworking}）。挂载点由
+ * {@code ProMaidExtension.onRegisterCommands} 调 {@link #register}（名字按各树 SRG/Mojmap）。
  */
 public final class MaidGoetyFlyCommand {
 

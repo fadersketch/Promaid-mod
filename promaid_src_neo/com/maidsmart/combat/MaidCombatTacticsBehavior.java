@@ -13,8 +13,6 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * v1.5.134：单兵作战战术（PVP 式战斗）——替代已删除的 v1.5.132 战斗协同。
- *
  * 定位：core 行为优先级 230（低于自保 250 / 落地水 240，高于自动装备 200 / 避让 150）。
  * 只对 TLM 原生战斗任务（attack/ranged_attack/crossbow_attack/trident_attack/
  * danmaku_attack）生效，只接管【移动】，不碰攻击本身——攻击仍由 TLM 的
@@ -23,30 +21,11 @@ import java.util.Set;
  * STOPPED 行为尝试启动，【没有高优先级阻断 break】——常驻 core 行为不会阻止
  * WORK 组战斗行为启动；tick 顺序是低 priority 先跑（TreeMap 升序），我们 230
  * 在最末尾，导航天然最后覆盖。
- *
  * 移动接管方式（与自保逃跑同款）：每 tick 清 WALK_TARGET + 直连导航（moveTo）。
  * MoveToTargetSink 的抑制由 MaidMoveSuppressMixin 负责（isActive 时取消本 tick），
  * TLM 的 SetWalkTargetFromAttackTargetIfTargetOutOfReach / MaidRangedWalkToTarget
  * 写的 WALK_TARGET 无人执行，我们的导航独占。
- *
- * 三套 PVP 操作：
- * 1. 近战（主手非投射武器）：
- *    - 弧形接近：追击不走直线贴脸（径向为主 + 横向偏置），少吃迎面刀
- *    - 贴脸绕圈：围绕目标圆周侧移（默认半径 2.2 格，每 12~20 tick 随机换向）
- *    - 打退拉扯（hit&run）：攻击完成的瞬间（冷却记忆刚写入）后撤 10 tick 再逼近
- *    - 跳劈接近：追击途中攻击冷却已满时概率跳跃（下落中命中 = 原版暴击 1.5 倍）
- * 2. 远程（弓/弩/三叉戟）：
- *    - 距离管理：保持在理想射程（最大射程 × 配置倍率 0.6）——原版
- *      MaidRangedWalkToTarget 会走到贴脸 0 格才射，弓贴脸 = 废物
- *    - 横移绕圈：理想距离内圆周侧移放风筝（大半径）
- * 3. 时机举盾：MaidShieldTimingMixin 拦截 MaidUseShieldTask——【实测七百九十二起
- *    近战套用**原版口径**】"8 格内就举盾"（不再要求攻击冷却中）；远程敌人放宽到 15 格
- *    且有视线（盾挡箭矢、推进到贴身再放盾砍）；**枪械任务也举盾**（原版本来就在
- *    gun_attack 里注册了举盾，是我们早期误挡）。唯一不举的是**弓/弩/三叉戟/御币蓄力中**
- *    ——它们和盾抢同一个"使用物品"槽位，物理上互斥（见 chargesUseSlot）。
- *    举盾不影响移速（原版"举盾降速"只作用于玩家）。
- *
- * 总开关：combat.tactics（面板"战斗自保"段，另含近战/远程/举盾子开关 + 两个数值）。
+ * 三套 PVP 操作： 1. 近战（主手非投射武器）： - 弧形接近：追击不走直线贴脸（径向为主 + 横向偏置），少吃迎面刀 - 贴脸绕圈：围绕目标圆周侧移（默认半径 2.2 格，每 12~20 tick 随机换向） - 打退拉扯（hit&run）：攻击完成的瞬间（冷却记忆刚写入）后撤 10 tick 再逼近 - 跳劈接近：追击途中攻击冷却已满时概率跳跃（下落中命中 = 原版暴击 1.5 倍） 2. 远程（弓/弩/三叉戟）： - 距离管理：保持在理想射程（最大射程 × 配置倍率 0.6）——原版 MaidRangedWalkToTarget 会走到贴脸 0 格才射，弓贴脸 = 废物 - 横移绕圈：理想距离内圆周侧移放风筝（大半径） 3. 时机举盾：MaidShieldTimingMixin 拦截 MaidUseShieldTask——【实测七百九十二起 近战套用**原版口径**】"8 格内就举盾"（不再要求攻击冷却中）；远程敌人放宽到 15 格 且有视线（盾挡箭矢、推进到贴身再放盾砍）；**枪械任务也举盾**（原版本来就在 gun_attack 里注册了举盾，是我们早期误挡）。唯一不举的是**弓/弩/三叉戟/御币蓄力中** ——它们和盾抢同一个"使用物品"槽位，物理上互斥（见 chargesUseSlot）。 举盾不影响移速（原版"举盾降速"只作用于玩家）。 总开关：combat.tactics（面板"战斗自保"段，另含近战/远程/举盾子开关 + 两个数值）。
  */
 public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
@@ -64,9 +43,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      *  完全打得到（反馈："女仆的手很长,完全打得到"），同时脱离敌人近战范围 */
     private static final double KITE_BACK_DIST = 3.0;
     /**
-     * 【实测七百九十一】近战举盾的距离闸（格）＝ 原版 {@code MaidUseShieldTask} 的
      * {@code CHECK_RANGE=8}，也正好是本类的接战范围（超出就不该举盾）。
-     *
      * <p>为什么必须放宽回 8：旧口径是「冷却中 **且** 贴身 ≤2.6 格」，而近战走位把
      * 冷却期整段推到 2.6 格以外——贴进 2.0 格就后退到 3.0（{@link #KITE_MELEE_RANGE}）、
      * 攻击完成后撤 14 tick 退到 3.5 格（{@link #RETREAT_TICKS}）、平时只接近到
@@ -185,15 +162,11 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     /**
      * 接战范围：近战 8 格；远程（弓/弩/枪械 + 远程分类任务）= 任务搜索半径。
-     *
-     * v1.2.0 实测五百一十七【三叉戟不再一律按远程算接战范围】：旧版把
      * `TridentItem` 也列在这个"物品即远程"的表里，于是**攻击模式（近战任务）
      * 手持三叉戟时接战范围被撑到搜索半径**、战术行为从十几格就接管走位 →
      * 后面 tick 又落进 rangedTick 绕圈（"像个傻子一样在那边转圈"）。
      * 三叉戟是**双用武器**（`TridentItem` 两树都不是 `ProjectileWeaponItem`，
-     * 近战还有 8.0 攻击力属性——javap 实证），该按【当前任务】分类而不是按物品：
-     * 近战任务 → 8 格接战；`trident_attack` 投掷任务 → 走 `isRangedTaskActive`
-     * 拿搜索半径（远程风筝照旧）。
+     * 近战还有 8.0 攻击力属性——javap 实证），该按【当前任务】分类而不是按物品： 近战任务 → 8 格接战；`trident_attack` 投掷任务 → 走 `isRangedTaskActive` 拿搜索半径（远程风筝照旧）。
      */
     private static double engageRange(EntityMaid maid) {
         ItemStack main = maid.getMainHandItem();
@@ -227,8 +200,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      * - 远程敌人：15 格内有视线就举盾——盾挡箭矢推进，贴身再放盾砍；
      * - 枪械（TaCZ / 卓越前线）任务：照举（原版 gun_attack 本就注册了举盾）；
      * - 弓 / 弩 / 三叉戟 / 御币：**蓄力中不举盾**——与盾抢同一个"使用物品"槽位，
-     *   原版 startUsingItem 互斥，同时用会互相顶掉（见 chargesUseSlot）；
-     * - 战术关闭 / 傀儡模式 / 骑扫帚：整体让位（见 isTacticsEnabled）。
+     *   原版 startUsingItem 互斥，同时用会互相顶掉（见 chargesUseSlot）； - 战术关闭 / 傀儡模式 / 骑扫帚：整体让位（见 isTacticsEnabled）。
      */
     public static boolean shouldUseShield(EntityMaid maid) {
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_SHIELD.get()) {
@@ -425,28 +397,11 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测一百二十②：远程分类任务（法术书/法杖等非投射远程武器）同样
         // 进 rangedTick 拉开距离风筝——旧版主手不是弓/弩/枪就落进 meleeTick
         //（跳劈/贴脸绕圈），与距离切换的远程分类矛盾
-        //
-        // v1.2.0 实测五百一十七【三叉戟：攻击模式走近战，不再绕圈】。反馈原文：
         // "三叉戟现在没法作为近战武器用在攻击模式里面了……我希望保留它被女仆拿在
         // 手上开攻击模式的时候不是像个傻子一样在那边转圈。核心问题就在于三叉戟目前
         // 只认远程武器那个模式，调整为攻击模式时候根本就不认这个武器。明明这个武器
         // 也有近战的方式的。"
-        //
-        // 根因（javap 实证）：三叉戟两树都**不是** `ProjectileWeaponItem`
-        //（1.20.1 `extends Item implements Vanishable`，1.21.1 `extends Item implements ProjectileItem`），
-        // 而且近战带 8.0 攻击力属性；TLM 侧完全认它——
-        // `TaskAttack.isWeapon` = "主手有攻击力属性"（含三叉戟）、
-        // `MaidMeleeAttack` 只在 `isHoldingUsableProjectileWeapon`（只认
-        // `ProjectileWeaponItem`）时才停手 → 近战任务是愿意挥三叉戟的。
-        // 所以"攻击模式不认三叉戟"不是 TLM 的限制，而是**本行为按物品类型
-        // 一刀切成远程**：三叉戟落进 rangedTick → 保持理想射程 ≥7 格 + 横移绕圈
-        // ——正是反馈里的"原地转圈不打架"。
-        //
-        // 修法：分类看【当前任务】而非物品——`isRangedTaskActive` 为真（远程分类
-        // 任务，含 trident_attack 投掷模式）→ rangedTick 风筝（远程机制保留）；
-        // 否则（含 attack 近战任务持三叉戟）→ meleeTick 走近战：蛇形逼近、
-        // 跳劈暴击、贴脸绕圈——三叉戟 8 点攻击力的近战形态这才用得上。
-        // 判定口径与 AutoCombatSwitch.isRangedTask（同样按任务 UID）对齐。
+        // 根因（javap 实证）：三叉戟两树都**不是** `ProjectileWeaponItem` （1.20.1 `extends Item implements Vanishable`，1.21.1 `extends Item implements ProjectileItem`）， 而且近战带 8.0 攻击力属性；TLM 侧完全认它—— `TaskAttack.isWeapon` = "主手有攻击力属性"（含三叉戟）、 `MaidMeleeAttack` 只在 `isHoldingUsableProjectileWeapon`（只认 `ProjectileWeaponItem`）时才停手 → 近战任务是愿意挥三叉戟的。 所以"攻击模式不认三叉戟"不是 TLM 的限制，而是**本行为按物品类型 一刀切成远程**：三叉戟落进 rangedTick → 保持理想射程 ≥7 格 + 横移绕圈 ——正是反馈里的"原地转圈不打架"。 修法：分类看【当前任务】而非物品——`isRangedTaskActive` 为真（远程分类 任务，含 trident_attack 投掷模式）→ rangedTick 风筝（远程机制保留）； 否则（含 attack 近战任务持三叉戟）→ meleeTick 走近战：蛇形逼近、 跳劈暴击、贴脸绕圈——三叉戟 8 点攻击力的近战形态这才用得上。 判定口径与 AutoCombatSwitch.isRangedTask（同样按任务 UID）对齐。
         if (main.getItem() instanceof ProjectileWeaponItem
                 || GunCompat.isGun(main)
                 || isRangedTaskActive(maid)) {
@@ -553,9 +508,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                             dz = 0.0;
                         }
                         // v1.5.175：抛物线大跳（要求"那种抛物线曲线"）——
-                        // v1.5.181：垂直初速 0.95 → 0.75（峰高 ≈3.5 格——刚好不触发
                         // 落地水，v1.5.154 历史实证值；落地时清 fallDistance 无伤）；
-                        // v1.5.185：水平初速按【实际可达距离】缩放——水平速度空中
                         // 每 tick 衰减 0.91，0.5 初速滞空 ≈19 tick 全程位移仅 ≈4.6
                         // 格（旧 dist*0.05 公式在 6 格起跳只给 0.3，落点距敌 3+ 格、
                         // 下落中 3D 距离 >3.1 砍不中 = "大跳完还剩相当远"的尴尬）；
@@ -629,12 +582,9 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.149：跳劈空中挥砍 + 暴击提示（每 tick 调用，先于坠落早退执行）。
-     * 旧版只"跳"不"打"——攻击仍由 TLM 攻击行为执行，它通常在【落地后】才挥砍
      * （onGround）→ 不满足"空中命中"→ 暴击粒子永不触发（"跳劈不明显"根因）。
      * 现在跳劈的挥砍由本行为亲自执行：空中贴近目标 → 玩家式暴击结算（挥刀动画 +
      * 伤害（攻击力×1.5 + 附魔加成）+ 暴击粒子 + 暴击音效）。一次跳劈只砍一刀。
-     * v1.5.184：结算完全对齐玩家 Player.attack 的暴击分支——普通跳劈（纯垂直
      * 0.42 跳）与跳劈斩（抛物线大跳）都走玩家暴击：伤害 = ATTACK_DAMAGE × 1.5
      * + 锋利加成，命中后触发火焰附加（主手）与荆棘反击（目标护甲）；跳劈斩
      * 额外大击退（1.5 力度劈飞，冲刺跳劈同款手感）。
@@ -924,16 +874,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测四十：背包里 DPH（单发伤害）最高的近战武器。
-     *
-     * v1.2.0 实测五百一十七【三叉戟算近战武器】:旧版把 `TridentItem` 也排除在
      * 近战武器之外，于是远程任务被贴身时的近战反击（{@link #meleeCounterAttack}）
      * 找不到三叉戟、只能按"无近战武器 1 点"结算——**手里握着 8 点攻击力的三叉戟
      * 却拍出 1 点**。三叉戟是双用武器（近战 8.0 攻击力，javap 实证），该参与评分。
      * 仍然排除的是**纯投射武器**：弓/弩（`ProjectileWeaponItem`）与枪械
      * （它们没有可用的近战形态，枪械贴脸也不是挥砍）。
-     * 剑/斧/镐/拔刀剑/史诗武器/三叉戟等按攻击力属性自然参与评分。
-     * 找不到返回 EMPTY 栈（调用方按 1 点伤害处理）。
+     * 剑/斧/镐/拔刀剑/史诗武器/三叉戟等按攻击力属性自然参与评分。 找不到返回 EMPTY 栈（调用方按 1 点伤害处理）。
      */
     private static ItemStack findBestMeleeWeapon(EntityMaid maid) {
         ItemStack best = ItemStack.EMPTY;

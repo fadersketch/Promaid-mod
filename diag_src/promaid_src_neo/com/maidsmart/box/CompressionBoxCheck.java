@@ -28,7 +28,6 @@ import java.util.List;
 /**
  * 压缩盒自检（v1.2.2 实测六百一十七；六百一十八扩到四条需求）——
  * {@code /maid_smart box check [女仆]} 干活的地方。
- *
  * ── 为什么要有这个东西 ──
  * 六百一十七那批修的是「收纳箱可以把自己装进去，导致被卡掉」。这个 bug 的入口是
  * **界面的一次点击**，而本仓的自动化回归只有专用服务端（没有客户端、点不了界面）
@@ -36,33 +35,10 @@ import java.util.List;
  * 测过了、其实没修」。所以这里用**假的玩家**（{@code FakePlayerFactory}）在服务端把
  * 那条路原样走一遍：假玩家的背包里放东西、调**界面点击真正调用的那个方法**
  * （{@link CompressionBoxService#handle}），再逐条对账。
- *
  * ── 六百一十八批自检覆盖的四件事（对应用户的四条反馈）──
  * <ol>
  *   <li><b>「盒子里放食物她不吃、放弹药/TNT 她认」</b> → {@link #maidView}：
- *       拿**TLM 自己的判据**（{@code MaidMealManager.getMaidMeals(HEAL_MEAL).canMaidEat}）
- *       去问她那两条「可用背包」里找不找得到盒子里的食物。找不到 = 就是用户报的那条
- *       （女仆自己吃饭走 {@code getAvailableBackpackInv}，六百一十六只注入了
- *       {@code getMaidInv}）；再配一条对照（盒子里没有的东西必须找不到）；</li>
- *   <li><b>「附魔类物品存进去会消失」</b> → {@link #stackSafety} + {@link #maidView}：
- *       不可堆叠的东西（附魔书）一格存了 2 个时，交给原版的**必须是合法堆**
- *       （{@code ≤ getMaxStackSize()}）——不然原版会只收下 1 个、剩下的作为返回值退回去，
- *       而调用点大多不看返回值 = 凭空消失。另配一条「自定义数据过一圈盒子还在」的
- *       往返（用 {@code isSameItemSameComponents} 判，不是只看物品 id）；</li>
- *   <li><b>「像箱子一样用鼠标拖进去」</b> → {@link #mouseDrag}：左键拿起 → 点盒子格放下 →
- *       再拿回来 → Shift+左键快速移动，以及「鼠标上拿着一个盒子去点盒子格必须被拒」
- *       这条新入口；</li>
- *   <li><b>「手上那一叠不许丢」</b> → {@link #mouseDrag} 的最后一条：挂着一叠时收手
- *       （{@link CompressionBoxService#CARRY_DROP}）→ 东西回到背包，一件不少。</li>
- * </ol>
- * 女仆那几条（给了女仆才跑）在**她真实的背包视图**上走，最后把试出来的东西清干净
- * ——自检不在任何人的背包里留东西。
- *
- * 【1.21.1 与 1.20.1 的差异】附魔在 1.21 是**数据驱动**的（{@code Enchantments} 不再是
- * 编译期常量类，要用注册表 + {@code Holder}），而这条自检验的从来不是"附魔"本身，
- * 而是「**不可堆叠 + 带 NBT 的物品**过一圈盒子」。所以 1.21 这一侧改用
- * {@code DataComponents.CUSTOM_DATA} 当那个 NBT：同样是 maxStackSize=1 的附魔书 +
- * 一段自定义数据，判据与 1.20.1 侧逐字对应（那边写的是真附魔 + 自定义标签）。
+ *       拿**TLM 自己的判据**（{@code MaidMealManager.getMaidMeals(HEAL_MEAL).canMaidEat}） 去问她那两条「可用背包」里找不找得到盒子里的食物。找不到 = 就是用户报的那条 （女仆自己吃饭走 {@code getAvailableBackpackInv}，六百一十六只注入了 {@code getMaidInv}）；再配一条对照（盒子里没有的东西必须找不到）；</li> <li><b>「附魔类物品存进去会消失」</b> → {@link #stackSafety} + {@link #maidView}： 不可堆叠的东西（附魔书）一格存了 2 个时，交给原版的**必须是合法堆** （{@code ≤ getMaxStackSize()}）——不然原版会只收下 1 个、剩下的作为返回值退回去， 而调用点大多不看返回值 = 凭空消失。另配一条「自定义数据过一圈盒子还在」的 往返（用 {@code isSameItemSameComponents} 判，不是只看物品 id）；</li> <li><b>「像箱子一样用鼠标拖进去」</b> → {@link #mouseDrag}：左键拿起 → 点盒子格放下 → 再拿回来 → Shift+左键快速移动，以及「鼠标上拿着一个盒子去点盒子格必须被拒」 这条新入口；</li> <li><b>「手上那一叠不许丢」</b> → {@link #mouseDrag} 的最后一条：挂着一叠时收手 （{@link CompressionBoxService#CARRY_DROP}）→ 东西回到背包，一件不少。</li> </ol> 女仆那几条（给了女仆才跑）在**她真实的背包视图**上走，最后把试出来的东西清干净 ——自检不在任何人的背包里留东西。 【1.21.1 与 1.20.1 的差异】附魔在 1.21 是**数据驱动**的（{@code Enchantments} 不再是 编译期常量类，要用注册表 + {@code Holder}），而这条自检验的从来不是"附魔"本身， 而是「**不可堆叠 + 带 NBT 的物品**过一圈盒子」。所以 1.21 这一侧改用 {@code DataComponents.CUSTOM_DATA} 当那个 NBT：同样是 maxStackSize=1 的附魔书 + 一段自定义数据，判据与 1.20.1 侧逐字对应（那边写的是真附魔 + 自定义标签）。
  */
 public final class CompressionBoxCheck {
 
@@ -92,13 +68,10 @@ public final class CompressionBoxCheck {
     /**
      * 「不可堆叠」这一类（原版堆叠上限 = 1）的探针：一把**没附魔**的钻石剑 + 一段自定义数据
      * （v1.2.4 实测六百四十五）。
-     *
      * 【为什么不再是附魔书】六百二十 ~ 六百四十四 之间这里的探针是一本附魔书，靠一个临时
      * 开关（{@code compressionBox.refuseEnchanted}）把它放进盒子跑那段回归。六百四十五 起
      * 附魔物品**一律禁入**、开关已删，附魔书再也进不去盒子，所以换成同样不可堆叠、同样能挂
-     * 自定义数据的钻石剑——验的还是那一件事：**交给原版的堆必须合法**（盒子的自定义数量与
-     * 原版 {@code getMaxStackSize()=1} 对不上时，多出来的那份会被原版当返回值丢掉，而
-     * 调用点大多不看返回值）。
+     * 自定义数据的钻石剑——验的还是那一件事：**交给原版的堆必须合法**（盒子的自定义数量与 原版 {@code getMaxStackSize()=1} 对不上时，多出来的那份会被原版当返回值丢掉，而 调用点大多不看返回值）。
      */
     private static ItemStack unstackableProbe() {
         ItemStack probe = stack("minecraft:diamond_sword", 1);
@@ -155,22 +128,11 @@ public final class CompressionBoxCheck {
 
     /**
      * 六百一十八【用户报的「附魔类物品存进去会消失」】。
-     *
      * 根因不是"存"这一步，而是**读出去**那一步：盒子一格能堆 114514 个，两件同名（附魔书
      * 则是同附魔）的东西存进同一格，那一格的堆就是 {@code ×2}；而它们的原版堆叠上限是 **1**。
      * 六百一十六起女仆那一侧的视野封顶写死 64，于是原版拿到了一个「2 个的附魔书」这种
      * **非法堆**——原版任何一处「插进背包/手里」都会按上限 1 收下 1 个、把剩下的当返回值
-     * 退回，而 TLM 那几十处调用点大多不看返回值（正常世界里它们的入参永远装得下）：
-     * 多出来的那个就这样没了。所以这里验两件事：
-     * <ul>
-     *   <li>不可堆叠的东西过一圈盒子，自定义数据**原样还在**
-     *       （{@code isSameItemSameComponents} 判的是整个组件集，不是只看 id）；</li>
-     *   <li>一格里有 2 个时，{@link CompressionBoxData#viewCap} 只放 1 个出去
-     *       ——**交给原版的堆永远合法**。</li>
-     * </ul>
-     *
-     * 【探针为什么是钻石剑】见 {@link #unstackableProbe}：六百四十五 起附魔物品一律禁入，
-     * 附魔书再也进不去盒子，探针换成一把没附魔的钻石剑（同样不可堆叠）。
+     * 退回，而 TLM 那几十处调用点大多不看返回值（正常世界里它们的入参永远装得下）： 多出来的那个就这样没了。所以这里验两件事： <ul> <li>不可堆叠的东西过一圈盒子，自定义数据**原样还在** （{@code isSameItemSameComponents} 判的是整个组件集，不是只看 id）；</li> <li>一格里有 2 个时，{@link CompressionBoxData#viewCap} 只放 1 个出去 ——**交给原版的堆永远合法**。</li> </ul> 【探针为什么是钻石剑】见 {@link #unstackableProbe}：六百四十五 起附魔物品一律禁入， 附魔书再也进不去盒子，探针换成一把没附魔的钻石剑（同样不可堆叠）。
      */
     private static void stackSafety(List<Component> out) {
         ItemStack probe = unstackableProbe();
@@ -460,20 +422,11 @@ public final class CompressionBoxCheck {
 
     /**
      * 用户第 1 条：「往压缩盒里面加食物，女仆是不会去吃的。只是往里面加弹药以及TNT这些会认。」
-     *
      * 【为什么这条一定要拿 TLM 自己的判据来验】女仆自己吃饭走的是
      * {@code EntityMaid.getAvailableBackpackInv()}（{@code MaidHealSelfTask} 拿它逐格找
      * 「能吃的那个」，判据就是 meal 系统的 {@code canMaidEat}），而那条路读的是
      * {@code maidInv} **字段**——六百一十六那批只注入了 {@code getMaidInv()}，所以盒子里的
-     * 食物她**根本看不见**；弹药/TNT 是我们自己的代码在 {@code getMaidInv()} 上找的，
-     * 一直看得见。这就是"只认弹药不认饭"的由来。
-     *
-     * 【为什么是"插进去、同一拍扫、再清掉"，而不是"扫盒子里本来就有的那份"】
-     * 六百一十八第一轮用的是后者，结果食物那条红着、看着像没修——其实是**她把那份熟牛肉
-     * 吃了**（这条修好之后她真能吃到盒子里的饭！）。判据本身与血量无关（{@code canMaidEat}
-     * 只看能不能吃），所以自己插一份同一拍扫，既确定性又能证明"她那条路看得见盒子"。
-     * （"她真的会去吃"另有一条端到端的行为用例，在 test_box618.py 的 A 段：把她打伤、
-     * 等着看盒子里的饭少没少、她的血回没回。）
+     * 食物她**根本看不见**；弹药/TNT 是我们自己的代码在 {@code getMaidInv()} 上找的， 一直看得见。这就是"只认弹药不认饭"的由来。 【为什么是"插进去、同一拍扫、再清掉"，而不是"扫盒子里本来就有的那份"】 六百一十八第一轮用的是后者，结果食物那条红着、看着像没修——其实是**她把那份熟牛肉 吃了**（这条修好之后她真能吃到盒子里的饭！）。判据本身与血量无关（{@code canMaidEat} 只看能不能吃），所以自己插一份同一拍扫，既确定性又能证明"她那条路看得见盒子"。 （"她真的会去吃"另有一条端到端的行为用例，在 test_box618.py 的 A 段：把她打伤、 等着看盒子里的饭少没少、她的血回没回。）
      */
     private static void foodVisible(List<Component> out, EntityMaid maid, CompressionBoxMaidInv view,
                                     int free, int cell) {
@@ -564,11 +517,9 @@ public final class CompressionBoxCheck {
     /**
      * 用户第 2 条的**产出侧**：盒子里一格存了 2 个不可堆叠的东西时，她那一侧
      * 「看得见」和「拿得走」的都必须**只有 1 个**（原版堆叠上限）。
-     *
      * 【为什么在这条上较真】给原版一个「2 个的附魔书」这种非法堆，原版按上限 1 收下 1 个、
      * 把另一个作为返回值退回；TLM 那几十处调用点大多不看返回值（正常世界不可能装不下）
      * ——那一个就凭空没了 = 用户报的「附魔物品存进去会消失」。
-     *
      * 探针自 六百四十五 起换成没附魔的钻石剑（附魔书已一律禁入，见 {@link #unstackableProbe}）。
      */
     private static void unstackableView(List<Component> out, CompressionBoxMaidInv view, int free,
@@ -604,15 +555,10 @@ public final class CompressionBoxCheck {
     /**
      * 用户那条：「加一个黑名单，在压缩盒界面内无法放入附魔书/附魔武器和压缩盒，
      * 压缩盒在这个界面内无法被鼠标选中，并再次提示玩家不能把压缩盒放进压缩袋里」。
-     *
      * 界面本身在专用服务器上点不了（没有客户端），但**界面每一次点击真正执行的方法**
      * 就是这里调的 {@link CompressionBoxService#handle}，所以这一条能把「放进不去」和
      * 「选不中」都验到；提示那一半看 {@link CompressionBoxService#noticeOf}
-     * （随内容同步发给客户端画成红字，服务端这一侧只存那句话）。
-     *
-     * 六百四十五 起这里多验一条（④）：那两个配置项（「禁入带附魔的物品」开关与
-     * 「禁入清单」）**必须已经从 {@code MaidSmartConfig} 上删掉**——口径写死，玩家
-     * 再没有能把它关掉的入口。
+     * （随内容同步发给客户端画成红字，服务端这一侧只存那句话）。 六百四十五 起这里多验一条（④）：那两个配置项（「禁入带附魔的物品」开关与 「禁入清单」）**必须已经从 {@code MaidSmartConfig} 上删掉**——口径写死，玩家 再没有能把它关掉的入口。
      */
     private static void refuseGate(List<Component> out, ServerLevel level, EntityMaid maid) {
         ItemStack book = probeBook();
@@ -757,7 +703,6 @@ public final class CompressionBoxCheck {
      * 一本附魔书 + 一段自定义数据（"整个组件原样过一圈"的探针）。
      * 见类文档：1.21 的附魔是数据驱动的，这里用 CUSTOM_DATA 当那段数据，
      * maxStackSize=1 这一点与 1.20.1 侧的附魔书完全一致。
-     *
      * 六百四十五 起它**只用来验拒绝**（{@link #refuseGate}：带附魔的物品进不去盒子）；
      * 六百二十 ~ 六百四十四 之间它还兼任「不可堆叠探针」，那个角色已交给
      * {@link #unstackableProbe}（没附魔的钻石剑）。

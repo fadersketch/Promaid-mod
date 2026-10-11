@@ -13,20 +13,17 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * v1.1.0 实测一百四十八：战斗任务兼容层（参考 tlm_beyond_space 的
- * CombatTaskCompatibility——反馈："女仆切换武器的时候还是不会使用模组武器；
- * 塞入模组武器后即使再拿出来，主动战斗就再也不触发了"）。
+ * 战斗任务兼容层（参考 tlm_beyond_space 的 CombatTaskCompatibility）——两个问题同根：战斗任务的
+ * 【武器契约不完整 + 切换前不预检】。
  *
- * 两个问题同根：战斗任务的【武器契约不完整 + 切换前不预检】。
- * ① ef_tlm:fight_mode_task（史诗战斗联动）【没有覆写 isWeapon(maid, stack)】——
- *    IAttackTask 默认实现恒 false（javap 实证）→ 该任务的武器永远进不了战斗候选池、
- *    永远不被自动装备 → "切换武器时不用模组武器"。该任务只暴露 isWeaponCap(ItemStack)
- *    与 hasCapWeapon(maid)，这里用反射调用 isWeaponCap 补上判定。
- * ② 切任务前不做【预检+自动装备】——TLM 官方 onFunctionCallSwitch 默认实现（javap
- *    实证）：主手有匹配武器 → NO_CHANGE；没有 → TaskEquipUtil.tryEquipFromBackpack
- *    自动装备 → OK；装不上 → MISSING_REQUIRED_ITEM。预检失败就不切入 → 不会把女仆
- *    卡在打不出伤害的战斗任务上（模组武器被拿走后的永久"战斗中"死锁 = 主动战斗
- *    再也不触发）。
+ * ① {@code ef_tlm:fight_mode_task}（史诗战斗联动）**没有覆写 {@code isWeapon(maid, stack)}**——
+ * {@code IAttackTask} 默认实现恒 false → 该任务的武器永远进不了战斗候选池、永不被自动装备（"切换武器
+ * 时不用模组武器"）。它只暴露 {@code isWeaponCap(ItemStack)} 与 {@code hasCapWeapon(maid)}，这里用
+ * 反射调 {@code isWeaponCap} 补上判定。
+ * ② 切任务前不做【预检+自动装备】——TLM {@code onFunctionCallSwitch} 默认实现：主手有匹配武器 →
+ * NO_CHANGE；没有 → {@code TaskEquipUtil.tryEquipFromBackpack} 自动装备 → OK；装不上 →
+ * MISSING_REQUIRED_ITEM。预检失败就不切入，不会把女仆卡在打不出伤害的战斗任务上（模组武器被拿走后的
+ * 永久"战斗中"死锁 = 主动战斗再也不触发）。
  */
 public final class CombatTaskCompat {
     public static final ResourceLocation EPIC_FIGHT_TASK =

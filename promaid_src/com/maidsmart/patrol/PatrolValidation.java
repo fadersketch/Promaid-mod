@@ -7,16 +7,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v1.3.8【巡逻航迹】校验汇总：几何（{@link PatrolGeometry}）+ 净空（{@link PatrolClearance}）合成一份结论。
- *
  * <p>几何不需要世界，净空需要——所以"只做几何"这条入口（编辑器打开时、纯客户端）也留在这里。
- *
  * <p>【v1.3.9.2：净空不再是门槛】玩家实测反馈「判定过严、一直在说有方块阻挡」，于是净空不通过
  * 只作为一句**提示**放进 {@code notes}（见 {@link #validate}）。能不能飞过去交给运行时：
  * {@link PatrolAdapt} 抬一抬，{@code MaidBroomDrive.steerTo} 的卡墙脱困与危险绕行再兜一道。
- *
  * <p>【v1.3.9.3：连接 / 绑定也不再有门槛】
- *
  * **一律照做**（{@code PatrolNetworking} 里不再有 return 型拒绝），
  * {@link PatrolGeometry.Report#problems()} 里的每一项（标记不够 / 陡坡 / 自交 / 未闭环）都由
  * {@link #warnings} 渲染成一句 ⚠ 提醒；半径超限在调用方单独提醒。{@link #lines} 仍是给

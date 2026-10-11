@@ -21,14 +21,11 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 实测 G-6【超越维度·存入】——采矿 / 伐木 / 收割的产物回收到**主人的主网络**。
- *
  * <h2>为什么先做存入、不做取出（需求方的直觉是对的）</h2>
  * <b>存入</b>不需要"知道要什么"：物品已经在她背包里，我们手里就有精确的 {@code ItemStack}，
  * 直接构 key 插进去即可。<b>取出</b>要先回答"取什么"——按物品 key 查是 O(1)，但"任意物品"
  * 要么列举网络内容（O(n)）、要么用 {@code fuzzy=true}（源码自己写了那是**线性扫描**），
  * 所以取出要配一套"向网络要什么"的表达方式，那是下一步的事。
- *
  * <h2>安全口径（宁可少搬，不可搬错）</h2>
  * <ol>
  *   <li><b>只扫背包</b>（{@code getAvailableBackpackInv}），**双手一律不碰**——手里的剑不会被搬走；</li>
@@ -36,14 +33,7 @@ import java.util.UUID;
  *       {@code c:gems} / {@code c:crops}；</li>
  *   <li><b>硬排除</b>：有耐久的（工具/护甲）、附魔的、改过名的、TLM 自己的物品（{@code touhou_little_maid}）、
  *       以及种子/树苗/食物/桶/火把——这些她干活要用；</li>
- *   <li><b>不丢东西</b>：先 <i>模拟取出</i> 确认数量 → <i>真插入</i>网络（拿回剩余量）→ 才从背包
- *       <i>真扣除</i>。顺序刻意如此：任何一步失败都不会出现"背包扣了、网络没进"的丢件；</li>
- *   <li>每笔都写日志（物品 id × 数量），可在 {@code promaid.log} 里对账。</li>
- * </ol>
- *
- * <h2>开关</h2>
- * 默认关；per-maid 开关存 {@code persistentData}（随魂符/存档走）。
- * {@code /maid_smart bd_deposit_dry} 可以"只看不搬"，先确认名单再开。
+ *   <li><b>不丢东西</b>：先 <i>模拟取出</i> 确认数量 → <i>真插入</i>网络（拿回剩余量）→ 才从背包 <i>真扣除</i>。顺序刻意如此：任何一步失败都不会出现"背包扣了、网络没进"的丢件；</li> <li>每笔都写日志（物品 id × 数量），可在 {@code promaid.log} 里对账。</li> </ol> <h2>开关</h2> 默认关；per-maid 开关存 {@code persistentData}（随魂符/存档走）。 {@code /maid_smart bd_deposit_dry} 可以"只看不搬"，先确认名单再开。
  */
 public final class MaidBdDeposit {
 

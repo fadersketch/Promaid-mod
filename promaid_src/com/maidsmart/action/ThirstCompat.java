@@ -5,10 +5,8 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * 「口渴」Thirst Was Taken（dev.ghen.thirst，modid=thirst）软兼容（实测五百七十一）。
- *
  * 需求原文："能让女仆喂水吗（软联动口渴mod），这块的代码直接照搬女仆喂主人食物就可以了。
  * 把判定位点改为口渴值即可。……触发效果和玩家自己喝水是一样的（也就是说会返还玻璃瓶这种）"
- *
  * 【1.20.1-1.4.0 API 形态（反编译实证；1.21.1-2.1.5 只差数据挂载方式，见下）】
  * - 口渴数据：挂在玩家的 Capability（{@code ModCapabilities.PLAYER_THIRST}，
  *   {@code IThirst.getThirst()}，0-20）；1.21.1 改成 AttachmentType（同字段语义）；
@@ -17,16 +15,8 @@ import net.minecraft.world.item.ItemStack;
  * - 哪些物品能回口渴：{@code ThirstHelper.itemRestoresThirst(ItemStack)}——TWT 自己的
  *   饮品表（config 可扩，水瓶/陶碗水默认在表）+ 关键词匹配，其他 mod 的装水工具
  *   只要在它的表里就认识；增量：{@code getThirst / getQuenched}（喂水选优用）。
- *
  * 【喂水为什么不直接调 drink】主人"自己喝"必须走物品自己的 {@code finishUsingItem}——
- * 药水瓶的口渴在 TWT 的 {@code MixinPotionItem}（注入 finishUsingItem 头部）、
- * TWT 自家 DrinkableItem 在自己的 finishUsingItem、可食用饮品走 FoodData 路径，
- * 容器返还（玻璃瓶/陶碗/空桶）也全在 finishUsingItem 里。本类
- * {@link #applyHookThirst} 只补最后一类缺口：物品在 TWT 饮品表里、但既非药水瓶
- * 也非 TWT 自家物品也非可食用（其他 mod 的装水容器多属此类）——它们的口渴靠
- * TWT 的完成钩子，而钩子只在"玩家真实手持右键喝完"时触发，女仆代喂绕过了它，
- * 所以按钩子自己的排除口径（药水瓶/可食用/TWT 自家物品都不补）直接调统一入口。
- * 这样与玩家自己喝完全同效、且绝不重复计数。
+ * 药水瓶的口渴在 TWT 的 {@code MixinPotionItem}（注入 finishUsingItem 头部）、 TWT 自家 DrinkableItem 在自己的 finishUsingItem、可食用饮品走 FoodData 路径， 容器返还（玻璃瓶/陶碗/空桶）也全在 finishUsingItem 里。本类 {@link #applyHookThirst} 只补最后一类缺口：物品在 TWT 饮品表里、但既非药水瓶 也非 TWT 自家物品也非可食用（其他 mod 的装水容器多属此类）——它们的口渴靠 TWT 的完成钩子，而钩子只在"玩家真实手持右键喝完"时触发，女仆代喂绕过了它， 所以按钩子自己的排除口径（药水瓶/可食用/TWT 自家物品都不补）直接调统一入口。 这样与玩家自己喝完全同效、且绝不重复计数。
  */
 public final class ThirstCompat {
     private ThirstCompat() {
@@ -48,8 +38,7 @@ public final class ThirstCompat {
      * [3]=PlayerThirst.drink(ItemStack,Player)
      * [4]=Capability<IThirst>（ModCapabilities.PLAYER_THIRST 静态字段值）
      * [5]=IThirst.getThirst() 实例方法
-     * [6]=DrinkableItem 类（排除判定用）
-     * 空数组 = 探测失败（该 mod 版本变化 → 保守禁用喂水，行为与未装一致） */
+     * [6]=DrinkableItem 类（排除判定用） 空数组 = 探测失败（该 mod 版本变化 → 保守禁用喂水，行为与未装一致） */
     private static volatile Object[] API;
     private static final Object API_LOCK = new Object();
 

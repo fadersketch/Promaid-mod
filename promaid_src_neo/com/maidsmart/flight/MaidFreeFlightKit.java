@@ -14,30 +14,19 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 
 /**
- * 实测六百七十三【仿创造飞行 · 能力探测】——判断"她身上有什么东西让她能飞"。
- *
  * 【为什么需要这一层】1.21.1 里"能不能飞"对**玩家**是 {@code Player#getAbilities().mayfly}
  * （NBT 里就是 abilities:{mayfly,flying}），而**女仆没有这套 Abilities**（全仓 grep：TLM 本体
  * 除了一处玩家判定，从没碰过 mayfly/Abilities）。所以不存在"读一个通用标记就知道她能飞"的路。
- *
  * 【而且不能指望物品自己生效】绝大多数"给飞行的模组物品"把逻辑写死在玩家身上
  * （`instanceof Player` / Abilities），女仆装着它们**什么都不会发生**——我们在鞘翅那条线上
  * 已经踩过同一个坑（见 MaidFlightKit.elytraDiagnostic 的那行提示）。所以这个功能的本质是
  * **仿创造飞行**：由我们给她悬浮与升降，物品只是"资格凭证"。
- *
  * 【三路探测，只认确定的、可配置的，绝不猜】
  * <ol>
  *   <li>{@code freeFlightItems}（默认空）：物品 id 列表，可写 {@code #命名空间:标签} 认整条标签；
  *       扫描范围 = 双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）；</li>
  *   <li>{@code freeFlightEffects}（默认空）：药水效果 id 列表（效果挂在实体上，这一路对女仆天然有效）；</li>
- *   <li>{@code freeFlightGravity}（默认开）：**通用启发式**——她的 {@code Attributes.GRAVITY} ≈ 0
- *       就算数（任何"重力归零"型来源都自动覆盖，不需要点名模组）。她在飘，我们只是把飘变成可控飞行。
- *       注意这条需要 1.21.1（GRAVITY 属性 1.20.5 才有），本文件属 neo 树。</li>
- * </ol>
- *
- * 【刻意不做的事】不尝试识别 Iron Jetpacks / MI 柴油喷气背包这类**自带燃料推进**的装备：它们的
- * 推力逻辑绑在玩家身上，我们"仿创造飞行"等于凭空绕过它的燃料，属于作弊。想用请自己往列表里加，
- * 并明白这一点。
+ *   <li>{@code freeFlightGravity}（默认开）：**通用启发式**——她的 {@code Attributes.GRAVITY} ≈ 0 就算数（任何"重力归零"型来源都自动覆盖，不需要点名模组）。她在飘，我们只是把飘变成可控飞行。 注意这条需要 1.21.1（GRAVITY 属性 1.20.5 才有），本文件属 neo 树。</li> </ol> 【刻意不做的事】不尝试识别 Iron Jetpacks / MI 柴油喷气背包这类**自带燃料推进**的装备：它们的 推力逻辑绑在玩家身上，我们"仿创造飞行"等于凭空绕过它的燃料，属于作弊。想用请自己往列表里加， 并明白这一点。
  */
 public final class MaidFreeFlightKit {
 
@@ -175,15 +164,7 @@ public final class MaidFreeFlightKit {
      *   <li>{@code modid:item} —— 物品 id；</li>
      *   <li>{@code #命名空间:标签} —— 物品标签；</li>
      *   <li>{@code @命名空间:组件} —— **有该数据组件**就算格；</li>
-     *   <li>{@code @命名空间:组件~文本} —— 该组件的值里包含这段文本才算格
-     *       （例：{@code @apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight}）。</li>
-     * </ul>
-     *
-     * 【为什么需要组件那两路（实测六百七十六）】很多整合包用**数据组件**授予能力，
-     * 而不是换一件物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给一件胸甲挂
-     * {@code neoforge:creative_flight} 修饰符——物品 id 没变、物品标签也匹配不到
-     * （{@code #neoforge:creative_flight} 是**修饰符 id**，不是物品标签），
-     * 只能按"组件存在 + 组件值含某段文本"来认。
+     *   <li>{@code @命名空间:组件~文本} —— 该组件的值里包含这段文本才算格 （例：{@code @apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight}）。</li> </ul> 【为什么需要组件那两路（实测六百七十六）】很多整合包用**数据组件**授予能力， 而不是换一件物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给一件胸甲挂 {@code neoforge:creative_flight} 修饰符——物品 id 没变、物品标签也匹配不到 （{@code #neoforge:creative_flight} 是**修饰符 id**，不是物品标签）， 只能按"组件存在 + 组件值含某段文本"来认。
      */
     public static boolean matchesAny(ItemStack stack, List<String> ids) {
         try {

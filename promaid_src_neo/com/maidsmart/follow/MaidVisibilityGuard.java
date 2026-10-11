@@ -13,41 +13,17 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 实测六百九十八【可见性自愈】——把"服务端还活着、客户端却没有她"这件事**每 tick 查一次、
- * 当场补回来**。（本文件是 neo / 1.21.1 树；forge 版见同名文件，SRG 名字各写各的。）
+ * 可见性自愈——把"服务端还活着、客户端却没有她"这件事**每 tick 查一次、当场补回来**。
  *
- * ── 玩家报的那句 ──
- * 「女仆在复活之后，建模直接被卡掉了，变成了幽灵状态。」（1.3.0 beta 实测六百九十七 那三枪
- * 补包没治好；本次整合包日志 2026-09-27 latest.log 又复现）
- *
- * ── 机制（这次是从原版字节码读出来的，不是猜） ──
- * <ol>
- *   <li>NeoForge 的 {@code EntityLeaveLevelEvent} 只在 {@code ServerLevel.EntityCallbacks
- *       .onTrackingEnd} 里发；而 {@code onTrackingEnd} 由
- *       {@code PersistentEntitySectionManager.updateChunkStatus} 在**区块视线档位降到
- *       {@code HIDDEN}**（区块卸载/掉出 entity-ticking）时对区块里所有实体调一遍
- *       ——这条路上 {@code entity.setRemoved(...)} 还没被执行，所以离场那一行一直是
- *       {@code reason=null}（这就是日志里那 21 行"reason=null"的来历，与死亡无关）。</li>
- *   <li>{@code onTrackingEnd} 的副作用是 {@code ChunkMap.removeEntity(entity)}：把
- *       {@code TrackedEntity} 从 {@code entityMap} 摘掉，并给**所有看过她的玩家**发一次
- *       {@code ClientboundRemoveEntitiesPacket} —— 客户端当场把她删掉。</li>
- *   <li>区块重新 ticking 时原版会重新 {@code addEntity} 并补发 spawn——但"新实体不补包"
- *       （实测五百九十六 的分流）拦掉了我们自己的补包，而实测六百九十七 那三枪只覆盖
- *       复活后头 10 秒。于是只要"她换区块 → 区块被拆 → 客户端删包"发生在别的时刻，
- *       客户端就**永远**没有她（
- * </ol>
- *
- * ── 这里做什么 ──
- * 挂在 {@code ChunkMap.tick} 尾巴上（与远程界面同步泵同一个注入点，见
- * {@code ChunkMapRemotePumpMixin}），只扫**我们自己持票的女仆**（量小、空表零成本）：
- * <ul>
- *   <li>她**在 entityMap 里但主人没配对**（{@code seenBy} 里没有主人的连接）= 典型幽灵
- *       → 立刻 {@link MaidResyncCommand#resyncToOwner} 重建一次（5 秒冷却，防抖）；</li>
- *   <li>她**根本不在 entityMap 里** = 她的区块没在 entity-ticking → 立刻把票挪到她脚下
- *       （{@link MaidChunkLoadManager#ensureTicketNow}），区块一 ticking 原版就会同步她。</li>
- * </ul>
- * 「主人不在 96 格内」一律不管：原版在 160 格内本来就该同步过她，96 格内没有她一定是异常；
- * 更远的距离是"正常看不见"，不该我们插手（也就不会给远处的女仆白白发包）。
+ * 【机制（原版字节码实证）】Forge/NeoForge 的 {@code EntityLeaveLevelEvent} 只在区块视线档位降到
+ * {@code HIDDEN}（区块卸载/掉出 entity-ticking）时发，那时 {@code setRemoved} 还没执行，所以离场那行
+ * 一直是 {@code reason=null}（与死亡无关）；它的副作用是 {@code ChunkMap.removeEntity}——把
+ * {@code TrackedEntity} 从实体表摘掉，并给**所有看过她的玩家**发一次移除包，客户端当场删掉她。区块
+ * 重新 ticking 时原版会重新同步，但"新实体不补包"拦掉了我们自己的补包，而复活后那三枪只覆盖头 10 秒
+ * ——幽灵就是这么留下的。
+ * 【这里做什么】挂在 {@code ChunkMap.tick} 尾巴上（与远程界面同步泵同一注入点），只扫我们自己持票的
+ * 女仆：① 她在实体表里但主人没配对 = 典型幽灵 → 立刻重建一次（5 秒冷却）；② 她根本不在实体表里 =
+ * 区块没在 entity-ticking → 立刻把票挪到她脚下。"主人不在 96 格内"一律不管（更远是"正常看不见"）。
  */
 public final class MaidVisibilityGuard {
 

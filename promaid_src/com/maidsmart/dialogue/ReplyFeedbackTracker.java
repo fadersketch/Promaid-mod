@@ -20,25 +20,19 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 聊天观察 + 回复反馈学习（v1.5.191，对齐 maidsoulcore ReplyEffectTracker 精简版）。
+ * 聊天观察 + 回复反馈学习（对齐 maidsoulcore ReplyEffectTracker 精简版）。
  *
- * 每 5 秒扫一次女仆聊天历史（TLM 公共 API，只读，与 AiMemoryExtractor 同源），
- * 按 gameTime watermark 只处理新消息，提供三块能力：
+ * 每 5 秒扫一次女仆聊天历史（TLM 公共 API，只读，与 AiMemoryExtractor 同源），按 gameTime watermark
+ * 只处理新消息，提供三块能力：
+ * 1. 真实沉默计时：ownerChatTick —— 主人最后一次聊天的 gameTime（7 阶段状态机需要它；不能用"女仆自己
+ *    上次发言"，否则主人没说话也算沉默、主人刚说完反而不算）。
+ * 2. 主人意图检测：提问（主人上条是问题且女仆未答 → LIGHT_FOLLOWUP 阶段用）、道歉（→
+ *    AffectManager.onOwnerApology）。
+ * 3. 回复反馈学习（dialogue.replyFeedback 开关）：负面（别说了/好烦/不是…）→ repairMode + 拉黑该话题到
+ *    当日结束 + 写 error_mark 记忆（每小时最多 1 条防刷）；修复（我说的是/你理解错…）→ repairMode；正面
+ *    （谢谢/说得对…）→ 解除 repairMode + 强化对应记忆（salience+1）。
  *
- * 1. 真实沉默计时：ownerChatTick —— 主人最后一次聊天的 gameTime。
- *    （旧版主动对话用"女仆自己上次发言"计时：女仆说完话自己等 20 分钟——
- *    主人没说话也算"沉默"，主人刚说完反而不算；这是 bug。7 阶段状态机
- *    需要真实主人聊天时间。）
- * 2. 主人意图检测：提问（主人上条是问题且女仆未答 → LIGHT_FOLLOWUP 阶段用）、
- *    道歉（→ AffectManager.onOwnerApology）。
- * 3. 回复反馈学习（dialogue.replyFeedback 开关）：
- *    - 负面（别说了/好烦/不是…）→ repairMode + 拉黑该话题到当日结束 +
- *      写 error_mark 记忆（每小时最多 1 条防刷）——主动会话跳过被否定的主题、语气更克制
- *    - 修复（我说的是/你理解错…）→ repairMode（听岔了，下次先确认再开口）
- *    - 正面（谢谢/说得对…）→ 解除 repairMode + 强化对应记忆（salience+1，记得更牢）
- *
- * 聊天历史被清除（原版清空聊天记录）：watermark 兜底重置——已存记忆不受影响，
- * 新对话照常被观察。
+ * 聊天历史被清除（原版清空聊天记录）：watermark 兜底重置——已存记忆不受影响，新对话照常被观察。
  */
 public class ReplyFeedbackTracker {
     /** 女仆 UUID → 已处理消息的最大 gameTime（水位） */

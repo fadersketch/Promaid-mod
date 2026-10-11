@@ -3,12 +3,9 @@ package com.maidsmart.combat;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 
 /**
- * 实测六百一十九【战斗时临时扩圈】（
- *
  * ── 需求原文 ──
  * "还有近战战斗时由于超出工作范围而被传送回来，然后就这么来回循环。感觉可以改成
  *  战斗状态临时扩圈把范围改大些，回到常态再用正常设置的工作范围。"
- *
  * ── 根因（TLM 1.5.2/1.5.3 两树反编译实证：{@code SchedulePos.tick} 每 40 tick 一次）──
  * <pre>
  *   restrictTo(maid);                                  // 按当前活动刷圈心/半径
@@ -18,37 +15,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  *   int minTeleportDistance = (int) maid.getRestrictRadius() + 4;   // ← 就是这一条
  *   if (distanceSqr &gt; minTeleportDistance² &amp;&amp; !sameWithRestrictCenter(maid)) {
  *       teleport(maid);                                // 传送回圈心（TeleportHelper.teleportToRestrictCenter）
- *   } else {
- *       BehaviorUtils.setWalkAndLookTarget(maid, center, 0.7f, 3); // 走回去
- *   }
- * </pre>
- * home 模式（不跟随 = 排班/在家干活）下，圈的半径来自 TLM 的
- * MAID_WORK_RANGE / MAID_IDLE_RANGE / MAID_SLEEP_RANGE（本模组另有
- * {@code scheduleActivityRange} 抬高下限，见 ScheduleRangeMixin）。女仆接了战后追怪，
- * 一跑出"半径 + 4"就被**直接传送回工位**——于是"追出去 → 传送回来 → 再追出去"，
- * 玩家看到的就是"来回循环"，仗永远打不完（追的是同一个怪，进度每次清零）。
- *
- * ── 修法：只改"读数"，不动任何存储 ──
- * {@link com.maidsmart.mixin.CombatWorkRangeMixin} 挂在
- * {@code EntityMaid.getRestrictRadius}（SRG {@code m_21535_}）的出口上：**正在接战时**
- * 返回 {@code max(常态半径, 配置的 combatWorkRange)}，其余时候原样返回。因为
- * TLM 那一整套判据（{@code isWithinRestriction} 的圈内判定、寻路节点评估
- * MaidNodeEvaluator、上面那条传送阈值、各任务"离家多远该回去"）**全都读这一个值**，
- * 一处改完就全线一致：
- * <ul>
- *   <li>接战中：圈变大 → 不传送、不"走回去"、寻路也允许她追出去；</li>
- *   <li>战斗结束（威胁消失 / 目标清掉 / 挨打窗口过去）：读数自动落回常态半径，
- *       该回家回家、该被传送传送——"回到常态再用正常设置的工作范围"，不需要任何收尾代码。</li>
- * </ul>
- *
- * ── 为什么取 max 而不是直接改大 ──
- * 玩家把 {@code scheduleActivityRange} 调到比本项更大时（想让她大范围干活），
- * 本项不该把圈**缩小**；只有常态半径比它小时才扩。
- *
- * ── 为什么不碰客户端的圈 ──
- * 客户端的圈靠同步的圈心/半径画（MaidAreaRenderEvent），而"在不在接战"依赖 Brain
- * 记忆与攻击时间戳——客户端拿不到（记忆不同步、target 也不同步）。硬在客户端猜会画出
- * 一个和服务端不一致的圈，所以客户端恒返回常态值（画出来的还是玩家设置的工作范围）。
+ *   } else { BehaviorUtils.setWalkAndLookTarget(maid, center, 0.7f, 3); // 走回去 } </pre> home 模式（不跟随 = 排班/在家干活）下，圈的半径来自 TLM 的 MAID_WORK_RANGE / MAID_IDLE_RANGE / MAID_SLEEP_RANGE（本模组另有 {@code scheduleActivityRange} 抬高下限，见 ScheduleRangeMixin）。女仆接了战后追怪， 一跑出"半径 + 4"就被**直接传送回工位**——于是"追出去 → 传送回来 → 再追出去"， 玩家看到的就是"来回循环"，仗永远打不完（追的是同一个怪，进度每次清零）。 ── 修法：只改"读数"，不动任何存储 ── {@link com.maidsmart.mixin.CombatWorkRangeMixin} 挂在 {@code EntityMaid.getRestrictRadius}（SRG {@code m_21535_}）的出口上：**正在接战时** 返回 {@code max(常态半径, 配置的 combatWorkRange)}，其余时候原样返回。因为 TLM 那一整套判据（{@code isWithinRestriction} 的圈内判定、寻路节点评估 MaidNodeEvaluator、上面那条传送阈值、各任务"离家多远该回去"）**全都读这一个值**， 一处改完就全线一致： <ul> <li>接战中：圈变大 → 不传送、不"走回去"、寻路也允许她追出去；</li> <li>战斗结束（威胁消失 / 目标清掉 / 挨打窗口过去）：读数自动落回常态半径， 该回家回家、该被传送传送——"回到常态再用正常设置的工作范围"，不需要任何收尾代码。</li> </ul> ── 为什么取 max 而不是直接改大 ── 玩家把 {@code scheduleActivityRange} 调到比本项更大时（想让她大范围干活）， 本项不该把圈**缩小**；只有常态半径比它小时才扩。 ── 为什么不碰客户端的圈 ── 客户端的圈靠同步的圈心/半径画（MaidAreaRenderEvent），而"在不在接战"依赖 Brain 记忆与攻击时间戳——客户端拿不到（记忆不同步、target 也不同步）。硬在客户端猜会画出 一个和服务端不一致的圈，所以客户端恒返回常态值（画出来的还是玩家设置的工作范围）。
  */
 public final class CombatWorkRange {
 
@@ -94,12 +61,7 @@ public final class CombatWorkRange {
      *   <li><b>脑里有活动目标</b>：{@code ATTACK_TARGET} 记忆在、且目标还活着
      *       （TLM 攻击任务与我们的战术/空袭全走这条记忆，是"正在打"最准的信号）；</li>
      *   <li><b>实体层目标</b>：{@code Mob.getTarget()} 非空且活着（TLM/原版任务写的那份，
-     *       与上面那条互为兜底——两边任一没写全都不影响判定）；</li>
-     *   <li><b>自保中</b>：自保会话标记在（自保本身就是"在危险里"，此时更不该被圈拽回去）；</li>
-     *   <li><b>刚交过手</b>：最近 {@value #RECENT_COMBAT_TICKS} tick 内她打过东西或挨过打
-     *       （覆盖"目标刚被打死/刚丢掉，人还在圈外"的那几秒——否则最后那一下必然触发传送）。</li>
-     * </ol>
-     * 全部只读，异常一律按"没在接战"处理（宁可少扩一次圈，也不要凭异常把圈放大）。
+     *       与上面那条互为兜底——两边任一没写全都不影响判定）；</li> <li><b>自保中</b>：自保会话标记在（自保本身就是"在危险里"，此时更不该被圈拽回去）；</li> <li><b>刚交过手</b>：最近 {@value #RECENT_COMBAT_TICKS} tick 内她打过东西或挨过打 （覆盖"目标刚被打死/刚丢掉，人还在圈外"的那几秒——否则最后那一下必然触发传送）。</li> </ol> 全部只读，异常一律按"没在接战"处理（宁可少扩一次圈，也不要凭异常把圈放大）。
      */
     public static boolean inCombat(EntityMaid maid) {
         try {

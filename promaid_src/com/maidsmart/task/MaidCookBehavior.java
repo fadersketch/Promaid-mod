@@ -38,18 +38,7 @@ import java.util.Set;
  * - v1.1.0 实测一百五十七：背包没有食材时兼容【矿物类可烧制物】——带矿物/原料标签
  *   （forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的
  *   物品（铁矿石/粗铁/金矿石/远古残骸等）照常放进熔炉烧（开关 misc.cookSmeltOres）
- * - v1.5.252 燃料修正：**不限于煤炭——凡是可燃烧物品（原版 isFuel）都可用，
- *   优先选背包中数量最多的那个**
- * - v1.1.0 实测二百四十一：燃料选择再修正——纯燃料优先（燃烧时长评分：
- *   煤炭/木炭/烈焰棒/干海带块/熔岩桶等不可烧制的可燃烧物），背包没有纯燃料
- *   才退而选可烧制燃料（原木/木板/树苗）——不再"用木头烧木头"
- * - v1.1.0 实测三百：按背包物品类型选炉子——先扫物品栏：有食物 → 烟熏炉优先
- *   （其次熔炉）；无食物有矿物（有高炉配方）→ 高炉优先（其次熔炉）；只有仅熔炉
- *   可烧物 → 只选熔炉。绑定后背包没有该炉型可烧物 → 取消绑定重新找。木材类
- *   （原木/木板/树苗/竹等）默认黑名单不烧（开关 misc.cookBurnWood，默认关）
- * - 处理间隔 100 tick（5 秒），不瞬间完成烹饪（炉子自身进度驱动）
- * - v1.5.252：绑定炉子并到达后立刻坐下不动；行为停止/炉子丢失恢复站立
- * - v1.2.4 实测六百三十七【没炉子可烧时不再"把自己冻住"】：见 {@link #wander}
+ * - v1.5.252 燃料修正：**不限于煤炭——凡是可燃烧物品（原版 isFuel）都可用， 优先选背包中数量最多的那个** - v1.1.0 实测二百四十一：燃料选择再修正——纯燃料优先（燃烧时长评分： 煤炭/木炭/烈焰棒/干海带块/熔岩桶等不可烧制的可燃烧物），背包没有纯燃料 才退而选可烧制燃料（原木/木板/树苗）——不再"用木头烧木头" - v1.1.0 实测三百：按背包物品类型选炉子——先扫物品栏：有食物 → 烟熏炉优先 （其次熔炉）；无食物有矿物（有高炉配方）→ 高炉优先（其次熔炉）；只有仅熔炉 可烧物 → 只选熔炉。绑定后背包没有该炉型可烧物 → 取消绑定重新找。木材类 （原木/木板/树苗/竹等）默认黑名单不烧（开关 misc.cookBurnWood，默认关） - 处理间隔 100 tick（5 秒），不瞬间完成烹饪（炉子自身进度驱动） - v1.5.252：绑定炉子并到达后立刻坐下不动；行为停止/炉子丢失恢复站立 - v1.2.4 实测六百三十七【没炉子可烧时不再"把自己冻住"】：见 {@link #wander}
  */
 public class MaidCookBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测一百六十一：诊断日志（latest.log 搜 "cook "）——定位"炉子就在
@@ -65,16 +54,13 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /** 可烹饪食材白名单（原版熔炉可烧食物）
-     *
-     *  v1.2.5 实测六百五十一【删掉五个"根本烧不了"的条目】：旧清单里
      *  {@code beetroot / carrot / brown_mushroom / cactus / dried_kelp} 在原版
      *  **没有任何炉子配方**——两份客户端 jar 的 {@code data/minecraft/recipes}
      *  逐个查过（smelting / smoking / blasting 全找遍）：这五个一条都没有，
      *  而同清单里的 potato / kelp / 生肉 / 鱼都查得到。
      *  清单里多这五个的直接后果是"女仆会烧胡萝卜"（
      *  删掉之后：模组/数据包**自己给这些物品补了配方**时照样能烧——那条路走
-     *  {@link #extractAnySmeltable} 与 {@link #pickFurnaceKind} 的通用分支，
-     *  它们查的是真实配方而不是这张表，所以这里是"白名单说法变准"，不是"功能变少"。 */
+     *  {@link #extractAnySmeltable} 与 {@link #pickFurnaceKind} 的通用分支， 它们查的是真实配方而不是这张表，所以这里是"白名单说法变准"，不是"功能变少"。 */
     private static final Set<Item> FOODS = new HashSet<>();
 
     static {
@@ -196,9 +182,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             // 玩家日志实证（latest.log 13:54 起）：反复 `cook start: maid=… furnace=null`
             // 之后再没挪过一步；反馈原文「不进入我们自己写的烧制且处于 home 状态
             // 这个模式的时候会直接卡在原地不动」。
-            // 现在改为一心两用：放行移动（不站桩），每 2 秒在附近挑个闲逛点
-            // ——与宰杀"没有牲畜就四处闲逛"（实测三百四十）同一套口径，
-            // 边走边扫炉子，找得到就绑定、找不到也不冻人。
+            // 现在改为一心两用：放行移动（不站桩），每 2 秒在附近挑个闲逛点 ——与宰杀"没有牲畜就四处闲逛"（实测三百四十）同一套口径， 边走边扫炉子，找得到就绑定、找不到也不冻人。
             MaidWorkTags.setStill(maid, false);
             this.standUp(maid);
             if (this.scanCooldown-- > 0) {
@@ -331,30 +315,12 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.2.4 实测六百三十七：**没炉子可烧时的闲逛**（"别把自己冻在原地"）。
-     *
      * ── 为什么要有这一段 ──
-     * 旧版在"找不到熔炉 / 炉子被拆 / 背包里没有这型炉子能烧的东西"三个分支里都是
      * {@code setStill(true)} = 站桩等待。单看是"不乱跑"的美意，实际效果是**永久静止**：
      * <ul>
      *   <li>WORK_STILL 由 {@code MaidMoveSuppressMixin} 在 MoveToTargetSink 入口整段取消
      *       ——不仅拦 WALK_TARGET，还会**每 tick 调 stopNavigation**，所以连直连导航
-     *       （m_26519_ moveTo）这种"绕开 MoveToTargetSink"的通道也会被立刻掐掉；</li>
-     *   <li>本任务 {@code enableLookAndRandomWalk=false}（不给 TLM 随机散步），
-     *       {@code HomeWorkMovementDriver} 只认农场/宰杀，{@code HomePatrolHandler}
-     *       跳过"非战斗干活中"——三条外部驱动全都不管她。</li>
-     * </ul>
-     * 三个条件叠加 → 玩家看到的就是"卡在原地不动"（日志实证：反复
-     * {@code cook start: maid=… furnace=null} 之后再没移动过）。
-     *
-     * ── 口径 ──
-     * 与宰杀（实测三百四十"没有需要宰杀的动物就四处闲逛"）**完全同一套**：
-     * 每 40 tick（2 秒）在她周围 8 格内随机取一点设 WALK_TARGET
-     * （{@code BlockPosTracker} 固定点，MoveToTargetSink 消费驱动寻路），
-     * 走位期间不站桩；闲逛点同样受工作圈钳制（{@link com.maidsmart.follow.WorkAreaClamp#allows}
-     * ——home 模式不逛出限制圈，跟随模式不逛离主人）。扫描照旧每 20 tick 一次
-     * （{@code findFurnace} 是以她当前位置为中心扫的），所以"边走边找炉子"，
-     * 一旦扫到就绑定并走过去坐下干活。
+     *       （m_26519_ moveTo）这种"绕开 MoveToTargetSink"的通道也会被立刻掐掉；</li> <li>本任务 {@code enableLookAndRandomWalk=false}（不给 TLM 随机散步）， {@code HomeWorkMovementDriver} 只认农场/宰杀，{@code HomePatrolHandler} 跳过"非战斗干活中"——三条外部驱动全都不管她。</li> </ul> 三个条件叠加 → 玩家看到的就是"卡在原地不动"（日志实证：反复 {@code cook start: maid=… furnace=null} 之后再没移动过）。 ── 口径 ── 与宰杀（实测三百四十"没有需要宰杀的动物就四处闲逛"）**完全同一套**： 每 40 tick（2 秒）在她周围 8 格内随机取一点设 WALK_TARGET （{@code BlockPosTracker} 固定点，MoveToTargetSink 消费驱动寻路）， 走位期间不站桩；闲逛点同样受工作圈钳制（{@link com.maidsmart.follow.WorkAreaClamp#allows} ——home 模式不逛出限制圈，跟随模式不逛离主人）。扫描照旧每 20 tick 一次 （{@code findFurnace} 是以她当前位置为中心扫的），所以"边走边找炉子"， 一旦扫到就绑定并走过去坐下干活。
      */
     private void wander(EntityMaid maid) {
         if (this.wanderCooldown-- > 0) {
@@ -419,8 +385,6 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         //    → 她绑着炉子坐下、永久不动（玩家看到的就是"站在原地卡死"）。
         //    先补柴，就能在喂之前先知道"有没有柴"：没柴就不喂，料留在她背包里，
         //    不会变成炉子里的路障。
-        //    v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
-        //    v1.1.0 实测二百四十一：纯燃料优先（燃烧时长评分，煤炭/木炭/烈焰棒等），
         //    没有纯燃料才退而选可烧制燃料（原木/木板）——不再"用木头烧木头"
         if (furnace.m_8020_(1).m_41619_()) {
             ItemStack fuel = this.extractBestFuel(level, maid, maidInv);
@@ -538,14 +502,11 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
 
     /** v1.1.0 实测一百五十七：物品是否带矿物/原料标签——标签路径含 ores 或
      *  raw_materials（forge:ores、forge:ores/*、minecraft:*_ores、forge:raw_materials 等）。
-     *
-     *  v1.2.5 实测六百五十一【顺手修掉：一直查错字段】：官方映射+tsrg 链式实证
      *  {@code m_135827_ = getNamespace}、{@code m_135815_ = getPath}。旧版取的是
      *  **命名空间**（forge / minecraft / 模组 id），而"ores"/"raw_materials"住在
      *  **路径**里（{@code forge:ores/iron} 的 path 是 {@code ores/iron}）——
      *  命名空间永远不含这两个词，于是本方法**恒返回 false**：矿物永远判不出来。
-     *  后果只是"矿物优先"失效（回退到通用可烧制物那条路照样能烧矿石），
-     *  所以一直没被发现；既然在改这个文件就一并按注释的原意修回来。
+     *  后果只是"矿物优先"失效（回退到通用可烧制物那条路照样能烧矿石）， 所以一直没被发现；既然在改这个文件就一并按注释的原意修回来。
      */
     private static boolean hasOreTag(Item item) {
         try {
@@ -563,23 +524,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     /**
      * 四张清单（默认全空 = 行为与旧版**一字不变**）：
      * 只烧这些 / 禁止烧制 / 只用这些燃料 / 禁用燃料。
-     *
      * ── 为什么要有 ──
      * 以前"她该烧什么、该拿什么当柴"全写在代码里（食材白名单 + 矿物标签 + 通用回退 + 按燃烧时长
      * 自动评分），玩家想"别拿我的钻石去烧""只许用煤炭当柴"只能改代码。挖矿/伐木/喂食都有
-     * 面板可编辑名单，烧制独缺一套——这四张表把它补齐（面板：生产与工作 → 烹饪与酿造 → 烧制清单）。
-     *
-     * ── 语义（一条说清）──
-     * **禁止永远优先**；**允许清单非空 = 只在这些里挑**，留空 = 自动（旧行为）。
-     *
-     * ── 一条硬约束：允许清单只"缩小"，绝不"放开" ──
-     * 判定挂在 {@link #hasRecipeRaw} **之上**（见 {@link #hasRecipe}），所以清单里就算写了一个
-     * 原版根本烧不动的物品，也不会让她把炉子占住——那正是实测六百五十一 刚修掉的毛病
-     *（"抱着一个烧不动的炉子卡死不动"）。清单改的是"挑哪些"，不是"能不能烧"。
-     *
-     * ── 生效时机 ──
-     * 与挖矿矿表/伐木木材表同一套路：面板保存时 {@link #loadCookLists()} 重建，
-     * 首次用到时懒加载（配置在静态初始化期读不到）。手改 toml 文件后需重开面板或重启游戏。
+     * 面板可编辑名单，烧制独缺一套——这四张表把它补齐（面板：生产与工作 → 烹饪与酿造 → 烧制清单）。 ── 语义（一条说清）── **禁止永远优先**；**允许清单非空 = 只在这些里挑**，留空 = 自动（旧行为）。 ── 一条硬约束：允许清单只"缩小"，绝不"放开" ── 判定挂在 {@link #hasRecipeRaw} **之上**（见 {@link #hasRecipe}），所以清单里就算写了一个 原版根本烧不动的物品，也不会让她把炉子占住——那正是实测六百五十一 刚修掉的毛病 （"抱着一个烧不动的炉子卡死不动"）。清单改的是"挑哪些"，不是"能不能烧"。 ── 生效时机 ── 与挖矿矿表/伐木木材表同一套路：面板保存时 {@link #loadCookLists()} 重建， 首次用到时懒加载（配置在静态初始化期读不到）。手改 toml 文件后需重开面板或重启游戏。
      */
     private static final java.util.Set<Item> SMELT_ALLOW = new java.util.HashSet<>();
     private static final java.util.Set<Item> SMELT_DENY = new java.util.HashSet<>();
@@ -658,7 +606,6 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      *  烟熏炉，用配方管理器查询，模组自定义配方同样生效）。probe 声明为 Container
      *  类型——getRecipeFor 的泛型 C 按实参静态类型推断，SimpleContainer 推不出
      *  Recipe<Container> 的约束。
-     *
      *  v1.2.5 实测六百五十二：这是**不看烧制清单**的原始判定——只有燃料那条路
      *  （判断"它本来算不算可烧制燃料"）用它：那里问的是"它自己能不能熔"，
      *  不该被玩家的原料白名单/黑名单改写，否则"把木材列进禁止烧制"会反过来
@@ -680,32 +627,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     /**
      * 面板「烧制清单」候选网格用：这件物品在当前世界**真的有炉子配方**吗——熔炉 / 烟熏炉 /
      * 高炉任一。
-     *
-     * <p>── 实测六百五十六【"网格里全是烧不动的东西"】──
-     * 旧版网格是**全物品**（把注册表里所有 item 铺出来），理由写在旧注释里："真正能不能烧
-     * 由女仆那边的配方判定管"。结果玩家打开这一页看到的是几千个物品：绝大多数根本没有炉子
-     * 配方（钻石、石头、面包、工具……），而真正能烧的生肉/矿石/沙子要翻页＋搜索才找得到
-     * ——反馈原文「那些不可烧东西都进这张表了，原本可以烧制的食物和物品反而不在里面」。
-     * 现在网格只列**真的有配方**的：判据就在这里，与行为侧同源，所以"面板上看得见的"
-     * 和"她真的会烧的"不会再是两套东西。
-     *
-     * <p>── 两条刻意的"不" ──
-     * <ul>
-     *   <li>**不看**玩家的四张清单（{@link #smeltListed}）：网格正是用来填清单的，再套一层
-     *       清单过滤会变成"只有已经在清单里的才显示"，自己把自己锁死；</li>
-     *   <li>**不看**开关（「烧任何可烧制物」「熔炉烧矿物」）：那是"我允不允许她烧"，
-     *       而"这东西能不能烧"是事实问题——面板该展示事实，开关在行为侧把关。</li>
-     * </ul>
-     * 装备类（工具/盔甲/三叉戟/盾）与附魔/用旧的物品按 {@link #isSafeToFeed} 一并排除：
-     * 她永不喂这些（它们有"烧成粒"配方），网格就不该鼓动玩家把它们填进清单。
+     * <p>── 实测六百五十六【"网格里全是烧不动的东西"】── 旧版网格是**全物品**（把注册表里所有 item 铺出来），理由写在旧注释里："真正能不能烧 由女仆那边的配方判定管"。结果玩家打开这一页看到的是几千个物品：绝大多数根本没有炉子 配方（钻石、石头、面包、工具……），而真正能烧的生肉/矿石/沙子要翻页＋搜索才找得到 ——反馈原文「那些不可烧东西都进这张表了，原本可以烧制的食物和物品反而不在里面」。 现在网格只列**真的有配方**的：判据就在这里，与行为侧同源，所以"面板上看得见的" 和"她真的会烧的"不会再是两套东西。 <p>── 两条刻意的"不" ── <ul> <li>**不看**玩家的四张清单（{@link #smeltListed}）：网格正是用来填清单的，再套一层 清单过滤会变成"只有已经在清单里的才显示"，自己把自己锁死；</li> <li>**不看**开关（「烧任何可烧制物」「熔炉烧矿物」）：那是"我允不允许她烧"， 而"这东西能不能烧"是事实问题——面板该展示事实，开关在行为侧把关。</li> </ul> 装备类（工具/盔甲/三叉戟/盾）与附魔/用旧的物品按 {@link #isSafeToFeed} 一并排除： 她永不喂这些（它们有"烧成粒"配方），网格就不该鼓动玩家把它们填进清单。
      */
     /**
-     * v1.3.0(beta) 实测六百六十五【面板「只看食物 / 填入原版食物」的唯一数据源】——
-     * 内置食材清单的注册名（只列**当前世界真有炉子配方**的那些，与行为侧 {@code isCookFood}
-     * 同一套判据；level 为 null 时不筛）。
-     *
-     * <p>为什么要走这里而不是面板自己再写一张表：内置食材清单只有一份（{@link #FOODS}），
-     * 面板若自己抄一遍，迟早出现"面板说能烧、她却不烧"（本模组反复强调的红线）。
+     * v1.3.0(beta) 实测六百六十五【面板「只看食物 / 填入原版食物」的唯一数据源】—— 内置食材清单的注册名（只列**当前世界真有炉子配方**的那些，与行为侧 {@code isCookFood} 同一套判据；level 为 null 时不筛）。 <p>为什么要走这里而不是面板自己再写一张表：内置食材清单只有一份（{@link #FOODS}）， 面板若自己抄一遍，迟早出现"面板说能烧、她却不烧"（本模组反复强调的红线）。
      */
     public static java.util.List<String> builtinFoodIds(net.minecraft.world.level.Level level) {
         java.util.List<String> out = new java.util.ArrayList<>();
@@ -800,24 +725,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     /**
      * v1.2.5 实测六百五十一【"女仆会烧胡萝卜" + "抱着炉子卡死不动"的根因】：
      * 白名单食材必须**真在当前世界有炉子配方**才算"可烹饪"。
-     *
-     * 旧版所有"她有没有吃的可烧"的判据都只查 {@code FOODS.contains(item)}——把
      * 硬编码清单当成事实断言。而清单里的
      * {@code carrot / beetroot / brown_mushroom / cactus / dried_kelp} 在原版
      * **没有任何炉子配方**（两份客户端 jar 的 {@code data/minecraft/recipes} 实证：
-     * 这五个既无 smelting 也无 smoking；对比 potato/kelp/生肉/鱼都查得到）。
-     * 后果是一条链上的两个现象：
-     * <ul>
-     *   <li>{@link #pickFurnaceKind} 见到胡萝卜就判成 FOOD → 她去占烟熏炉/熔炉；</li>
-     *   <li>{@link #processFurnace} 把胡萝卜塞进原料槽（提取路径也不查配方）；</li>
-     *   <li>{@link #furnaceMatchesInv} 用的是**同一个**白名单判据 → 恒为真 →
-     *       她永远不解绑，抱着一个烧不动的炉子坐到底 = 玩家看到的"卡死不动"。</li>
-     * </ul>
-     * 实测六百三十七 只治了"附近**找不到**炉子"那条冻结路径；这条"炉子找到了、
-     * 但里面根本没有能烧的东西"是另一条，两条都会冻人。
-     *
-     * 现在白名单只当**优先项**、不当**事实**：要有烟熏或熔炉配方才算数。
-     * 模组给这些物品补了配方时照样认（走的都是同一个配方管理器）。
+     * 这五个既无 smelting 也无 smoking；对比 potato/kelp/生肉/鱼都查得到）。 后果是一条链上的两个现象： <ul> <li>{@link #pickFurnaceKind} 见到胡萝卜就判成 FOOD → 她去占烟熏炉/熔炉；</li> <li>{@link #processFurnace} 把胡萝卜塞进原料槽（提取路径也不查配方）；</li> <li>{@link #furnaceMatchesInv} 用的是**同一个**白名单判据 → 恒为真 → 她永远不解绑，抱着一个烧不动的炉子坐到底 = 玩家看到的"卡死不动"。</li> </ul> 但里面根本没有能烧的东西"是另一条，两条都会冻人。 现在白名单只当**优先项**、不当**事实**：要有烟熏或熔炉配方才算数。 模组给这些物品补了配方时照样认（走的都是同一个配方管理器）。
      */
     private static boolean isCookFood(ServerLevel level, ItemStack stack) {
         if (stack == null || stack.m_41619_()) {
@@ -831,23 +742,12 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测三百四十九（反馈："女仆在进行烧制的时候，会把附魔的物品拿去
      * 烧掉"）：可烧制 ≠ 可以喂——带附魔（经验修补/耐久/时运等，哪怕只有 1 条）
      * 或耐久未满（用旧过的工具/武器/盔甲）的物品一律不进炉子。三类取料路径
      * （食材白名单外的矿物回退 extractOreFromMaid / 通用可烧制物回退
      * extractAnySmeltable / 烟熏炉·高炉 extractByRecipe）统一在入口拦截。
      * m_41793_ = isEnchanted（附魔表非空，javap 实证查 NBT Enchantments 列表），
-     * m_41768_ = isDamaged（当前耐久 &lt; 最大）、m_41776_ = getMaxDamage。
-     *
-     * v1.2.5 实测六百五十一【这一条以前**从来没生效过**】：旧版写的是
-     * {@code m_41753_() && m_41773_() > 0}，而按官方映射（obf→Mojmap）+ tsrg 链式
-     * 实证：{@code m_41753_ = isStackable}（不是 isDamaged）、
-     * {@code m_41773_ = getDamageValue}（不是 getMaxDamage）。
-     * {@code isStackable() && getDamageValue() > 0} 在原版几乎恒为假——
-     * 能堆叠的物品根本不吃耐久，吃耐久的（工具/盔甲）又都是单件不可堆叠，
-     * 于是"用旧的耐久物品不熔"这道闸等于不存在：**她会把自己用过的铁剑之类
-     * 直接丢进炉子**（实测三百四十九 报的是附魔物品，附魔那半条由 isEnchanted
-     * 挡住了，这半条一直漏着）。现在照注释的原意写回来。
+     * m_41768_ = isDamaged（当前耐久 &lt; 最大）、m_41776_ = getMaxDamage。 {@code m_41753_() && m_41773_() > 0}，而按官方映射（obf→Mojmap）+ tsrg 链式 实证：{@code m_41753_ = isStackable}（不是 isDamaged）、 {@code m_41773_ = getDamageValue}（不是 getMaxDamage）。 {@code isStackable() && getDamageValue() > 0} 在原版几乎恒为假—— 能堆叠的物品根本不吃耐久，吃耐久的（工具/盔甲）又都是单件不可堆叠， 于是"用旧的耐久物品不熔"这道闸等于不存在：**她会把自己用过的铁剑之类 直接丢进炉子**（实测三百四十九 报的是附魔物品，附魔那半条由 isEnchanted 挡住了，这半条一直漏着）。现在照注释的原意写回来。
      */
     private static boolean isSafeToFeed(ItemStack stack) {
         if (stack == null || stack.m_41619_()) {
@@ -1013,16 +913,13 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.252：燃料 = 背包中【数量最多】的可燃烧物品（原版 isFuel 判定，不限于煤炭）。
-     *  v1.1.0 实测二百四十一（反馈："女仆有的时候会使用木头烧木头"）：旧版按数量
      *  最多选——原木/木板/树苗既是燃料又是可烧制原料，伐木女仆背包原木数量碾压
      *  煤炭 → 原木进燃料槽、原木又进原料槽 = "用木头烧木头"。修复：
      *  ① 评分 = 燃烧时长优先（getFuel 映射，煤炭 1600 tick ≫ 原木 300 tick），
      *     同长再按数量——有煤必用煤，不再被数量带偏；
      *  ② 纯燃料优先：可燃烧且【无熔炉配方】（煤炭/木炭/烈焰棒/干海带块/熔岩桶）
      *     先选；背包没有纯燃料才退而选可烧制燃料（原木烧原木总比炉子熄火好）。
-     *  v1.1.0 实测三百零一：曾按要求改为"按物品栏摆放顺序取第一个"，实测后
-     *  玩家改回评分制（"还是改回按燃烧时长/数量评分吧"）。木材黑名单只拦"当原料
-     *  烧"，当燃料不受影响（原木/木板照常可烧炉子）。 */
+     *  玩家改回评分制（"还是改回按燃烧时长/数量评分吧"）。木材黑名单只拦"当原料 烧"，当燃料不受影响（原木/木板照常可烧炉子）。 */
     private ItemStack extractBestFuel(ServerLevel level, EntityMaid maid, IItemHandler maidInv) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有可烧的东西 →
         // 先请 TLM 从精妙背包/旅行者背包搬一组燃料进来（pull 先扫她自己的背包）

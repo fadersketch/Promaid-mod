@@ -17,19 +17,18 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import java.util.UUID;
 
 /**
- * 实测六百七十八【仿创造飞行 · per-maid 开关的网络层】——两个包：
- *
+ * 【仿创造飞行 · per-maid 开关的网络层】——两个包：
  * <ul>
  *   <li>{@link TogglePacket}（C2S）：action 0 = 查询当前状态、1 = 设置；</li>
- *   <li>{@link StatePacket}（S2C）：把该女仆的显式状态回给发起者
- *       （0 = 未设置/跟随全局、1 = 显式开、2 = 显式关），客户端写进缓存供界面显示。</li>
+ *   <li>{@link StatePacket}（S2C）：把该女仆的显式状态回给发起者（0 = 未设置/跟随全局、1 = 显式开、
+ *       2 = 显式关），客户端写进缓存供界面显示。</li>
  * </ul>
  *
- * 【为什么必须有 S2C】per-maid 标记存在服务端 `persistentData` 里（见 {@link MaidFreeFlightFlags}），
- * 客户端读不到——界面重开时若只靠本地猜，就会把"被关掉的开关"显示成"开"，
- * 玩家一点反而又打开（AiMemoryManager 踩过同一个坑）。
- *
+ * 【为什么必须有 S2C】per-maid 标记存在服务端 {@code persistentData} 里（见 {@link MaidFreeFlightFlags}），
+ * 客户端读不到——界面重开时若只靠本地猜，就会把"被关掉的开关"显示成"开"，玩家一点反而又打开。
  * 【服务端校验】只允许**主人本人或 OP** 改，且要她在加载范围内、距离不能太远（防远程遥控别人家的女仆）。
+ * 【落法】本树用 NeoForge 的 {@code CustomPayload} + {@code PayloadRegistrar}；Forge 树的同名类用
+ * SimpleChannel 写法，语义一字不改。
  */
 @EventBusSubscriber(modid = "promaid", bus = EventBusSubscriber.Bus.MOD)
 public final class MaidFreeFlightNetworking {

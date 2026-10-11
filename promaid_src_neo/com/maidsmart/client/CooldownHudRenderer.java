@@ -10,31 +10,19 @@ import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 
 /**
- * 实测四百二十一【冷却可视化】——反馈："我希望女仆复活的CD及自己回魂符的CD在
  * 玩家屏幕上可视化。"
- *
- * 实测四百三十三【照搬 HeartPact 的分娩倒计时显示机制】：
  * - **用 {@code @Mod.EventBusSubscriber} 注解常驻注册**（不再"收到第一个快照才
  *   register"——旧的懒注册一旦没触发，HUD 恒不显示）；
  * - 在 {@code RenderGuiLayerEvent.Post} 里【只认 HOTBAR 那一层】绘制（原版每帧
  *   热键栏画完时正好一次），带阴影、按剩余秒升序、彩色。
- *
  * 显示（左上角，建造 HUD 之下）：
  * 冷却
  *   复活 · 小玉    0:42
  *   回魂符 · 小玉  0:18 / 1:00
- *
  * ── 【实测六百七十八：这一块还顺带显示武装拴绳的"绑定中"】──
- *
- *
  * {@code kind = "bound"}（见 {@code CooldownHudTracker.broadcast}），于是位置、字体、行高、
  * "三秒没数据自动清空"、"打开界面 / F3 时整体隐藏"全套行为**一行都不用新写**。
- * 区别只有两处：① 那一段的字是**蓝色**（{@code §9}）；② 它没有倒计时，永远排在**最上**一行。
- * 它**不受"冷却 HUD"开关影响**（那是两件事；见服务端 {@code soulScanWanted()}）。
- *
- * <p>【实测六百八十二：它下面再多一行操作提示】
- *
- * 只在这条"绑定中"存在时画，灰字、缩进 4 像素，仍然受"放不下就不画"的边界保护。
+ * 区别只有两处：① 那一段的字是**蓝色**（{@code §9}）；② 它没有倒计时，永远排在**最上**一行。 它**不受"冷却 HUD"开关影响**（那是两件事；见服务端 {@code soulScanWanted()}）。 <p>【实测六百八十二：它下面再多一行操作提示】 只在这条"绑定中"存在时画，灰字、缩进 4 像素，仍然受"放不下就不画"的边界保护。
  */
 @EventBusSubscriber(modid = "promaid", value = Dist.CLIENT)
 public final class CooldownHudRenderer {
@@ -135,10 +123,7 @@ public final class CooldownHudRenderer {
     }
 
     /**
-     * 【实测六百八十七】「绑定中」下面那两行操作提示（灰字）。
-     *
      * <p>
-     *
      * 旧版只有一句"右击她：解除；她骑扫帚时改为主动骑乘"——没写**手里得拿着那根武装拴绳**，
      * 玩家空手右击发现没反应（或以为随便什么物品都行）。现在拆两行：第一行把"手持武装拴绳"
      * 摆在开头，第二行再写那一下右击在两种情形下各自是什么。
@@ -169,10 +154,7 @@ public final class CooldownHudRenderer {
 
     /**
      * 一行 → 彩色文案（名字截断防超宽）。
-     *
      * <p>【实测六百七十八 新增一档】{@code kind = "bound"}：武装拴绳的"绑定中"指示。
-     *
-     *
      * 同一条带阴影的文字、同样三秒没数据自动清空），只是这一段的字是**蓝色**（{@code §9}）。
      * 第二格是女仆名，第三格是相位（{@code leash} = 牵绳档，其它 = 二号位悬挂），
      * 两档在文案上直接写清楚——你一眼能看出"我现在是牵着还是在下面挂着"。

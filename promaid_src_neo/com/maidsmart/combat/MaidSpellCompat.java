@@ -9,34 +9,19 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 /**
- * v1.2.0 实测五百五十九：【车万女仆：万法皆通】法术附属的软兼容层。
- *
  * 【为什么需要它】该附属给女仆加了两个法术战斗任务
  * （`maidspell:spell_combat_melee` 近战法术 / `maidspell:spell_combat_far` 远程法术），
  * 而它们的 `isWeapon(maid, stack)` **恒返回 true**（javap 反汇编实证：方法体只有
  * `iconst_1; ireturn`）。我们所有"武器"判定都走"任务自带判据"（{@link CombatTaskCompat}），
  * 于是对这两个任务等于**万物皆武器**：
- *
  * - 自动换武器：主手空/快坏时会把背包里**最高 DPS 的冷兵器**（剑/斧）塞进法术模式的主手；
  * - 自主参战：法术任务只凭"背包里任意一件非原版物品"就进候选池（实测三百七十九的兜底）——
  *   等于带个模组食物也算"会用魔法"。
- *
  * 用户要求收紧：**必须保证女仆真的会用法术（随身带着法术装备）才开放切换，否则不进列表。**
- *
  * 【软依赖】全部走反射 + 一次性缓存：附属没装 / 版本不符 → 所有判定恒 false，
  * 调用方按"没有法术任务"处理，行为与旧版完全一致（与 {@link GunCompat} 同一套路，
  * 不给本模组增加任何前置或硬链接）。
- *
- * 【判据口径】
- * - "法术装备" = 附属自己认的法术书/法器（`ISpellBookProvider.isSpellBook`：铁魔法的法术书、
- *   新生魔艺的法器…）——法术本体就存在这些物品里（铁魔法一本法术书 = 一个法术），
- *   所以"随身有法术装备"就是"学过法术、用得出法术"；**v1.2.4 实测六百二十五 起再排掉
- *   两个 provider**（`slashblade` 认拔刀剑、`youkaishomecoming` 认弹幕/激光/符卡——它们
- *   本身就是武器、且各自已有专属战斗模式），见 {@link #spellProviderOf} 与配置
- *   `combat.spellGearIgnore`。
- * - "会不会用法术" = 主手/副手/背包/饰品栏里有法术装备，或者附属自己的数据里已经有她的
- *   法术书（`MaidIronsSpellData/MaidArsNouveauSpellData.get(uuid).getSpellBooks()` 非空，
- *   覆盖附属收进"末影口袋"等特殊位置的情况）。
+ * 【判据口径】 - "法术装备" = 附属自己认的法术书/法器（`ISpellBookProvider.isSpellBook`：铁魔法的法术书、 新生魔艺的法器…）——法术本体就存在这些物品里（铁魔法一本法术书 = 一个法术）， 所以"随身有法术装备"就是"学过法术、用得出法术"；**v1.2.4 实测六百二十五 起再排掉 两个 provider**（`slashblade` 认拔刀剑、`youkaishomecoming` 认弹幕/激光/符卡——它们 本身就是武器、且各自已有专属战斗模式），见 {@link #spellProviderOf} 与配置 `combat.spellGearIgnore`。 - "会不会用法术" = 主手/副手/背包/饰品栏里有法术装备，或者附属自己的数据里已经有她的 法术书（`MaidIronsSpellData/MaidArsNouveauSpellData.get(uuid).getSpellBooks()` 非空， 覆盖附属收进"末影口袋"等特殊位置的情况）。
  */
 public final class MaidSpellCompat {
     /** 附属 modId（其 mods.toml 实证：touhou_little_maid_spell） */
@@ -109,8 +94,6 @@ public final class MaidSpellCompat {
     /**
      * 这件物品是不是"法术装备"（附属各 provider 认的法术书/法器）。
      * 附属没装 / 反射失败 / 命中的 provider 在忽略表里 → false。
-     *
-     * v1.2.4 实测六百三十二 起**没有任何调用方**，别把它接回主手：法术任务的自动换武器
      * 已整个停用（见 {@code MaidToolAutoEquip.ensureForTask}）。原因正是这个口径本身
      * ——附属认的"法术书"里有一类根本不是武器（Goety 的聚晶袋就是袋子），
      * 按它换主手等于把玩家放的剑每 tick 换走。保留此方法只作口径定义与诊断用。
@@ -121,18 +104,11 @@ public final class MaidSpellCompat {
 
     /**
      * 这件物品命中了哪个附属 provider 的"法术装备"判定（没命中 / 被忽略 → null）。
-     *
      * 【忽略表，v1.2.4 实测六百二十五】为什么不能"附属说什么就是什么"：附属把"法术装备"
      * 的定义交给各前置附属自己的 provider，而其中两个 provider 认的"法术装备"
      * **本身就是武器/投掷物**，且它们在 TLM 侧各自已有**专属战斗模式**（javap 反编译实证）：
      * - {@code slashblade}：{@code isSpellBook} = {@code item instanceof
-     *   mods.flammpfeil.slashblade.item.ItemSlashBlade} → 拔刀剑；
-     * - {@code youkaishomecoming}：{@code instanceof DanmakuItem/LaserItem} 或附属自己的
-     *   符卡 → 弹幕/激光/符卡（TLM 原版任务里就有 {@code touhou_little_maid:danmaku_attack}）。
-     * 于是"背包里有把拔刀剑"＝"她带着法术书"：法术任务进候选池 →「模组任务优先让位」
-     * 再把原版任务挤掉 → 玩家看到的正是"我明明只给了她一把刀，她怎么自己切去法术了"
-     * （实测三百七十九 同款反馈再临）。默认把这两个 provider 排除在"法术装备"之外；
-     * 想还原旧口径就把 id 从配置 {@code combat.spellGearIgnore} 里删掉。
+     *   mods.flammpfeil.slashblade.item.ItemSlashBlade} → 拔刀剑； - {@code youkaishomecoming}：{@code instanceof DanmakuItem/LaserItem} 或附属自己的 符卡 → 弹幕/激光/符卡（TLM 原版任务里就有 {@code touhou_little_maid:danmaku_attack}）。 于是"背包里有把拔刀剑"＝"她带着法术书"：法术任务进候选池 →「模组任务优先让位」 再把原版任务挤掉 → 玩家看到的正是"我明明只给了她一把刀，她怎么自己切去法术了" （实测三百七十九 同款反馈再临）。默认把这两个 provider 排除在"法术装备"之外； 想还原旧口径就把 id 从配置 {@code combat.spellGearIgnore} 里删掉。
      */
     private static String spellProviderOf(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !resolve()) {
@@ -304,15 +280,11 @@ public final class MaidSpellCompat {
 
     /**
      * 附属自己的盟友判定（v1.2.2 实测五百六十）：友军风免用它来判断"这个人该不该被免"。
-     *
      * 为什么不用我们自己的口径而是借它的：附属对"女仆→友军"的伤害就是在
      * {@code MaidSpellAllyEvents} 里按 {@code MaidSpellAllyResolver.areFriendly} 取消的
      * （javap 实证：它依次看魔法召唤物的召唤者、同队、同主人/盟友）。
      * 既然"伤害免了"，"震开"就该按**完全同一份名单**免 —— 否则会出现
-     * "这个人它认为不该受伤、却被震飞"的错位，正是用户报的现象。
-     *
-     * @return 附属在场时返回它的判定结果；附属不在场 / 老版本没有这个类 → 返回 null，
-     *         调用方回退到本模组自己的口径（{@link FriendlyFireGuard#isFriendly}）。
+     * "这个人它认为不该受伤、却被震飞"的错位，正是用户报的现象。 @return 附属在场时返回它的判定结果；附属不在场 / 老版本没有这个类 → 返回 null， 调用方回退到本模组自己的口径（{@link FriendlyFireGuard#isFriendly}）。
      */
     public static Boolean addonAreFriendly(net.minecraft.world.entity.Entity a,
                                            net.minecraft.world.entity.Entity b) {

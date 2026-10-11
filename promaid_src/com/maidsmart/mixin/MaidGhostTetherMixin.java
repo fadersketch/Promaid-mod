@@ -11,23 +11,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.3.0 实测六百七十三【武装拴绳三期·半透明】：绑定的玩家在第一人称下看挂着自己那只女仆 = 半透明。
+ * 【武装拴绳三期·半透明】：绑定的玩家在第一人称下看挂着自己那只女仆 = 半透明。
  *
- * 【为什么拦 {@code EntityMaidRenderer.m_7392_(Mob, …)} 这一个方法】
- * TLM 三条渲染分支（YSM / Gecko / Bedrock）全部从它进——javap 实证：
- * {@code mainInfo.isGeckoModel()} 为真时把渲染整个交给 {@code geckoEntityMaidRenderer.render(...)}
- * 并 return，否则落到 {@code MobRenderer.m_7392_}（Bedrock）；YSM 模型走 {@code ysmMaidRenderer.geoRender(...)}。
- * 只有拦在这里，"模型本体 + 各图层全变半透明"才对三种模型一视同仁（按渲染类型逐个去改就只能覆盖其中一种）。
- *
- * 【为什么是"取消 + 用包好的 buffer 重进一次"】
- * 不能用 {@code @Redirect} 改实参（1.20.1 的 {@code MultiBufferSource} 参数在这里没有可安全注入的
- * 单一点），也不能"改完类型再让原方法跑"——渲染类型是方法体内部算出来的。这里的写法是：
- * 先 {@code ci.cancel()} 掉**这一遍**，再用"包了一层的 MultiBufferSource"**重进同一个方法**；
- * 重进的那一遍由 {@code MaidGhostRender} 内部的 active 标记挡住拦截，于是**原方法体只执行一次**
- * （RenderMaidEvent 只发一次、patpat 只画一次、模型信息只算一次），只是它拿到的 buffer 变成了幽灵版。
- *
- * 【两侧无关】判定全在客户端（第一人称 + 本地玩家 + S2C 挂载表），服务端一行都不用改；
- * 本 mixin 挂在 mixins 配置的 client 列表里，专用服务器上不会被加载。
+ * 【为什么拦 {@code EntityMaidRenderer.render(Mob, …)} 这一个方法】TLM 三条渲染分支（YSM / Gecko /
+ * Bedrock）全部从它进——javap 实证：{@code isGeckoModel()} 为真时把渲染整个交给
+ * {@code geckoEntityMaidRenderer.render(...)} 并 return，否则落到 {@code MobRenderer.render(...)}
+ * （Bedrock）；YSM 走 {@code ysmMaidRenderer.geoRender(...)}。只有拦在这里，"模型本体 + 各图层全变半透明"
+ * 才对三种模型一视同仁（按渲染类型逐个改只能覆盖其中一种）。
+ * 【为什么是"取消 + 用包好的 buffer 重进一次"】不能用 {@code @Redirect} 改实参（{@code MultiBufferSource}
+ * 在这里没有可安全注入的单一点），也不能"改完类型再让原方法跑"——渲染类型是方法体内部算出来的。写法是：先
+ * {@code ci.cancel()} 掉**这一遍**，再用"包了一层的 MultiBufferSource"**重进同一个方法**；重进那遍由
+ * {@code MaidGhostRender} 内部的 active 标记挡住拦截，于是**原方法体只执行一次**（RenderMaidEvent 只发一次、
+ * 模型信息只算一次），只是它拿到的 buffer 变成了幽灵版。
+ * 【两侧无关】判定全在客户端（第一人称 + 本地玩家 + S2C 挂载表），服务端一行不改；本 mixin 挂在 client 列表。
  */
 @Mixin(EntityMaidRenderer.class)
 public abstract class MaidGhostTetherMixin {

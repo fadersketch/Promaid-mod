@@ -7,12 +7,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * v1.5.393 实测八百零四：饰品「大运」的女仆侧挂件。
- *
  * <p>【需求原文】"加入一个新饰品，可以由玩家和女仆进行佩戴。佩戴的效果是使用鞘翅飞行的过程中
  * 可以直接击毁自身周边 5×5 范围内除硬度大于等于黑曜石以及硬度&lt;0 的一切方块。配置选项里面
  * 也可以写。这个效果在女仆空袭的时候生效。"
- *
  * <p>【女仆侧判据（三重闸，缺一不可）】
  * <ol>
  *   <li>她饰品栏里有「大运」（本类被 TLM 只在装了这件时才回调，天然满足）；</li>
@@ -21,11 +18,8 @@ import net.minecraft.world.item.ItemStack;
  *       {@code flight_ranged}）。需求原文"这个效果在女仆空袭的时候生效"，所以骑扫帚、
  *       仿创造飞行、单纯滑翔跟随都不触发。</li>
  * </ol>
- *
  * <p>【性能闸】TLM 每 tick 对每件饰品调一次 {@code onTick}；破坏动作内部还有
- * {@code accessory.daYun.maxPerTick} 上限，超出的格子下一 tick 继续清。
- *
- * <p>本类两树各一份：Neo 树用 Mojmap 名（本文件），Forge 树用 SRG 名。
+ * {@code accessory.daYun.maxPerTick} 上限，超出的格子下一 tick 继续清。 <p>本类两树各一份：Neo 树用 Mojmap 名（本文件），Forge 树用 SRG 名。
  */
 public class DaYunBauble implements IMaidBauble {
 
@@ -67,24 +61,12 @@ public class DaYunBauble implements IMaidBauble {
     }
 
     /**
-     * v1.5.394 实测八百零五：女仆侧 BGM——戴着「大运」真的在滑翔就起播，落地/停下就停。
-     *
      * <p>判据只看「戴着（本回调本身就是）+ 在滑翔」，**不要求空袭任务**：需求原文是
      * "玩家和女仆穿饰品飞行时会播放"，说的是"穿饰品飞行"这件事，破坏方块的"只在空袭生效"
      * 是另一条闸（见类注释）。所以骑扫帚/跟随飞行那些不是鞘翅滑翔的方式照样不会响。
-     *
      * <p>曲目读 {@code accessory.daYun.bgm}；0 = 关。
-     *
      * <p>【v1.5.396 实测八百零九：空袭途中不再"打一下就重播"】
-     *
-     * 收翅猛击那一段（见 {@code MaidFlightCombatBehavior}）会主动清掉滑翔位，打完再起飞才置回来。
-     * 旧版只认 {@link EntityMaid#isFallFlying()}，于是"收翅那一拍"被判成"不飞了" → 停 → 下一拍再起播
-     * → 音乐从头开始。
-     *
-     * <p>现在判据放宽成 {@link MaidFlightKit#isFlightAirborne}（滑翔 **或** 本轮攻击进行中）：
-     * 一次空袭从起跳到收手全程都算"在飞"，音乐一口气播到曲终。这条比"给停止加宽限期"更稳——
-     * 猛击段最长是配置项 {@code airRaid.smashMaxTicks}（可调到 200 刻 = 10 秒），
-     * 单靠宽限期盖不住，而"本轮正在打"天然覆盖整段（状态表由行为收尾 {@code forget()} 整清，有界）。
+     * 收翅猛击那一段（见 {@code MaidFlightCombatBehavior}）会主动清掉滑翔位，打完再起飞才置回来。 → 音乐从头开始。 <p>现在判据放宽成 {@link MaidFlightKit#isFlightAirborne}（滑翔 **或** 本轮攻击进行中）： 一次空袭从起跳到收手全程都算"在飞"，音乐一口气播到曲终。这条比"给停止加宽限期"更稳—— 猛击段最长是配置项 {@code airRaid.smashMaxTicks}（可调到 200 刻 = 10 秒）， 单靠宽限期盖不住，而"本轮正在打"天然覆盖整段（状态表由行为收尾 {@code forget()} 整清，有界）。
      */
     private static void tickMusic(ServerLevel level, EntityMaid maid) {
         int track = MaidSmartConfig.DAYUN_BGM.get();

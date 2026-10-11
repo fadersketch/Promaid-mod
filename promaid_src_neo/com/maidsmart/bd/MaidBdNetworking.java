@@ -18,25 +18,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 实测七百七十二【超越维度联动的网络层：让"配置面板"能改服务端规则】。
+ * 超越维度联动的网络层：让**纯客户端**的配置面板（{@code PromaidConfigScreen}）能改**服务端**规则。
+ * 面板改的 {@code ModConfigSpec} 只在客户端内存 + 客户端 toml 生效、到不了服务端（本 mod 没有
+ * config 同步包），而规则文件 {@code config/promaid_bd_rules.json} 与"某只女仆要不要产出回收"的
+ * {@code persistentData} 都是服务端的——所以要一条 C2S 通道（照 {@code MaidSeatNetworking} 骨架）。
  *
- * <h2>为什么必须有它</h2>
- * 配置面板（{@code PromaidConfigScreen}）是**纯客户端**的 {@code Screen}：它改的
- * {@code ModConfigSpec} 只在客户端内存 + 客户端自己的 toml 里生效，**到不了服务端**（本 mod
- * 没有任何 config 同步包）。而超越维度的规则文件 {@code config/promaid_bd_rules.json} 与
- * "某只女仆要不要产出回收"的 {@code persistentData} 都是**服务端**的东西。所以面板要提供这些
- * 选项，就得多一条 C2S 通道——本类就是那条通道（照 {@code MaidSeatNetworking} /
- * {@code ScheduleNetworking} 的骨架）。
- *
- * <h2>三个包</h2>
- * <ul>
- *   <li><b>BdRulePacket（C2S）</b>：改规则名单（addMove/addKeep/setKeepN/addKeepAtLeast/remove）
- *       或仅查询（query）。服务端 {@code hasPermission(2)} 校验后调 {@link MaidBdRules}
- *       （改完即落盘），无论改没改都回推一份最新状态。</li>
- *   <li><b>BdRulesStatePacket（S2C）</b>：把四类规则编码下发，面板子页据此刷新列表。</li>
- *   <li><b>BdPerMaidPacket（C2S）</b>：开/关"产出回收"（{@code maidUuid} 空 = 取玩家附近最近的
- *       一只自己的女仆），校验 主人/OP + 8 格内；回推 {@strong BdPerMaidStatePacket} 让面板显示。</li>
- * </ul>
+ * 四个包：① {@code BdRulePacket}（C2S）改规则名单（addMove/addKeep/setKeepN/addKeepAtLeast/remove）
+ * 或查询；服务端 {@code hasPermission(2)} 校验后调 {@link MaidBdRules}（改完即落盘），无论改没改都
+ * 回推最新状态。② {@code BdRulesStatePacket}（S2C）下发四类规则，面板子页据此刷新。③
+ * {@code BdPerMaidPacket}（C2S）开/关"产出回收"（{@code maidUuid} 空 = 取附近最近的一只自己的女仆），
+ * 校验主人/OP + 8 格内。④ {@code BdPerMaidStatePacket}（S2C）回该女仆状态。
+ * 【平台差异】1.21.1 用 NeoForge {@code CustomPacketPayload}+{@code PayloadRegistrar} 自动注册；
+ * 1.20.1/Forge 用 {@link SimpleChannel}，注册由 {@code ProMaidMod} 构造期调 {@link #register()}。
+ * 客户端面板回调走**反射**调 {@code onBdRulesState()} / {@code onBdPerMaidState()}，不强绑编译期。
  */
 @EventBusSubscriber(modid = "promaid", bus = EventBusSubscriber.Bus.MOD)
 public final class MaidBdNetworking {

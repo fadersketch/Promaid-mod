@@ -14,45 +14,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * v1.3.9【巡逻航图】航迹预览（纯客户端世界渲染）。
- *
  * <p>──
  * 「玩家只有在手持航图的时候可以看到这个轨道，不手持的时候看不到。」
  * 「标记成功之后，玩家根本就看不到这个标记长什么样子。能不能采用 replay mod 同款的渲染，
  * 把这个标记渲染出来呢？」
- *
  * <p>⇒ ① 可见性判据 = **主手或副手拿着巡逻航图**（第一句就查），不拿着一条线都不画；
  * ② 每个标记画成**菱形核 + 地面光环 + 竖针**（v1.3.9.2 改版，原来只是一个立方体轮廓——
  * ），并给首/尾**异色**：
  * <b>首点青绿、末点品红、中间淡紫</b>——首尾本来就是"连接"要接上的两个点，颜色分开才看得清。
  * ③ 曲线画的是**抬升后**那条（见 {@link PatrolAdapt}）：有方块挡着的地方会拱起一道缓坡，
  * 所以你看到的线就是她实际会飞的线。
- *
  * <p>── v1.3.9.2：为什么全都改成"面片"而不是线 ──
  * 而 {@code RenderType.lines()}
- * 的线宽是 GL 的 {@code glLineWidth}——现代驱动普遍把它钳到 1px，调不了。所以标记与"选中那条
- * 曲线"改用 {@link #ribbon 面向相机的细长四边形}（宽度是真实世界尺寸），走
- * {@code RenderType.debugQuads()}（javap 实证：POSITION_COLOR + QUADS + 半透明 + 不剔除 + 正常
- * 深度测试）。尺寸也一并放大到 0.48~0.58 格半径。
- *
- * <p>── 还画什么 ──
- * <ul>
- *   <li>这本航图里**全部**轨道（不只选中那条）：选中/正在标记那条亮天蓝（粗带），
- *       别的暗石板蓝（细线，只作背景）；</li>
- *   <li>净空走廊（旧版沿整条轨道在 ±净空 各画一条半透明琥珀虚线）<b>v1.3.9.5 已删</b>——
- *       ：下半截那条就在轨道正下方，
- *       看着正是这条轨道的"影子"；净空值在轨道说明里本来就有，不在地面上再画一份；</li>
- *   <li>正在标记时，从**最后一个标记**到你**当前位置**画一条牵引线（"橡皮筋"），
- *       让你知道下一个点会落在哪、跟上一个点怎么连。</li>
- *   <li>【v1.3.9.3】每个菱形**头上写一行字**：「轨道N 第M点」——
- *
- *       广告牌字</b>（TLM {@code RenderHelper.renderFloatingText}，见下）。</li>
- * </ul>
- *
- * <p>── 数据从哪来 ──
- * 客户端每 tick 自己读手上的物品（{@link PatrolChartData#readBook}）——物品数据组件是
- * 同步到客户端的，不需要额外发包。缓存按"内容签名"判重，内容没变就不重算样条。
- * 标记态走 S2C 包（{@link #setMarking}）。
+ * 的线宽是 GL 的 {@code glLineWidth}——现代驱动普遍把它钳到 1px，调不了。所以标记与"选中那条 曲线"改用 {@link #ribbon 面向相机的细长四边形}（宽度是真实世界尺寸），走 {@code RenderType.debugQuads()}（javap 实证：POSITION_COLOR + QUADS + 半透明 + 不剔除 + 正常 深度测试）。尺寸也一并放大到 0.48~0.58 格半径。 <p>── 还画什么 ── <ul> <li>这本航图里**全部**轨道（不只选中那条）：选中/正在标记那条亮天蓝（粗带）， 别的暗石板蓝（细线，只作背景）；</li> <li>净空走廊（旧版沿整条轨道在 ±净空 各画一条半透明琥珀虚线）<b>v1.3.9.5 已删</b>—— ：下半截那条就在轨道正下方， 看着正是这条轨道的"影子"；净空值在轨道说明里本来就有，不在地面上再画一份；</li> <li>正在标记时，从**最后一个标记**到你**当前位置**画一条牵引线（"橡皮筋"）， 让你知道下一个点会落在哪、跟上一个点怎么连。</li> <li>【v1.3.9.3】每个菱形**头上写一行字**：「轨道N 第M点」—— 广告牌字</b>（TLM {@code RenderHelper.renderFloatingText}，见下）。</li> </ul> <p>── 数据从哪来 ── 客户端每 tick 自己读手上的物品（{@link PatrolChartData#readBook}）——物品数据组件是 同步到客户端的，不需要额外发包。缓存按"内容签名"判重，内容没变就不重算样条。 标记态走 S2C 包（{@link #setMarking}）。
  */
 public final class PatrolPreviewClient {
 
@@ -62,34 +36,19 @@ public final class PatrolPreviewClient {
 
     /**
      * 【v1.3.9.7 标记文字——照搬建造模式那条路】
-     *
      * <p>
-     *
-     *
-     *
      * <p>建造模式区块上那行「（建造中）」+「创建于 x, y, z」是 {@code BlueprintAreaPreview}
      * 调 <b>TLM 的 {@code RenderHelper.renderFloatingText(pose, 文本, 世界X, 世界Y, 世界Z, 颜色,
      * 字号, 居中, 纵向偏移, 透视可见)}</b> 画的——javap 实证：那是 <b>世界空间的广告牌字</b>，
-     * 传进去的是 <b>绝对世界坐标</b>，方法内部自己减相机位置、并把字面转正对着镜头。它不走 GUI
-     * 层、也不做屏幕投影。
-     *
-     * <p>此前几版我自作聪明改成"投影到屏幕、再用 {@code GuiGraphics.drawString} 画"，还叠了
-     * 一套屏幕矩形防重叠——那根本不是建造模式的路子，位置也就对不上（玩家截图里字全飘了）。
-     * 现在 <b>全删</b>，一字不差照抄建造模式：同一个 API、同样的参数、同样的"名字一行 + 坐标
-     * 一行"两行结构，钉在每个菱形头顶。
-     *
-     * <p>两个上限：{@link #LABEL_MAX_DIST} 超过这个距离（格）就不画字——一本航图十几条 × 几十个
-     * 标记，远景全画会把字糊成一团；{@link #LABEL_MAX} 同一帧最多画这么多条（离相机近的先画）。
+     * 传进去的是 <b>绝对世界坐标</b>，方法内部自己减相机位置、并把字面转正对着镜头。它不走 GUI 层、也不做屏幕投影。 <p>此前几版我自作聪明改成"投影到屏幕、再用 {@code GuiGraphics.drawString} 画"，还叠了 一套屏幕矩形防重叠——那根本不是建造模式的路子，位置也就对不上（玩家截图里字全飘了）。 现在 <b>全删</b>，一字不差照抄建造模式：同一个 API、同样的参数、同样的"名字一行 + 坐标 一行"两行结构，钉在每个菱形头顶。 <p>两个上限：{@link #LABEL_MAX_DIST} 超过这个距离（格）就不画字——一本航图十几条 × 几十个 标记，远景全画会把字糊成一团；{@link #LABEL_MAX} 同一帧最多画这么多条（离相机近的先画）。
      */
     private static final double LABEL_MAX_DIST = 128.0;
     private static final int LABEL_MAX = 64;
     /**
      * 【v1.3.9.8 字号缩小】。
-     *
      * <p>建造模式用的是 0.15 / 0.12 —— 那是给**一整片区块**（几十格宽）用的；我们的菱形只有
      * 约 1 格半径，同样字号时字比菱形还大。这里**整体减半**：首行 0.075、次行 0.06
      * （原版一个字高 9px × 0.075 ≈ 0.68 格，仍清晰可读、又不再压住菱形）。
-     *
      * <p>行距也随之收：原来是 1.4 格（配 0.15 号字的一行高），现在两行相差约 0.68 格
      * （= 0.50 → −0.175，锚点相对<b>菱形顶点</b>），正好是 0.075 号字的一行高、不叠字。
      */
@@ -183,9 +142,7 @@ public final class PatrolPreviewClient {
                 // （javap 实证 {@code map.getOrDefault(type, f_109904_)}，且第二次进
                 // {@code f_109907_.add(builder)} 返回 false → **不再 begin**）：于是先取 lines()、
                 // 再取 debugQuads() 时，四边形顶点被写进仍是 **LINES 模式** 的缓冲 → 整批菱形
-                // 面片画不出来（细线还在，正是"菱形没了"）。
-                // 修法与 {@code BombMarkClient} / {@code BlueprintAreaPreview} 同款：给四边形
-                // **单独一份 BufferSource**（自带 builder、自己 flush），与 lines 完全隔离。
+                // 面片画不出来（细线还在，正是"菱形没了"）。 修法与 {@code BombMarkClient} / {@code BlueprintAreaPreview} 同款：给四边形 **单独一份 BufferSource**（自带 builder、自己 flush），与 lines 完全隔离。
                 MultiBufferSource.BufferSource ribbonSrc = new RibbonBufferSource();
                 VertexConsumer quad = ribbonSrc.m_6299_(RenderType.m_269166_());
                 Matrix4f mat = pose.m_85850_().m_252922_();
@@ -318,14 +275,11 @@ public final class PatrolPreviewClient {
 
     /**
      * 这条航迹的密采样（按内容签名缓存；0.8 格步长足够画得顺，也不必和运行时那份同精度）。
-     *
      * <p>【v1.3.9.2】画的是**抬升后**的那条线：{@link PatrolAdapt#liftAll} 遇到挡路方块会把它
      * 拱起一道缓坡——所以玩家在预览里看到的就是她实际会飞的那条曲线（抬升不改存档，
      * 玩家打的那几颗标记仍在原地）。
-     *
      * <p>【v1.3.9.3】点「连接」之后改用**连接那一刻烘好的抬升线**
-     * （{@link PatrolRoute#flightPoints()}，见 {@link PatrolAdapt#refine}）——
-     * 与运行时飞的是同一条，菱形记号仍画在玩家打的原地。
+     * （{@link PatrolRoute#flightPoints()}，见 {@link PatrolAdapt#refine}）—— 与运行时飞的是同一条，菱形记号仍画在玩家打的原地。
      */
     private static List<Vec3> polyFor(PatrolRoute r, net.minecraft.world.level.Level level) {
         String sig = r.id() + "|" + r.closed() + "|" + r.size() + "|" + r.points().hashCode()
@@ -463,15 +417,11 @@ public final class PatrolPreviewClient {
 
     /**
      * QUADS + POSITION_COLOR 的顶点（没有法线这一项，所以不能走 {@link #line}）。
-     *
      * <p>【1.20.1 的顶点必须显式收尾】末尾那句 {@code m_5752_()}（{@code VertexConsumer.endVertex}）
      * 不是可有可无的：javap 实证，1.20.1 的 {@code BufferBuilder} 只有 {@code endVertex()} 会把
      * <b>顶点计数 {@code f_85654_}</b> 加一（{@code addVertex}/{@code setColor} 都只往缓冲里写分量、
      * 不动这个计数）。不调它，整批顶点的计数恒为 0 → {@code endBuffer} 认为"没有顶点"、静默画 0 个，
-     * <b>既不报错也什么都看不到</b>——这就是 1.20.1 里线、菱形、整个预览全都没了的根因。
-     * 1.21.1 的 BufferBuilder 已改成写完即收尾，所以 neo 树那半边没有这一句也正常。
-     * （{@code DebugRenderer} / TLM {@code RenderHelper.renderLine} / {@code GunnerTetherClient}
-     * 这些在 1.20.1 能正常显示的，逐字都调了它。）
+     * <b>既不报错也什么都看不到</b>——这就是 1.20.1 里线、菱形、整个预览全都没了的根因。 1.21.1 的 BufferBuilder 已改成写完即收尾，所以 neo 树那半边没有这一句也正常。 （{@code DebugRenderer} / TLM {@code RenderHelper.renderLine} / {@code GunnerTetherClient} 这些在 1.20.1 能正常显示的，逐字都调了它。）
      */
     private static void vtx(VertexConsumer vc, Matrix4f mat, Vec3 p,
                             float r, float g, float b, float alpha) {

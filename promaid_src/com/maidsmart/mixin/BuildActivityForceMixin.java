@@ -12,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * v1.5.173：建造任务强制 WORK activity（修复"下达后不建造"根因）。
- *
  * 根因（日志实证 + TLM/原版字节码）：
  * - TLM 的 MaidUpdateActivityFromSchedule 每 tick 按时间表（Schedule.m_38019_）
  *   切换女仆 activity——游戏内休息/睡觉时段 → REST/HOME/IDLE。
@@ -22,16 +21,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * - 症状特征：core 行为（自保/战术，任何 activity 都评估）日志正常，
  *   WORK 任务行为日志一条没有（10:42 会话实证：jump attack 有日志、
  *   build canUse 零条）。
- *
  * 做法：注入 updateActivityFromSchedule（private static 4 参，两个 public 重载
  * 的汇聚点）——女仆当前任务是 maid_smart:build 时强制切 WORK 并跳过 schedule
- * 计算。下达建造 = 玩家明确意图，休息时段也必须建；任务切走后恢复正常作息。
- *
- * v1.5.176：method 指定完整 descriptor——SMART 版 TLM 存在 3 个同名重载
- * （public (EntityMaid,Brain) / public (EntityMaid) / private (ServerLevel,EntityMaid,Brain,long)），
- * 仅按名字匹配会命中第一个 public 重载 → InvalidInjectionException →
- * MixinTransformerError 致命崩溃（2026-08-09 11:32 会话实证）。带 descriptor
- * 精确命中 private 4 参汇聚点（javap 实证 SMART jar 中该方法存在）。
+ * 计算。下达建造 = 玩家明确意图，休息时段也必须建；任务切走后恢复正常作息。 （public (EntityMaid,Brain) / public (EntityMaid) / private (ServerLevel,EntityMaid,Brain,long)）， 仅按名字匹配会命中第一个 public 重载 → InvalidInjectionException → MixinTransformerError 致命崩溃（2026-08-09 11:32 会话实证）。带 descriptor 精确命中 private 4 参汇聚点（javap 实证 SMART jar 中该方法存在）。
  */
 @Mixin(MaidUpdateActivityFromSchedule.class)
 public abstract class BuildActivityForceMixin {

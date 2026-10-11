@@ -7,13 +7,10 @@ import net.minecraft.world.level.block.Block;
 import net.neoforged.neoforge.common.NeoForge;
 
 /**
- * v1.1.0 实测二百二十八（反馈："种树逻辑直接分开来——手上有树苗就随手种一个；
  * 在一定范围内判定周围有没有树苗和可种地块，没有就随手种一个；与伐木不相关，
  * 但触发仍然是伐木这个模式"）：
- *
  * 「随手种树」独立模块——逻辑与伐木完全分离（不读伐木的任何目标/状态），
  * 由 MaidWoodBehavior 每 20 tick 调起一次（触发 = 伐木模式；不做独立总开关）。
- *
  * 行为：冷却跳表（默认 5 秒，伐木面板「补种树苗冷却」可调）后——
  * 1. 背包有树苗（ItemNameBlockItem 且方块带 #minecraft:saplings——原版+模组树苗兼容）；
  *    没有则先扫身边（XZ 6 × Y ±6）树苗掉落物捡进来（伐木中拾取任务让位，树叶掉的苗落地后捡不到）；
@@ -440,16 +437,12 @@ public final class MaidPlanting {
     }
 
     /**
-     * v1.1.0 实测三百五十二：骨粉催熟——对身边（半径 RADIUS、垂直 ±2）最近的一株
      * 合格树苗使用背包里的骨粉。实测三百五十三（反馈："催熟的积极性不高；树苗
      * 没有冒出粒子特效；施肥速度应该是每 0.5 秒尝试一次"）调整：
      * ① 节拍独立于种树冷却，由驱动每 10 tick（0.5 秒）调一次；
      * ② 修双扣——growCrop（growCrop）尾部自带 shrink(1)（javap 实证 offset 83，
      * 45% 判定成败都扣），旧版再手动 extractItem = 每次扣 2；
-     * ③ 补粒子——growCrop 本身不放 1505（原版粒子在玩家 useOn 路径），每次
-     * 施肥手动 levelEvent(1505) 给视觉反馈。
-     * 选择条件不变：SaplingBlock 实例 + 非深色橡树（单株永不生长）+ 干列净空；
-     * 【不查光照】——骨粉不经过原版 randomTick 的光照门槛（地下/室内也能催熟）。
+     * ③ 补粒子——growCrop 本身不放 1505（原版粒子在玩家 useOn 路径），每次 施肥手动 levelEvent(1505) 给视觉反馈。 选择条件不变：SaplingBlock 实例 + 非深色橡树（单株永不生长）+ 干列净空； 【不查光照】——骨粉不经过原版 randomTick 的光照门槛（地下/室内也能催熟）。
      */
     private static void tryBonemealSapling(ServerLevel level, EntityMaid maid) {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_BONEMEAL_SAPLING.get()) {
@@ -531,17 +524,12 @@ public final class MaidPlanting {
     }
 
     /**
-     * v1.1.0 实测三百五十四：施肥换手持骨粉状态。实测三百六十【状态机重写】
      * （反馈："工具和骨粉之间反复切换的鬼畜；有概率刷出背包里面出现大量道具"）：
-     * 旧版把原主手物品 insert 进背包槽、还原时又 setStackInSlot(0, original)——
      * 【同一个 ItemStack 实例同时被背包槽和主手槽引用】（背包槽旧引用未清），
      * 每次换手循环留一个幽灵引用 → 存档时同一实例重复序列化 → 读档刷出道具。
      * 新状态机：
      * ① 原主手物品放【副手】（随实体持久化——关服/存档都不丢），不在内存记账、
-     *    不进背包，任何实例任一时刻只存在于一个槽位；
-     * ② 全链路 extract-then-place：每个槽位写入前先把旧实例完整取走（拿引用 +
-     *    setStackInSlot(EMPTY)），杜绝共享引用；
-     * ③ HAND_HOLD 只记还原时刻（maidId → restoreAt tick）。
+     *    不进背包，任何实例任一时刻只存在于一个槽位； ② 全链路 extract-then-place：每个槽位写入前先把旧实例完整取走（拿引用 + setStackInSlot(EMPTY)），杜绝共享引用； ③ HAND_HOLD 只记还原时刻（maidId → restoreAt tick）。
      */
     private static final java.util.Map<Integer, Long> HAND_HOLD = new java.util.HashMap<>();
 
@@ -729,7 +717,6 @@ public final class MaidPlanting {
      *  mangrove_propagule 等【普通 BlockItem 子类】的幼苗——物品标签分支必须验
      *  BlockItem（旧版放行了非 ItemNameBlockItem 的块物品，种植强转当场
      *  ClassCastException→整条种树链 silently 崩溃）；兜底 ItemNameBlockItem+方块标签。
-     *  v1.1.0 实测三百五十一：深色橡树苗排除——javap 实证 DarkOakTreeGrower 的
      *  单株特征 getConfiguredFeature 返回 null（只有 2×2 mega 特征），单株深色橡
      *  树苗【永不生长】；女仆只会单种，种了就是白种还白占冷却，捡取/种植一并
      *  排除（按注册名判定，模组自定义 2×2 树可按需扩展黑名单）。 */

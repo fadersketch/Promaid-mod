@@ -20,37 +20,14 @@ import java.util.Map;
  * {@link com.maidsmart.combat.SlashBladeCompat}（拔刀剑）、{@code MaidSpellCastCompat}
  * （万法皆通）一致：**全程反射，能调就调、调不到就当没有**，没装 / 换版本 / 内部改名
  * 都不该让 Promaid 起不来。
- *
  * <h2>为什么调 {@code mobSpellResult} 而不是走玩家的施法链（源码 + 字节码实证）</h2>
  * Goety 的玩家施法入口是 {@code DarkWand#use(Level, Player, InteractionHand)}——
  * 它本身就是原版的 **Player 专属**回调，而且中间有一道硬门
  * {@code if (spell != null && caster instanceof Player)}，不满足就走
  * {@code failParticles} + 灭火音效，**根本到不了 SpellResult**。
  * 灵魂（SE）那套同理：capability 只在 Player 上注册、{@code SEHelper.*} 的形参也全是 Player。
- *
  * <p>但 Goety **自己给怪物留了正门**：{@code Spell#mobSpellResult(LivingEntity, ItemStack)}
- * 是 public，直接进 {@code SpellResult}，**不查灵魂、不扣灵魂、不进冷却**——
- * Goety 自家的骷髅领主、唤风仆从全走这条路。所以女仆作为 Mob 是"有门可进的"，
- * 代价是**灵魂与冷却得由我们（外层）自己管**。
- *
- * <h2>数值（1.21.1 的 goety-3.1.5.1 字节码实测 + 配置回读）</h2>
- * <pre>
- *   两者都是「直接把速度**覆盖**成 视线方向 × d0」（不是累加）：
- *     d0 = power + potency / 2      // 注意 potency/2 是**整数除法**
- *     飞行聚晶 FlyingSpell：power = 0.5；若手里是 wind_staff（rightStaff）则 power = 1.0
- *     发射聚晶 LaunchSpell：power = 1.5；若手里是 wind_staff 则 power = 2.5
- *   节奏：FlyingSpell 的 Cooldown() 硬编码 0 ⇒ 持杖者**每 tick** 覆盖一次（真·恒速飞行）；
- *        LaunchSpell 走普通冷却（配置 launchCoolDown = 20 tick）。
- *   配置默认（config/goety/goety-spells.toml）：发射 灵魂4/冷却20；飞行 灵魂4/每 20 tick 扣一次。
- * </pre>
- * 也就是说：**飞行聚晶 = 20 格/秒（风杖）或 10 格/秒**，比我们仿创造飞行的上限（0.35 格/tick）
- * 高一个量级——它更像"喷气"而不是"直升机"。
- *
- * <h2>已知坑（本工程踩过同名的一个）</h2>
- * FlyingSpell 靠"每 tick 覆盖 deltaMovement"，而**女仆是 Mob**：她的
- * {@code MoveControl}/`travel` 会在 aiStep 阶段改速度。Goety 侧的玩家版不用管这个
- * （玩家的 travel 走输入速度 + hasImpulse 同步），**我们这一侧必须管**——
- * 与仿创造飞行同一个坑，解法也一样（源头抑制走路目标 + 晚写速度）。
+ * 是 public，直接进 {@code SpellResult}，**不查灵魂、不扣灵魂、不进冷却**—— Goety 自家的骷髅领主、唤风仆从全走这条路。所以女仆作为 Mob 是"有门可进的"， 代价是**灵魂与冷却得由我们（外层）自己管**。 <h2>数值（1.21.1 的 goety-3.1.5.1 字节码实测 + 配置回读）</h2> <pre> 两者都是「直接把速度**覆盖**成 视线方向 × d0」（不是累加）： d0 = power + potency / 2      // 注意 potency/2 是**整数除法** 飞行聚晶 FlyingSpell：power = 0.5；若手里是 wind_staff（rightStaff）则 power = 1.0 发射聚晶 LaunchSpell：power = 1.5；若手里是 wind_staff 则 power = 2.5 节奏：FlyingSpell 的 Cooldown() 硬编码 0 ⇒ 持杖者**每 tick** 覆盖一次（真·恒速飞行）； LaunchSpell 走普通冷却（配置 launchCoolDown = 20 tick）。 配置默认（config/goety/goety-spells.toml）：发射 灵魂4/冷却20；飞行 灵魂4/每 20 tick 扣一次。 </pre> 也就是说：**飞行聚晶 = 20 格/秒（风杖）或 10 格/秒**，比我们仿创造飞行的上限（0.35 格/tick） 高一个量级——它更像"喷气"而不是"直升机"。 <h2>已知坑（本工程踩过同名的一个）</h2> FlyingSpell 靠"每 tick 覆盖 deltaMovement"，而**女仆是 Mob**：她的 {@code MoveControl}/`travel` 会在 aiStep 阶段改速度。Goety 侧的玩家版不用管这个 （玩家的 travel 走输入速度 + hasImpulse 同步），**我们这一侧必须管**—— 与仿创造飞行同一个坑，解法也一样（源头抑制走路目标 + 晚写速度）。
  */
 public final class MaidGoetyCompat {
 
@@ -378,37 +355,12 @@ public final class MaidGoetyCompat {
     }
 
     /**
-     * 【实测七百六十六·后门】把诡厄仆从的"目标优先闸"打开（{@code IServant.setPriorityTime(100)}）。
-     *
      * <h2>现场（玩家 2026-10-02 19:42/19:43 那两局的日志 + 反编译实证）</h2>
      * 女仆骑上下界合金巨兽仆从、目标也写进去了（日志 {@code [模组坐骑·目标] ... 目标=husk}），
      * 但它**一招不出、只会自己游荡**。根因在 {@code Summoned.setTarget(LivingEntity)}：
      * <pre>
      *   if (isGuardingArea() &amp;&amp; !isPrioritizing()) {
-     *       if (target != null) {
-     *           if (target.distanceToSqr(vec3BoundPos()) &lt;= Mth.square(guardingRange()))
-     *               overrideSetTarget(target);   // 区内才收
-     *           // 区外：**静默丢掉**，连日志都没有
-     *       } else overrideSetTarget(null);
-     *   } else overrideSetTarget(target);
-     * </pre>
-     * 而 {@code IServant.servantTick()} 对守区仆从还有第二道：目标离守区中心超过
-     * {@code guardingRange()*2} 就 {@code owned.setTarget(null)} 直接清掉。两条叠加的结果是
-     * **它的 getTarget() 恒为 null** ⇒ {@code InternalSummonMoveGoal} / 五个
-     * {@code InternalSummonAttackGoal}（砸地/岩浆弹/火焰弹/冲锋/震地）全部 {@code canUse()=false}
-     * ——只剩 {@code Summoned.WanderGoal}（priority 5，不看目标）在走 ⇒
-     *
-     *
-     * <h2>这道闸为什么能开</h2>
-     * 上面两条的判据里都有 {@code !isPrioritizing()} / {@code isPrioritizing()}——
-     * 而 {@code isPrioritizing() == getPriorityTime() > 0}，{@code setPriorityTime(int)} 是
-     * {@code IServant} 的 public 接口方法、{@code Summoned} 原样实现。把闸打开之后再走
-     * {@code setTarget(...)}，它自己就会落到 {@code else} 分支直接收下，且 {@code servantTick}
-     * 的"清目标"那一段整块被跳过。**没有新数值、没有绕过它自己的任何判据**——用的是模组
-     * 自己给"优先目标"留的那条正门。
-     *
-     * <p>本方法只对**诡厄仆从**生效（{@code setPriorityTime} 在别的实体上根本不存在 → 返回 false，
-     * 调用方照旧 {@code setTarget}，一个字节都不变）。110 拍后自动衰减，不留痕。
+     *       if (target != null) { if (target.distanceToSqr(vec3BoundPos()) &lt;= Mth.square(guardingRange())) overrideSetTarget(target);   // 区内才收 // 区外：**静默丢掉**，连日志都没有 } else overrideSetTarget(null); } else overrideSetTarget(target); </pre> 而 {@code IServant.servantTick()} 对守区仆从还有第二道：目标离守区中心超过 {@code guardingRange()*2} 就 {@code owned.setTarget(null)} 直接清掉。两条叠加的结果是 **它的 getTarget() 恒为 null** ⇒ {@code InternalSummonMoveGoal} / 五个 {@code InternalSummonAttackGoal}（砸地/岩浆弹/火焰弹/冲锋/震地）全部 {@code canUse()=false} ——只剩 {@code Summoned.WanderGoal}（priority 5，不看目标）在走 ⇒ <h2>这道闸为什么能开</h2> 上面两条的判据里都有 {@code !isPrioritizing()} / {@code isPrioritizing()}—— 而 {@code isPrioritizing() == getPriorityTime() > 0}，{@code setPriorityTime(int)} 是 {@code IServant} 的 public 接口方法、{@code Summoned} 原样实现。把闸打开之后再走 {@code setTarget(...)}，它自己就会落到 {@code else} 分支直接收下，且 {@code servantTick} 的"清目标"那一段整块被跳过。**没有新数值、没有绕过它自己的任何判据**——用的是模组 自己给"优先目标"留的那条正门。 <p>本方法只对**诡厄仆从**生效（{@code setPriorityTime} 在别的实体上根本不存在 → 返回 false， 调用方照旧 {@code setTarget}，一个字节都不变）。110 拍后自动衰减，不留痕。
      */
     public static boolean openPriorityGate(Entity e) {
         try {

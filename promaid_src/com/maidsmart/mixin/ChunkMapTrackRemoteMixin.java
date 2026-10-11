@@ -17,9 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.Set;
 
 /**
- * v1.3.5 实测六百六十「几百格外也真的能开界面」——把「客户端看得见她」这件事，
  * 对**我们替他开界面的那一对**（玩家, 女仆）做一次强制同步。
- *
  * ── 玩家问的那句：「不是有过一个女仆区块强制加载吗？难道解决不了这样的问题吗？」 ──
  * 区块加载**解决不了这一条**，因为它们是两条完全独立的管线：
  * <ul>
@@ -30,57 +28,8 @@ import java.util.Set;
  *       {@code ChunkMap$TrackedEntity.m_140497_}（= updatePlayer）里，本 mixin 下面细说，
  *       只有距离 + 可见性，与区块票据完全无关。</li>
  * </ul>
- *
  * ── 原版那道门到底长什么样（javap 实证，1.20.1 forge 树） ──
- * <pre>
- *   void m_140497_(ServerPlayer player) {                     // = updatePlayer
- *       if (player == this.entity) return;
- *       Vec3 d = player.position().subtract(entity.position());
- *       double r = Math.min(getEffectiveRange(), viewDistance * 16);   // ← f_140126_ × 16
- *       boolean flag = (d.x*d.x + d.z*d.z) <= r*r                // ← 只算水平！不算 Y
- *                      &amp;&amp; entity.m_6459_(player);               // = broadcastToPlayer
- *       if (flag)  { if (seenBy.add(player.f_8906_)) serverEntity.m_8541_(player); }  // addPairing
- *       else       { if (seenBy.remove(player.f_8906_)) serverEntity.m_8534_(player); } // removePairing
- *   }
- * </pre>
- * 其中 {@code getEffectiveRange()} 的起点是 {@code ChunkMap.m_140199_}（= addEntity）里写进去的
- * 那个数：{@code entity.getType().m_20681_() * 16}——字节码实证 {@code bipush 16 / imul} 紧跟在
- * {@code EntityType.m_20681_} 之后，也就是 <b>区块数 × 16 = 方块数</b>（女仆声明的是 10 区块 →
- * 160 格）。于是「自然能同步到多远」= {@code min(160, 视距×16)}——
- * 玩家视距 8 区块时只有 128 格，视距 16 时才到 160 格封顶。
- *
- * <p>1.21.1（neo 树）在同一个方法里还多一道 gate：{@code this$0.isChunkTracked(player, x, z)}
- * ——客户端必须已经把她的区块收下来了才算数。本 mixin 在方法**入口**直接接管，
- * 这道额外的 gate 一并绕开（同一个 mixin 的两树版本各自对应）。
- *
- * ── 这个 mixin 做的两件事 ──
- * <ol>
- *   <li><b>配</b>：把这一对塞进 {@code seenBy} 并调原版 {@code addPairing}——
- *       客户端由此拿到「她」这个实体（spawn + 元数据 + 属性，与走近时一模一样）；</li>
- *   <li><b>不许被拆</b>：原版还有两条路会把她从客户端拆掉，会话期间一并拦下：
- *       {@code m_140497_}（= updatePlayer：玩家走远后这一条会 removePairing）与
- *       {@code m_140485_}（= removePlayer：她的区块滑出玩家视野时原版直接拆）。
- *       两者都只在"这次界面是我们替玩家开的"前提下拦，拦的时候顺手把配对补上。</li>
- * </ol>
- *
- * ── 一个字都不碰的地方 ──
- * <ul>
- *   <li>没登记过的（玩家自己右键女仆）→ {@code promaid$forcePair} 直接返回 false，
- *       原版按距离算，3 格手感照旧；</li>
- *   <li>她死了 / 被魂符收走 → 也返回 false，交给原版正常拆（界面该关就关，
- *       不会留一个"她不在了、客户端还挂着一个幽灵"的尾巴——见 {@code promaid$mayForce}）；</li>
- *   <li>{@code seenBy} 里已有的不重复发（{@code add} 的返回值就是"这次新加进去没有"），
- *       所以不会出现"同一个实体发两遍 spawn"；</li>
- *   <li>界面一关，{@code AbstractMaidContainer.removed} 那条注入就撤销登记
- *       （见 {@code MaidContainerRemoteOpenMixin}），下一个 tick 原版自己把她拆回原样
- *       ——不会有任何长期驻留的"强制同步"。</li>
- * </ul>
- *
- * 【映射】forge 树写 SRG（{@code m_140497_} / {@code m_140485_} / {@code m_8541_} /
- * {@code f_140471_} / {@code f_140472_} / {@code f_140475_} / {@code f_8906_}），
- * neo 树写官方名（{@code updatePlayer} / {@code removePlayer} / {@code addPairing} /
- * {@code serverEntity} / {@code entity} / {@code seenBy} / {@code connection}）——
- * 两版 jar 里逐个 javap 核对过。
+ * <pre> void m_140497_(ServerPlayer player) {                     // = updatePlayer if (player == this.entity) return; Vec3 d = player.position().subtract(entity.position()); double r = Math.min(getEffectiveRange(), viewDistance * 16);   // ← f_140126_ × 16 boolean flag = (d.x*d.x + d.z*d.z) <= r*r                // ← 只算水平！不算 Y &amp;&amp; entity.m_6459_(player);               // = broadcastToPlayer if (flag)  { if (seenBy.add(player.f_8906_)) serverEntity.m_8541_(player); }  // addPairing else       { if (seenBy.remove(player.f_8906_)) serverEntity.m_8534_(player); } // removePairing } </pre> 其中 {@code getEffectiveRange()} 的起点是 {@code ChunkMap.m_140199_}（= addEntity）里写进去的 那个数：{@code entity.getType().m_20681_() * 16}——字节码实证 {@code bipush 16 / imul} 紧跟在 {@code EntityType.m_20681_} 之后，也就是 <b>区块数 × 16 = 方块数</b>（女仆声明的是 10 区块 → 160 格）。于是「自然能同步到多远」= {@code min(160, 视距×16)}—— 玩家视距 8 区块时只有 128 格，视距 16 时才到 160 格封顶。 <p>1.21.1（neo 树）在同一个方法里还多一道 gate：{@code this$0.isChunkTracked(player, x, z)} ——客户端必须已经把她的区块收下来了才算数。本 mixin 在方法**入口**直接接管， 这道额外的 gate 一并绕开（同一个 mixin 的两树版本各自对应）。 ── 这个 mixin 做的两件事 ── <ol> <li><b>配</b>：把这一对塞进 {@code seenBy} 并调原版 {@code addPairing}—— 客户端由此拿到「她」这个实体（spawn + 元数据 + 属性，与走近时一模一样）；</li> <li><b>不许被拆</b>：原版还有两条路会把她从客户端拆掉，会话期间一并拦下： {@code m_140497_}（= updatePlayer：玩家走远后这一条会 removePairing）与 {@code m_140485_}（= removePlayer：她的区块滑出玩家视野时原版直接拆）。 两者都只在"这次界面是我们替玩家开的"前提下拦，拦的时候顺手把配对补上。</li> </ol> ── 一个字都不碰的地方 ── <ul> <li>没登记过的（玩家自己右键女仆）→ {@code promaid$forcePair} 直接返回 false， 原版按距离算，3 格手感照旧；</li> <li>她死了 / 被魂符收走 → 也返回 false，交给原版正常拆（界面该关就关， 不会留一个"她不在了、客户端还挂着一个幽灵"的尾巴——见 {@code promaid$mayForce}）；</li> <li>{@code seenBy} 里已有的不重复发（{@code add} 的返回值就是"这次新加进去没有"）， 所以不会出现"同一个实体发两遍 spawn"；</li> <li>界面一关，{@code AbstractMaidContainer.removed} 那条注入就撤销登记 （见 {@code MaidContainerRemoteOpenMixin}），下一个 tick 原版自己把她拆回原样 ——不会有任何长期驻留的"强制同步"。</li> </ul> 【映射】forge 树写 SRG（{@code m_140497_} / {@code m_140485_} / {@code m_8541_} / {@code f_140471_} / {@code f_140472_} / {@code f_140475_} / {@code f_8906_}）， neo 树写官方名（{@code updatePlayer} / {@code removePlayer} / {@code addPairing} / {@code serverEntity} / {@code entity} / {@code seenBy} / {@code connection}）—— 两版 jar 里逐个 javap 核对过。
  */
 @Mixin(targets = "net.minecraft.server.level.ChunkMap$TrackedEntity")
 public abstract class ChunkMapTrackRemoteMixin implements RemoteTrackBridge {

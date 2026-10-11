@@ -8,26 +8,19 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * v1.3.0「扫帚模式」的判定套件 + 活动范围夹取（两树镜像）。
- *
  * ── 这是什么 ──
  * 一个 TLM 任务模式：女仆取出扫帚、在脚下放出 {@code EntityBroom} 并骑上去飞起来，
  * 用**远程武器**打（开火链路整条复用飞行远战，见 {@link MaidFlightRangedTask#fireRangedWeapon}），
  * 平时悬停跟着主人。**不做编队**（玩家明确排除：成本太高）。
- *
  * ── 为什么需要单独的 Kit（而不是直接用 MaidFlightKit）──
  * 空袭的"能不能激活"是三件套：**鞘翅 + 武器 + 推进剂（烟花/羽扇/位移法术/激流三叉戟）**。
  * 扫帚模式要的是两件套：**扫帚 + 远程武器**（骑扫帚本身就是推进方式，不需要鞘翅，
  * 也不需要烟花）。所以判定要另写一份，但**远程武器与弹药那两条口径一字不改地复用**
  * {@link MaidFlightKit}——本模组反复强调的红线：同一个口径只能有一处实现。
- *
  * ── 与空袭的关系（用户）──
  * <pre>
  *   空袭：  hasElytra && hasWeaponForFlightTask && hasFlightPropellant && rangedAmmoOk
- *   扫帚：  hasBroom  && hasRangedWeapon                            && rangedAmmoOk
- * </pre>
- * "弹药"这一条照搬：远程空袭本来就是"没弹药不必起飞"，扫帚同理（弓/弩要箭、枪械要子弹；
- * 御币/三叉戟/能量枪不消耗弹药，那一档 {@code hasAmmoForWeapon} 自己放行）。
+ *   扫帚：  hasBroom  && hasRangedWeapon                            && rangedAmmoOk </pre> "弹药"这一条照搬：远程空袭本来就是"没弹药不必起飞"，扫帚同理（弓/弩要箭、枪械要子弹； 御币/三叉戟/能量枪不消耗弹药，那一档 {@code hasAmmoForWeapon} 自己放行）。
  */
 public final class MaidBroomKit {
 
@@ -175,24 +168,12 @@ public final class MaidBroomKit {
     }
 
     /**
-     * 【实测六百九十二】她此刻有没有资格**待在扫帚上** = 扫帚（身上有物品 **或** 正骑着）+ 远程武器。
-     *
      * <p>与 {@link #isModeActive} 的**唯一**差别：**弹药不算**。旧版把弹药也算进"未激活"，于是
      * 冲锋枪 / 狙击枪打空弹匣的那一拍就当场上 {@code dismount} —— 她是扫帚的乘客，下鞍 = 从空中
      * 掉下去。
-     *
      * <pre>
      *   [远程开火] …主手=tacz:modern_kinetic_gun 距敌 14.93 格 开镜=true TLM档=true 弹=无
-     *   [扫帚模式] …下扫帚（理由=缺远程武器/弹药，这把是世界里那把，原地留着）
-     * </pre>
-     * 落地后 TLM 自己的枪械链路又给她换弹 → 判定"齐备" → 再骑上 → 约 5 秒一循环（同一分钟里 7 次）。
-     * 冲锋枪（射速高，一梭子秒空）与狙击枪（弹匣小 + 栓动）最先撞上这一拍，其它枪种只是晚一点。
-     *
-     * <p>【为什么"弹匣空了"不该下鞍】那是"这一拍打不响"，不是"她没必要待在扫帚上"：TLM 的
-     * {@code GunCommonUtil.performGunAttack} 自己就有 {@code ShootResult.NO_AMMO →
-     * IGunOperator.reload()} 那一支（javap 实证，那是我们开火链路每一步都在调的方法），
-     * 换完弹她照打。所以弹药只该决定"要不要起飞"（{@link #isModeActive}，实测四百九十五 的口径
-     * 一字不改），不该决定"要不要把她摔下去"。
+     *   [扫帚模式] …下扫帚（理由=缺远程武器/弹药，这把是世界里那把，原地留着） </pre> 落地后 TLM 自己的枪械链路又给她换弹 → 判定"齐备" → 再骑上 → 约 5 秒一循环（同一分钟里 7 次）。 冲锋枪（射速高，一梭子秒空）与狙击枪（弹匣小 + 栓动）最先撞上这一拍，其它枪种只是晚一点。 <p>【为什么"弹匣空了"不该下鞍】那是"这一拍打不响"，不是"她没必要待在扫帚上"：TLM 的 {@code GunCommonUtil.performGunAttack} 自己就有 {@code ShootResult.NO_AMMO → IGunOperator.reload()} 那一支（javap 实证，那是我们开火链路每一步都在调的方法）， 换完弹她照打。所以弹药只该决定"要不要起飞"（{@link #isModeActive}，实测四百九十五 的口径 一字不改），不该决定"要不要把她摔下去"。
      */
     public static boolean canStayMounted(EntityMaid maid) {
         if (maid == null || !enabled()) {
@@ -205,20 +186,12 @@ public final class MaidBroomKit {
     }
 
     /**
-     * 【实测七百〇九】起飞判定里**除扫帚之外的那两件**：远程武器 + 弹药。
-     *
      * <p>
-     *
-     *
      * <p>【它补的是哪条路】"她身上没有扫帚 → 去找一把"那一档（{@link com.maidsmart.combat.MaidBroomDrive#seekBroom}）
      * 原先**什么都不判**：只要附近有扫帚/掉落的扫帚，她就走过去骑上并立刻起飞
      * （{@link com.maidsmart.combat.MaidBroomDrive#rideWorldBroom} 里直接 {@code startTakeoff}）——
      * 于是"没武器 / 没弹药"的她也会腾空，再花 2 秒才被缺件判据放下来。远程空袭那边
-     * （{@link MaidFlightKit#isModeActive}）**起飞前就要三件齐 + 弹药**，这条链路必须对齐。
-     *
-     * <p>【为什么单独一个方法】扫帚那一件在"去找"这一档里**必然还没到手**（她正因为没有才去找），
-     * 所以不能直接用 {@link #isModeActive}（它会因为"缺扫帚"直接为假、她永远不出门找）。
-     * 这里只判另外两件；"扫帚那件"由调用方按当前状态另外判（已经骑上/身上有 = 齐）。
+     * （{@link MaidFlightKit#isModeActive}）**起飞前就要三件齐 + 弹药**，这条链路必须对齐。 <p>【为什么单独一个方法】扫帚那一件在"去找"这一档里**必然还没到手**（她正因为没有才去找）， 所以不能直接用 {@link #isModeActive}（它会因为"缺扫帚"直接为假、她永远不出门找）。 这里只判另外两件；"扫帚那件"由调用方按当前状态另外判（已经骑上/身上有 = 齐）。
      */
     public static boolean armed(EntityMaid maid) {
         if (maid == null || !enabled()) {
@@ -259,27 +232,10 @@ public final class MaidBroomKit {
     /**
      * 把一个飞行目标点夹进她的**活动范围圈**（home 模式）——扫帚模式的"与 home 模式的关系"
      * 这条最难的账，全部收在这一个方法里。
-     *
      * 【为什么必须我们自己夹】她一旦骑上扫帚就是**乘客**：TLM {@code canBrainMoving()} 在
      * {@code isPassenger()} 时为 false（字节码实证），于是 TLM 自身那套"范围约束"（寻路节点
      * 评估、任务选点过滤）**整条失效**——她自己的移动全停，往哪飞只听我们的。
-     * 好消息是 TLM 的硬约束 {@code SchedulePos.tick} 里紧跟着 `if (!canBrainMoving()) return;`，
-     * 所以**不会被传送拉回**（不会出现"飞出去→被拽回来→再飞出去"的循环，也不会被拽下扫帚）。
-     * 坏消息是"守家"这件事**没人管了**，必须由这里补上。
-     *
-     * 【只夹水平，不夹垂直】活动范围圈在 TLM 里就是个水平圆（{@code getRestrictCenter()} 是
-     * BlockPos、{@code getRestrictRadius()} 是 float，没有纵向半径这一说）；而扫帚模式本来
-     * 就只在目标/地面之上 1~3 格悬停，纵向夹取没有意义、还会把她按进地里。
-     *
-     * 【半径读的是"放大后"的值】战斗任务下 {@code CombatWorkRangeMixin} 会把
-     * {@code getRestrictRadius()} 的读数临时放大到 {@code combat.workRange}（默认 15，见
-     * {@link CombatWorkRange}）——我们**直接读 {@code maid.m_21535_()}**，所以吃得到
-     * 同一次放大：与近战/空袭"接战时可以追远一点"的口径完全一致，不需要另写一套。
-     *
-     * 【圈心没配好就不夹】{@code WorkAreaClamp.circleCenter} 已经把"从未 restrictTo 过"
-     * （圈心是 {@code BlockPos.ZERO}）挡成 null——那种情况下照夹会把她拴到世界原点。
-     *
-     * @return 夹取后的点（任何异常 / 未开 home / 关掉本项 → 原样返回）
+     * 好消息是 TLM 的硬约束 {@code SchedulePos.tick} 里紧跟着 `if (!canBrainMoving()) return;`， 所以**不会被传送拉回**（不会出现"飞出去→被拽回来→再飞出去"的循环，也不会被拽下扫帚）。 坏消息是"守家"这件事**没人管了**，必须由这里补上。 【只夹水平，不夹垂直】活动范围圈在 TLM 里就是个水平圆（{@code getRestrictCenter()} 是 BlockPos、{@code getRestrictRadius()} 是 float，没有纵向半径这一说）；而扫帚模式本来 就只在目标/地面之上 1~3 格悬停，纵向夹取没有意义、还会把她按进地里。 【半径读的是"放大后"的值】战斗任务下 {@code CombatWorkRangeMixin} 会把 {@code getRestrictRadius()} 的读数临时放大到 {@code combat.workRange}（默认 15，见 {@link CombatWorkRange}）——我们**直接读 {@code maid.m_21535_()}**，所以吃得到 同一次放大：与近战/空袭"接战时可以追远一点"的口径完全一致，不需要另写一套。 【圈心没配好就不夹】{@code WorkAreaClamp.circleCenter} 已经把"从未 restrictTo 过" （圈心是 {@code BlockPos.ZERO}）挡成 null——那种情况下照夹会把她拴到世界原点。 @return 夹取后的点（任何异常 / 未开 home / 关掉本项 → 原样返回）
      */
     public static Vec3 clampToHome(EntityMaid maid, Vec3 desired) {
         if (desired == null) {
@@ -321,7 +277,6 @@ public final class MaidBroomKit {
 
     /**
      * 她此刻正**骑在扫帚上飞**（扫帚模式 + 是本模组所有的女仆）。
-     *
      * 【为什么单独一个判据，而不是把扫帚 UID 塞进 {@code MaidFlightKit.isFlightUid}】
      * `isFlightUid` 是"鞘翅空袭"的判据，它一路喂给**鞘翅渲染图层、滑翔姿态前倾、防摔落、
      * 落地水**那些"她背上有翅膀、在滑翔"的语义。扫帚模式**既不背鞘翅也不滑翔**，把它并进去
@@ -338,14 +293,11 @@ public final class MaidBroomKit {
 
     /**
      * 「守家 / 工作区」此刻是否真的生效——也就是「平时该沿着工作范围那个圈盘旋」。
-     *
      * <p>三件都要成立：总开关（{@code combat.broom.clampHome}）开着、她确实处在 home 模式
      * （{@code hasRestriction()}）、且圈心有效（{@link com.maidsmart.follow.WorkAreaClamp#circleCenter}
      * 已经把「从未 restrictTo 过」那种挡成 null）。
-     *
      * <p>【为什么单独成一个判据】它同时被两处消费：「飞行目标点夹取」（{@link #clampToHome}）
-     * 与「平时沿圈盘旋」（{@code MaidBroomDrive.homeOrbitPoint}）。口径只留一处，
-     * 免得出现"夹了圈却不盘旋"或"盘旋了却不夹"这种半开状态。
+     * 与「平时沿圈盘旋」（{@code MaidBroomDrive.homeOrbitPoint}）。口径只留一处， 免得出现"夹了圈却不盘旋"或"盘旋了却不夹"这种半开状态。
      */
     public static boolean homeRestricted(EntityMaid maid) {
         try {
@@ -363,11 +315,9 @@ public final class MaidBroomKit {
      * 扫帚模式下**禁止放置类战术**（TNT / 末地水晶 / 重生锚 / 床）——她骑在扫帚上，只该用
      * 主手武器打。判据就是「她的任务是扫帚模式」（**不看有没有正骑着**）：骑不骑都是这一种
      * 打法，不该出现"刚下扫帚去找扫帚的那两秒顺手扔了个 TNT"。
-     *
      * <p>【为什么是加闸，而不是只在手册里声明】放置那条链路（{@code MaidBombing} 的相位机与
      * {@code BombTntTick} 的战斗投掷扫描）**只看任务是不是战斗类**，全程没有
-     * {@code isPassenger} 判定——她骑在扫帚上照样会起手放水晶 / 重生锚 / 床（源码实证）。
-     * 所以"手册里那句声明"要成立，就必须在这里真拦一道（现在三处：起手、投掷扫描、相位推进）。
+     * {@code isPassenger} 判定——她骑在扫帚上照样会起手放水晶 / 重生锚 / 床（源码实证）。 所以"手册里那句声明"要成立，就必须在这里真拦一道（现在三处：起手、投掷扫描、相位推进）。
      */
     public static boolean forbidsBombing(EntityMaid maid) {
         return isBroomTask(maid);

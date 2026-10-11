@@ -16,13 +16,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * v1.2.2 实测六百〇七：**模组 TNT 的那一炸也受「不破坏方块」管辖**。
- *
  * ── 需求原文 ──
  * "mod的TNT也受我们的不破坏方块管辖。"
- *
  * ── 为什么要单独开一层（六百〇五 留下的边界）──
- * 实测六百〇五 起，判据认出来的模组 TNT 是**它自己那一枚就放它自己**——她扔出去的是模组
  * 自己的 TNT 实体（等价交换的 {@code projecte:nova_catalyst_primed}，威力 16、走它自己的
  * {@code NovaExplosion}）。当时定的口径是"威力 / 破不破方块 / 带不带火**全归它自己**"，
  * 所以那一炸**照样在地上留坑**：本模组的「轰炸破坏方块」开关管不到它（我们只在
@@ -30,52 +26,9 @@ import java.util.Map;
  * 根本不经过我们的出口）。现在把**"破不破方块"收回本模组的开关管**：
  * 开关关着（默认）→ 她扔的模组 TNT 也不许动地形；开着 → 照它自己那一炸拆坑。
  * **威力与带不带火仍归它自己**（本类一概不改，也不改伤害）。
- *
  * ── 拦截点为什么是 {@link ExplosionEvent.Detonate}（javap 实证，两版一致）──
  * <ul>
- *   <li>{@code Explosion} **没有**威力 / 交互模式的公开读取口（{@code explosionPower} 与
- *       {@code blockInteraction} 都是 private，全表核对过），所以"在事件里照着原威力重炸一遍"
- *       这条路走不通；</li>
- *   <li>但 Forge / Neo 都在 **{@code Explosion.explode()} 里**发布本事件（forge-client 偏移 589、
- *       neoforge-client 偏移 581），而**方块真正被拆发生在之后的 {@code finalizeExplosion}**，
- *       且它读的就是 {@code getToBlow()} 这张表；</li>
- *   <li>而 {@code Detonate.getAffectedBlocks()} **直接返回活的 {@code getToBlow()} 表**
- *       （不是副本：字节码就是 {@code invokevirtual getToBlow()} 之后 {@code areturn}）。</li>
- * </ul>
- * 所以**在事件里把这张表清空 = 这一炸不再拆任何方块**。实体伤害与击退完全不受影响
- * （伤害走另一个列表，且同样在事件之后结算）——这正是需求要的"只收走地形权限，别的一概不动"。
- *
- * 【为什么对 ProjectE 也成立】它覆盖了 {@code finalizeExplosion}（{@code NovaExplosion}），
- * 但那边顺序同样是**先 {@code explode()}（本事件在这里发）再 {@code finalizeExplosion()}**，
- * 并且在 {@code finalizeExplosion} 里才把 {@code getToBlow()} 拷一份出来拆
- * （字节码：偏移 166 取表 → {@code new ObjectArrayList<>(…)} → 逐个处理）。事件在它拷贝之前，
- * 所以清空这一手对它同样生效。
- *
- * 【为什么碰不到本模组自己的四类炸弹】我们自己那一炸走的是
- * {@code Level.explode(..., ExplosionInteraction.NONE)}——{@code interactsWithBlocks()} 恒假，
- * {@code finalizeExplosion} 里拆方块那一整段根本不执行，本来就一个方块都不拆。这层对它是空转。
- *
- * ── 怎么认出"这是她扔的那一枚" ──
- * 两条取并集，**只认 TNT**（绝不对别人的爆炸动手）：
- * <ol>
- *   <li>**主人链**（主路径、无状态）：直系来源是 {@link PrimedTnt}、而间系来源（= 点火者）
- *       是女仆。原版/加载器自己就是这么把 TNT 归给主人的（{@code PrimedTnt} 是
- *       {@code TraceableEntity}；我们 {@code primeTnt} 点火时传的 igniter 就是她；
- *       ProjectE 的 {@code EntityNovaCatalystPrimed(level,x,y,z,igniter)} 同样把 owner 收下了）；</li>
- *   <li>**我们亲手登记过的那一枚**（兜底）：{@link #rememberTnt} 由 {@code MaidBombing.primeTnt}
- *       在我们放出"模组自己的 TNT 实体"时登记（连带是哪位女仆扔的）。个别模组不记 owner 时
- *       靠这条兜住——**我们自己放出去的一定认得出**。</li>
- * </ol>
- *
- * ── 边界（写在这里，免得以后误以为它管得更宽）──
- * · **地形这一半**归本类（清 {@code getToBlow()}）；**伤害那一半**：六百〇七 当时写的是
- *   "那一炸的伤害源是那枚 TNT 实体、不是女仆，所以主人/友军免伤覆盖不到它"——六百一十
- *   实机更正：那颗 TNT 的**造成者就是她**（原版拿引信 TNT 记的点火者当造成者，javap 实证：
- *   {@code DamageSources.explosion} 的造成者参数就是 {@code Explosion.getIndirectSourceEntity()}
- *   = {@code PrimedTnt.getOwner()}），所以主人/友军本来就被 {@link FriendlyFireGuard} 护住了。
- *   本类真正的用处是**模组没把点火者写进伤害源**的那一类：{@link #maidOfTnt} 按这张登记表
- *   把账算回她头上，让"她扔的模组 TNT 不伤主人/友军"这个承诺不依赖第三方怎么写。
- * · 若某个模组的爆炸**不走 {@code getToBlow()}**、而是自己另开一套循环拆方块，这层拦不住。
+ *   <li>{@code Explosion} **没有**威力 / 交互模式的公开读取口（{@code explosionPower} 与 {@code blockInteraction} 都是 private，全表核对过），所以"在事件里照着原威力重炸一遍" 这条路走不通；</li> <li>但 Forge / Neo 都在 **{@code Explosion.explode()} 里**发布本事件（forge-client 偏移 589、 neoforge-client 偏移 581），而**方块真正被拆发生在之后的 {@code finalizeExplosion}**， 且它读的就是 {@code getToBlow()} 这张表；</li> <li>而 {@code Detonate.getAffectedBlocks()} **直接返回活的 {@code getToBlow()} 表** （不是副本：字节码就是 {@code invokevirtual getToBlow()} 之后 {@code areturn}）。</li> </ul> 所以**在事件里把这张表清空 = 这一炸不再拆任何方块**。实体伤害与击退完全不受影响 （伤害走另一个列表，且同样在事件之后结算）——这正是需求要的"只收走地形权限，别的一概不动"。 【为什么对 ProjectE 也成立】它覆盖了 {@code finalizeExplosion}（{@code NovaExplosion}）， 但那边顺序同样是**先 {@code explode()}（本事件在这里发）再 {@code finalizeExplosion()}**， 并且在 {@code finalizeExplosion} 里才把 {@code getToBlow()} 拷一份出来拆 （字节码：偏移 166 取表 → {@code new ObjectArrayList<>(…)} → 逐个处理）。事件在它拷贝之前， 所以清空这一手对它同样生效。 【为什么碰不到本模组自己的四类炸弹】我们自己那一炸走的是 {@code Level.explode(..., ExplosionInteraction.NONE)}——{@code interactsWithBlocks()} 恒假， {@code finalizeExplosion} 里拆方块那一整段根本不执行，本来就一个方块都不拆。这层对它是空转。 ── 怎么认出"这是她扔的那一枚" ── 两条取并集，**只认 TNT**（绝不对别人的爆炸动手）： <ol> <li>**主人链**（主路径、无状态）：直系来源是 {@link PrimedTnt}、而间系来源（= 点火者） 是女仆。原版/加载器自己就是这么把 TNT 归给主人的（{@code PrimedTnt} 是 {@code TraceableEntity}；我们 {@code primeTnt} 点火时传的 igniter 就是她； ProjectE 的 {@code EntityNovaCatalystPrimed(level,x,y,z,igniter)} 同样把 owner 收下了）；</li> <li>**我们亲手登记过的那一枚**（兜底）：{@link #rememberTnt} 由 {@code MaidBombing.primeTnt} 在我们放出"模组自己的 TNT 实体"时登记（连带是哪位女仆扔的）。个别模组不记 owner 时 靠这条兜住——**我们自己放出去的一定认得出**。</li> </ol> ── 边界（写在这里，免得以后误以为它管得更宽）── · **地形这一半**归本类（清 {@code getToBlow()}）；**伤害那一半**：六百〇七 当时写的是 "那一炸的伤害源是那枚 TNT 实体、不是女仆，所以主人/友军免伤覆盖不到它"——六百一十 实机更正：那颗 TNT 的**造成者就是她**（原版拿引信 TNT 记的点火者当造成者，javap 实证： {@code DamageSources.explosion} 的造成者参数就是 {@code Explosion.getIndirectSourceEntity()} = {@code PrimedTnt.getOwner()}），所以主人/友军本来就被 {@link FriendlyFireGuard} 护住了。 本类真正的用处是**模组没把点火者写进伤害源**的那一类：{@link #maidOfTnt} 按这张登记表 把账算回她头上，让"她扔的模组 TNT 不伤主人/友军"这个承诺不依赖第三方怎么写。 · 若某个模组的爆炸**不走 {@code getToBlow()}**、而是自己另开一套循环拆方块，这层拦不住。
  */
 @Mod.EventBusSubscriber(modid = "promaid")
 public final class MaidTntBlastGuard {
@@ -193,18 +146,11 @@ public final class MaidTntBlastGuard {
 
     /**
      * v1.2.2 实测六百一十：**这一枚 TNT 是不是她放的** —— 是就返回那位女仆，否则 null。
-     *
      * 由 {@link #ownerMaidOf} 与主人/友军免伤（{@code FriendlyFireGuard.maidOfDamage}）共用：
      * 爆炸事件里我们拿得到 {@code Explosion}，而伤害事件里只有一枚**直接实体**，
      * 两边都要能把账算回她头上，所以这条判据必须是公开的、与 {@link #tracked} 的表同一份。
-     *
      * 判据与类注释那两条一致（只认 {@link PrimedTnt} 这一类）：
-     * <ol>
-     *   <li><b>主人链</b>：引信 TNT 自己记的点火者（原版 {@code PrimedTnt.getOwner()}，
-     *       {@code Explosion.getIndirectSourceEntity()} 读的就是它）；</li>
-     *   <li><b>我们亲手登记过的那一枚</b>：{@code MaidBombing.primeTnt} 放出模组自己的 TNT 时登记，
-     *       防的是"模组不把点火者写进爆炸/伤害源"那一类（这时前一条整段落空）。</li>
-     * </ol>
+     * <ol> <li><b>主人链</b>：引信 TNT 自己记的点火者（原版 {@code PrimedTnt.getOwner()}， {@code Explosion.getIndirectSourceEntity()} 读的就是它）；</li> <li><b>我们亲手登记过的那一枚</b>：{@code MaidBombing.primeTnt} 放出模组自己的 TNT 时登记， 防的是"模组不把点火者写进爆炸/伤害源"那一类（这时前一条整段落空）。</li> </ol>
      */
     public static EntityMaid maidOfTnt(Entity tnt) {
         if (!(tnt instanceof PrimedTnt)) {

@@ -13,41 +13,18 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * 骑乘链路的能力探测与公共小工具（v1.3.0(beta)·原版生物骑乘，1.21.1 版）。
+ * 骑乘链路的能力探测与公共工具：只回答「能不能给她骑」与「骑上后该走多快」。
+ * 绑定 / 驱动 / 下坐骑在 {@link RideBindManager}，物品是 {@link RideBatonItem}。
  *
- * <p>本类的唯一职责：回答两个问题——「这只生物能不能给她骑」与「骑上之后该走多快」。
- * 绑定/驱动/下坐骑在 {@link RideBindManager}，物品是 {@link RideBatonItem}。
+ * <p>上鞍：{@code maid.startRiding(mount, true)}——force 跳过原版 canRide / canAddPassenger
+ * 两道门（javap 实证）。不自己写驱动：女仆当乘客时马/猪/骆驼的
+ * {@code getControllingPassenger()} 恒为 null（只认第一乘客是 Player），原版走普通
+ * {@code travel()}——只把目的地喂进载具自己的 {@code PathNavigation} 即可，绕障/跳跃交给它。
+ * 载具自己的 {@code RandomStrollGoal} 仍会抢方向，由 {@code RandomStrollGoalRiddenMixin}
+ * 按"玩家骑就不闲逛"的原版规则抑制（口径同 {@link #isDriven}）。
  *
- * ── 【为什么是"套僵尸的骑乘代码"】──
- * 原版僵尸骑鸡走的就是 {@code startRiding(force)} + 让**载具自己**的 AI 带着走
- * （{@code Zombie.finalizeSpawn} 里那一记 {@code startRiding(chicken)}，javap 实证）。
- * 我们原样借用：
- * <ul>
- *   <li><b>上鞍</b>：{@code maid.startRiding(mount, true)}——force = true 跳过
- *       {@code canRide}/{@code canAddPassenger} 两道门（javap 实证）。她成为乘客后 TLM
- *       自动把大脑切到 RIDE_IDLE/RIDE_WORK/RIDE_REST（{@code MaidUpdateActivityFromSchedule}
- *       字节码实证，判据 {@code isMaidInSittingPose() || isPassenger()}）。</li>
- *   <li><b>驱动</b>：原版 {@code LivingEntity.aiStep} 只在
- *       {@code getControllingPassenger() instanceof Player} 时才走 {@code travelRidden}，
- *       否则走普通 {@code travel()}（javap 实证）。而马/猪/炽足兽的
- *       {@code getControllingPassenger()} 只认**第一乘客是 Player**（猪/炽足兽还要钓竿，
- *       javap 实证；骆驼/马继承自 {@code AbstractHorse} 的同一实现）→ 女仆当乘客时它
- *       **恒为 null**，于是载具走的是普通 travel、导航照常推着它走。我们只把目的地喂进
- *       它自己的 {@code PathNavigation}。</li>
- *   <li><b>它自己的闲逛会抢方向</b>：{@code RandomStrollGoal.canUse()} 只在
- *       {@code hasControllingPassenger()} 为真时返回 false（javap 实证）——女仆当乘客时
- *       那个判据是 false（见上），所以载具自己的随机闲逛仍会跑。这一条由
- *       {@code RandomStrollGoalRiddenMixin} 补上。</li>
- * </ul>
- *
- * ── 【"可骑乘"= 能力探测】──
- * {@code instanceof Saddleable && isSaddled()}：原版马/驴/骡/骷髅马/僵尸马、猪、炽足兽、
- * 骆驼全部实现 {@link Saddleable}（javap 全量扫描实证），且都要求已上鞍。模组生物只要也
- * 实现这个接口、已上鞍，**零适配**即可骑。
- *
- * ── 【速度：载具上限与女仆上限取最大】──
- * 导航的 speed 参数是**倍率**（{@code MoveControl} 内部 {@code speedModifier ×
- * MOVEMENT_SPEED}，javap 实证），所以换算成 {@code max(载具, 女仆) / 载具}。
+ * <p>"可骑乘"= 能力探测不写死 id：{@code Saddleable && isSaddled()}，模组生物零适配。
+ * <p>速度见 {@link #speedModifierFor}：导航 speed 是倍率，最终 = max(载具, 女仆) / 载具速度。
  */
 public final class MaidRideKit {
 
@@ -85,20 +62,9 @@ public final class MaidRideKit {
     /* ==================== 家具类坐骑黑名单 ==================== */
 
     /**
-     * v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单后门】。
-     *
-     * <p>
-     *
-     *
-     *
-     * <p>TLM 的椅子（{@code EntityChair}）/坐垫（{@code EntitySit}）都让女仆变成"乘客"
-     * （{@code isPassenger()} = true），于是它们天然落进本链路的几个"乘客"判据里：指挥棒把她
-     * 当成"骑在一只 Saddleable 上"、{@link #isDriven} 会去抑制载具闲逛、传送链路会想着
-     * "连坐骑一起搬"。可它们根本不是坐骑，是家具——玩家明确把她安放在那儿的。默认名单 =
-     * {@code touhou_little_maid:chair} / {@code touhou_little_maid:sit}；别的模组的可坐家具
-     * 只要往配置里填一行实体 id 即可。
-     *
-     * <p>判据是**实体类型注册名**（不写死类引用，1.20.1 / 1.21.1 两树共用同一份 id）。
+     * TLM 的椅子 / 坐垫让女仆变成"乘客"，会误落进本链路的乘客判据（当坐骑、抑制闲逛、连坐骑搬）；
+     * 它们其实是家具，不是坐骑。判据用**实体类型注册名**（两树共用；配置可加别的可坐家具 id，
+     * 默认 {@code touhou_little_maid:chair} / {@code sit}）。实测七百一十七。
      */
     public static boolean isFurniture(Entity e) {
         try {
@@ -150,18 +116,9 @@ public final class MaidRideKit {
     /* ==================== 扫帚：不是坐骑 ==================== */
 
     /**
-     * v1.3.0(beta) 实测七百一十八【点4：指挥棒不许选中坐垫/扫帚，且只有棍子绑的才算骑乘】。
-     *
-     * <p>。
-     *
-     * <p>扫帚（TLM {@code EntityBroom}）让女仆也变成"乘客"（{@code isPassenger()} = true），
-     * 于是它天然落进本链路那几个"乘客"判据里。可扫帚有**自己的一整条飞行链路**
-     * （{@code MaidBroomKit}/{@code MaidBroomDrive}），把它当坐骑会打架：指挥棒点她会把
-     * 她从扫帚上拽下来（{@code releaseMaid} → {@code stopRiding}）、{@link #isDriven} 会去
-     * 抑制扫帚自己的行为、传送链路会想"连扫帚一起搬"。所以这里一刀切掉。
-     *
-     * <p>判据用**类型**（编译期盯着）而不是注册名——与 {@code MaidBroomKit.isBroomItem}
-     * 同一种写法（TLM 改 id 不会让我们静默失效）。
+     * 扫帚让女仆也成为"乘客"，但它有自己一整条飞行链路（MaidBroomKit / MaidBroomDrive）——当坐骑会打架
+     * （指挥棒会把她拽下来、{@link #isDriven} 会抑制扫帚行为、传送会连扫帚一起搬），故一刀切掉。
+     * 判据用**类型**而非注册名（与 MaidBroomKit.isBroomItem 同写法，TLM 改 id 不静默失效）。实测七百一十八·点4。
      */
     public static boolean isBroom(Entity e) {
         try {
@@ -174,18 +131,10 @@ public final class MaidRideKit {
     /* ==================== 「只有棍子绑的才算」 ==================== */
 
     /**
-     * v1.3.0(beta) 实测七百一十八【点4：收紧进入条件】。
-     *
-     * <p>。
-     *
-     * <p>判据 = 她自己身上带着 {@link #TAG_RIDE_MOUNT}（绑定成功那一刻写、解绑/自然脱落时清除，
-     * 随存档持久化）。所以**不是**我们把她放上坐骑的场合——原版/别的模组让她成为乘客
-     * （坐船、坐矿车、被别的模组拽上坐骑、TLM 椅子/坐垫、扫帚）——我们的驱动、闲逛抑制、
-     * 连坐骑传送**一个字节都不生效**，完全交还原版规则。
-     *
-     * <p>【为什么判据是"她自己身上的痕迹"而不是查链路表】服务端重启/区块重载后链路表
-     * 还没重建的那一拍，传送入口也要能认出她——与 {@code MaidBroomKit.isBroomAirborne}
-     * 同口径（那个也不查表，只看"任务 + 真的骑着扫帚"）。
+     * 判据 = 她身上带着 {@link #TAG_RIDE_MOUNT}（绑定成功那刻写、解绑/脱落时清，随存档持久化）。
+     * 只有"我们用指挥棒绑的"才走我们的骑乘链路；原版/别的模组让她当乘客（船/矿车/椅子/扫帚…）
+     * 一律交还原版规则。取她自己身上的痕迹而非查链路表——服务端重启/区块重载后链路表未重建
+     * 的那一拍也能认出她（与 MaidBroomKit.isBroomAirborne 同口径）。实测七百一十八·点4。
      */
     public static boolean isBatonBound(EntityMaid maid) {
         try {
@@ -250,36 +199,12 @@ public final class MaidRideKit {
     }
 
     /**
-     * 这只仆从是不是"声明了可骑、但压根没有鞍"的那一类——本模组的**后门**判据。
-     *
-     * <h2>
-     * 「像诡厄巫法的可骑仆从（红石巨兽），以及某些整合包魔改的套用代码的仆从（下界合金巨兽），
-     *  这些都是没有办法让女仆骑乘的（不能装鞍），能不能走个后门让女仆可以骑乘那些？」
-     *
-     * <h2>根因（反编译实证，本地 goety-3.1.5.1 / goety-2.5.58.4 / goety_cataclysm 三个 jar）</h2>
-     * 这些仆从实现的是原版 {@code net.minecraft.world.entity.PlayerRideable}——一个
-     * **一个方法都没有的空标记接口**——或者诡厄自己的
-     * {@code com.Polarice3.Goety.api.entities.IAutoRideable}；**都不是** {@link Saddleable}。
-     * 原版红石巨兽的骑乘入口是 {@code mobInteract} 里那一记 {@code doPlayerRide(player)}
-     * （反编译实证）：主人空手右击一下就直接 {@code startRiding}，全程没有鞍。而本模组原来的
-     * 判据只认"已上鞍的 Saddleable"，于是整类被挡在门外，回一句"它不是能上鞍的坐骑～"。
-     *
-     * <h2>判据（不写死任何实体 id，两树共用）</h2>
-     * <ol>
-     *   <li>是 {@link Mob}（要能喂它自己的 {@code PathNavigation}，与通用档同口径）；</li>
-     *   <li>声明了 {@code PlayerRideable}（编译期判据）或诡厄的 {@code IAutoRideable}
-     *       （反射探测，编译期不依赖诡厄）；</li>
-     *   <li><b>不能装鞍</b>—— {@code !(e instanceof Saddleable)}。</li>
-     * </ol>
-     * 第 ③ 条是**必须留着**的：否则"没上鞍的原版马/骆驼"也会落进本档，把
-     * {@code denyReason} 里"先给它装上鞍再绑给我吧～"那道闸整个绕过（变成一个凭空可骑的 bug）。
-     * 所以本档只放行"从来没有鞍这一环"的仆从，原版兽的装鞍语义一字不改。
-     *
-     * <p>【为什么不是"凡是 PlayerRideable 全放行"】扫描本地全部模组 jar 后发现：光看接口会把
-     * 突变生物的蜘蛛猪、ALEX 洞穴的独角兽这类**别的模组自己的可骑生物**也一起放行；它们与我们的
-     * 驱动链路没有适配过。玩家要的是诡厄这一类（同一套 {@code IAutoRideable} 代码被整合包仆从
-     * 沿用），所以窄判据 = {@code PlayerRideable} **或** {@code IAutoRideable}，二者取并集正好
-     * 覆盖红石巨兽与下界合金巨兽仆从，又不会把无关模组的坐骑卷进来。
+     * "声明可骑但没有鞍"的那一类（诡厄红石巨兽 / 下界合金巨兽仆从）——本模组的后门判据。
+     * 它们实现 {@code PlayerRideable}（空标记接口）或诡厄 {@code IAutoRideable}，都不是
+     * {@link Saddleable}，原版只给"已上鞍的 Saddleable"放行因而整类被挡。判据：
+     * ① 是 {@link Mob}；② 是 {@code PlayerRideable} 或 {@code IAutoRideable}（反射探测）；
+     * ③ <b>不能装鞍</b>（{@code !(e instanceof Saddleable)}）——③必须留，否则没上鞍的原版
+     * 马/骆驼也会落进本档、绕过"先装鞍"那道闸。实测七百七十。
      */
     public static boolean isNoSaddleRideable(Entity e) {
         try {
@@ -317,28 +242,11 @@ public final class MaidRideKit {
     /* ==================== 【实测七百七十·模组仆从坐骑：单独一个区间】 ==================== */
 
     /**
-     * 【实测七百七十】"模组仆从坐骑"单独一个区间——与卓越前线载具同级的通解档。
-     *
-     * <h2>玩家定档（
-     * 「女仆坐上去只会赋予仆从相应的速度，其余的行动逻辑全都换成仆从自己的。（如果开启 home 模式，
-     * 那么坐骑还是会停下来，这一点是通用的）」「如果女仆受到了伤害，会将伤害转移给身下坐着的仆从。」
-     * 并明确要求：「只对 mod 类仆从类生效，就跟卓越前线一样是单独开了个区间。不影响其他区间以及
-     * 原版生物或者通用的骑乘逻辑。」
-     *
-     * <h2>区间判据 = {@link #isNoSaddleRideable}</h2>
-     * 诡厄巫法 / 诡厄灾变的"无鞍可骑仆从"（红石巨兽、下界合金巨兽仆从这一族）。它们**自带一整套
-     * 战斗 AI**：{@code targetSelector} 里有 {@code SummonTargetGoal}/{@code ServantHurtByTargetGoal}
-     * 自主锁敌，{@code goalSelector} 里有巡逻 / 接近 / 全部技能（反编译 goety-3.1.5.1 与
-     * goety_cataclysm-1.21.1-1.8.2 实证）。女仆骑上它之后，本模组**只做两件事**：
-     * <ol>
-     *   <li>{@link #applyRiddenSpeed}：把她的移动速度赋给坐骑（"只会赋予仆从相应的速度"）；</li>
-     *   <li>{@link #reopenRiddenCombatGoals}：把它自己的 goal 控制位开回来，让它的 AI 在"被骑"
-     *       状态下照常运转（否则它的 goal 会被原版驾驶规则整个掐停，见那个方法）。</li>
-     * </ol>
-     * 除此之外**一个字都不写**——不再喂走位、不再写目标、不再拦它的寻路、不再强制它出招。
-     * 唯一例外是 home 模式：那时**不**给它开控制位 = 它的 goal 全停 = 坐骑停住（玩家要求保留的
-     * 通用例外）。**原版马 / 骆驼、卓越前线载具、冰火传说龙、别的模组生物、通用骑乘逻辑一律不受
-     * 本区间影响**（判据只在 {@link #isNoSaddleRideable} 上）。
+     * "模组仆从坐骑"单独一个区间（与卓越前线载具同级）：判据 = {@link #isNoSaddleRideable}。
+     * 这类仆从自带整套战斗 AI；女仆骑上后本模组只做两件事——{@link #applyRiddenSpeed} 赋速 +
+     * {@link #reopenRiddenCombatGoals} 开回它的 goal 控制位，其余一字不写（不喂走位 / 不写目标 /
+     * 不拦寻路）。home 模式例外：那时不开控制位 = 坐骑停住。原版兽 / 载具 / 别的模组均不受影响。
+     * 实测七百七十。
      */
     public static boolean servantAutoEnabled() {
         try {
@@ -411,38 +319,12 @@ public final class MaidRideKit {
     /* ==================== 【实测七百七十·把它自己的 AI 开回来】 ==================== */
 
     /**
-     * 【实测七百七十】把"被女仆骑着"误关掉的 goal 控制位开回来，让模组仆从坐骑用它自己的 AI。
-     *
-     * <h2>根因（javap 两版逐字实证）</h2>
-     * 原版 {@code Mob.updateControlFlags()}（{@code tickCount % 5 == 0} 时由 {@code Mob.tick()}
-     * 调用）第一句就是 {@code flag = !(this.getControllingPassenger() instanceof Mob);}，随后把
-     * {@code goalSelector} 的 {@code MOVE}/{@code JUMP}/{@code LOOK} 设成 {@code flag}——
-     * 「**驾驶者是个生物** → 坐骑自己的 goal 全部停摆」。而 {@code getControllingPassenger()}
-     * 认的正是"第一乘客是 {@code Mob}"——**女仆就是个 Mob**。诡厄
-     * {@code Summoned.updateControlFlags()} 又在这之上把 {@code TARGET} 一并关掉。
-     * {@code GoalSelector.tick()} 于是把所有带这些控制位的 goal 直接 {@code stop()}：诡厄灾变的
-     * 下界合金巨兽仆从（反编译实证）的接近（{@code InternalSummonMoveGoal}）与全部技能
-     * （{@code SMASH}/{@code EARTHQUAKE}/{@code MagmaShoot}/{@code FlareShoot}/{@code ShoulderCheck}）
-     * 恰好全带这些位 ⇒ 它一步走不了、一招放不出。
-     *
-     * <h2>本区间口径（与 768 的差别）</h2>
-     * 768 只在"它此刻有目标"时开、且我们还要替它写目标、替它带路；770 起**整段让给它自己的 AI**：
-     * 由 {@code MobRiddenControlFlagsMixin} 在 {@code Mob.tick()} 里 {@code updateControlFlags()} 的
-     * **调用之后立刻**回调本方法（调用点注入，天然兼容诡厄的重写版本），判据全部命中就把
-     * MOVE / LOOK / JUMP / TARGET 一起开回来（含 TARGET，因为诡厄把它也关了）：
-     * <ol>
-     *   <li>总开关开着（{@link #servantAutoEnabled}）；</li>
-     *   <li>是 {@link #isNoSaddleRideable} 的模组仆从（只治这一类）；</li>
-     *   <li>第一乘客是女仆、且是我们棍子绑上去的（{@link #isDriven}）；</li>
-     *   <li>她**不在 home 模式**——home 模式不接管，控制位保持关闭 = 它自己的 goal 全停 = 坐骑停住
-     *       （玩家明确要求保留的通用例外）。</li>
-     * </ol>
-     * 开回来之后它用自己的 {@code SummonTargetGoal} 自主锁敌、用自己的接近 goal 追、用自己的技能
-     * 出招——完全"换成仆从自己的"。**重开 TARGET 不会让它攻击背上的女仆**：反编译
-     * {@code MobUtil.isOwnedTargetable(仆从, 女仆)} 对"非敌对、未被记仇"的目标返回 false，且
-     * {@code SummonTargetGoal.canUse()} 显式排除 {@code getTrueOwner()}。
-     *
-     * <p>不满足判据 → 一个控制位都不动，原版（含诡厄）行为逐字节不变。
+     * 把"被女仆骑着"误关掉的 goal 控制位开回来，让模组仆从坐骑用它自己的 AI。根因：原版
+     * {@code Mob.updateControlFlags()} 见"驾驶者是 Mob"就把 goalSelector 的 MOVE/JUMP/LOOK 全停
+     * （{@code getControllingPassenger()} 认第一乘客是 Mob，女仆就是 Mob），诡厄又叠加关掉 TARGET
+     * ——下界合金巨兽仆从的接近与全部技能因此全废。本方法在 {@code MobRiddenControlFlagsMixin}
+     * 调用点注入（兼容诡厄重写）；四判据（总开关 / 是 NoSaddleRideable / 是棍子绑的 / 不在 home）
+     * 全中则开回 MOVE/LOOK/JUMP/TARGET。重开 TARGET 不打背上的女仆（SummonTargetGoal 排除 owner）。实测七百七十。
      */
     public static void reopenRiddenCombatGoals(Mob mount) {
         try {
@@ -542,19 +424,10 @@ public final class MaidRideKit {
     /* ==================== 【实测七百四十九·点1】「有没有模式在指挥她走位」 ==================== */
 
     /**
-     * v1.3.0(beta) 实测七百四十九【点1：默认档"跟着主人走"、有模式才走模式逻辑】。
-     *
-     * <p>
-     *
-     *
-     * <p>判据就是「她此刻的**任务**是不是"没有任务"」——TLM 的空闲任务 uid 固定为
-     * {@code touhou_little_maid:idle}（其它所有任务：矿/木/农/建造/战斗/钓鱼/耕地…都有自己的
-     * 运动逻辑）。空任务 / 任务还没就绪 → 返回 {@code false} = "没有模式在指挥"。
-     *
-     * <p>为什么用任务而不是"她的导航有没有目标"：她**是乘客**时，TLM 的跟随
-     * （{@code MaidFollowOwnerTask}）与我们自己的若干 core 行为照样在她自己的
-     * {@code PathNavigation} 上写走位点——那正是 716 之后坐骑"乱窜"的来源。要区分"这是模式
-     * 在指挥"还是"这只是跟随/闲逛在写"，只能看任务。
+     * 她此刻是不是"有模式在指挥走位"——判据 = 任务不是 TLM 的空闲任务 {@code touhou_little_maid:idle}
+     * （空闲 / 未就绪 → false = 走默认"跟主人走"档）。为什么看任务而不是"导航有没有目标"：她当乘客
+     * 时 TLM 跟随与我们的 core 行为照样在她自己的导航上写走位点，只有看任务才能区分"模式在指挥"
+     * 还是"跟随 / 闲逛在写"。实测七百四十九·点1。
      */
     public static boolean hasModeMovement(EntityMaid maid) {
         try {
@@ -574,15 +447,9 @@ public final class MaidRideKit {
     /* ==================== 【实测七百四十九·点3】「别叠罗汉」的公共标准 ==================== */
 
     /**
-     * v1.3.0(beta) 实测七百四十九【点3：坐骑也要防叠罗汉，与扫帚**同一套标准**】。
-     *
-     * <p>
-     *
-     *
-     * <p>扫帚那套（实测六百九十一）由两部分组成：**相位错开**（每只女仆的盘旋起点按 UUID 错开
-     * 一整圈）+ **邻近互斥**（目标点被别的"女仆骑着的扫帚"顶开）。坐骑这边没有"盘旋"这回事，
-     * 所以只需要后半截——把"去这里"的目标点推离同伴。为了真的是"统一的标准"而不是"抄一份
-     * 数字过去"，四个参数与那段算式**都放在本类**，扫帚与坐骑各自只负责"凑齐同伴位置"这一步。
+     * 坐骑也要防叠罗汉，与扫帚**同一套标准**：相位错开（按 UUID）+ 邻近互斥（目标点被同伴顶开）。
+     * 坐骑无"盘旋"，只需后半截；四个参数与算式都放在本类，扫帚 / 坐骑各自只负责凑齐同伴位置。
+     * 实测七百四十九·点3。
      */
 
     /** 两只"载着女仆的坐骑/扫帚"之间的最小水平间距（格）：近到这个数以内就互相让位。 */
@@ -617,18 +484,12 @@ public final class MaidRideKit {
     }
 
     /**
-     * 「别叠罗汉」的公共算式：把"去这里"（{@code aim}）推离一批同伴位置（{@code peers}）。
-     *
-     * <p>【只推水平】要的是水平方向错开；竖直那一份交给各自的起飞/爬升相位，互斥插一脚只会抖动。
-     * <p>【有封顶】互斥只做修正，绝不把"去哪"整条盖掉（真正"去哪"由调用方决定）。
-     * <p>【退化情形】同伴与目标点几乎重合（d&lt;0.05）时，用 {@link #ridePhase} 当"往哪边让"的
-     * 方向——必须是确定的，不能每次算出来不一样。
-     *
-     * @param aim    原始目标点
-     * @param phase  "往哪边让"的兜底方向（弧度，{@link #ridePhase}）
-     * @param peers  同伴（"别的女仆正骑着的坐骑/扫帚"）的位置
-     * @param combat 这一拍是不是在接敌（决定用哪一档间距与封顶）
-     * @return 修正后的目标点；不需要修正 / 出任何异常一律原样返回 {@code aim}
+     * 「别叠罗汉」公共算式：把目标点 {@code aim} 推离一批同伴位置 {@code peers}。只推水平
+     * （竖直交给起飞 / 爬升相位）；有封顶（互斥只做修正，不盖掉真正"去哪"）；退化情形（同伴与
+     * 目标点几乎重合）用 {@link #ridePhase} 定"往哪边让"，必须确定。
+     * @param aim 原始目标点  @param phase 兜底方向（弧度）  @param peers 同伴位置
+     * @param combat 这一拍是否接敌（决定用哪档间距与封顶）
+     * @return 修正后的目标点；不需修正 / 异常一律原样返回 {@code aim}
      */
     public static Vec3 separateAim(Vec3 aim, double phase, java.util.List<Vec3> peers, boolean combat) {
         return separateAim(aim, phase, peers,
@@ -637,14 +498,10 @@ public final class MaidRideKit {
     }
 
     /**
-     * 【实测七百五十八】同一个算式的**可调间距档**——给**卓越前线载具**（坦克/装甲车这类大车）用。
-     *
-     * <p>为什么必须能调：{@link #SEP_R}（2 格）/ {@link #SEP_R_COMBAT}（4 格）是 749 按**扫帚与
-     * 人形**定的间距；对一辆车体 4 格宽的坦克，2 格间距等于"让位让了个寂寞"——车与车照样叠在
-     * 一起（玩家实测：「多个女仆乘坐多个坦克，仍然会出现严重的叠罗汉情况」）。载具那边把间距
-     * 放大到"车体全宽 + 1.5 格缝"、封顶按比例抬起来，再走本档；**算式仍然只有这一处**。
-     *
-     * @param sepR   要求的水平间距（格）；&le;0 视为"不修正"
+     * 同一算式的**可调间距档**——给卓越前线载具（坦克 / 装甲车这类大车）用。2 / 4 格间距是按扫帚
+     * 与人形定的，对 4 格宽坦克等于没让位，故载具按"车体全宽 + 1.5 格缝"调大再走本档；**算式仍只有
+     * 这一处**。实测七百五十八。
+     * @param sepR 要求的水平间距（格）；&le;0 视为"不修正"
      * @param sepMax 一次让位的位移封顶（格）
      */
     public static Vec3 separateAim(Vec3 aim, double phase, java.util.List<Vec3> peers,
@@ -713,19 +570,11 @@ public final class MaidRideKit {
     }
 
     /**
-     * 【实测七百一十六·点4】她此刻是不是"被棍子绑上坐骑、需要连坐骑一起搬运"的骑乘女仆。
-     * 判据自洽（不查链路表）：正骑着一只非女仆的 {@link Saddleable} 已上鞍生物，且身上带着
-     * {@link #TAG_RIDE_MOUNT}（绑定成功时写的持久化痕迹）。服务端重启/区块重载后、链路表
-     * 还没重建时照样认得出她——与扫帚那边 {@code MaidBroomKit.isBroomAirborne} 同口径。
-     *
-     * <p>为什么传送要单独问她：她一旦是乘客，原版 {@code teleportTo} 内部会先 {@code unRide()}
-     * ——直接传她就等于"把坐骑扔在原地、人掉到主人身边"。所以传送链路必须先认出来她，改走
-     * "连坐骑一起搬"（见 {@code MaidChunkLoadManager.recallRideRider}）。
-     *
-     * <p>【v1.3.0(beta) 实测七百一十八·点4 收紧】判据加上"必须是我们用骑乘棒绑的"
-     * （{@link #isBatonBound}）——原版/别的模组让她坐船、坐矿车、被拽上别人的坐骑，
-     * 一律不再走"连坐骑一起搬"，完全交还原版乘客规则。
-     * 「只有拿骑乘棒让女仆进入骑乘状态才走我们的骑乘链路」。
+     * 她是不是"被棍子绑上坐骑、需连坐骑一起搬运"的骑乘女仆。判据自洽（不查链路表）：正骑着一只非女仆的
+     * {@link Saddleable} 已上鞍生物 + 身上带 {@link #TAG_RIDE_MOUNT}（持久化痕迹），故重启 / 区块重载后
+     * 链路表未重建也能认出（与 MaidBroomKit.isBroomAirborne 同口径）。为什么传送要单独问她：乘客状态下
+     * 原版 {@code teleportTo} 会先 {@code unRide()}，直接传 = 把坐骑扔下，所以要改走"连坐骑一起搬"。
+     * 实测七百一十六·点4 / 七百一十八·点4 收紧。
      */
     public static boolean isRideRider(EntityMaid maid) {
         try {
@@ -840,31 +689,17 @@ public final class MaidRideKit {
     }
 
     /**
-     * 给载具喂"去这里"（【实测七百一十六·点2】分两个渠道）。
-     *
-     * <p>
-     *
-     * <ul>
-     *   <li><b>渠道一（{@code GroundPathNavigation}）＝只会跑的坐骑</b>：把目标点喂进它自己的
-     *       寻路——它按地面寻路跑过去，上下坡/绕障/跳跃交给它，这就是"1:1 还原她两条腿的走位"
-     *       （走位点由她的导航给出，见 {@link #ownNavigationTarget}）。</li>
-     *   <li><b>渠道二（非地面寻路：飞行/两栖/别的模组坐骑）＝不只是会跑路的</b>：地面寻路表达
-     *       不了她的意图，改**直连操纵**（{@code MoveControl#setWantedPosition}）——不重新规划
-     *       路径，直接朝目标点给操纵意图。与渠道一互斥。</li>
-     * </ul>
+     * 给载具喂"去这里"，分两个渠道：① 地面寻路（{@code GroundPathNavigation}，马 / 猪 / 骆驼等）把目标点
+     * 喂进它自己的寻路，绕障 / 跳跃交给它，1:1 还原她两条腿的走位；② 非地面寻路（飞行 / 两栖 / 别的模组
+     * 坐骑）改**直连操纵**（{@code MoveControl.setWantedPosition}），不重规划路径。两渠道互斥。实测七百一十六·点2。
      */
     public static void feedNavigation(Entity mount, Vec3 target, double modifier) {
         feedNavigation(mount, target, modifier, null);
     }
 
     /**
-     * 同上，带 {@code rider}（= 骑在上面的那只女仆）。
-     *
-     * <p>【实测七百二十三】为什么要把她传下去：卓越前线的**轮椅（WHEELCHAIR）**引擎
-     * 的转向只读 {@code getFirstPassenger().getYHeadRot()}（反编译实证），不读左右位——
-     * 所以驱动层必须拿到"她"，才能把目标方位写成她的头朝向。
-     * 「为什么骑马就不会出现这种情况呢？」的答案也在这条链上：马走的是下面那个
-     * {@code GroundPathNavigation} 渠道，压根不经过这套引擎。
+     * 同上，带 {@code rider}（骑在上面的女仆）。为什么要传她：卓越前线轮椅引擎的转向只读
+     * {@code getFirstPassenger().getYHeadRot()}（反编译实证），需由她定头朝向。实测七百二十三。
      */
     public static void feedNavigation(Entity mount, Vec3 target, double modifier, Entity rider) {
         try {

@@ -17,47 +17,18 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 
 /**
- * v1.3.0 实测六百七十三【武装拴绳三期·半透明】+ 实测六百七十四【半透明二期】：吊在女仆下面 /
- * 跟她同乘或驾驶一把扫帚时，**把她的模型与扫帚本体一并画成半透明**，而且**只对"那位玩家的
- * 第一人称"生效**。
+ * 武装拴绳·半透明：吊在女仆下面 / 跟她同乘或驾驶一把扫帚时，把她的模型与扫帚本体一并画成半透明，而且只
+ * 对"那位玩家的第一人称"生效。
  *
- * 【
- *
- *
- * 0.1，而且扫帚也应该是半透明的。"
- *
- * ── 为什么必须"换渲染类型"，只压 alpha 不够（javap 实证）──
- * 女仆模型走的是 {@code RenderType.entityCutoutNoCull(贴图)}，而它带的透明态是
- * {@code NO_TRANSPARENCY}——**混合根本没开**，顶点 alpha 压到 0.1 也照样不透明。
- * 原版自己的"幽灵渲染"（隐形实体对旁观者可见那一档）用的是
- * {@code RenderType.itemEntityTranslucentCull(贴图)}（{@code LivingEntityRenderer} 的 translucent
- * 分支；它的透明态才是 TRANSLUCENT）**配上顶点 alpha = 0.15**（同一个类的
- * {@code renderToBuffer(..., flag ? 0.15F : 1.0F)}）。
- * 本类把这两件事都做上：① 换成同贴图的 itemEntityTranslucentCull；② 把顶点色里的 alpha 乘上配置值。
- *
- * ── 什么时候幽灵化（两档，都只看客户端）──
- * <ul>
- *   <li><b>女仆</b>：① 你正骑着她、而且是**拴绳挂上去的**（{@link
- *       com.maidsmart.combat.GunnerTetherManager#isGunner}，客户端读 S2C 的挂载表；空袭档与扫帚档
- *       都算）；② 你坐在一把扫帚上、她也坐在**同一把**上（六百七十二 起的"换座"态：你在驾驶位、
- *       她在第二乘客——这一档没有拴绳链路，判据只能落在"同一载具 + 她是我的人"）。</li>
- *   <li><b>扫帚</b>：① 你正骑着这把扫帚（自己开 / 换座共乘）；② 你吊在骑这把扫帚的女仆下面
- *       （扫帚就在你头顶，同样挡视线）。</li>
- * </ul>
- * 三条硬门对所有档都成立：**总开关开着、透明度 &lt; 1、相机是第一人称**。于是第三人称、别的玩家、
- * 别人骑别的女仆/扫帚，一律照旧不透明。
- *
- * ── 贴图怎么来（不写死名单、也不猜名字）──
- * 反射读 RenderType 内部的 {@code CompositeState → EmptyTextureStateShard → Optional<ResourceLocation>}
- * （1.20.1 与 1.21.1 的字段布局都实证过；**按字段类型找、不按字段名找**，所以 SRG / 官方名两版通用）。
- * 读出贴图 → 换成 itemEntityTranslucentCull(同一贴图)；本来就是半透明的（模型包自带 alpha 的那种）
- * → 类型原样留着、只压 alpha。反射万一失灵 → 女仆那一档退化成"只把她当前这张贴图的那一档换掉"
- * （贴图由渲染器 getTextureLocation 给出，Gecko 路径实证就是同一个值）；扫帚那档没有兜底贴图，
- * 真读不出来就只压 alpha（视觉上等于没变，但绝不崩）。
- * **绝不因为渲染而抛异常**：全部包在 try 里，异常时按不透明走。
- *
- * 【性能】RenderType 是按贴图记忆化的实例（javap 实证走 {@code Util.memoize}），
- * 所以恒等缓存的条目数 = 她/它身上用到的贴图数（个位数）。
+ * 【为什么必须换渲染类型】女仆模型走 {@code RenderType.entityCutoutNoCull}，透明态是 {@code NO_TRANSPARENCY}
+ * ——**混合根本没开**，只压顶点 alpha 不会透明。原版"幽灵渲染"用 {@code itemEntityTranslucentCull}（透明态
+ * TRANSLUCENT）+ 顶点 alpha 0.15；本类两件都做：① 换成同贴图的 itemEntityTranslucentCull；② 顶点色 alpha 乘配置值。
+ * 【何时幽灵化】女仆档：① 你骑着她且是**拴绳挂的**（{@code GunnerTetherManager#isGunner}）；② 你坐在一把
+ * 扫帚上、她也坐同一把（换座态）。扫帚档：① 你正骑它；② 你吊在骑它的女仆下面。三硬门对所有档成立：**总开
+ * 关开着、透明度 < 1、相机第一人称**——第三人称/别的玩家一律照旧。
+ * 【贴图怎么来】反射读 RenderType 内部的 {@code CompositeState → EmptyTextureStateShard → Optional<ResourceLocation>}
+ * （**按字段类型找、不按字段名**，两版通用）→ 换成同贴图的 itemEntityTranslucentCull；本就半透明的只压 alpha。
+ * 反射失灵时女仆档退化成"只换当前贴图那一档"、扫帚档只压 alpha（视觉不变但绝不崩）；**绝不因渲染抛异常**（全包 try）。
  */
 @OnlyIn(Dist.CLIENT)
 public final class MaidGhostRender {

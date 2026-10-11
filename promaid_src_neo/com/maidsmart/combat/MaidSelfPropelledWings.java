@@ -13,12 +13,9 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * v1.3.0(beta) 实测七百一十【自推鞘翅：不靠烟花也能飞的那一类模组鞘翅】。
- *
  * <p>本类是 {@code promaid_src} 同名类的 **1.21.1 NeoForge 镜像**（官方名，
  * {@code BuiltInRegistries.ITEM} / {@code ResourceLocation.parse}），逐行同口径；
  * 两树差异只在注册表与 SRG 名，**行为一字不差**。
- *
  * ── 一、这两家到底加了什么（反编译实证，逐条）──
  * <b>伊卡洛斯之翼</b>（1.21.1：{@code locusazzurro_icaruswings-1.21-0.7.0}）：
  * <ul>
@@ -28,46 +25,7 @@ import java.util.UUID;
  *   <li>{@code ikaros_wings} / {@code nymph_wings} / {@code astraea_wings} / {@code chaos_wings}
  *       / {@code hiyori_wings} / {@code melan_wings} —— {@code SynapseWings}，**自推**：
  *       {@code FlyingEventsHandler.onPlayerTick}（{@code PlayerTickEvent.Pre}）里，
- *       只要她在滑翔就每 tick 加一份推力
- *       {@code v += (look·d + (look·i − v)·t) · c}（d/i/t 见 {@link #paramsOf}）。
- *       **不需要按跳跃键**。</li>
- * </ul>
- * <b>神秘遗物+</b>（{@code enigmaticlegacyplus-1.21.1-1.1.2}）：{@code majestic_elytra}（壮丽鞘翅）与
- * {@code chaos_elytra}（混沌之傲）继承 {@code BaseElytraItem}，它把 {@code canElytraFly} 直接写成
- * {@code true}（**不看是不是玩家**）→ 女仆穿得上、滑得起来。自推在 {@code flyingBoost(player)}：
- * **按住跳跃键**时 {@code v = v×0.48 + look×0.64}（壮丽）/ {@code v = v×0.5 + look×k}（混沌，
- * k = {@code flyingSpeedModifier}，默认 0.8）。
- *
- * <p>【1.20.1 侧不可用】那边的神秘遗物（{@code EnigmaticLegacy} / {@code enigmaticaddons}）把
- * {@code canElytraFly} 写死了 {@code entity instanceof Player && ...}，女仆**连滑翔都做不到**，
- * 所以表里不列它们（列了也只是死的，还会让"她能动"看起来像我们在瞎认）。
- *
- * ── 二、为什么"认物品"远远不够：三家都只推玩家 ──
- * 上面的自推入口**全部**挂在 {@code PlayerTickEvent} / {@code instanceof ServerPlayer} /
- * 客户端跳跃键包上。**女仆不是 Player**，只把它算作"推进剂"的结果是她跳起来、展开滑翔、
- * 然后**一路往下沉**。所以本类真正的活是 <b>由我们替她施加推力</b>（{@link #tick}）。
- *
- * ── 三、通解通法：同一个形状、各自的小数 ──
- * 三家的公式是**同一个形状**：{@code v ← v×gain + look×add}（原版挂载烟花也是这一条：
- * {@code v ← v×0.5 + look×0.85}）。所以通解 = 一张表（{@link #paramsOf}）+ 一个窗口
- * （{@link #tick}）+ 一条接入链。以后再有同类模组，只需往配置的资格表里加 id——
- * 认不出具体型号就走 {@link #FALLBACK} 兜底模型，**不需要改代码**。
- *
- * ── 四、刻意做的三件事 ──
- * <ol>
- *   <li><b>不消耗、不扣额外耐久</b>：模组对玩家自推是额外扣耐久的（伊卡洛斯每 20 tick、
- *       神秘遗物每 5 tick），女仆这边**只按原版滑翔的节奏扣**（{@code updateFallFlying}
- *       每 20 tick 扣 1）——那两个是我们借它的**动作**，这里只借它的**物理**，不该替它扣钱。</li>
- *   <li><b>排在补推链最末</b>：扇子 → 烟花 → 法术 → 激流 → **自推鞘翅**。前四样存在的存档
- *       手感一字不变。</li>
- *   <li><b>窗口收敛、不会飞走</b>：公式本身收敛（不动点 = 视线 × add/(1−gain)），窗口开着时
- *       速度往那一个值收敛；窗口到期（{@link #WINDOW_TICKS} 40 tick）交还滑翔，掉高了由链路
- *       按同一个判据（速度 &lt; 0.35）再补一次。</li>
- * </ol>
- *
- * ── 五、与"仿创造飞行"（{@code MISC_FREE_FLIGHT}）的分工 ──
- * 那个是另一个功能（给女仆创造模式飞行：悬浮+自由升降，不需要鞘翅、也不是滑翔）。本类走
- * **鞘翅滑翔**这条物理（原版滑翔位 + 滑翔阻力），两者互不干涉，资格表各自独立。
+ *       只要她在滑翔就每 tick 加一份推力 {@code v += (look·d + (look·i − v)·t) · c}（d/i/t 见 {@link #paramsOf}）。 **不需要按跳跃键**。</li> </ul> <b>神秘遗物+</b>（{@code enigmaticlegacyplus-1.21.1-1.1.2}）：{@code majestic_elytra}（壮丽鞘翅）与 {@code chaos_elytra}（混沌之傲）继承 {@code BaseElytraItem}，它把 {@code canElytraFly} 直接写成 {@code true}（**不看是不是玩家**）→ 女仆穿得上、滑得起来。自推在 {@code flyingBoost(player)}： **按住跳跃键**时 {@code v = v×0.48 + look×0.64}（壮丽）/ {@code v = v×0.5 + look×k}（混沌， k = {@code flyingSpeedModifier}，默认 0.8）。 <p>【1.20.1 侧不可用】那边的神秘遗物（{@code EnigmaticLegacy} / {@code enigmaticaddons}）把 {@code canElytraFly} 写死了 {@code entity instanceof Player && ...}，女仆**连滑翔都做不到**， 所以表里不列它们（列了也只是死的，还会让"她能动"看起来像我们在瞎认）。 ── 二、为什么"认物品"远远不够：三家都只推玩家 ── 上面的自推入口**全部**挂在 {@code PlayerTickEvent} / {@code instanceof ServerPlayer} / 客户端跳跃键包上。**女仆不是 Player**，只把它算作"推进剂"的结果是她跳起来、展开滑翔、 然后**一路往下沉**。所以本类真正的活是 <b>由我们替她施加推力</b>（{@link #tick}）。 ── 三、通解通法：同一个形状、各自的小数 ── 三家的公式是**同一个形状**：{@code v ← v×gain + look×add}（原版挂载烟花也是这一条： {@code v ← v×0.5 + look×0.85}）。所以通解 = 一张表（{@link #paramsOf}）+ 一个窗口 （{@link #tick}）+ 一条接入链。以后再有同类模组，只需往配置的资格表里加 id—— 认不出具体型号就走 {@link #FALLBACK} 兜底模型，**不需要改代码**。 ── 四、刻意做的三件事 ── <ol> <li><b>不消耗、不扣额外耐久</b>：模组对玩家自推是额外扣耐久的（伊卡洛斯每 20 tick、 神秘遗物每 5 tick），女仆这边**只按原版滑翔的节奏扣**（{@code updateFallFlying} 每 20 tick 扣 1）——那两个是我们借它的**动作**，这里只借它的**物理**，不该替它扣钱。</li> <li><b>排在补推链最末</b>：扇子 → 烟花 → 法术 → 激流 → **自推鞘翅**。前四样存在的存档 手感一字不变。</li> <li><b>窗口收敛、不会飞走</b>：公式本身收敛（不动点 = 视线 × add/(1−gain)），窗口开着时 速度往那一个值收敛；窗口到期（{@link #WINDOW_TICKS} 40 tick）交还滑翔，掉高了由链路 按同一个判据（速度 &lt; 0.35）再补一次。</li> </ol> ── 五、与"仿创造飞行"（{@code MISC_FREE_FLIGHT}）的分工 ── 那个是另一个功能（给女仆创造模式飞行：悬浮+自由升降，不需要鞘翅、也不是滑翔）。本类走 **鞘翅滑翔**这条物理（原版滑翔位 + 滑翔阻力），两者互不干涉，资格表各自独立。
  */
 public final class MaidSelfPropelledWings {
 

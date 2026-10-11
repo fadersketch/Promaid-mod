@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 604 | 268 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 608 | 272 | 24 |
+| promaid_src（Forge 1.20.1） | 594 | 258 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 598 | 262 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `DEBT.md` TD-08）：（无）
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -70,11 +70,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.maidTeleportRebuild` | bool | true | 传送后客户端重建（默认开） |
 | `misc.workTeleportHold` | bool | true | 干活时不被传送召回（默认开） |
 
-### 排班 / 作息　（15 项）
+### 排班 / 作息　（14 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
-| `build.scheduleRangeMigrated` | bool | false | 内部标记 |
 | `aitools.readiness` | bool | true | smart_readiness 工具（只读自检——空袭三件套/弹药/驻守/排班/工作锚点/血量，让模型"先查后做"） |
 | `combat.forceAllSchedule` | bool | true | 参战时把作息临时切「全天」（默认开） |
 | `misc.scheduleBubbleEnabled` | bool | true | 排班贴身气泡（默认开） |
@@ -308,17 +307,17 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `airRaid.diveBoostMaxRange` | num | 40.0 | 俯冲段冲刺·最远距离（格，默认 40） |
 | `airRaid.diveBoostImpulse` | num | 0.55 | 俯冲段冲刺·一口补多少速度（格/tick，默认 0.55） |
 | `airRaid.diveBoostFirework` | bool | true | 俯冲段冲刺·用烟花（默认开） |
-| `airRaid.diveBoostFireworkScale` | num | 1.4 | 俯冲段冲刺·烟花力度倍数（默认 1.4，v1.2.2 新增） |
+| `airRaid.diveBoostFireworkScale` | num | 1.4 | 俯冲段冲刺·烟花力度倍数（默认 1.4） |
 | `airRaid.diveBoostFan` | bool | false | 俯冲段冲刺·用羽扇（默认关） |
-| `airRaid.diveBoostRiptide` | bool | true | 俯冲段冲刺·用激流三叉戟（默认开，v1.2.4） |
-| `airRaid.rangedBoostRiptide` | bool | true | 掉高补推·用激流三叉戟（默认开，v1.2.4） |
+| `airRaid.diveBoostRiptide` | bool | true | 俯冲段冲刺·用激流三叉戟（默认开） |
+| `airRaid.rangedBoostRiptide` | bool | true | 掉高补推·用激流三叉戟（默认开） |
 | `bombing.tntTrack` | bool | true | TNT 追踪飞行（默认开） |
 | `flightFollow.enabled` | bool | false | 飞行跟随（默认关） |
-| `flightFollow.dist` | num | 25.0 | 飞行跟随·起手距离（格，默认 25，v1.2.2 起由 5 改大） |
-| `flightFollow.endDist` | num | 5.0 | 飞行跟随·收手距离（格，默认 5，v1.2.2 新增） |
+| `flightFollow.dist` | num | 25.0 | 飞行跟随·起手距离（格，默认 25） |
+| `flightFollow.endDist` | num | 5.0 | 飞行跟随·收手距离（格，默认 5） |
 | `flightFollow.firework` | bool | true | 飞行跟随·消耗烟花（默认开） |
 | `flightFollow.elytra` | bool | true | 飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点） |
-| `flightFollow.trident` | bool | true | 飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点，v1.2.4 新增） |
+| `flightFollow.trident` | bool | true | 飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点） |
 | `voice.freeFlight` | bool | false | 仿创造飞行（默认关，1.20.1 精简版） |
 | `voice.freeFlightItems` | list | List.of( | 仿创造飞行·资格物品表（默认空） |
 | `voice.freeFlightEffects` | list | List.of( | 仿创造飞行·资格效果表（默认空） |
@@ -329,7 +328,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `voice.freeFlightTravelDist` | num | 8.0 | 仿创造飞行·超过多远就改飞（格，默认 8） |
 | `voice.glideElytraAnimation` | bool | false | 滑翔时改用模型自己的鞘翅动画（默认关） |
 
-### 扫帚 / 载具　（26 项）
+### 扫帚 / 载具　（21 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -350,11 +349,6 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `broom.patrolEnable` | bool | true | 巡逻航迹总开关（默认开） |
 | `broom.clearance` | num | 1.5 | 新建航迹的默认净空半径（格，默认 1.5，0.5~6.0） |
 | `broom.maxRadius` | num | 128 | 巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制） |
-| `broom.climbMigrated` | bool | false | 内部标记 |
-| `broom.climb12Migrated` | bool | false | 内部标记 |
-| `broom.patrolEnableMigrated` | bool | false | 内部标记 |
-| `broom.airAltMigrated` | bool | false | 内部标记 |
-| `broom.orbitRadiusMigrated` | bool | false | 内部标记 |
 | `tether.broomExtra` | num | 0.3 | 【扫帚档的额外下沉】（格，默认 0.3，0.0~2.0） |
 | `ride.startupDelaySeconds` | num | 3.0 | 绑定飞行载具后的启动时间（秒，默认 3.0，0 = 关闭） |
 | `ride.airCombat` | bool | true | 骑飞行载具时的悬停与低空盘旋（默认开） |
@@ -375,7 +369,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.valueWeight` | num | 2.0 | 价值权重（高价值矿优先程度） |
 | `mine.depthPenalty` | num | 3.0 | 深度惩罚（越深成本越高） |
 | `mine.speedFactor` | num | 1.2 | 挖矿速度系数（1.0=玩家速度，1.2=快20%） |
-| `mine.moveSpeed` | num | 0.6 | 发现矿物后的移动速度（v1.5.118 起 0.6 = TLM 伐木任务同款移速（IFarmTask 同款 0.6f |
+| `mine.moveSpeed` | num | 0.6 | 发现矿物后的移动速度（0.6 = TLM 伐木任务同款移速（IFarmTask 同款 0.6f），走路观感自然） |
 | `mine.junkKeep` | num | 32 | 废石保留量（每种超出销毁） |
 | `mine.placedLifetime` | num | 5 | 搭方块自动清理时间（秒） |
 | `mine.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致） |
@@ -388,7 +382,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.targetTimeout` | num | 300 | 目标超时（tick，够不到矿超时放弃） |
 | `mine.reach` | num | 4.5 | 挖掘/捡拾距离（格） |
 | `mine.pillarCooldown` | num | 4 | 搭方块冷却（tick，垫脚下/搭路节奏） |
-| `mine.rideNoPillar` | bool | true | 骑乘/坐下中禁止搭方块（默认开；v1.2.4 起对**所有**搭方块行为生效） |
+| `mine.rideNoPillar` | bool | true | 骑乘/坐下中禁止搭方块（默认开；对**所有**搭方块行为生效） |
 | `mine.junkCheckInterval` | num | 100 | 废石清理检查间隔（tick） |
 | `mine.scanBudget` | num | 4096 | 挖矿扫描预算（格/tick，默认 4096） |
 | `mine.skipReportInterval` | num | 600 | 跳过矿/捡不到掉落播报间隔（tick，防刷屏） |
@@ -410,7 +404,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `wood.valueWeight` | num | 2.0 | 价值权重 |
 | `wood.depthPenalty` | num | 0.0 | 深度惩罚（每格扣分）——树在地表，默认 0（不偏好浅层） |
 | `wood.speedFactor` | num | 1.2 | 砍伐速度系数（1.0=玩家速度，1.2=快20%） |
-| `wood.moveSpeed` | num | 0.3 | 接近木材速度倍率（v1.1.0 |
+| `wood.moveSpeed` | num | 0.3 | 接近木材速度倍率（0.6→0.3——伐木移速至少快一倍，观感像狂奔 |
 | `wood.junkKeep` | num | 32 | 废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组 |
 | `wood.placedLifetime` | num | 5 | 搭方块清理时间（秒） |
 | `wood.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗斧耐久 |
@@ -439,28 +433,24 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.pickupPriority` | bool | true | 挖矿中禁止拾取（捡掉落物最低优先级） |
 | `misc.orbJoin` | bool | true | 经验球归挖矿女仆（默认开） |
 
-### 建造 / 蓝图　（40 项）
+### 建造 / 蓝图　（36 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
 | `build.speedTier` | str | "x1" | 建造速度档位 |
 | `build.turbo` | bool | false | 极速模式（吃满服务器上限，性能风险） |
-| `build.speedMigrated` | bool | false | 内部标记 |
-| `build.scheduleRangeMigrated` | bool | false | 内部标记 |
-| `build.strollSpeedMigrated` | bool | false | 内部标记 |
-| `build.defaultRepairMigrated` | bool | false | 内部标记 |
 | `build.globalQuota` | num | 350 | 全局放置配额（每秒方块数上限，性能敏感） |
 | `build.maxForceChunks` | num | 1024 | 建造区强制加载区块上限 |
-| `build.maxBlocks` | num | 200 | LLM 蓝图最大方块数（v1.5.222 |
+| `build.maxBlocks` | num | 200 | LLM 蓝图最大方块数（上限放开到 50 万——构建链统一支持 50 万块级建筑） |
 | `build.maxRange` | num | 12 | LLM 蓝图平面范围（±） |
 | `build.maxHeight` | num | 32 | LLM 蓝图高度上限（默认由 8 提到 32——8 格高连一棵 20 格高的树都放不下，是「图纸设计出来后存不成蓝图 |
-| `build.designMaxBlocks` | num | 500000 | AI 子 Agent 设计蓝图方块上限（v1.5.222 |
+| `build.designMaxBlocks` | num | 500000 | AI 子 Agent 设计蓝图方块上限（默认与上限放开到 50 万——构建链统一支持 50 万块级建筑） |
 | `build.structureMaxBlocks` | num | 1000000 | 结构文件蓝图方块上限（100万是服务器负担） |
 | `build.maxMaids` | num | 30 | Promaid 手册女仆管理列表上限 |
 | `build.originPlayer` | bool | true | 建造地点基准 |
 | `build.indexStone` | bool | true | 指标石（默认开） |
 | `build.noForceHome` | bool | true | 建造不强制 home（默认开） |
-| `build.machineSmart` | bool | true | 红石机器专属搭建（v1.5.316 改革） |
+| `build.machineSmart` | bool | true | 红石机器专属搭建 |
 | `build.keepFluids` | str | "auto" | 图纸流体保留（水/岩浆） |
 | `build.looseMaterials` | str | "machine" | 缺料同类宽松 |
 | `build.tntIgnitionGrace` | num | 120 | TNT 点火保护期（秒，默认 120） |
@@ -597,12 +587,12 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `dialogue.reportRadius` | num | 32 | 工作播报扫描范围 |
 | `dialogue.proactive` | bool | true | 主动对话（关心/夜晚/好感等主动开口） |
 | `dialogue.proactiveCooldown` | num | 4 | 两次主动发言最小间隔（分钟） |
-| `dialogue.proactiveDaily` | num | 12 | 主动对话日上限（次，控 token 成本；v1.5.191 |
+| `dialogue.proactiveDaily` | num | 12 | 主动对话日上限（次，控 token 成本 |
 | `dialogue.proactiveKill` | bool | false | 击杀邀功对话（默认关） |
 | `dialogue.autonomous` | bool | true | 自主决策（女仆自己换任务干活） |
 | `dialogue.autonomousCooldown` | num | 10 | 自主决策冷却（分钟） |
 | `dialogue.autonomousDaily` | num | 10 | 自主决策日上限（次） |
-| `dialogue.apiDailyLimit` | num | 40 | 所有女仆每日主动 LLM 调用总量上限（token 成本；v1.5.191 |
+| `dialogue.apiDailyLimit` | num | 40 | 所有女仆每日主动 LLM 调用总量上限（token 成本 |
 | `dialogue.reportCheck` | num | 20 | 工作播报检查间隔（tick） |
 | `dialogue.proactiveScan` | num | 20 | 主动对话周期扫描间隔（秒） |
 | `dialogue.proactiveLowHp` | num | 30 | 主动关心主人低血阈值（%） |
@@ -611,13 +601,13 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `dialogue.autoOwnerRange` | num | 16 | 自主决策触发主人范围 |
 | `dialogue.autoDayStart` | num | 1000 | 自主决策工作开始时刻（游戏 tick） |
 | `dialogue.autoDayEnd` | num | 13000 | 自主决策工作结束时刻（游戏 tick） |
-| `dialogue.maxReplies` | num | 4 | 每轮主动会话最多发言次数（v1.5.191 |
+| `dialogue.maxReplies` | num | 4 | 每轮主动会话最多发言次数（7 阶段不会一次性全喷——主人一次互动周期内最多主动发 N 次，之后进入空闲） |
 | `dialogue.proactiveIdleMin` | num | 60 | 主动对话空闲重启（分钟，一轮跑完/被打断后主人 N 分钟没互动才重启新周期） |
 | `dialogue.longSilenceMax` | num | 2 | 长沉默确认每日上限（次，"主人还在吗"这类确认一天最多几次，防烦人） |
 | `dialogue.replyFeedback` | bool | true | 回复反馈学习（主人说'别说了/好烦'→ 记 error_mark 停止该话题 |
 | `dialogue.topicBackoffMin` | num | 60 | 话题冷却（分钟，被主人否定的主动话题 N 分钟内不再提起） |
 | `dialogue.outputLanguage` | str | "" | 对话输出语言（留空 = 强制中文输出 |
-| `dialogue.langCheck` | bool | true | 对话输出语言检测（v1.5.250 起 |
+| `dialogue.langCheck` | bool | true | 对话输出语言检测（LLM 回复非设定语言时【内嵌翻译】成目标语言再显示） |
 | `dialogue.promptSittingWork` | bool | true | 对话提示词·坐姿工作说明（默认开） |
 | `misc.bubbleLimitMs` | num | 5000 | 对话气泡限频（毫秒，防刷屏） |
 | `voice.volumeMultiplier` | num | 2.0 | TTS 语音播放音量倍率（与伤害/减伤无关！） |
@@ -639,7 +629,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `voice.freeFlightTravelDist` | num | 8.0 | 仿创造飞行·超过多远就改飞（格，默认 8） |
 | `voice.glideElytraAnimation` | bool | false | 滑翔时改用模型自己的鞘翅动画（默认关） |
 
-### 危险方块 / 避让　（5 项）
+### 危险方块 / 避让　（4 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -648,7 +638,6 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.dangerBlocks` | list | List.of(
                         "minecraft:lava" | 危险方块表（完整注册名，一行一个 |
 | `misc.dangerEscape` | bool | true | 险境脱离（默认开） |
-| `misc.dangerCampfireMigrated` | bool | false | 内部标记 |
 
 ### 预设 / 调试　（1 项）
 
@@ -737,10 +726,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `airRaid.diveBoostMaxRange` | num | 40.0 | 俯冲段冲刺·最远距离（格，默认 40） |
 | `airRaid.diveBoostImpulse` | num | 0.55 | 俯冲段冲刺·一口补多少速度（格/tick，默认 0.55） |
 | `airRaid.diveBoostFirework` | bool | true | 俯冲段冲刺·用烟花（默认开） |
-| `airRaid.diveBoostFireworkScale` | num | 1.4 | 俯冲段冲刺·烟花力度倍数（默认 1.4，v1.2.2 新增） |
+| `airRaid.diveBoostFireworkScale` | num | 1.4 | 俯冲段冲刺·烟花力度倍数（默认 1.4） |
 | `airRaid.diveBoostFan` | bool | false | 俯冲段冲刺·用羽扇（默认关） |
-| `airRaid.diveBoostRiptide` | bool | true | 俯冲段冲刺·用激流三叉戟（默认开，v1.2.4） |
-| `airRaid.rangedBoostRiptide` | bool | true | 掉高补推·用激流三叉戟（默认开，v1.2.4） |
+| `airRaid.diveBoostRiptide` | bool | true | 俯冲段冲刺·用激流三叉戟（默认开） |
+| `airRaid.rangedBoostRiptide` | bool | true | 掉高补推·用激流三叉戟（默认开） |
 
 ### aitools　（11 项）
 
@@ -780,7 +769,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `bombing.bombInterval` | num | 200 | 轰炸最短间隔（tick，默认 200 = 10 秒） |
 | `bombing.pose` | bool | true | 副手动作表现（默认开） |
 | `bombing.airPlace` | bool | true | 空中强制放置（默认开） |
-| `bombing.airDrop` | bool | true | 空中悬空投弹（走后门，默认开，v1.2.2） |
+| `bombing.airDrop` | bool | true | 空中悬空投弹（走后门，默认开） |
 | `bombing.pinkMark` | bool | true | 女仆放置物的淡粉色标记（默认开，纯客户端） |
 | `bombing.pinkFire` | bool | true | 爆炸火焰改粉色（默认开） |
 | `bombing.fireRender` | bool | true | 粉色火焰渲染（默认开） |
@@ -807,7 +796,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `bridge.buildWhitelist` | list | java.util.List.of( | 搭方块放宽名单（完整注册名，逗号分隔；默认空） |
 | `bridge.combatPlacedLifetime` | num | 10 | 战斗搭方块清理时间（秒，默认 10） |
 
-### broom　（22 项）
+### broom　（17 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -828,34 +817,25 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `broom.patrolEnable` | bool | true | 巡逻航迹总开关（默认开） |
 | `broom.clearance` | num | 1.5 | 新建航迹的默认净空半径（格，默认 1.5，0.5~6.0） |
 | `broom.maxRadius` | num | 128 | 巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制） |
-| `broom.climbMigrated` | bool | false | 内部标记 |
-| `broom.climb12Migrated` | bool | false | 内部标记 |
-| `broom.patrolEnableMigrated` | bool | false | 内部标记 |
-| `broom.airAltMigrated` | bool | false | 内部标记 |
-| `broom.orbitRadiusMigrated` | bool | false | 内部标记 |
 
-### build　（38 项）
+### build　（34 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
 | `build.speedTier` | str | "x1" | 建造速度档位 |
 | `build.turbo` | bool | false | 极速模式（吃满服务器上限，性能风险） |
-| `build.speedMigrated` | bool | false | 内部标记 |
-| `build.scheduleRangeMigrated` | bool | false | 内部标记 |
-| `build.strollSpeedMigrated` | bool | false | 内部标记 |
-| `build.defaultRepairMigrated` | bool | false | 内部标记 |
 | `build.globalQuota` | num | 350 | 全局放置配额（每秒方块数上限，性能敏感） |
 | `build.maxForceChunks` | num | 1024 | 建造区强制加载区块上限 |
-| `build.maxBlocks` | num | 200 | LLM 蓝图最大方块数（v1.5.222 |
+| `build.maxBlocks` | num | 200 | LLM 蓝图最大方块数（上限放开到 50 万——构建链统一支持 50 万块级建筑） |
 | `build.maxRange` | num | 12 | LLM 蓝图平面范围（±） |
 | `build.maxHeight` | num | 32 | LLM 蓝图高度上限（默认由 8 提到 32——8 格高连一棵 20 格高的树都放不下，是「图纸设计出来后存不成蓝图 |
-| `build.designMaxBlocks` | num | 500000 | AI 子 Agent 设计蓝图方块上限（v1.5.222 |
+| `build.designMaxBlocks` | num | 500000 | AI 子 Agent 设计蓝图方块上限（默认与上限放开到 50 万——构建链统一支持 50 万块级建筑） |
 | `build.structureMaxBlocks` | num | 1000000 | 结构文件蓝图方块上限（100万是服务器负担） |
 | `build.maxMaids` | num | 30 | Promaid 手册女仆管理列表上限 |
 | `build.originPlayer` | bool | true | 建造地点基准 |
 | `build.indexStone` | bool | true | 指标石（默认开） |
 | `build.noForceHome` | bool | true | 建造不强制 home（默认开） |
-| `build.machineSmart` | bool | true | 红石机器专属搭建（v1.5.316 改革） |
+| `build.machineSmart` | bool | true | 红石机器专属搭建 |
 | `build.keepFluids` | str | "auto" | 图纸流体保留（水/岩浆） |
 | `build.looseMaterials` | str | "machine" | 缺料同类宽松 |
 | `build.tntIgnitionGrace` | num | 120 | TNT 点火保护期（秒，默认 120） |
@@ -1030,12 +1010,12 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `dialogue.reportRadius` | num | 32 | 工作播报扫描范围 |
 | `dialogue.proactive` | bool | true | 主动对话（关心/夜晚/好感等主动开口） |
 | `dialogue.proactiveCooldown` | num | 4 | 两次主动发言最小间隔（分钟） |
-| `dialogue.proactiveDaily` | num | 12 | 主动对话日上限（次，控 token 成本；v1.5.191 |
+| `dialogue.proactiveDaily` | num | 12 | 主动对话日上限（次，控 token 成本 |
 | `dialogue.proactiveKill` | bool | false | 击杀邀功对话（默认关） |
 | `dialogue.autonomous` | bool | true | 自主决策（女仆自己换任务干活） |
 | `dialogue.autonomousCooldown` | num | 10 | 自主决策冷却（分钟） |
 | `dialogue.autonomousDaily` | num | 10 | 自主决策日上限（次） |
-| `dialogue.apiDailyLimit` | num | 40 | 所有女仆每日主动 LLM 调用总量上限（token 成本；v1.5.191 |
+| `dialogue.apiDailyLimit` | num | 40 | 所有女仆每日主动 LLM 调用总量上限（token 成本 |
 | `dialogue.reportCheck` | num | 20 | 工作播报检查间隔（tick） |
 | `dialogue.proactiveScan` | num | 20 | 主动对话周期扫描间隔（秒） |
 | `dialogue.proactiveLowHp` | num | 30 | 主动关心主人低血阈值（%） |
@@ -1044,13 +1024,13 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `dialogue.autoOwnerRange` | num | 16 | 自主决策触发主人范围 |
 | `dialogue.autoDayStart` | num | 1000 | 自主决策工作开始时刻（游戏 tick） |
 | `dialogue.autoDayEnd` | num | 13000 | 自主决策工作结束时刻（游戏 tick） |
-| `dialogue.maxReplies` | num | 4 | 每轮主动会话最多发言次数（v1.5.191 |
+| `dialogue.maxReplies` | num | 4 | 每轮主动会话最多发言次数（7 阶段不会一次性全喷——主人一次互动周期内最多主动发 N 次，之后进入空闲） |
 | `dialogue.proactiveIdleMin` | num | 60 | 主动对话空闲重启（分钟，一轮跑完/被打断后主人 N 分钟没互动才重启新周期） |
 | `dialogue.longSilenceMax` | num | 2 | 长沉默确认每日上限（次，"主人还在吗"这类确认一天最多几次，防烦人） |
 | `dialogue.replyFeedback` | bool | true | 回复反馈学习（主人说'别说了/好烦'→ 记 error_mark 停止该话题 |
 | `dialogue.topicBackoffMin` | num | 60 | 话题冷却（分钟，被主人否定的主动话题 N 分钟内不再提起） |
 | `dialogue.outputLanguage` | str | "" | 对话输出语言（留空 = 强制中文输出 |
-| `dialogue.langCheck` | bool | true | 对话输出语言检测（v1.5.250 起 |
+| `dialogue.langCheck` | bool | true | 对话输出语言检测（LLM 回复非设定语言时【内嵌翻译】成目标语言再显示） |
 | `dialogue.promptSittingWork` | bool | true | 对话提示词·坐姿工作说明（默认开） |
 
 ### flightFollow　（6 项）
@@ -1058,11 +1038,11 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
 | `flightFollow.enabled` | bool | false | 飞行跟随（默认关） |
-| `flightFollow.dist` | num | 25.0 | 飞行跟随·起手距离（格，默认 25，v1.2.2 起由 5 改大） |
-| `flightFollow.endDist` | num | 5.0 | 飞行跟随·收手距离（格，默认 5，v1.2.2 新增） |
+| `flightFollow.dist` | num | 25.0 | 飞行跟随·起手距离（格，默认 25） |
+| `flightFollow.endDist` | num | 5.0 | 飞行跟随·收手距离（格，默认 5） |
 | `flightFollow.firework` | bool | true | 飞行跟随·消耗烟花（默认开） |
 | `flightFollow.elytra` | bool | true | 飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点） |
-| `flightFollow.trident` | bool | true | 飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点，v1.2.4 新增） |
+| `flightFollow.trident` | bool | true | 飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点） |
 
 ### maneuver　（4 项）
 
@@ -1146,7 +1126,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.valueWeight` | num | 2.0 | 价值权重（高价值矿优先程度） |
 | `mine.depthPenalty` | num | 3.0 | 深度惩罚（越深成本越高） |
 | `mine.speedFactor` | num | 1.2 | 挖矿速度系数（1.0=玩家速度，1.2=快20%） |
-| `mine.moveSpeed` | num | 0.6 | 发现矿物后的移动速度（v1.5.118 起 0.6 = TLM 伐木任务同款移速（IFarmTask 同款 0.6f |
+| `mine.moveSpeed` | num | 0.6 | 发现矿物后的移动速度（0.6 = TLM 伐木任务同款移速（IFarmTask 同款 0.6f），走路观感自然） |
 | `mine.junkKeep` | num | 32 | 废石保留量（每种超出销毁） |
 | `mine.placedLifetime` | num | 5 | 搭方块自动清理时间（秒） |
 | `mine.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致） |
@@ -1159,7 +1139,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.targetTimeout` | num | 300 | 目标超时（tick，够不到矿超时放弃） |
 | `mine.reach` | num | 4.5 | 挖掘/捡拾距离（格） |
 | `mine.pillarCooldown` | num | 4 | 搭方块冷却（tick，垫脚下/搭路节奏） |
-| `mine.rideNoPillar` | bool | true | 骑乘/坐下中禁止搭方块（默认开；v1.2.4 起对**所有**搭方块行为生效） |
+| `mine.rideNoPillar` | bool | true | 骑乘/坐下中禁止搭方块（默认开；对**所有**搭方块行为生效） |
 | `mine.junkCheckInterval` | num | 100 | 废石清理检查间隔（tick） |
 | `mine.scanBudget` | num | 4096 | 挖矿扫描预算（格/tick，默认 4096） |
 | `mine.skipReportInterval` | num | 600 | 跳过矿/捡不到掉落播报间隔（tick，防刷屏） |
@@ -1172,7 +1152,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.requirePick` | bool | true | 没镐不启动（默认开） |
 | `mine.repick` | bool | true | 锁定期间持续重挑（默认开） |
 
-### misc　（83 项）
+### misc　（82 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1226,7 +1206,6 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.dangerBlocks` | list | List.of(
                         "minecraft:lava" | 危险方块表（完整注册名，一行一个 |
 | `misc.dangerEscape` | bool | true | 险境脱离（默认开） |
-| `misc.dangerCampfireMigrated` | bool | false | 内部标记 |
 | `misc.maidRescue` | bool | true | 受困救援（默认开） |
 | `misc.logEnabled` | bool | true | 运行日志（默认开） |
 | `misc.presetMode` | str | "default" | 模式预设（手册首页「DIY / 默认模式」页切换） |
@@ -1271,7 +1250,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `perception.weather` | bool | true | 天气变化检测 |
 | `perception.scanInterval` | num | 20 | 快照扫描间隔（tick） |
 | `perception.eventCooldown` | num | 30 | 同类事件播报限频（秒，非敌对事件用） |
-| `perception.hostileShowCooldown` | num | 300 | 敌对感知显示限频（秒，v1.5.119 |
+| `perception.hostileShowCooldown` | num | 300 | 敌对感知显示限频（秒，感知检测照常、仅'发现怪物'类显示大大降频 |
 | `perception.ownerLowHealth` | num | 30 | 主人血量低阈值（%） |
 | `perception.lookTicks` | num | 3 | 主人持续注视判定时长（秒） |
 | `perception.lookEnterDeg` | num | 35.0 | 看向进入角度（度） |
@@ -1320,7 +1299,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `tether.enable` | bool | true | 武装拴绳总开关（默认开） |
 | `tether.tetherLeashSteer` | bool | true | 二号位·悬挂时用武装拴绳操控方向（默认开，仅空袭档） |
 | `tether.hang` | num | 2.6 | 悬挂距离（格，默认 2.6，0.5~6.0） |
-| `tether.ghostAlpha` | num | 0.1 | 【第一人称下的透明度】（默认 0.1，0.0~1.0；**设 1.0 = 关掉这个功能**，照旧不透明）。需求 |
+| `tether.ghostAlpha` | num | 0.1 | 【第一人称下的透明度】（默认 0.1，0.0~1.0；**设 1.0 = 关掉这个功能**，照旧不透明） |
 | `tether.glowMark` | bool | true | 【金色描边标记】（默认开） |
 | `tether.broomExtra` | num | 0.3 | 【扫帚档的额外下沉】（格，默认 0.3，0.0~2.0） |
 | `tether.pull` | bool | true | 【拉扯】绳子绷紧时像原版拴绳一样把女仆拽过来（默认开） |
@@ -1362,7 +1341,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `wood.valueWeight` | num | 2.0 | 价值权重 |
 | `wood.depthPenalty` | num | 0.0 | 深度惩罚（每格扣分）——树在地表，默认 0（不偏好浅层） |
 | `wood.speedFactor` | num | 1.2 | 砍伐速度系数（1.0=玩家速度，1.2=快20%） |
-| `wood.moveSpeed` | num | 0.3 | 接近木材速度倍率（v1.1.0 |
+| `wood.moveSpeed` | num | 0.3 | 接近木材速度倍率（0.6→0.3——伐木移速至少快一倍，观感像狂奔 |
 | `wood.junkKeep` | num | 32 | 废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组 |
 | `wood.placedLifetime` | num | 5 | 搭方块清理时间（秒） |
 | `wood.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗斧耐久 |

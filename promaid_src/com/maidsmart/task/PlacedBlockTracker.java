@@ -20,12 +20,9 @@ import java.util.UUID;
 import java.util.function.Predicate;
 
 /**
- * v1.1.0 实测四十二：女仆搭方块统一追踪器——【绑定搭建者】的到期回收。
- *
  * 旧机制的问题（反馈："垫脚方块收回背包这个机制有问题——女仆离得远方块就掉了，
  * 长途搭建场景必掉"）：回收时找【附近 8 格】的女仆塞背包，找不到就落地——长途
  * 搭建（搭路去远处的矿/树）到期时女仆早走远了，方块全部掉地上。
- *
  * 新机制：
  * 1. 【绑定搭建者】：登记时记录放置女仆的 UUID；到期销毁时【不分远近】回收进她
  *    背包（同维度即可；她已在别的维度、或她已死亡这两件意外就地落地）；背包满才走
@@ -35,7 +32,6 @@ import java.util.function.Predicate;
  *    女仆回到世界后计时恢复。
  * 3. 女仆站在方块上仍刷新计时（实测十八同款保护，防脚下塌陷摔落）。
  * 4. 女仆永久消失（死亡/删除）→ 名下方块立即到期回收（不再有主人，别挂着）。
- *
  * 四套搭方块表（挖矿/伐木/搭路/自保）共用本类，各自一个实例（寿命/销毁回调不同）。
  */
 public final class PlacedBlockTracker {
@@ -143,17 +139,12 @@ public final class PlacedBlockTracker {
     }
 
     /**
-     * 实测八百二十八【女仆死亡清理】：把某只女仆【名下的全部垫脚方块】立即销毁并
      * 落地成掉落物。旧版女仆一死，她名下的方块在 {@link #expirePlaced} 里因
      * {@code owner == null}（findMaid 过滤 isAlive）而永久暂停计时——
      * "女仆突然死亡，垫的方块再也回收不了，一直留在原地"。
-     *
      * <p>为什么不塞回她背包：她本人已经死了，塞背包等于凭空把方块送进一个死人的
      * 存档，且掉落物本就该留在原地让玩家捡。所以这里统一 owner=null（destroyAndReclaim
-     * 的落地分支：直接 popResource）。
-     *
-     * <p>玩家替换过的方块照旧不碰（destroyAndReclaim 内部 blockId 比对）。
-     * 全部实例（挖矿/伐木/搭路/战斗搭高）一并清理——她死时这四张表可能都挂着。
+     * 的落地分支：直接 popResource）。 <p>玩家替换过的方块照旧不碰（destroyAndReclaim 内部 blockId 比对）。 全部实例（挖矿/伐木/搭路/战斗搭高）一并清理——她死时这四张表可能都挂着。
      */
     public static void reclaimAllFor(net.minecraft.server.MinecraftServer server, java.util.UUID maidUuid) {
         if (server == null || maidUuid == null) {
@@ -315,17 +306,12 @@ public final class PlacedBlockTracker {
     }
 
     /**
-     * v1.2.4【主人同款：靠近也刷新】——主人走进刷新带内（与女仆同一个 nearRadius/vertBand）
      * 就给这块续命，而不是只认"脚下那一格"。
-     *
      * 需求原文："将主人站在方块上采用和女仆同款的刷新机制。"
      * 女仆那一侧一直是「站在上面 **或** 靠近半径内」两条（实测二百零七防摔口径），
      * 主人只有前一条：他站在 1 格宽桥的边缘、或刚抬脚走到下一格、或站在桥头略偏的位置时，
      * 正在承重的那块已经不在"脚下/脚下一格"的严格口径里 → 计时继续走 → 3 秒后
-     * 脚下抽空（反馈："站的时间太久还是会掉下去"）。同款之后，主人走在桥上 = 沿路的
-     * 桥体一路续命，真正走远（>半径或高度差超出）才开始回收。
-     *
-     * 只对 refreshOnOwnerStand 的实例生效；维度/存活/主人存在性与 masterOnBlock 同一套前置。
+     * 脚下抽空（反馈："站的时间太久还是会掉下去"）。同款之后，主人走在桥上 = 沿路的 桥体一路续命，真正走远（>半径或高度差超出）才开始回收。 只对 refreshOnOwnerStand 的实例生效；维度/存活/主人存在性与 masterOnBlock 同一套前置。
      */
     private boolean masterNearBlock(EntityMaid maid, ServerLevel level, BlockPos pos) {
         net.minecraft.world.entity.LivingEntity master = masterOf(maid, level);
@@ -407,18 +393,11 @@ public final class PlacedBlockTracker {
 
     /**
      * v1.2.2 实测五百九十八【回收要"整体还她"，不能按挖掘掉落表打折】。
-     *
      * 旧版回收走 {@code Block.getDrops}——那是**挖掘口径**：萤石→萤石粉、草方块→泥土、
      * 石头→圆石、树叶→树苗/木棍、黏土→黏土球、矿石→原矿……可这些方块是女仆**从自己背包里
      * 拿出来垫的**（搭路 / 搭高 / 战斗垫脚 / 深井挖矿），她放下去的本来就是一件件"物品"，
      * 回收时理应把**那件物品**原样还她。反馈原文："回收方块的时候是整体回到女仆的背包，
-     * 但是我发现在搭建萤石的时候会掉落萤石粉。"
-     *
-     * 现在：方块有对应物品（{@code Block.asItem()}，SRG m_5456_）就还 1 个该物品本身；
-     * 只有**没有物品形式**的方块（水/岩浆/火/红石线/耕地/茎这些）才回退原版掉落表
-     * （红石线→红石粉之类本来就得靠掉落表，见 BlueprintLib.BLOCK_ITEM_OVERRIDES 同一口径）。
-     *
-     * 不会凭空生料：这些方块是女仆先扣了自己 1 个物品才放下去的，回收只是把它还回去。
+     * 但是我发现在搭建萤石的时候会掉落萤石粉。" 现在：方块有对应物品（{@code Block.asItem()}，SRG m_5456_）就还 1 个该物品本身； 只有**没有物品形式**的方块（水/岩浆/火/红石线/耕地/茎这些）才回退原版掉落表 （红石线→红石粉之类本来就得靠掉落表，见 BlueprintLib.BLOCK_ITEM_OVERRIDES 同一口径）。 不会凭空生料：这些方块是女仆先扣了自己 1 个物品才放下去的，回收只是把它还回去。
      */
     public static java.util.List<ItemStack> reclaimDrops(BlockState state, ServerLevel level, BlockPos pos) {
         try {
@@ -432,7 +411,6 @@ public final class PlacedBlockTracker {
     }
 
     /**
-     * v1.1.0 实测四十六：女仆放方块的【玩家同款】放置音效。
      * 旧实现用 levelEvent 3001 + Block.m_49956_(state)（Block id）——客户端
      * LevelEvent handler 对 3001 的附加数据按【BlockState id】走的是原版注释/
      * 事件路径，mod 环境下 id 与注册表错位会被解析成无关音效（玩家听成"咆哮"）。

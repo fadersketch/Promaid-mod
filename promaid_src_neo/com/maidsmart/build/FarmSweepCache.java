@@ -128,26 +128,12 @@ public final class FarmSweepCache {
     }
 
     /**
-     * v1.1.0 实测二百七十八：锄地目标判定（FarmMoveTillMixin 与 FarmSweepMixin 共用）。
-     *
-     * 根因：MaidFarmMoveTask.shouldMoveTo 只认"可收割/可种植"两种目标，踩坏的泥土
-     * （dirt）不在其中 → 找不到目标 → TARGET_POS 永不设置 → MaidFarmPlantTask.start
-     * 永不触发 → 挂在 start TAIL 的锄地逻辑永不运行。
-     *
-     * 修复：shouldMoveTo 注入第三个目标判定——"需要锄的泥土"（dirt + 上方空气 +
-     * 3×3 内有耕地 + 背包/主手有锄头）也算目标，女仆走过去后 start 触发锄地。
-     *
-     * v1.1.0 实测二百九十一：判定扩展——dirt 之外认 grass_block（GRASS_BLOCK，
-     * javap 实证：GrassBlock 构造 → GRASS_BLOCK）。反馈："当地块从泥土变为草方块
-     * 之后，女仆就会彻底失去判定"——草方块蔓延到泥土上后旧版只认 dirt → 不再
-     * 锄。原版锄头（HoeItem.TILLABLES 表）本来就能锄 dirt/grass_block/dirt_path
-     * → farmland，判定与锄地动作对齐。
-     *
-     * v1.1.0 实测三百零二（反馈："对曾经已经是耕地的地块打上一个标记……在 5×5
-     * 范围内检索到以后发现不是耕地就动用锄头将其锄成耕地"）：判定改为【标记制】——
-     * 旧版"3×3 内有耕地"启发式会连锁扩散（锄一块后周围 3×3 就有耕地 → 超平坦
-     * 地形 5×5 全被锄成耕地）。现在只锄【有标记（曾经是耕地）且当前不是耕地】的
-     * 地块——标记由锄地事件自动打（玩家/女仆锄地时），SavedData 持久化。
+     * 锄地目标判定（FarmMoveTillMixin 与 FarmSweepMixin 共用）。根因：{@code MaidFarmMoveTask
+     * .shouldMoveTo} 只认"可收割/可种植"，踩坏的 dirt 不在其中 → 找不到目标 → 后续锄地逻辑永不运行。
+     * 修复：注入第三个目标判定——"需要锄的地块"（dirt 或 grass_block，上方空气，且背包/主手有锄头；
+     * 原版锄头本来就能锄 dirt/grass_block/dirt_path）。
+     * 判定改【标记制】：只锄【有标记（曾经是耕地，由锄地事件自动打标、SavedData 持久化）且当前不是
+     * 耕地】的地块——旧版"3×3 内有耕地"启发式会连锁扩散（超平坦 5×5 全被锄）。
      */
     public static boolean isTillable(net.minecraft.server.level.ServerLevel world,
                                      com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid,

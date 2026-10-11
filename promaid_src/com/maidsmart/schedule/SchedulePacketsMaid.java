@@ -543,14 +543,7 @@ public final class SchedulePacketsMaid {
                 //    客户端看到的就是"点进去一下、立刻闪退"。这一条由 MaidContainerRemoteOpenMixin
                 //    对**登记过的**这一对（玩家, 她）整条放行。
                 // ② 客户端侧：TLM 的容器是按实体的**网络 id** 在客户端找她的（字节码实证：
-                //    AbstractMaidContainer 构造里 level.getEntity(int) + cast EntityMaid，
-                //    「玩家背包那一片槽位」只在 maid != null 时才建）——客户端根本不认识她时，
-                //    打开的就是个残界面。这一条由 ChunkMapTrackRemoteMixin **强制同步**解决：
-                //    把这一对塞进原版 seenBy 并调原版 addPairing（spawn + 元数据 + 属性一起发），
-                //    客户端由此真的拿到她，与"走近时原版自己配上的"完全一致。
-                // 所以这里**不再有任何距离阈值**——几十格、几百格、几千格都是同一套流程。
-                // 真正的动作在 RemoteMaidGui.pump（挂在 ChunkMap.tick 尾部，每 tick 一次），
-                // 顺序是「先强制配对、再把界面开出来」：两条包同一条连接按序到达，不会抢跑。
+                //    AbstractMaidContainer 构造里 level.getEntity(int) + cast EntityMaid， 「玩家背包那一片槽位」只在 maid != null 时才建）——客户端根本不认识她时， 打开的就是个残界面。这一条由 ChunkMapTrackRemoteMixin **强制同步**解决： 把这一对塞进原版 seenBy 并调原版 addPairing（spawn + 元数据 + 属性一起发）， 客户端由此真的拿到她，与"走近时原版自己配上的"完全一致。 所以这里**不再有任何距离阈值**——几十格、几百格、几千格都是同一套流程。 真正的动作在 RemoteMaidGui.pump（挂在 ChunkMap.tick 尾部，每 tick 一次）， 顺序是「先强制配对、再把界面开出来」：两条包同一条连接按序到达，不会抢跑。
                 String blocked = openBlockedReason(player, maid);
                 if (blocked != null) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(blocked));
@@ -563,33 +556,11 @@ public final class SchedulePacketsMaid {
 
         /**
          * 这次开她的配置界面会不会"开了就关"——会的话返回给玩家看的那句话，不会则 null。
-         *
          * <p>判据的顺序照抄 {@code AbstractMaidContainer.m_6875_}（TLM 的 stillValid）：
          * 容器那边是"越靠前的条件先否掉"，我们按同一个顺序给理由，玩家看到的就是真正的那个原因。
          * 仍是本模组那条铁律的又一次应用：同一个口径只有一处实现——这里是**客户端表现**那一侧的
          * 同一份口径，改了 TLM 的判据我们也得跟着改，所以注释里把出处写死。
-         *
-         * <p>【v1.3.4 实测六百五十九：距离那一条不在这里拦了】
-         * 「离她 ≤ 3 格」由 {@code MaidContainerRemoteOpenMixin} 对**登记过的**这一对整条放行
-         * ——那是 TLM 每 tick 关界面的唯一原因。
-         *
-         * <p>【v1.3.5 实测六百六十：连"离得太远、客户端看不见她"也不拦了】
-         * 上一版在这里挡了一条写死的距离上限（怕客户端没同步到她、开出来是残界面），做法是"不让开"。
-         * 玩家问：「不是有过一个女仆区块强制加载吗？难道解决不了这样的问题吗？」
-         * ——区块票据确实解决不了这一条：它管的是"她在服务端还在不在、动不动"，
-         * 与"客户端认不认得她"是两条独立管线（同步门在 ChunkMap$TrackedEntity.m_140497_ 里，
-         * 只有距离 + 可见性，与票据无关）。但"把同步真做出来"做得到：ChunkMapTrackRemoteMixin
-         * 就是干这个的。所以那个距离阈值整个删掉了，这里只剩三条"开了也会立刻被原版关掉"的：
-         * <ol>
-         *   <li>她已经不在了（被收回 / 死亡）；</li>
-         *   <li>她正在睡觉——TLM 的 openMaidGui 自己就拒绝（字节码实证：里面只有
-         *       {@code isSleeping()} 一道判据）；</li>
-         *   <li>她在别的维度——跨维度时玩家的客户端在另一个维度，
-         *       {@code AbstractMaidContainer} 构造里那个 {@code level.getEntity(int)} 找的是
-         *       **玩家所在维度**，永远找不到她；而且强制同步也做不了（她在那一维度的实体跟踪表里，
-         *       玩家不在那一维度）。{@code ScheduleNetworking.findMaid} 是**遍历所有维度**找她的
-         *       （字节码实证），所以这一条必须我们自己拦。</li>
-         * </ol>
+         * <p>【v1.3.4 实测六百五十九：距离那一条不在这里拦了】 「离她 ≤ 3 格」由 {@code MaidContainerRemoteOpenMixin} 对**登记过的**这一对整条放行 ——那是 TLM 每 tick 关界面的唯一原因。 <p>【v1.3.5 实测六百六十：连"离得太远、客户端看不见她"也不拦了】 上一版在这里挡了一条写死的距离上限（怕客户端没同步到她、开出来是残界面），做法是"不让开"。 玩家问：「不是有过一个女仆区块强制加载吗？难道解决不了这样的问题吗？」 ——区块票据确实解决不了这一条：它管的是"她在服务端还在不在、动不动"， 与"客户端认不认得她"是两条独立管线（同步门在 ChunkMap$TrackedEntity.m_140497_ 里， 只有距离 + 可见性，与票据无关）。但"把同步真做出来"做得到：ChunkMapTrackRemoteMixin 就是干这个的。所以那个距离阈值整个删掉了，这里只剩三条"开了也会立刻被原版关掉"的： <ol> <li>她已经不在了（被收回 / 死亡）；</li> <li>她正在睡觉——TLM 的 openMaidGui 自己就拒绝（字节码实证：里面只有 {@code isSleeping()} 一道判据）；</li> <li>她在别的维度——跨维度时玩家的客户端在另一个维度， {@code AbstractMaidContainer} 构造里那个 {@code level.getEntity(int)} 找的是 **玩家所在维度**，永远找不到她；而且强制同步也做不了（她在那一维度的实体跟踪表里， 玩家不在那一维度）。{@code ScheduleNetworking.findMaid} 是**遍历所有维度**找她的 （字节码实证），所以这一条必须我们自己拦。</li> </ol>
          */
         private static String openBlockedReason(ServerPlayer player, EntityMaid maid) {
             if (!maid.m_6084_()) {

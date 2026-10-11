@@ -6,29 +6,17 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
- * v1.2.0（1.20.1）实测四百六十九：飞行作战——免疫"鞘翅撞击伤害"（用户要求的后门）。
+ * 飞行作战——免疫"鞘翅撞击伤害"（用户要求的后门，默认开）。女仆高速滑翔撞到方块会吃原版
+ * {@code fly_into_wall} 伤害，一撞就掉血会打断连招，故在"生存与复活"分区给开关。
  *
- * 女仆在飞行作战里高速滑翔，撞到方块会吃原版 `fly_into_wall` 伤害（原版对鞘翅玩家也照常结算）。
- * 飞行链路（烟花推进 → 盘旋/俯冲）撞墙并不罕见，一撞就掉血会直接打断连招，所以在
- * "生存与复活"分区给了开关：默认开 = 免疫。
- *
- * 判定用 `getMsgId().equals("flyIntoWall")`——这个字符串跨版本稳定（1.20.1 与 1.21.1 的
- * `data/minecraft/damage_type/fly_into_wall.json` 都是 `"message_id": "flyIntoWall"`），
- * 比绑定混淆后的 SRG 常量名更耐版本变化。
- *
- * 事件用 `LivingAttackEvent`（Forge 1.20.1 没有 NeoForge 的 LivingIncomingDamageEvent）：
- * 它在伤害源头、可取消，最贴合"免疫"语义（与 FriendlyFireGuard 同一套路）。
- *
- * v1.2.0 实测四百九十四：本类同时承担**空袭免疫摔落伤害**（`fall`，**默认关**）。
- * 同一个 message_id 判定手法——`data/minecraft/damage_type/fall.json` 两个版本都是
- * `"message_id": "fall"`（1.20.1 与 1.21.1 的版本目录 jar 逐个开包核对过）。
- *
- * <p>实测八百五十六：「大运」佩戴者的冲撞免疫也挂在这里（开关 `accessory.daYunNoWallDamage`，默认开）。
- * 戴着「大运」的**玩家或女仆**只要在鞘翅滑翔，撞到方块就不再掉血——它与下面那条女仆飞行链路是
- * **两道独立闸**：那条认「女仆在飞任务 / 跟随 / 收手中」，这条只认「戴着大运 + 在滑翔」，
- * 所以玩家自己飞、或女仆不在飞任务时也管。判"戴没戴"复用现成的两处：
- * 玩家 {@code DaYunPlayerHook.hasDaYun}（Curios 反射）、女仆 {@code DaYunWallPhase.wearsDaYun}
- * （TLM 饰品栏扫描）。**只认服务端**——客户端也取消会造成"本地不掉血、服务端照扣"的错位。
+ * 判定用 {@code getMsgId().equals("flyIntoWall")}——这个字符串跨版本稳定（两树
+ * {@code damage_type/fly_into_wall.json} 都是 {@code "message_id":"flyIntoWall"}），比绑 SRG/Mojmap
+ * 常量名更耐版本变化。同时承担**空袭免疫摔落伤害**（{@code fall}，**默认关**），同一 message_id 手法。
+ * 【「大运」佩戴者的冲撞免疫也挂这里】（开关 {@code accessory.daYunNoWallDamage}，默认开）：戴「大运」的
+ * **玩家或女仆**只要在鞘翅滑翔撞方块就不掉血——它与上面"女仆飞行链路"是**两道独立闸**（那条认"女仆在
+ * 飞任务/跟随/收手中"，这条只认"戴大运 + 在滑翔"），所以玩家自己飞、或女仆不在飞任务时也管。判"戴没戴"
+ * 复用现成的两处：{@code DaYunPlayerHook.hasDaYun}（玩家，Curios 反射）、{@code DaYunWallPhase
+ * .wearsDaYun}（女仆，TLM 饰品栏）。**只认服务端**——客户端也取消会造成"本地不掉血、服务端照扣"错位。
  */
 @Mod.EventBusSubscriber(modid = "promaid")
 public final class MaidFlightWallGuard {

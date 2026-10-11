@@ -15,25 +15,19 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * 实测七百〇二【仿创造飞行 · 1.20.1 精简版 · per-maid 开关的网络层】——两个包：
- *
+ * 【仿创造飞行 · 1.20.1 精简版 · per-maid 开关的网络层】——两个包：
  * <ul>
  *   <li>{@link TogglePacket}（C2S）：action 0 = 查询当前状态、1 = 设置；</li>
- *   <li>{@link StatePacket}（S2C）：把该女仆的显式状态回给发起者
- *       （0 = 未设置/跟随全局、1 = 显式开、2 = 显式关），客户端写进缓存供界面显示。</li>
+ *   <li>{@link StatePacket}（S2C）：把该女仆的显式状态回给发起者（0 = 未设置/跟随全局、1 = 显式开、
+ *       2 = 显式关），客户端写进缓存供界面显示。</li>
  * </ul>
  *
  * 【为什么必须有 S2C】per-maid 标记存在服务端 {@code persistentData} 里（见 {@link MaidFreeFlightFlags}），
- * 客户端读不到——界面重开时若只靠本地猜，就会把"被关掉的开关"显示成"开"，
- * 玩家一点反而又打开（AiMemoryManager 踩过同一个坑）。
- *
+ * 客户端读不到——界面重开时若只靠本地猜，就会把"被关掉的开关"显示成"开"，玩家一点反而又打开。
  * 【服务端校验】只允许**主人本人或 OP** 改，且要她在加载范围内、距离不能太远（防远程遥控别人家的女仆）。
- *
- * 【1.20.1 落法：照仓库现有范式写一份】1.21.1 上是 NeoForge 的
- * {@code CustomPacketPayload}+{@code PayloadRegistrar}；1.20.1/Forge 是
- * {@link SimpleChannel}（本树已有 8 处同样写法：GunnerTetherNetworking / EmotionNetworking /
- * ScheduleNetworking / IndexStoneNetworking / BlueprintBookNetworking / BrewManualNetworking /
- * CompressionBoxNetworking / BombMarkNetworking）。这里照抄其中之一，语义一字不改。
+ * 【落法】1.21.1 用 NeoForge 的 {@code CustomPayload}，1.20.1/Forge 是 {@link SimpleChannel}（本树已有 8
+ * 处同样写法：GunnerTetherNetworking / EmotionNetworking / ScheduleNetworking / IndexStoneNetworking /
+ * BlueprintBookNetworking / BrewManualNetworking / CompressionBoxNetworking / BombMarkNetworking）。
  */
 public final class MaidFreeFlightNetworking {
 

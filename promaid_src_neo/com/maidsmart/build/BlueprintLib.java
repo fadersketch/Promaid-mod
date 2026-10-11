@@ -23,7 +23,6 @@ import java.util.Set;
 
 /**
  * 建筑蓝图库（v1.4，v1.5.12 起支持 numen 式结构文件蓝图）。
- *
  * 蓝图格式：List<String>，每个元素 "x,y,z,blockid" 或 "x,y,z,blockid|stateSnbt|beSnbt"
  * （相对坐标，y 从 0 起；stateSnbt = BlockState NBT 文本，beSnbt = 方块实体 NBT 文本）。
  * 来源：
@@ -31,7 +30,6 @@ import java.util.Set;
  * - LLM 现场生成（联网）：smart_build 工具传入 JSON 蓝图
  * - 外部文件（v1.5.11 JSON；v1.5.12 起 .nbt/.snbt 结构文件，numen 式）：
  *   config/maid_smart/blueprints/ 与 存档 schematics/ 文件夹，放入即用（增量扫描）
- *
  * 安全与平衡：
  * - LLM JSON 蓝图：方块白名单（~45 种建筑方块）+ 平面 ±12 + 高度 ≤8 + ≤200 块
  * - 结构文件蓝图：无白名单（玩家自己的文件），黑名单（基岩/命令方块/液体等）+ ≤8192 块
@@ -147,8 +145,7 @@ public final class BlueprintLib {
      * 规则（对齐 numen）：
      * - 黑名单方块 / 液体 / 无物品方块 / 二次半块（门上半、床头）→ 跳过
      * - v1.5.317：keepFluids=true（红石机器蓝图）→ 水/岩浆保留为可建步骤
-     *   （机器水道/气泡柱/岩浆焚烧口需要）；普通建筑维持剥离（防洪水/岩浆事故）。
-     * - 精确 BlockState 与方块实体数据随步骤携带（|stateSnbt|beSnbt）
+     *   （机器水道/气泡柱/岩浆焚烧口需要）；普通建筑维持剥离（防洪水/岩浆事故）。 - 精确 BlockState 与方块实体数据随步骤携带（|stateSnbt|beSnbt）
      */
     public static List<String> parseStructure(net.minecraft.nbt.CompoundTag tag, int quarters,
                                               net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder,
@@ -247,15 +244,13 @@ public final class BlueprintLib {
                         net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
                                 net.minecraft.resources.ResourceLocation.parse(blockName));
                 // v1.2.2 实测五百九十八（issue #12 追查）【这道过滤旧版对墙上方块从来没生效过】：
-                // 旧版判"有没有对应物品"用的是 `block.asItem() == AIR`，而原版墙上方块
                 // （wall_torch / *_wall_sign / *_wall_banner / *_wall_hanging_sign）的 asItem()
                 // **并不是 AIR**——BlockItem 注册时把墙上方块也登记进了 BY_BLOCK，返回的是
                 // **前身物品**（redstone_wall_torch → 红石火把、oak_wall_sign → 橡木告示牌）。
                 // 于是这类方块照样进计划，然后在取料那一步撞上"同名物品查不到"——那正是
                 // issue #12 的现场（反馈者观察到"过滤没拦住"）；材料侧已在实测五百八十三
                 // 修好（itemForBlock 做 wall_ 归一）。现在这里统一走**同一个** itemForBlock()：
-                // 判据与材料链完全一致，真正没有物品形式的方块（火/传送门…）才跳过，
-                // 跳过的格数由调用方写进日志（旧版静默——反馈）。
+                // 判据与材料链完全一致，真正没有物品形式的方块（火/传送门…）才跳过， 跳过的格数由调用方写进日志（旧版静默——反馈）。
                 boolean fluidBlock = "minecraft:water".equals(blockName) || "minecraft:lava".equals(blockName);
                 if (block == null || (fluidBlock && !fluidKept) || itemForBlock(blockName) == null) {
                     BlueprintStructureCodec.noItemCells++;
@@ -536,22 +531,7 @@ public final class BlueprintLib {
      * - 轰炸机类（三向/双向/2TNT/自返回/推土机）：活塞+粘液块弹头，红石块为移动
      *   信号源，观察者检测弹头运动，探测铁轨（矿车压轨）触发 TNT 复制。
      * - 打包机类（伪12倍速/六倍速/混杂/带分类/自适应）：灵魂沙气泡柱+冰道水流冲
-     *   物品→漏斗→投掷器/活塞打包入箱，观察者/音符盒时钟自转。
-     * - 潜影盒仓库类（单排/双排/大仓库）：观察者/音符盒 BUD 检测物品输入→活塞推
-     *   潜影盒→比较器/漏斗分类，冰道+气泡柱运输。
-     * - 其他：分类机（漏斗链+比较器）/铁砧机（观察者时钟）/村民机（压板触发）/
-     *   南瓜机（附生茎无法建造）/甘蔗机（纯水流半自动）。
-     * - Never4Get：巨型 TNT 大炮——手动装填触发。
-     *
-     * v1.5.316【红石机器改革：专属顺序 + 活建造（去禁锢）】：
-     * - 机器不再"静默放置（flag 2）+ 完工唤醒/不唤醒"（旧禁锢：机器建好冻结在
-     *   蓝图导出时的瞬态，线保留冻结 power、活塞保留冻结伸缩态 → 建好不运行）。
-     * - 机器改走【专属搭建顺序 sortMachinePlan】：按红石拓扑分层
-     *   结构 → 惰性机构 → 活动件 → 传感/信号 → 动力源 → TNT，动力源最后落位。
-     * - 机器【活放置】（doPlace flag 3）：红石/水流随放随算；机器在最后一格
-     *   动力源落下时自然进入运行态——"建好就能跑"，无需完工唤醒。
-     * - 轰炸机类完工自动在探测铁轨上生成矿车（spawnStartMinecarts）启动复制循环。
-     * - 关闭开关 MaidSmartConfig.BUILD_MACHINE_SMART = 完整回退旧行为。
+     *   物品→漏斗→投掷器/活塞打包入箱，观察者/音符盒时钟自转。 - 潜影盒仓库类（单排/双排/大仓库）：观察者/音符盒 BUD 检测物品输入→活塞推 潜影盒→比较器/漏斗分类，冰道+气泡柱运输。 - 其他：分类机（漏斗链+比较器）/铁砧机（观察者时钟）/村民机（压板触发）/ 南瓜机（附生茎无法建造）/甘蔗机（纯水流半自动）。 - Never4Get：巨型 TNT 大炮——手动装填触发。 - 机器不再"静默放置（flag 2）+ 完工唤醒/不唤醒"（旧禁锢：机器建好冻结在 蓝图导出时的瞬态，线保留冻结 power、活塞保留冻结伸缩态 → 建好不运行）。 - 机器改走【专属搭建顺序 sortMachinePlan】：按红石拓扑分层 结构 → 惰性机构 → 活动件 → 传感/信号 → 动力源 → TNT，动力源最后落位。 - 机器【活放置】（doPlace flag 3）：红石/水流随放随算；机器在最后一格 动力源落下时自然进入运行态——"建好就能跑"，无需完工唤醒。 - 轰炸机类完工自动在探测铁轨上生成矿车（spawnStartMinecarts）启动复制循环。 - 关闭开关 MaidSmartConfig.BUILD_MACHINE_SMART = 完整回退旧行为。
      */
     /** v1.5.315：蓝图 id（内置 maid_smart:xxx 或外部 maid_smart_ext:<文件名>）→ 机器家族；非机器返回 null —— 实现见 BlueprintMachineFinish.machineFamily（v1.2.4 拆分）。 */
     public static String machineFamily(String id) { return BlueprintMachineFinish.machineFamily(id); }

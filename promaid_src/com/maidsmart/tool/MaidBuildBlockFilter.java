@@ -14,11 +14,9 @@ import net.minecraftforge.items.IItemHandler;
 import net.minecraftforge.registries.ForgeRegistries;
 
 /**
- * v1.1.0 实测七【搭方块安全过滤·全局统一】：女仆一切"垫脚/搭高/搭桥"的选材
  * 都必须过这一关——火把/花/草/地毯/雪片等【无碰撞体积】方块放下去踩不住、
  * 挡不住，旧版四个模块（自保搭高/挖矿/伐木/搭路）各自的 takeBuildBlock 只拦
  * "下落方块"，火把进了"数量最多"就选它 → 垫了个寂寞还白消耗。
- *
  * 判定（全部通过才可用）：
  * 1. BlockItem（必须是方块物品）；
  * 2. 非下落方块（沙/砾石/铁砧——放下就掉）；
@@ -28,15 +26,7 @@ import net.minecraftforge.registries.ForgeRegistries;
  *    口径与自保旧判定一致）+ 碰撞箱非空（m_5939_ getCollisionShape → m_83281_ isEmpty
  *    双保险——火把/花/雪片等 collisionShape 为空直接拦）。
  * 6. 非可替换方块（火把/草/雪片同时也在 REPLACEABLE tag 里——双保险第二层）。
- *
- * 注意：不依赖具体坐标做碰撞查询（m_5939_ 需要 BlockGetter，这里用空 Level 的
- * 世界坐标风险大）——退而求其次用方块默认状态的碰撞形状（m_7952_ getShape 无
- * Level 参与的默认形状；火把等默认形状也为空，判定成立）。为稳妥起见两个口径
- * 都检查：默认 shape 为空 或 REPLACEABLE tag 命中 → 一律拒绝。
- *
- * v1.2.4【issue #19·搭路刷物品】：取材这一侧再加一条口径——**取值区间不许包含"被动作表现
- * 借走的副手"**（见 {@link #takeBuildBlock(IItemHandler, IItemHandler, Level, BlockPos, boolean)}）。
- * 判定器只管"哪种方块能垫"，"哪一格算材料"由调用方按此口径传参。
+ * 注意：不依赖具体坐标做碰撞查询（m_5939_ 需要 BlockGetter，这里用空 Level 的 世界坐标风险大）——退而求其次用方块默认状态的碰撞形状（m_7952_ getShape 无 Level 参与的默认形状；火把等默认形状也为空，判定成立）。为稳妥起见两个口径 都检查：默认 shape 为空 或 REPLACEABLE tag 命中 → 一律拒绝。 v1.2.4【issue #19·搭路刷物品】：取材这一侧再加一条口径——**取值区间不许包含"被动作表现 借走的副手"**（见 {@link #takeBuildBlock(IItemHandler, IItemHandler, Level, BlockPos, boolean)}）。 判定器只管"哪种方块能垫"，"哪一格算材料"由调用方按此口径传参。
  */
 public final class MaidBuildBlockFilter {
 
@@ -144,21 +134,10 @@ public final class MaidBuildBlockFilter {
     /**
      * 该方块是否被【玩家自己那张搭方块禁用名单】拦住——本模组对"哪种方块能垫脚"的第四条判定
      * （前三条：安全黑名单 / dangerBlocks 危险表 / 碰撞形状），也是玩家能直接改的那一条。
-     *
      * <p>判定顺序（**优先级从高到低**，与配置面板上显示的状态完全同源——面板画的就是这个方法）：
      * <ol>
      *   <li><b>放宽名单</b>（{@code bridge.buildWhitelist}）里有 → <b>允许</b>：面板上被取消勾选
-     *       （绿框✔）的那些，含玩家想用的<b>模组方块</b>；</li>
-     *   <li><b>禁用名单</b>（{@code bridge.buildBlacklist}）里有 → <b>禁止</b>：面板上点成红框✖ 的；</li>
-     *   <li><b>「只用原版天然方块」</b>开着（默认）→ 不在 {@link NaturalBlocks} 表里就 <b>禁止</b>
-     *       ——于是<b>全部模组方块默认都被这一条拦住</b>（玩家要的默认）；</li>
-     *   <li>以上都不适用 → 放行，交给前面那三条判定（沙子/沙砾这类下落方块照样过不去，
-     *       所以「现有的那些在黑名单里的仍然是不允许的，比如沙子」这句
-     * </ol>
-     *
-     * <p>匹配用完整注册名（也认裸 path：写 {@code sand} 等于 {@code minecraft:sand}），
-     * 与 {@code dangerBlocks} / 投喂黑名单同一套键口径。任何异常一律返回 false（放行）——
-     * 最坏情况是"这张玩家名单没生效、退回旧行为"，绝不会因为一次异常把搭路整条掐死。
+     *       （绿框✔）的那些，含玩家想用的<b>模组方块</b>；</li> <li><b>禁用名单</b>（{@code bridge.buildBlacklist}）里有 → <b>禁止</b>：面板上点成红框✖ 的；</li> <li><b>「只用原版天然方块」</b>开着（默认）→ 不在 {@link NaturalBlocks} 表里就 <b>禁止</b> ——于是<b>全部模组方块默认都被这一条拦住</b>（玩家要的默认）；</li> <li>以上都不适用 → 放行，交给前面那三条判定（沙子/沙砾这类下落方块照样过不去， 所以「现有的那些在黑名单里的仍然是不允许的，比如沙子」这句 </ol> <p>匹配用完整注册名（也认裸 path：写 {@code sand} 等于 {@code minecraft:sand}）， 与 {@code dangerBlocks} / 投喂黑名单同一套键口径。任何异常一律返回 false（放行）—— 最坏情况是"这张玩家名单没生效、退回旧行为"，绝不会因为一次异常把搭路整条掐死。
      */
     public static boolean isBlacklistedBuildBlock(Block block) {
         if (block == null) {
@@ -256,24 +235,12 @@ public final class MaidBuildBlockFilter {
     }
 
     /**
-     * v1.2.4【搭路刷物品·issue #19】{@code skipBorrowedOffhand = true} = **这一下不许把副手
      * 当材料**（计数与扣取都跳过副手槽）。
-     *
      * 为什么必须有这个口径：动作表现（{@link com.maidsmart.combat.BombPose}）把"她这一下正在
      * 用的那件"以**复制品**写进**真实副手槽**举 10 tick。搭路节奏默认 4 tick（BRIDGE_STEP_COOLDOWN）、
      * 展示 10 tick —— 于是下一次取材时那件复制品还在副手上，而本方法旧口径"计数含双手、先扣手"
      * 正好把它当材料扣走；扣完 `showGated` 又补一件新的。净效果：**真料一次都不掉**，但方块到期
-     * 回收按方块 id 逐格还一件真物品（{@link com.maidsmart.task.PlacedBlockTracker#reclaimDrops}）
-     * ——实测「给 1 个铁块、走了 128 格桥」，回收 128 件，凭空多 127 件。
-     *
-     * 调用侧一律传 {@code BombPose.offhandBorrowed(maid)}：**借走期间副手不算材料**；没被借走时
-     * 照旧（玩家把方块挂她副手是正常用法）。主手不跳——那格是她自己真握着的。
-     *
-     * <p>【实测七百九十九·issue #19 四修：这个参数现在退成兜底】上面那套"布尔闸"不再是主防线——
-     * {@link com.maidsmart.combat.BombPose} 与 {@link com.maidsmart.combat.FlightFireworkPose}
-     * 都已改成**展示只发客户端、服务端副手槽一个字不动**，于是"副手那件"永远是玩家的真东西，
-     * 不存在"复制品被当材料"这件事。这个参数保留只为兼容仍传它的调用点（语义不变：true = 跳过副手），
-     * 但即便某条链路忘了问、或问的时机差一拍，也不会再漏账——因为槽里根本没有复制品可漏。
+     * 回收按方块 id 逐格还一件真物品（{@link com.maidsmart.task.PlacedBlockTracker#reclaimDrops}） ——实测「给 1 个铁块、走了 128 格桥」，回收 128 件，凭空多 127 件。 调用侧一律传 {@code BombPose.offhandBorrowed(maid)}：**借走期间副手不算材料**；没被借走时 照旧（玩家把方块挂她副手是正常用法）。主手不跳——那格是她自己真握着的。 <p>【实测七百九十九·issue #19 四修：这个参数现在退成兜底】上面那套"布尔闸"不再是主防线—— {@link com.maidsmart.combat.BombPose} 与 {@link com.maidsmart.combat.FlightFireworkPose} 都已改成**展示只发客户端、服务端副手槽一个字不动**，于是"副手那件"永远是玩家的真东西， 不存在"复制品被当材料"这件事。这个参数保留只为兼容仍传它的调用点（语义不变：true = 跳过副手）， 但即便某条链路忘了问、或问的时机差一拍，也不会再漏账——因为槽里根本没有复制品可漏。
      */
     public static Item takeBuildBlock(IItemHandler inv, IItemHandler hands, Level level, BlockPos pos,
                                       boolean skipBorrowedOffhand) {
@@ -340,27 +307,12 @@ public final class MaidBuildBlockFilter {
     }
 
     /**
-     * v1.3.0(beta) 实测七百一十七【issue #19：搭路方块长期缓慢泄漏】。
-     *
      * 从 {@code slot} 扣 1 件，并且**核对真的扣掉了**：返回 true = 真扣到（该槽位总数确实减 1）。
-     *
      * <p>【为什么要核对】旧写法只看 {@code extractItem} 的返回值非空就当作"取到了"。
      * 但本项目自己的注释早就记过这条坑（见 {@code MaidTorchPlacerBehavior}：「handler 返回副本时
      * 扣不掉（无限插火把刷方块）」）：某些 {@link IItemHandler} 包装层（额外容器/第三方背包的
      * 适配层）的 {@code extractItem} 会**返回一份副本却不真正扣减**底层库存。此时搭路照常放置、
-     * 到期照常归还 1 件（{@link PlacedBlockTracker#reclaimDrops}）——一进一出就是净 +1，而且只在
-     * 恰好选中那个坏槽位时才发生，所以表现为"改善了很多、但长期使用仍缓慢增加"（issue #19 的
-     * 最新报告正是这个形状）。
-     *
-     * <p>核对口径刻意只用"槽位总数变化"这一个绝对事实（不猜实现）：
-     * 真扣 → after == before-1（正常包装全部通过）；返回副本没扣 → after == before → 判定为
-     * 没取到，试下一槽；全都不真扣 → 返回 null，「取材失败」——**宁可这次不搭，也不凭空造料**。
-     *
-     * <p>【实测七百六十二·issue #19 三修：把这个口径开放给同族链路】原来是 private，只服务
-     * 搭路/挖矿/伐木/自保/索引石主材；而**战斗放置**（{@code BombItems.takeFirstMatch}）与
-     * **索引石补下方支撑**（{@code IndexStoneBuildBehavior.takeOneFor}）仍在用裸 {@code extractItem}
-     * → 坏包装层下同样"放置照放、到期按方块 id 逐格还真物"，净 +1。改成 public 让它们共用
-     * 这一个收口，避免下次又漏一条。
+     * 到期照常归还 1 件（{@link PlacedBlockTracker#reclaimDrops}）——一进一出就是净 +1，而且只在 恰好选中那个坏槽位时才发生，所以表现为"改善了很多、但长期使用仍缓慢增加"（issue #19 的 最新报告正是这个形状）。 <p>核对口径刻意只用"槽位总数变化"这一个绝对事实（不猜实现）： 真扣 → after == before-1（正常包装全部通过）；返回副本没扣 → after == before → 判定为 没取到，试下一槽；全都不真扣 → 返回 null，「取材失败」——**宁可这次不搭，也不凭空造料**。 <p>【实测七百六十二·issue #19 三修：把这个口径开放给同族链路】原来是 private，只服务 搭路/挖矿/伐木/自保/索引石主材；而**战斗放置**（{@code BombItems.takeFirstMatch}）与 **索引石补下方支撑**（{@code IndexStoneBuildBehavior.takeOneFor}）仍在用裸 {@code extractItem} → 坏包装层下同样"放置照放、到期按方块 id 逐格还真物"，净 +1。改成 public 让它们共用 这一个收口，避免下次又漏一条。
      */
     public static boolean extractOneHonest(IItemHandler handler, int slot) {
         return extractHonest(handler, slot, 1);

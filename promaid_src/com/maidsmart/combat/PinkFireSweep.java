@@ -17,11 +17,8 @@ import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
- * v1.2.2 实测六百〇二【粉色火焰：保证会灭】。
- *
  * ── 反馈原文 ──
  * "粉色的火又不会熄灭了"（"又"= 实测五百九十八 修过一次同类问题）。
- *
  * ── 实测查到的真相（不是 tick 逻辑坏了）──
  * 反编译已部署的 jar 核对：{@link PinkFireBlock#m_213897_} 的字节码里
  * {@code setValue(AGE, age+1) → scheduleTick} 两条都在（五百九十八 那一修还在），
@@ -32,24 +29,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * 而是它所在的区块在它老化之前就不再 tick 了**（远处战斗 / 玩家走开 / 区块卸载）：
  * 原版火的熄灭完全依赖方块 tick 链（{@code onPlace} 排第一拍、tick 里再排下一拍），
  * 区块一旦不 tick，这条链就冻住；冻住的区块被存进存档，之后再看就是"粉色的火永远不灭"。
- * 顺带核对：1.20.1 的区块 NBT 里确实有 {@code block_ticks}（计划 tick 会存盘、重载后会恢复），
- * 所以这不是"存盘丢了 tick"，而是"**活在没人 tick 的地方**"。
- *
- * ── 于是加两层兜底（tick 链保持不动，它依然是最主要的那条）──
- * ① {@link #track}：每一格被换成的粉火都登记一条"到期时间"（默认 8 秒，与手册口径一致），
- *    由服务端 tick（{@link #onServerTick}）在**不依赖方块 tick** 的前提下到期抹掉
- *    ——只要那一格所在的区块还加载着，就一定会灭；
- * ② {@link #onChunkLoad}：区块**加载时**扫一遍，把存档里带进来的粉火**收进兜底表**（只读坐标，
- *    真正的抹除由下一 tick 的 ① 做——原因见方法注释：在加载管线里改方块会把服务器卡死）——
- *    这一条既治"老版本时代残留的老火"（实测：玩家存档里那 70 格会在下次进区块时自动消失），
- *    也治"火在卸载期间冻住、回来又看到"的观感。
- *
- * 【为什么不干脆把 tick 链删掉、只留这一层】方块 tick 链是**原版贴图/音效/同步**都在用的
- * 常规路径（而且它不占我们的 tick 预算），只是不能保证；两层叠起来才是"正常路线 + 兜底"。
- *
- * 【开销】登记表只装"女仆炸出来的火"（一次爆炸几十~一百多格、寿命 8 秒），
- * 每 tick 遍历一遍做一个 gameTime 比较；区块加载只对"调色板里真有粉火的段落"逐格扫
- * （{@code maybeHas} 先用调色板判一次，没有粉火的分段零成本）。
+ * 顺带核对：1.20.1 的区块 NBT 里确实有 {@code block_ticks}（计划 tick 会存盘、重载后会恢复）， 所以这不是"存盘丢了 tick"，而是"**活在没人 tick 的地方**"。 ── 于是加两层兜底（tick 链保持不动，它依然是最主要的那条）── ① {@link #track}：每一格被换成的粉火都登记一条"到期时间"（默认 8 秒，与手册口径一致）， 由服务端 tick（{@link #onServerTick}）在**不依赖方块 tick** 的前提下到期抹掉 ——只要那一格所在的区块还加载着，就一定会灭； ② {@link #onChunkLoad}：区块**加载时**扫一遍，把存档里带进来的粉火**收进兜底表**（只读坐标， 真正的抹除由下一 tick 的 ① 做——原因见方法注释：在加载管线里改方块会把服务器卡死）—— 这一条既治"老版本时代残留的老火"（实测：玩家存档里那 70 格会在下次进区块时自动消失）， 也治"火在卸载期间冻住、回来又看到"的观感。 【为什么不干脆把 tick 链删掉、只留这一层】方块 tick 链是**原版贴图/音效/同步**都在用的 常规路径（而且它不占我们的 tick 预算），只是不能保证；两层叠起来才是"正常路线 + 兜底"。 【开销】登记表只装"女仆炸出来的火"（一次爆炸几十~一百多格、寿命 8 秒）， 每 tick 遍历一遍做一个 gameTime 比较；区块加载只对"调色板里真有粉火的段落"逐格扫 （{@code maybeHas} 先用调色板判一次，没有粉火的分段零成本）。
  */
 public final class PinkFireSweep {
 
@@ -120,7 +100,6 @@ public final class PinkFireSweep {
 
     /**
      * 到期兜底：条件满足就抹掉那一格粉火——**不管那一格有没有在 tick**。
-     *
      * 区块没加载就先留着（每 tick 再看一次；挂太久才丢——那种情况由 {@link #onChunkLoad}
      * 在下次加载时重新收进来）。**必须在这里、而不是在区块加载事件里改方块**：
      * 加载事件是在区块加载管线内部触发的，那时 {@code level.removeBlock} 会把同一格所在
@@ -169,14 +148,10 @@ public final class PinkFireSweep {
     /**
      * 区块加载时把粉火**收进兜底表**（下一个服务端 tick 抹掉）：**粉火是"那一炸的几秒特效"，
      * 不该被存进世界**。
-     *
      * 这一条同时是"老版本残留"的自愈入口——实测玩家存档里那 70 格会在区块下次加载时消失。
      * 服务端独有（{@code instanceof ServerLevel}）。
-     *
      * 【这里只读不写，是实测换来的】第一版直接在这里 {@code level.removeBlock}，结果
-     * {@code forceload} 一执行服务器就死锁：加载事件在区块加载管线里，那时同一格所在区块还没
-     * 发布，removeBlock 内部的 {@code getChunk} 会阻塞等自己（watchdog：单 tick 60 秒）。
-     * 现在改成"只扫坐标 + 交给 {@link #onServerTick}"，写方块发生在正常的 tick 上下文里。
+     * {@code forceload} 一执行服务器就死锁：加载事件在区块加载管线里，那时同一格所在区块还没 发布，removeBlock 内部的 {@code getChunk} 会阻塞等自己（watchdog：单 tick 60 秒）。 现在改成"只扫坐标 + 交给 {@link #onServerTick}"，写方块发生在正常的 tick 上下文里。
      */
     @SubscribeEvent
     public static void onChunkLoad(ChunkEvent.Load event) {

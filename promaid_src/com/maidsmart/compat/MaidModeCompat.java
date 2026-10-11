@@ -6,33 +6,18 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import java.util.Map;
 
 /**
- * v1.2.2 实测五百九十【第三方「玩法模式」黑名单】。
+ * 第三方「玩法模式」黑名单——对象 =《傀儡装配》Modular Golems 给女仆注册的任务「傀儡师」
+ * （UID {@code modulargolems:summon_golems}，实现 {@code IRangedAttackTask}，进入条件=主手万能手杖）。
  *
- * 反馈原文：「这个功能的模组位于龙之冒险、新征程这个存档里面。如果检测到有傀儡模式，那么会
- * 自动将他列入黑名单。自主切换和主动作战不会切换到这个模式。如果玩家手动切换到这个模式，
- * 那么原本这个 mod 安排的所有战术全都暂时无效，仅保留那个模组原汁原味的傀儡装配玩法。」
- *
- * 对象 =《傀儡装配》Modular Golems（modulargolems；龙之冒险：新征程 v2.4a 里的
- * `[傀儡装配] modulargolems-2.7.3.jar`）给女仆注册的任务「傀儡师」。javap 实证：
- * `dev.xkmc.modulargolems.compat.maid.MaidSummonerTask implements IRangedAttackTask`，
- * UID = `modulargolems:summon_golems`（`ModularGolems.loc("summon_golems")`），
- * 进入条件 = 主手持「万能手杖」（lang 键 `task.modulargolems.summon_golems.condition.has_golem_wand`），
- * 玩法 = 女仆召唤傀儡替她打。
- *
- * 【为什么要拉黑】它是 `IRangedAttackTask`——本模组所有「战斗任务」口径（自主参战的任务池、
- * 投弹链路、单兵战术）都会把它当成战斗模式。可它的玩法是「女仆站在后面指挥傀儡」，本模组那套
- * 跳劈/贴脸绕圈/投弹会把她从指挥官变成突击兵，等于把那个模组的玩法拆了。
- *
- * 两条口径（对应反馈里的两句话）：
- * ① 自动系统（自主参战选任务 / 战中换战术 / LLM 自主切换的候选与可用列表）**永不切进去**
- *    ——{@link #isBlacklisted}；
- * ② 玩家手动切进去之后，本模组的**战术全体让位**——{@link #isPuppetMode}：单兵作战战术
- *    （走位/跳劈/举盾/威胁驱动）、自动换装、投弹与轰炸、自主参战与还原、排班换段全部停手。
- *    **保命动作不在让位之列**（自保、落地水、防火、宠物免疫）——那是「别死」的保险，不是战术。
- *    玩家把她切回别的任务，一切自动恢复（全程没动过任何存档数据）。
- *
- * 检测口径：UID 硬编码比对——**没装那个模组时这就是一句恒假的判断**（整合包里没有这个任务，
- * 黑名单等于空），所以对不装该模组的存档零影响。总开关：`compat.puppetBlacklist`（面板可关）。
+ * 【为什么拉黑】它是 {@code IRangedAttackTask}——本模组所有「战斗任务」口径（自主参战任务池、投弹链路、
+ * 单兵战术）都会当成战斗模式，可它的玩法是"女仆站后面指挥傀儡"，本模组那套跳劈/贴脸绕圈/投弹会把她从
+ * 指挥官变成突击兵，等于拆了那个模组的玩法。
+ * 两条口径：① 自动系统（自主参战选任务 / 战中换战术 / LLM 自主切换的候选与可用列表）**永不切进去**
+ * （{@link #isBlacklisted}）；② 玩家手动切进去后本模组**战术全体让位**（{@link #isPuppetMode}）：单兵
+ * 作战战术、自动换装、投弹与轰炸、自主参战与还原、排班换段全停手——**保命动作不在让位之列**（自保、落地
+ * 水、防火、宠物免疫）。切回别的任务即全部恢复（全程没动存档数据）。
+ * 检测口径：UID 硬编码比对——**没装那个模组时就是一句恒假判断**（黑名单等于空），对不装它的存档零影响。
+ * 总开关 {@code compat.puppetBlacklist}（面板可关）。
  */
 public final class MaidModeCompat {
     /** 黑名单（UID → 人类可读名）：目前只有傀儡师；将来有同类「玩法模式」往这里加 */

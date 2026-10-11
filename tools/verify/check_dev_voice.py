@@ -30,6 +30,10 @@ CN_TABLES = ['assets/promaid/i18n/en_us.json', 'assets/maid_smart/lang/zh_cn.jso
 DEV = re.compile(r'\b(we|our|us|ours|ourselves)\b', re.IGNORECASE)
 ROUND = re.compile(u'\u5b9e\u6d4b|(?<![A-Za-z])(?:test|tested)\\s*\\d', re.IGNORECASE)
 DEV_CN = re.compile(u'\u5b9e\u6d4b|[\u56db\u4e94\u516d\u4e03\u516b\u4e5d]\u767e|\u628a *\\d+ *\u8bef\u5f53')
+# ④ 玩家可见文案里的「开发叙事」（版本戳 / 旧版对比 / 需求原话 / 实现过程引用 / 内部工单号）。
+NARR = re.compile(u'v\\d+\\.\\d+|\\u65e7\\u7248|\\u65e7\\u884c\\u4e3a|\\u65e7\\u9ed8\\u8ba4|\\u65e7\\u503c|\\u65e7\\u7684\\u8bed\\u4e49|'
+                  u'\\u9700\\u6c42\\uff1a|\\u9700\\u6c42\\u8865\\u5145|\\u539f\\u8bdd\\uff1a|\\u73a9\\u5bb6\\u70b9\\u540d|\\u53cd\\u9988\\uff1a|'
+                  u'\\u5b57\\u8282\\u7801\\u5b9e\\u8bc1|javap \\u5b9e\\u8bc1|\\u53cd\\u7f16\\u8bd1\\u5b9e\\u8bc1|TD-\\d|BD-\\d')
 
 # 基线 = 现存残留（只减不增）。实测八百八十五/八百八十八 清零：全部 0。
 BASELINE_EN = {
@@ -60,6 +64,23 @@ def cn_comments(tree):
             t = strip_comments(io.open(os.path.join(dp, f), encoding='utf-8', errors='ignore').read())
             for c in re.findall(r'\.comment\("((?:[^"\\]|\\.)*)"\)', t):
                 m = DEV_CN.search(c)
+                if m:
+                    n += 1
+                    hits.append((f, m.group(0), c[:50]))
+    return n, hits
+
+
+def cn_narrative(tree):
+    """④ 两树 .java 里 .comment("…") 正文里的「开发叙事」数（R902 起钉在 0）。"""
+    n = 0
+    hits = []
+    for dp, dn, fn in os.walk(os.path.join(ROOT, tree)):
+        for f in sorted(fn):
+            if not f.endswith('.java'):
+                continue
+            t = strip_comments(io.open(os.path.join(dp, f), encoding='utf-8', errors='ignore').read())
+            for c in re.findall(r'\.comment\("((?:[^"\\]|\\.)*)"\)', t):
+                m = NARR.search(c)
                 if m:
                     n += 1
                     hits.append((f, m.group(0), c[:50]))
@@ -133,6 +154,14 @@ def main():
         if dump:
             for rel, tok, k in hits[:20]:
                 print('      %-12s %s :: %s' % (tok, rel, k))
+        # ④ .comment 正文里的「开发叙事」棘轮（R902 起基线 0）
+        n, hits = cn_narrative(tree)
+        print('--- %s / .comment 叙事（版本戳/旧版/原话/实证/工单）：%d 处' % (tree, n))
+        if n > 0:
+            FAILS.append('%s/.comment 叙事: %d > 0（见 R902 / DEV_GUIDE 文案口径）' % (tree, n))
+        if dump:
+            for f, tok, c in hits[:20]:
+                print('      %-12s %s :: %s' % (tok, f, c))
     print()
     for w in WARNS:
         print('WARN ' + w)

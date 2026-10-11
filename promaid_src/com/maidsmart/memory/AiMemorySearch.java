@@ -12,7 +12,6 @@ import java.util.WeakHashMap;
 
 /**
  * 记忆检索（v1.5.86 起，对齐 maidsoulcore；实测八百二十九c 补齐 v3 的检索能力）。
- *
  * <p>多路召回 + RRF 融合（score = Σ 1/(k + rank)，k 见 memory.rrfK）：
  * <ul>
  *   <li><b>p 段落</b>：{@link AiMemoryBm25}（原来手搓 n-gram 打分 → 换成 BM25 + CJK 分词）；</li>
@@ -23,10 +22,8 @@ import java.util.WeakHashMap;
  *   <li><b>t 时间</b>：{@link AiMemoryTimeQuery} 把"昨天/上周/N天前"解析成游戏日窗口后按时距排序；</li>
  *   <li><b>v 语义</b>：{@link AiMemoryVectorIndex} 余弦相似（需调用方提供查询向量，见下）。</li>
  * </ul>
- *
  * <p>关于语义路：算查询向量要发一次 embeddings 请求，**不能**在服务端 tick/主线程里同步做。
- * 所以这里不主动算；调用方拿到查询向量后走 {@link #search(AiMemoryStore, String, int, float[])}
- * 即可让语义路参与融合，否则该路贡献为 0、其余照常（优雅降级）。两树逐字相同。
+ * 所以这里不主动算；调用方拿到查询向量后走 {@link #search(AiMemoryStore, String, int, float[])} 即可让语义路参与融合，否则该路贡献为 0、其余照常（优雅降级）。两树逐字相同。
  */
 public final class AiMemorySearch {
 

@@ -22,11 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v1.2.0（1.20.1）：飞行**远战**任务——图标 = 弓，**不响应自主切换**。
- *
  * 【激活口径】鞘翅 + **任意远程武器（ProjectileWeaponItem：弓/弩/御币/模组弹射武器；
  * 以及枪械：TACZ / 卓越前线）** + 烟花火箭，三件齐备才激活；缺任意一件 → 行为与普通攻击模式一致。
- *
  * 【与飞行近战的区别（用户指定）】
  * - 起飞方式完全相同（起跳滑翔 + 放烟花给"背离敌人 + 向上"的初速）；
  * - 起飞之后**不再扑击**，而是持续在天上盘旋（类似幻翼），按需补烟花维持高度；
@@ -95,22 +92,12 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
     }
 
     /**
-     * v1.2.0 实测五百一十三【空袭索敌改为"以自身为圆心、半径 50 的立方盒"】——与
      * {@link MaidFlightCombatTask#searchDimension} 完全同款（远程空袭同属空中作战模式，
      * 索敌口径必须一致）。
-     *
      * 【演进】五百零八先把**垂直**半径从 TLM 默认的 4 格提到 50（水平仍 `searchRadius`，
      * 默认 16），修掉"凋灵飞高就锁不上"；但实测水平 16 格仍太小（"索敌范围还是太小"）——
      * 空袭是立体作战，敌人斜上方 20~40 格时水平距离早就出界。
-     *
-     * 【现在】三轴统一 50 格（`inflate(50,50,50)` = 以自身为半径 50 的立方盒），水平/垂直
-     * 一视同仁。
-     *
-     * 【隔墙不出手由 TLM 原版保证】本方法只管"扫多大范围"；"能不能打"走 TLM 的
-     * `IAttackTask.findFirstValidAttackTarget` → `NearestVisibleLivingEntities.findClosest`，
-     * **该类自带视线过滤**（可见性谓词 = `Sensor.isEntityAttackable` → `TargetingConditions.test`，
-     * `ignoreLineOfSight` 默认 false → `Sensing.hasLineOfSight`，字节码实证）。
-     * 所以放大范围不会导致隔墙出手——候选进得来、可见性那关会滤掉。我们没动这条链路。
+     * 【现在】三轴统一 50 格（`inflate(50,50,50)` = 以自身为半径 50 的立方盒），水平/垂直 一视同仁。 【隔墙不出手由 TLM 原版保证】本方法只管"扫多大范围"；"能不能打"走 TLM 的 `IAttackTask.findFirstValidAttackTarget` → `NearestVisibleLivingEntities.findClosest`， **该类自带视线过滤**（可见性谓词 = `Sensor.isEntityAttackable` → `TargetingConditions.test`， `ignoreLineOfSight` 默认 false → `Sensing.hasLineOfSight`，字节码实证）。 所以放大范围不会导致隔墙出手——候选进得来、可见性那关会滤掉。我们没动这条链路。
      */
     private static final double FLIGHT_SEARCH_RADIUS = 50.0;
 
@@ -130,23 +117,11 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
     /**
      * 开火（由 `EntityMaid.m_6504_` 回调）。
-     *
-     * v1.2.0 实测四百七十六【手持武器没参与开火】——旧版这里**无条件造箭**：
      * 拿御币/三叉戟/模组弹射武器也照样射出一支箭（反馈
-     *
      * 之后就自己造箭，武器本身的发射机制从未被调用。
-     *
      * 现在按武器分流（与玩家手持该武器时的表现对齐）：
      * - **枪械**（TACZ / 卓越前线）：直接返回，由 `MaidFlightCombatBehavior#tickGunFire`
-     *   走 TLM 枪械通道；
-     * - **三叉戟**：走 {@link #throwTrident}——**它不是 `ProjectileWeaponItem`**
-     *   （1.20.1 是 `TridentItem extends Item implements Vanishable`），旧版会在这里被
-     *   判掉、一枪都放不出来；
-     * - **御币**（TLM 的 `ItemHakureiGohei`）：走 TLM 的弹幕 API `DanmakuShoot`——
-     *   与 TLM 自己的 `TaskDanmakuAttack` 同一套（反编译实证：御币的
-     *   `m_6394_/shootProjectile` 是**空实现**、supportedProjectiles 恒 true，
-     *   说明它压根不走原版箭矢通道，硬造箭必然变成"射箭"）；
-     * - **其它弹射武器**（弓/弩/模组弹射物）：造箭，弹药优先按武器自己的判据找。
+     *   走 TLM 枪械通道； - **三叉戟**：走 {@link #throwTrident}——**它不是 `ProjectileWeaponItem`** （1.20.1 是 `TridentItem extends Item implements Vanishable`），旧版会在这里被 判掉、一枪都放不出来； - **御币**（TLM 的 `ItemHakureiGohei`）：走 TLM 的弹幕 API `DanmakuShoot`—— 与 TLM 自己的 `TaskDanmakuAttack` 同一套（反编译实证：御币的 `m_6394_/shootProjectile` 是**空实现**、supportedProjectiles 恒 true， 说明它压根不走原版箭矢通道，硬造箭必然变成"射箭"）； - **其它弹射武器**（弓/弩/模组弹射物）：造箭，弹药优先按武器自己的判据找。
      */
     @Override
     public void performRangedAttack(EntityMaid shooter, LivingEntity target, float power) {
@@ -156,7 +131,6 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
     /**
      * v1.3.0「扫帚模式」复用入口——上面那段开火口径的**唯一实现**，飞行远战与扫帚模式共用。
-     *
      * 【为什么把入口开在这里，而不是把整段搬进单独的 RangedFireSupport】纯粹是风险取舍：
      * 这一整套分支（枪械排除 / 三叉戟 / 御币弹幕 / 弩射烟花 / 弩装配 / 弓造箭）口径很细，
      * 并且已经在两棵树里逐行 SRG 化、随 v1.2.x 发过版；整段搬移到新类只会引入"搬错一行"
@@ -215,20 +189,11 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
     /**
      * 三叉戟投掷——照搬 TLM `TaskTridentAttack.performRangedAttack`（1.20.1 字节码实证）。
-     *
      * 为什么不能走原版那条路：`TridentItem.m_5551_(releaseUsing)` 第一件事就是
      * `if (!(entityLiving instanceof Player)) return;`（字节码 `instanceof Player; ifne`），
      * 女仆不是 Player → 调用它等于空转。所以必须自己建 `ThrownTrident`，这也正是
      * TLM 给女仆做三叉戟任务的做法。
-     *
-     * 与 TLM 逐点一致（不是自己发挥，避免出现"比玩家强/有刷取漏洞"的差异）：
-     * ① 投的是**副本**——主手那把只掉 1 点耐久，不会被真的扔出去；
-     * ② **剥掉忠诚附魔**（`Enchantments.f_44955_`，官方 mappings 实证即 LOYALTY）——
-     *    留着它，`ThrownTrident.m_37594_()` 对活着的女仆返回 true，这把副本会飞回来、
-     *    还可能被玩家捡走，等于凭空多出一把三叉戟；
-     * ③ `setNoGravity(true)` 直线飞行（配 TLM 的 `ThrownTridentMixin`：命中实体后才恢复重力）；
-     * ④ `pickup = CREATIVE_ONLY`——副本不落地可捡，到期由 `tickDespawn` 自行回收；
-     * ⑤ 速度/散布照 TLM：`clamp(距离/10, 1.6, 3.2)` 与 `1 - clamp(距离/100, 0, 0.9)`。
+     * 与 TLM 逐点一致（不是自己发挥，避免出现"比玩家强/有刷取漏洞"的差异）： ① 投的是**副本**——主手那把只掉 1 点耐久，不会被真的扔出去； ② **剥掉忠诚附魔**（`Enchantments.f_44955_`，官方 mappings 实证即 LOYALTY）—— 留着它，`ThrownTrident.m_37594_()` 对活着的女仆返回 true，这把副本会飞回来、 还可能被玩家捡走，等于凭空多出一把三叉戟； ③ `setNoGravity(true)` 直线飞行（配 TLM 的 `ThrownTridentMixin`：命中实体后才恢复重力）； ④ `pickup = CREATIVE_ONLY`——副本不落地可捡，到期由 `tickDespawn` 自行回收； ⑤ 速度/散布照 TLM：`clamp(距离/10, 1.6, 3.2)` 与 `1 - clamp(距离/100, 0, 0.9)`。
      */
     private static void throwTrident(EntityMaid shooter, LivingEntity target) {
         try {
@@ -275,43 +240,11 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
     /**
      * TLM 弹幕开火——**照搬 TLM `TaskDanmakuAttack.performRangedAttack` 的完整规则**。
-     *
-     * v1.2.0 实测四百九十【御币扇形丢失修复】。反馈："御币进行的攻击是扇形范围攻击，
      * 但目前在飞行远战期间御币失去了这个功能。"
-     *
      * 【根因】旧版这里是无条件单发：
      * ```
      * DanmakuShoot.create()....setVelocity(1.6f).setInaccuracy(1.0f).aimedShot();
-     * ```
-     * 而 TLM 的御币扇形来自 `fanShapedShot()`——`DanmakuShoot` 里 `aimedShot` 只造
-     * **1** 发、`fanShapedShot` 才按 `setFanNum(n)` + `setYawTotal(弧度)` 围绕目标方向
-     * 张开一个扇形（CFR 反编译实证：以目标方向为轴，`yaw` 从 `-yawTotal/2` 起按
-     * `yawTotal/(fanNum-1)` 递进，逐发 `Vec3.yRot(yaw)`）。
-     *
-     * 【TLM 的原始规则——不是"永远扇形"】扇叶数按【周围同种敌人数量】分档：
-     * ```
-     *   同种敌人 ≤1 且 无多重射击 → aimedShot()      单发瞄准
-     *   同种敌人 ≤1 且 有多重射击 → fanShapedShot()  3 发 / 0.2618 rad(15°)
-     *   同种敌人 ≤5              → fanShapedShot()  8 发 / 1.0472 rad(60°)
-     *   同种敌人 >5              → fanShapedShot() 32 发 / 2.0944 rad(120°)
-     * ```
-     * 所以「打了 3 只以上才明显扇形」是有意设计（单挑不该撒一片）。旧版一律单发，
-     * 等于把这套规则整段丢了。
-     *
-     * 【为什么照抄而不是自己发挥】伤害/速度/散布都与 TLM 原式对齐（`attackValue`
-     * 取攻击力属性、`speed = 0.3*(df+1)*(急速+1) + clamp(dist/40-0.4, 0, 2.4)`、
-     * `inaccuracy` 单发时 `1-clamp(dist/100,0,0.8)`、扇形时再 /5），避免出现
-     * "比 TLM 原版强/弱"的差异。
-     *
-     * 【本模组特有的两处调整（仅这两处）】
-     * ① 速度基线：TLM 用 `0.3f`，飞行远战是空中交战、目标常更远，沿用会导致弹幕
-     *    追不上（这也是旧版把 setVelocity 提到 1.6 的原因）——这里保留本模组原有的
-     *    "更快"取向，即把 TLM 的 `0.3f` 基线整体抬到 `1.6f`；
-     * ② 附魔：TLM 独有的「阻碍/神速/末影杀手」三个自定义附魔在飞行远战里不做特殊
-     *    处理（保持与旧版一致：不吃这三个附魔），只保留**多重射击**这一条影响形态的。
-     *
-     * @param distanceFactor 由 TLM 的开火通道传入（`MaidShootTargetTask` 的蓄力系数），
-     *                       与 TLM 同款用于伤害/速度缩放
+     * ``` 而 TLM 的御币扇形来自 `fanShapedShot()`——`DanmakuShoot` 里 `aimedShot` 只造 **1** 发、`fanShapedShot` 才按 `setFanNum(n)` + `setYawTotal(弧度)` 围绕目标方向 张开一个扇形（CFR 反编译实证：以目标方向为轴，`yaw` 从 `-yawTotal/2` 起按 `yawTotal/(fanNum-1)` 递进，逐发 `Vec3.yRot(yaw)`）。 【TLM 的原始规则——不是"永远扇形"】扇叶数按【周围同种敌人数量】分档： ``` 同种敌人 ≤1 且 无多重射击 → aimedShot()      单发瞄准 同种敌人 ≤1 且 有多重射击 → fanShapedShot()  3 发 / 0.2618 rad(15°) 同种敌人 ≤5              → fanShapedShot()  8 发 / 1.0472 rad(60°) 同种敌人 >5              → fanShapedShot() 32 发 / 2.0944 rad(120°) ``` 所以「打了 3 只以上才明显扇形」是有意设计（单挑不该撒一片）。旧版一律单发， 等于把这套规则整段丢了。 【为什么照抄而不是自己发挥】伤害/速度/散布都与 TLM 原式对齐（`attackValue` 取攻击力属性、`speed = 0.3*(df+1)*(急速+1) + clamp(dist/40-0.4, 0, 2.4)`、 `inaccuracy` 单发时 `1-clamp(dist/100,0,0.8)`、扇形时再 /5），避免出现 "比 TLM 原版强/弱"的差异。 【本模组特有的两处调整（仅这两处）】 ① 速度基线：TLM 用 `0.3f`，飞行远战是空中交战、目标常更远，沿用会导致弹幕 追不上（这也是旧版把 setVelocity 提到 1.6 的原因）——这里保留本模组原有的 "更快"取向，即把 TLM 的 `0.3f` 基线整体抬到 `1.6f`； ② 附魔：TLM 独有的「阻碍/神速/末影杀手」三个自定义附魔在飞行远战里不做特殊 处理（保持与旧版一致：不吃这三个附魔），只保留**多重射击**这一条影响形态的。 @param distanceFactor 由 TLM 的开火通道传入（`MaidShootTargetTask` 的蓄力系数）， 与 TLM 同款用于伤害/速度缩放
      */
     private static void shootDanmaku(EntityMaid shooter, LivingEntity target, float distanceFactor) {
         try {
@@ -438,28 +371,11 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
     /**
      * 弩：照原版 `CrossbowItem.createProjectile` + `performShooting` 的装配与发射。
-     *
-     * v1.2.0 实测五百三十一。反馈："飞行没有办法触发手持武器的附魔。比如弓和弩，还有三叉戟。"
-     *
      * 【根因·反编译实证（1.20.1 客户端 SRG 字节码）】原版弩的附魔**不在弓那条路里**：
      * <ul>
      *   <li>`CrossbowItem.m_40914_`(createProjectile) 给每支箭额外打三样：
      *       `m_36740_(SoundEvents.f_11840_)`（命中音 = CROSSBOW_HIT）、
-     *       `m_36793_(true)`（setShotFromCrossbow）、
-     *       `m_36767_((byte) 等级)`（穿透，读 `Enchantments.f_44961_` = PIERCING）；</li>
-     *   <li>`CrossbowItem.m_40887_`(performShooting) 按 `Enchantments.f_44959_`(MULTISHOT)
-     *       决定发数：**1 发 / 3 发**，三发的偏角在字节码里就是 **0° / -10° / +10°** 三个 ldc；</li>
-     *   <li>`CrossbowItem.m_40939_`(getChargeDuration) = **25 - 5 × `f_44960_`(QUICK_CHARGE)**——
-     *       快速装填作用在"蓄力时长"上；飞行时没有蓄力动作，所以由
-     *       `MaidFlightCombatBehavior#rangedShotCooldown` 按同一相对幅度缩短开火间隔。</li>
-     * </ul>
-     *
-     * 旧版把弩当弓处理（一律走 {@link #shootArrow}），于是**多重射击 / 穿透 100% 丢失**；
-     * 而弩根本附不上 Power/Punch/Flame，所以"弩的附魔一个都不触发"就是这么来的。
-     *
-     * 【弹药只吃 1 份】原版 `loadProjectiles` 对 Multishot 的第 2、3 发用的是副本，
-     * 只有第 1 发真的从背包扣——所以"1 支箭变 3 支"正是这个附魔的价值，这里照抄。
-     * 【耐久每次射击扣 1】原版 `onCrossbowShot` 是每次射击扣 1 点，不是每支箭扣 1 点。
+     *       `m_36793_(true)`（setShotFromCrossbow）、 `m_36767_((byte) 等级)`（穿透，读 `Enchantments.f_44961_` = PIERCING）；</li> <li>`CrossbowItem.m_40887_`(performShooting) 按 `Enchantments.f_44959_`(MULTISHOT) 决定发数：**1 发 / 3 发**，三发的偏角在字节码里就是 **0° / -10° / +10°** 三个 ldc；</li> <li>`CrossbowItem.m_40939_`(getChargeDuration) = **25 - 5 × `f_44960_`(QUICK_CHARGE)**—— 快速装填作用在"蓄力时长"上；飞行时没有蓄力动作，所以由 `MaidFlightCombatBehavior#rangedShotCooldown` 按同一相对幅度缩短开火间隔。</li> </ul> 而弩根本附不上 Power/Punch/Flame，所以"弩的附魔一个都不触发"就是这么来的。 【弹药只吃 1 份】原版 `loadProjectiles` 对 Multishot 的第 2、3 发用的是副本， 只有第 1 发真的从背包扣——所以"1 支箭变 3 支"正是这个附魔的价值，这里照抄。 【耐久每次射击扣 1】原版 `onCrossbowShot` 是每次射击扣 1 点，不是每支箭扣 1 点。
      */
     private static void shootCrossbowArrows(EntityMaid shooter, LivingEntity target, ItemStack crossbow,
                                             net.minecraft.world.item.ProjectileWeaponItem pwi) {
@@ -515,27 +431,11 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
     /**
      * 弓/弩/模组弹射物：造箭并射出（弹药优先按武器自己的判据找）。
-     *
      * v1.2.0 实测四百九十二【箭矢不吃附魔】。反馈："看一下飞行时攻击能不能触发附魔效果。"
-     *
      * 【根因·反编译实证】1.20.1 的 `ArrowItem.m_6394_(level, stack, shooter)` **只有三个参数、
      * 不收武器**（反编译：`new Arrow(level, shooter)` 之后只 `m_36878_(stack)` 设了拾取物），
      * 所以"附魔"这件事在原版里是由 **`BowItem.releaseUsing` 手工写上去的**——
-     * 它造完箭后自己读武器附魔、逐条施加（见下）。我们旧版造完箭直接 `m_6686_` 射出去，
-     * 这三条**从未被调用** → 飞行远战的箭矢在 1.20.1 上完全没有武器附魔。
-     *
-     * 【1.21.1 不存在这个问题】那边 `createArrow(level, stack, shooter, weapon)` 多一个武器参数、
-     * 存进箭矢的 `firedFromWeapon`，命中时由 `EnchantmentHelper.modifyDamage` / `modifyKnockback`
-     * 自行读取（无 `instanceof Player` 门控，实测确认）——本树只补 1.20.1。
-     *
-     * 【照抄原版 BowItem 的三条】逐条与原版同一算式，不做自创：
-     * ```
-     *   Power  (f_44988_) → m_36781_(m_36789_() + level * 0.5 + 0.5)   // 伤害
-     *   Punch  (f_44989_) → m_36735_(level)                            // 击退
-     *   Flame  (f_44990_) → m_20254_(100)                              // 点燃 5 秒
-     * ```
-     * 另按原版同款处理**无限附魔**（`f_44952_`）：有无限则不消耗背包里的箭
-     * （原版是"创造或无限就不吃弹药"，我们照抄无限这一支）。
+     * 它造完箭后自己读武器附魔、逐条施加（见下）。我们旧版造完箭直接 `m_6686_` 射出去， 这三条**从未被调用** → 飞行远战的箭矢在 1.20.1 上完全没有武器附魔。 【1.21.1 不存在这个问题】那边 `createArrow(level, stack, shooter, weapon)` 多一个武器参数、 存进箭矢的 `firedFromWeapon`，命中时由 `EnchantmentHelper.modifyDamage` / `modifyKnockback` 自行读取（无 `instanceof Player` 门控，实测确认）——本树只补 1.20.1。 【照抄原版 BowItem 的三条】逐条与原版同一算式，不做自创： ``` Power  (f_44988_) → m_36781_(m_36789_() + level * 0.5 + 0.5)   // 伤害 Punch  (f_44989_) → m_36735_(level)                            // 击退 Flame  (f_44990_) → m_20254_(100)                              // 点燃 5 秒 ``` 另按原版同款处理**无限附魔**（`f_44952_`）：有无限则不消耗背包里的箭 （原版是"创造或无限就不吃弹药"，我们照抄无限这一支）。
      */
     private static void shootArrow(EntityMaid shooter, LivingEntity target, ItemStack weapon,
                                    net.minecraft.world.item.ProjectileWeaponItem pwi) {
@@ -629,57 +529,11 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
     /**
      * 弩 + 烟花火箭：照原版 `CrossbowItem.m_40889_(createProjectile)` 的烟花分支打出一枚真烟花。
-     *
-     * v1.2.0 实测四百九十九。反馈原文：「在使用弩的时候没有办法发射攻击性烟花火箭。」
-     *
-     * v1.2.0 实测五百三十三【任意烟花都算弹药 + 优先威力大的】：旧版只认带 `Explosions`
      * 的烟花，玩家拿一叠普通烟花配弩会被判成不认（反馈："女仆不认烟花火箭是弩的弹药"）。
      * 现在口径改为**任意烟花火箭**（与原版 `CrossbowItem` 的弹药谓词一致），
      * 且取用时由 `MaidFlightKit#takeBestCrossbowFirework` **按威力降序挑**
      * （威力 = 爆炸条目数 = 合成用的烟火之星个数，原版伤害 `5 + 2×条目数`）——
-     * 好烟花先用，普通烟花只作兜底。
-     *
-     * 【根因】本方法上面的分流里，弩没有任何特殊待遇——弩是 `ProjectileWeaponItem`，
-     * 于是直接落到 {@link #shootArrow}，而那里**只认 `ArrowItem`**：
-     * 1.20.1 的 {@link #findArrow} 先看副手（烟花不是 ArrowItem，判不过），再去背包找箭；
-     * 背包里没箭就返回空 → {@link #shootArrow} 直接 `return`，**一枪都放不出来**。
-     * 也就是说"手上有弩有烟花，女仆却完全不开火"就是这么来的。
-     *
-     * 【烟花在本任务里的两种身份】烟花火箭在本任务里有两种身份：
-     * ① **飞行燃料**——喂鞘翅推进用，发射路径自己造弹体
-     *    （`MaidFlightCombatBehavior#launchFirework`），**不需要手持**；
-     * ② **弩弹药**——原版口径（`EntityMaid.m_6298_` 副手是烟花就交出来当弹药）。
-     * v1.2.0 实测五百一十：① 已不再占用副手（`MaidFlightKit.equip` 让出副手供盾牌/食物用），
-     * 所以这两者不再抢同一个槽位。
-     *
-     * 【实测五百三十三：不再把"普通烟花"挡在门外】旧版这里只认带爆炸组件的烟花，
-     * 理由是"不带爆炸打出去 0 伤害"。但那条理由**只说明它弱，不说明它不能用**——
-     * 原版玩家拿弩装普通烟花照样能射（`CrossbowItem` 的弹药谓词就不看爆炸组件），
-     * 而本模组却因此报"缺弹药"、一发不开。现在改为"任意烟花都能当弹药"，
-     * 并用**威力优先**（{@link MaidFlightKit#takeBestCrossbowFirework}）把"弱"这件事
-     * 变成排序而不是门禁：有带烟火之星的先打带烟火之星的，没有才用普通烟花兜底。
-     * 弹药耗尽后仍会回落到射箭。
-     *
-     * 【逐点对齐原版 + TLM，不自己发挥】
-     * - 弹体 = `new FireworkRocketEntity(level, 弹药, 女仆, x, 眼高 - 0.15, z, true)`，
-     *   与原版 `createProjectile` 的烟花分支逐字一致；末位 `true` = `shotAtAngle`，
-     *   即**命中即爆、不给射手推力**（不是给滑翔加速的那种挂载烟花）；
-     * - 瞄准照 TLM 自己的女仆弩口径（1.20.1 走原版 `m_4089_`/`shootProjectile`，
-     *   1.21.1 走 `MixinCrossbowItem#shootCrossbowProjectile`）：方向取双方**眼高**之差，
-     *   `setNoGravity(true)` 直线飞行，速度 = `clamp(距离/10, 1.6, 3.2)`、
-     *   散布 = `1 - clamp(距离/100, 0, 0.9)`，音效 `CROSSBOW_SHOOT`（音高带 ±0.4 随机）；
-     * - 耐久按原版烟花分支扣 **3**（射箭是 1）；
-     * - **顺序**：弹药由 {@link MaidFlightKit#takeExplosiveFirework} 先取走（副手优先、
-     *   其次主手、最后背包只抽 1 枚，与 {@link MaidFlightKit#takeFirework} 同一套换装语义），
-     *   紧接着直接建弹体入世界——
-     *   这两步之间只有算术、没有任何可能失败的分支（不查方块、不查目标、不做条件判断），
-     *   所以不存在"烟花扣了却打不出去"的窗口；耐久在弹体入世界之后才扣。
-     *
-     * 【主人免伤】烟花是爆炸伤害，`DamageSources.fireworks(烟花, 女仆)` 的造成者就是女仆，
-     * 会被 {@link FriendlyFireGuard}（`LivingAttackEvent` / `LivingHurtEvent`）拦下——
-     * 女仆绝不会用烟花炸到主人。
-     *
-     * @return true = 确实打出了烟花（调用方不要再走射箭）
+     * 好烟花先用，普通烟花只作兜底。 【根因】本方法上面的分流里，弩没有任何特殊待遇——弩是 `ProjectileWeaponItem`， 于是直接落到 {@link #shootArrow}，而那里**只认 `ArrowItem`**： 1.20.1 的 {@link #findArrow} 先看副手（烟花不是 ArrowItem，判不过），再去背包找箭； 背包里没箭就返回空 → {@link #shootArrow} 直接 `return`，**一枪都放不出来**。 也就是说"手上有弩有烟花，女仆却完全不开火"就是这么来的。 【烟花在本任务里的两种身份】烟花火箭在本任务里有两种身份： ① **飞行燃料**——喂鞘翅推进用，发射路径自己造弹体 （`MaidFlightCombatBehavior#launchFirework`），**不需要手持**； ② **弩弹药**——原版口径（`EntityMaid.m_6298_` 副手是烟花就交出来当弹药）。 所以这两者不再抢同一个槽位。 理由是"不带爆炸打出去 0 伤害"。但那条理由**只说明它弱，不说明它不能用**—— 原版玩家拿弩装普通烟花照样能射（`CrossbowItem` 的弹药谓词就不看爆炸组件）， 而本模组却因此报"缺弹药"、一发不开。现在改为"任意烟花都能当弹药"， 并用**威力优先**（{@link MaidFlightKit#takeBestCrossbowFirework}）把"弱"这件事 变成排序而不是门禁：有带烟火之星的先打带烟火之星的，没有才用普通烟花兜底。 弹药耗尽后仍会回落到射箭。 【逐点对齐原版 + TLM，不自己发挥】 - 弹体 = `new FireworkRocketEntity(level, 弹药, 女仆, x, 眼高 - 0.15, z, true)`， 与原版 `createProjectile` 的烟花分支逐字一致；末位 `true` = `shotAtAngle`， 即**命中即爆、不给射手推力**（不是给滑翔加速的那种挂载烟花）； - 瞄准照 TLM 自己的女仆弩口径（1.20.1 走原版 `m_4089_`/`shootProjectile`， 1.21.1 走 `MixinCrossbowItem#shootCrossbowProjectile`）：方向取双方**眼高**之差， `setNoGravity(true)` 直线飞行，速度 = `clamp(距离/10, 1.6, 3.2)`、 散布 = `1 - clamp(距离/100, 0, 0.9)`，音效 `CROSSBOW_SHOOT`（音高带 ±0.4 随机）； - 耐久按原版烟花分支扣 **3**（射箭是 1）； - **顺序**：弹药由 {@link MaidFlightKit#takeExplosiveFirework} 先取走（副手优先、 其次主手、最后背包只抽 1 枚，与 {@link MaidFlightKit#takeFirework} 同一套换装语义）， 紧接着直接建弹体入世界—— 这两步之间只有算术、没有任何可能失败的分支（不查方块、不查目标、不做条件判断）， 所以不存在"烟花扣了却打不出去"的窗口；耐久在弹体入世界之后才扣。 【主人免伤】烟花是爆炸伤害，`DamageSources.fireworks(烟花, 女仆)` 的造成者就是女仆， 会被 {@link FriendlyFireGuard}（`LivingAttackEvent` / `LivingHurtEvent`）拦下—— 女仆绝不会用烟花炸到主人。 @return true = 确实打出了烟花（调用方不要再走射箭）
      */
     private static boolean shootCrossbowFirework(EntityMaid shooter, LivingEntity target, ItemStack weapon) {
         try {

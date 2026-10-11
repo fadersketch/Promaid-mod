@@ -13,9 +13,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * v1.1.0 实测一百一十七：危险方块避让——【原版寻路 malus 机制】（玩家建议：
  * "这边就不能套用原版生物的一些寻路逻辑吗？"）。
- *
  * 背景（javap 字节码实证）：原版寻路对"危险格子"的通行裁决是 Mob 的
  * getPathfindingMalus（m_21439_）——没设覆盖时回落 BlockPathTypes 枚举默认值
  * （m_77124_）：LAVA=-1（不可通行，原版生物自动躲岩浆）、DAMAGE_OTHER=-1
@@ -24,18 +22,10 @@ import java.util.Set;
  * 原版层面根因：TLM 女仆寻路（MaidPathNavigation → MaidWrappedPathFinder →
  * MaidNodeEvaluator，均 extends 原版 WalkNodeEvaluator 体系）对岩浆格/岩浆
  * 上方的空气格都返回 DAMAGE_FIRE，而 16 的 malus 不拦路。
- *
  * 修复：用原版决策点本身——把女仆的 DAMAGE_FIRE 等危险类型 malus 覆盖为 -1
  * （m_21441_ = setPathfindingMalus），与 LAVA 完全同款"不可通行"语义。原版
  * WalkNodeEvaluator 生成邻居节点时（m_164725_：mob.getPathfindingMalus(类型)
- * < 0 → 节点直接跳过；m_7209_：malus<0 → 类型直接短路返回）对所有寻路路径
- * （跟随/巡逻/干活/战斗）统一生效——不依赖任何注入点，无论哪条移动链路最终
- * 都走到原版寻路裁决。危险方块表（dangerBlocks）里的方块按原版 raw 映射归入
- * 对应类型；不在表里时恢复枚举默认值（关开关/删条目即时生效）。
- *
- * 与 MaidDangerPathMixin 双保险：mixin 在节点层按【配置方块 ID】拦截（覆盖
- * 模组危险方块、头顶灼烧型等原版 malus 管不到的格子）；本处理器按【原版类型】
- * 覆盖 malus（独立于注入点）。岩浆/火/营火两路都拦。
+ * < 0 → 节点直接跳过；m_7209_：malus<0 → 类型直接短路返回）对所有寻路路径 （跟随/巡逻/干活/战斗）统一生效——不依赖任何注入点，无论哪条移动链路最终 都走到原版寻路裁决。危险方块表（dangerBlocks）里的方块按原版 raw 映射归入 对应类型；不在表里时恢复枚举默认值（关开关/删条目即时生效）。 与 MaidDangerPathMixin 双保险：mixin 在节点层按【配置方块 ID】拦截（覆盖 模组危险方块、头顶灼烧型等原版 malus 管不到的格子）；本处理器按【原版类型】 覆盖 malus（独立于注入点）。岩浆/火/营火两路都拦。
  */
 public final class MaidDangerMalusHandler {
 

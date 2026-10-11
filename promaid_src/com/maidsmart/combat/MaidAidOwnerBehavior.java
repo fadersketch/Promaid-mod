@@ -8,9 +8,6 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * v1.5.189：自动投喂/治疗主人（被动技能，非工作状态）——core 行为，任何任务都运行。
- *
- * v1.5.206：投喂策略全面化——不再"仅投喂单一药水/物品"，按主人状态分优先级链
  * （每 3 秒检查一次，命中即止）：
  * 1. 血量 < 30%（aidHealthThreshold）：喷溅治疗药水 → 滞留治疗药水 → 金苹果/附魔
  *    金苹果（即时增益）→ 喷溅/滞留再生药水 → 普通治疗药水塞主人背包（提示快喝）→
@@ -20,16 +17,10 @@ import net.minecraft.world.item.ItemStack;
  *    → 蜂蜜瓶（解中毒 + 回饱食）；
  * 4. 饱食度 < 12（aidFoodThreshold）：按饱和度恢复量喂最优食物（EmotionalActionExecutor.
  *    FOODS 全清单 21 种：金胡萝卜 > 熟牛排/猪排 > 兔肉煲 > …；主人背包满自动退回）。
- *
  * 药水识别统一用药水注册名（ForgeRegistries.POTIONS，1.20.1 实证：治疗 =
  * healing/strong_healing、再生 = regeneration/long_regeneration/strong_regeneration、
  * 抗火 = fire_resistance/long_fire_resistance）——不再用 MobEffect 字段名比对
- * （v1.5.205 修过 f_19616_ 不是 instant_health 的坑）。
- * 总开关：combat.aidOwnerEnable（默认开）+ 两个阈值可调。
- * v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话改一下。
- * 同时女仆战斗时也应该可以传递食物"）：互助链补两条——① 饮用型药水直接喂姐妹
- * （finishUsingItem 强制饮用，空瓶返还；旧版只投喷溅/滞留，普通药水从不传递）；
- * ② 姐妹正在战斗（脑内有攻击目标）且血不满时喂食（战斗续航，低血链已喂则跳过）。
+ * （v1.5.205 修过 f_19616_ 不是 instant_health 的坑）。 总开关：combat.aidOwnerEnable（默认开）+ 两个阈值可调。 同时女仆战斗时也应该可以传递食物"）：互助链补两条——① 饮用型药水直接喂姐妹 （finishUsingItem 强制饮用，空瓶返还；旧版只投喷溅/滞留，普通药水从不传递）； ② 姐妹正在战斗（脑内有攻击目标）且血不满时喂食（战斗续航，低血链已喂则跳过）。
  */
 public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
 
@@ -221,12 +212,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         // 金苹果/喂食 fallback 完全不设防：主人低血 + 治疗药水在种类 CD 内时
         // 每 tick fallback 金苹果 → 几十个金苹果几秒蒸发（喂食同理每 tick 喂一个）。
         // try/finally 保证早退路径也记账。
-        // v1.5.252g11【情境保命优先】：着火抗火、溺水水肺排到低血治疗前面——
         // 溺水掉血后 hp 跌到阈值 → 旧版治疗链先抢到（aided=true）→ 水肺分支
         // 被短路跳过，溺水的人只被扔治疗（救不了溺水，纯浪费）；着火同理。
-        // 情境药水 CD 内（8 分钟）不重复投，主人在情境中时不需要治疗凑热闹。
-        // 1. 着火 → 抗火药水（v1.5.252g13：正门 = 主人身上无抗火效果才投——
-        //    效果在就绝不投，任何变体都不需要；效果消失立即重投，无空档）
+        // 情境药水 CD 内（8 分钟）不重复投，主人在情境中时不需要治疗凑热闹。 1. 着火 → 抗火药水（v1.5.252g13：正门 = 主人身上无抗火效果才投—— 效果在就绝不投，任何变体都不需要；效果消失立即重投，无空档）
         if (owner.m_6060_() && !this.hasEffectOn(owner, "minecraft:fire_resistance")) {
             if (this.throwPotionToOwner(level, maid, owner, FIRE_RESIST_POTIONS, "抗火", false, MaidSupportPolicy.Ctx.COUNTER) >= 0
                     || this.giveDrinkablePotion(maid, owner, FIRE_RESIST_POTIONS, "抗火", false, MaidSupportPolicy.Ctx.COUNTER) >= 0) {
@@ -330,39 +318,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.3.0(beta) 实测七百七十一【支援范围扩大：从"只支援女仆"到"支援其他友方单位"】。
-     *
      * <h2>
-     *
      * 并补充界定：「原版的那些宠物以及仆从这些有什么共同特点？他们都是算作友军的。」
      * 「因为他们没有饥饿值，所以他们只能吃药水这些治疗效果……支援药水以及一些效用性食物
      * （金苹果这种），也就是说相比于女仆间支援，等于少了普通的食物和不死图腾支援。」
-     *
      * <h2>"友军"判据（唯一共同点 = 有主人，字节码实证）</h2>
-     * 原版宠物与模组仆从的共同特点就是<b>归属于同一位主人</b>——这正是原版
-     * {@code net.minecraft.world.entity.OwnableEntity}（唯一抽象方法 {@code getOwnerUUID()}）：
-     * <ul>
-     *   <li>原版宠物：{@code TamableAnimal}（狼/猫/鹦鹉/狐狸…）、{@code AbstractHorse}
-     *       （马/驴/骆驼…）**都实现 {@code OwnableEntity}**（javap 实证）；</li>
-     *   <li>模组仆从：诡厄巫法 {@code Owned} extends {@code PathfinderMob} implements
-     *       {@code IOwned, OwnableEntity}（javap 实证）——红石巨兽/下界合金巨兽全在这条链上。</li>
-     * </ul>
-     * 所以判据 = <b>目标是 {@code OwnableEntity} 且其 {@code getOwnerUUID()} 与本女仆的主人
-     * UUID 相同</b>。不写死任何实体 id、不挑"哪几种宠物/仆从"——凡是主人名下的可拥有单位一律算友军。
-     * 再叠一道 {@code isAlliedTo}（同队/同盟，与 {@link FriendlyFireGuard#isFriendly} 同口径），
-     * 让组队/整合包自定义的友方也享受支援。
-     *
-     * <h2>支援内容（比女仆间支援少两样）</h2>
-     * 友方单位<b>没有饥饿值</b>（宠物吃食靠 {@code Animal.isFood} 的繁殖/驯服语义，仆从更是
-     * 没有 FoodData）——普通食物喂了没有意义，不死图腾这类"塞背包/替他挡死"的机制也只对女仆
-     * 自己成立。所以本链只做：<b>药水（抗火 / 治疗 / 再生 / 饮用型直接喂）+ 效用性食物
-     * （金苹果 / 附魔金苹果）+ 负面效果解除（牛奶 / 蜂蜜）</b>；<b>不做</b>普通食物投喂与不死图腾。
-     *
-     * <h2>与女仆互助的关系</h2>
-     * 女仆（{@code EntityMaid}）本身也是 {@code OwnableEntity}，会被本链扫到——但**先跑的女仆互助
-     * 链已把同主女仆优先处理**（每轮最多救一个、成功即记 3 秒 CD），本链在同 tick 让位；
-     * 女仆互助链没救成（没道具/CD 内）时本链也不再重复处理同主女仆，避免"女仆吃两遍"。
-     * 开关见 {@link com.maidsmart.config.MaidSmartConfig#AID_FRIENDLY_UNITS}；关掉 = 只支援主人与女仆。
+     * 原版宠物与模组仆从的共同特点就是<b>归属于同一位主人</b>——这正是原版 {@code net.minecraft.world.entity.OwnableEntity}（唯一抽象方法 {@code getOwnerUUID()}）： <ul> <li>原版宠物：{@code TamableAnimal}（狼/猫/鹦鹉/狐狸…）、{@code AbstractHorse} （马/驴/骆驼…）**都实现 {@code OwnableEntity}**（javap 实证）；</li> <li>模组仆从：诡厄巫法 {@code Owned} extends {@code PathfinderMob} implements {@code IOwned, OwnableEntity}（javap 实证）——红石巨兽/下界合金巨兽全在这条链上。</li> </ul> 所以判据 = <b>目标是 {@code OwnableEntity} 且其 {@code getOwnerUUID()} 与本女仆的主人 UUID 相同</b>。不写死任何实体 id、不挑"哪几种宠物/仆从"——凡是主人名下的可拥有单位一律算友军。 再叠一道 {@code isAlliedTo}（同队/同盟，与 {@link FriendlyFireGuard#isFriendly} 同口径）， 让组队/整合包自定义的友方也享受支援。 <h2>支援内容（比女仆间支援少两样）</h2> 友方单位<b>没有饥饿值</b>（宠物吃食靠 {@code Animal.isFood} 的繁殖/驯服语义，仆从更是 没有 FoodData）——普通食物喂了没有意义，不死图腾这类"塞背包/替他挡死"的机制也只对女仆 自己成立。所以本链只做：<b>药水（抗火 / 治疗 / 再生 / 饮用型直接喂）+ 效用性食物 （金苹果 / 附魔金苹果）+ 负面效果解除（牛奶 / 蜂蜜）</b>；<b>不做</b>普通食物投喂与不死图腾。 <h2>与女仆互助的关系</h2> 女仆（{@code EntityMaid}）本身也是 {@code OwnableEntity}，会被本链扫到——但**先跑的女仆互助 链已把同主女仆优先处理**（每轮最多救一个、成功即记 3 秒 CD），本链在同 tick 让位； 女仆互助链没救成（没道具/CD 内）时本链也不再重复处理同主女仆，避免"女仆吃两遍"。 开关见 {@link com.maidsmart.config.MaidSmartConfig#AID_FRIENDLY_UNITS}；关掉 = 只支援主人与女仆。
      */
     private void aidFriendlyUnits(ServerLevel level, EntityMaid maid, long gameTime) {
         if (!com.maidsmart.config.MaidSmartConfig.AID_FRIENDLY_UNITS.get()) {
@@ -483,17 +444,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.3.0(beta) 实测七百七十一：目标是不是"我们这一边"的友方单位。
-     *
      * <p>判据两条（任一成立即友军）：<br>
      * ① <b>同主</b>：目标实现 {@code OwnableEntity}（原版宠物 TamableAnimal/AbstractHorse、
      *    模组仆从如诡厄 Owned 都在这条接口上——javap 实证），且其 {@code getOwnerUUID()} 与
      *    本女仆主人的 UUID 相同。这是"原版宠物与仆从的共同特点 = 都归属于主人"的落地。<br>
      * ② <b>同盟</b>：{@code isAlliedTo}（同队/同盟，与 {@link FriendlyFireGuard#isFriendly} 同口径）。
-     *
-     * <p>刻意<b>不</b>用 {@code getOwner()}（在线实体）：主人下线时它会变 null，
-     * 认领关系应跟着 UUID 走（与 {@link com.maidsmart.tool.MaidScope} 同一口径）。
-     * 全程只读 + 异常兜底 false。
+     * <p>刻意<b>不</b>用 {@code getOwner()}（在线实体）：主人下线时它会变 null， 认领关系应跟着 UUID 走（与 {@link com.maidsmart.tool.MaidScope} 同一口径）。 全程只读 + 异常兜底 false。
      */
     private boolean sameFriendlySide(EntityMaid maid, net.minecraft.world.entity.Entity target) {
         try {
@@ -1485,15 +1441,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.231b：投掷药水给主人——【择优】：
      * ① 择优：强效/长效优先（strong_healing > healing；long_regeneration >
      * strong_regeneration > regeneration；long_fire_resistance > fire_resistance），
      * 不再按槽位顺序取第一个；
      * ② v1.1.0 实测二百五十（反馈："干脆就省去那些繁文缛节吧。只要触发扔药水这个
      * 事件，那就给予效果，滞留型则是在目标旁边生成对应的药水效果。然后会有一个药水
-     * 抛出的动画就可以了"）：触发即生效——不再投掷实体（历次投掷实体方案均被实测
-     * 否决：追踪乱飞/抛物线扔歪/落地不生效）。消耗 + 摆臂动画（抛药水动作）；滞留型
-     * → 主人旁边生成 AreaEffectCloud；其他形态 → 直接给主人施加所有效果。
+     * 抛出的动画就可以了"）：触发即生效——不再投掷实体（历次投掷实体方案均被实测 否决：追踪乱飞/抛物线扔歪/落地不生效）。消耗 + 摆臂动画（抛药水动作）；滞留型 → 主人旁边生成 AreaEffectCloud；其他形态 → 直接给主人施加所有效果。
      */
     private int throwPotionToOwner(ServerLevel level, EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd,
@@ -1757,19 +1710,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测二百五十一（反馈："再加一个药水以抛物线方式从女仆飞到目标原有位置
      * 的动画。但那个仅仅是动画"）：抛药水【纯动画】——从女仆位置按弹道公式抛物线
      * 飞向目标位置。
-     * v1.1.0 实测二百五十四（反馈："扔出去的药水所显示的动画效果理论上应该是投掷
      * 药水的动画效果吧？而在投掷再生药水的时候，地上的药水云仍然是无效果药水云就
      * 会显得很违和"）：动画药水改用【实际药水完整复制】（同样形态 + 实际 Potion
      * 效果）——旧版用空喷溅药水（setPotion empty）：瓶子是红色空瓶样式、落地只有
-     * 白色水花粒子，与"投掷再生药水"的观感完全不符。现在飞出去的就是再生药水瓶
-     * （紫色），落地自然呈现再生药水的碎裂粒子/效果云——与真实投掷视觉一致。
-     * 效果重复无害：触发逻辑已用 forceAddEffect 强制施加，动画落地溅射的 addEffect
-     * 只会与已有同种效果合并（时长取更长），不叠加。
-     * 注意：动画抛掷必须【远距离（>3 格）且目标仍存活】才做——近距离/目标已消失
-     * 时抛空药水没有意义（目标位置即女仆脚下/原地）。
+     * 白色水花粒子，与"投掷再生药水"的观感完全不符。现在飞出去的就是再生药水瓶 （紫色），落地自然呈现再生药水的碎裂粒子/效果云——与真实投掷视觉一致。 效果重复无害：触发逻辑已用 forceAddEffect 强制施加，动画落地溅射的 addEffect 只会与已有同种效果合并（时长取更长），不叠加。 注意：动画抛掷必须【远距离（>3 格）且目标仍存活】才做——近距离/目标已消失 时抛空药水没有意义（目标位置即女仆脚下/原地）。
      */
     private void throwPotionAnimate(ServerLevel level, EntityMaid maid,
                                     net.minecraft.world.entity.LivingEntity target,
@@ -2077,17 +2023,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
 
     /**
      * 【亡灵支援后门】目标是不是"生死颠倒"的生物——亡灵（{@code MobType.f_21641_}）。
-     *
      * <p>字节码实证：{@code LivingEntity.m_21222_}（isInvertedHealAndHarm）直接
      * {@code return m_6336_() == MobType.f_21641_}（computeIfAbsent 语义）。这类生物：
      * <ul>
      *   <li>治疗药水（instant_health）→ 反而【扣血】（{@code m_19461_} 对
-     *       {@code f_19601_} 且 inverted 的实体走 hurt 支）；</li>
-     *   <li>伤害药水（instant_damage）→ 反而【回血】（{@code f_19602_} 且 inverted 走
-     *       {@code m_5634_} heal 支）；</li>
-     *   <li>再生/中毒被 {@code m_7301_}（canBeAffected）直接拒收——所以这两样对亡灵
-     *       必须换 {@link #applyEffectForced} 走"后门"。</li>
-     * </ul>
+     *       {@code f_19601_} 且 inverted 的实体走 hurt 支）；</li> <li>伤害药水（instant_damage）→ 反而【回血】（{@code f_19602_} 且 inverted 走 {@code m_5634_} heal 支）；</li> <li>再生/中毒被 {@code m_7301_}（canBeAffected）直接拒收——所以这两样对亡灵 必须换 {@link #applyEffectForced} 走"后门"。</li> </ul>
      */
     private static boolean isInvertedHeal(net.minecraft.world.entity.LivingEntity target) {
         try {
@@ -2099,17 +2039,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
 
     /**
      * 【亡灵支援后门】绕过 canBeAffected 强制施加效果。
-     *
      * <p>{@code m_7292_}/{@code m_147207_}/{@code m_147215_}（forceAddEffect）三个入口
      * 都先问 {@code m_7301_}（canBeAffected）——亡灵拒收 regeneration/poison。唯一真正的
      * 后门是**活跃效果表本体**：{@code m_21221_}（getActiveEffectsMap）字节码实证返回
      * 的就是 {@code f_20945_} 这个字段本身（`aload_0; getfield; areturn`，不是副本）。
-     *
-     * <p>直接 {@code put} 会不会少跑 {@code onEffectAdded}？会——但 regeneration 的
-     * 「加属性修饰符」发生在效果 tick（{@code m_6385_}）而不是 onEffectAdded，所以
-     * put 进去的效果下一 tick 就正常生效；而且本路径只用于**瞬时型**效果
-     * （instant_health/instant_damage），它们由实体 tick→效果 tick→{@code m_19461_}
-     * →hurt/heal 结算，同样不依赖 onEffectAdded。异常兜底静默。
+     * <p>直接 {@code put} 会不会少跑 {@code onEffectAdded}？会——但 regeneration 的 「加属性修饰符」发生在效果 tick（{@code m_6385_}）而不是 onEffectAdded，所以 put 进去的效果下一 tick 就正常生效；而且本路径只用于**瞬时型**效果 （instant_health/instant_damage），它们由实体 tick→效果 tick→{@code m_19461_} →hurt/heal 结算，同样不依赖 onEffectAdded。异常兜底静默。
      */
     private static void applyEffectForced(net.minecraft.world.entity.LivingEntity target,
                                           String effectId, int duration, int amplifier) {
@@ -2405,19 +2339,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     /**
      * 喂水主流程——结构照搬喂食链（feedHealingFood）：手持（主手→副手）与背包同扫、
      * 按分选优、副本喂给主人、成功才消耗来源。
-     *
      * 【与喂食的差异（需求原文："把判定位点改为口渴值即可"）】
      * - 门禁：白名单（{@code AID_DRINK_WHITELIST}，留空 = 不喂）且「口渴」模组认识该物品
      *   （{@code itemRestoresThirst}，能真的回口渴值才喂——白名单是玩家意愿，这一层是
-     *   模组口径，喂了没效果的饮品只会浪费）；
-     * - 选优：口渴恢复量 ×100 + 解渴缓冲（ThirstHelper.getThirst/getQuenched），
-     *   替代食物链的饱和度评分；
-     * - 喝的语义：不调 {@code owner.eat}（那是吃的路径，饮品没有食物组件）——直接
-     *   {@code stack.finishUsingItem(level, owner)}（SRG m_5922_），即"主人亲手喝完"：
-     *   药水瓶效果 + TWT 口渴/纯度（MixinPotionItem / DrinkableItem 自结算）+ 音效 +
-     *   容器返还全走原版路径；容器栈塞回女仆背包（与喂蜂蜜返还玻璃瓶同一口径）；
-     * - 其他 mod 的装水工具：finishUsingItem 不带口渴的，由
-     *   {@link ThirstCompat#applyHookThirst} 按钩子同口径兜底（绝不双重计数）。
+     *   模组口径，喂了没效果的饮品只会浪费）； - 选优：口渴恢复量 ×100 + 解渴缓冲（ThirstHelper.getThirst/getQuenched）， 替代食物链的饱和度评分； - 喝的语义：不调 {@code owner.eat}（那是吃的路径，饮品没有食物组件）——直接 {@code stack.finishUsingItem(level, owner)}（SRG m_5922_），即"主人亲手喝完"： 药水瓶效果 + TWT 口渴/纯度（MixinPotionItem / DrinkableItem 自结算）+ 音效 + 容器返还全走原版路径；容器栈塞回女仆背包（与喂蜂蜜返还玻璃瓶同一口径）； - 其他 mod 的装水工具：finishUsingItem 不带口渴的，由 {@link ThirstCompat#applyHookThirst} 按钩子同口径兜底（绝不双重计数）。
      */
     private boolean feedDrinkToOwner(EntityMaid maid, ServerPlayer owner) {
         if (com.maidsmart.config.MaidSmartConfig.AID_DRINK_WHITELIST == null) {

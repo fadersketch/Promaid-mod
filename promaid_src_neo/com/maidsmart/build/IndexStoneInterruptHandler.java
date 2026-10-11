@@ -6,22 +6,17 @@ import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 
 /**
- * 指标石中断清理（v1.2.0，1.21.1 NeoForge 版）——女仆**被收回 / 死亡**时结束该次临时搭建。
+ * 指标石中断清理——女仆**被收回 / 死亡**时结束该次临时搭建（清幽灵方块 + 解绑）。
  *
- * 需求（指路石细节）：搭建期间女仆被收回/死亡 → 清除幽灵方块 + 解绑，视作结束和初始化。
- *
- * 三条入口，都靠 IndexStoneService.failSession 的幂等保证只结算一次：
- * 1. {@link EntityLeaveLevelEvent}：项目既有的"女仆离场"统一清理点。用 RemovalReason
- *    区分【永久移除】（KILLED 死亡 / DISCARDED 收回解雇）与【区块卸载 / 换维度】——
- *    后者女仆会回来，绝不能结束会话。
- * 2. {@link LivingDeathEvent}：死亡兜底（死亡→复活流程会先移除再重建实体，
- *    EntityLeaveLevelEvent 时机不保证）。
- * 3. 魂符收回（MaidAndItemTransformEvent.ToItem）：TLM 收女仆进魂符的唯一汇聚点
- *    （手动空魂符 / 自动回魂符都走 AbstractStoreMaidItem.storeMaidData）。**注意
- *    storeMaidData 先 saveWithoutId 拍快照、再 post ToItem（CFR 反编译实证）**——
- *    所以只清女仆活体标记已经晚了一步（标记已进快照），必须把
- *    {@code event.getData()}（TLM 即将存进物品的同一份 CompoundTag）一起洗掉，
- *    否则放出来时 TLM load 会把"临时建造"任务与标记一并读回 → 建造不停 + 僵住。
+ * 三条入口，都靠 {@code IndexStoneService.failSession} 的幂等保证只结算一次：
+ * ① {@link EntityLeaveLevelEvent}（项目既有的"女仆离场"统一清理点）：用 RemovalReason 区分
+ *    【永久移除】（KILLED 死亡 / DISCARDED 收回解雇）与【区块卸载 / 换维度】——后者女仆会回来，
+ *    绝不能结束会话。
+ * ② {@link LivingDeathEvent}：死亡兜底（部分流程"死亡→复活"会先移除再重建实体，上面那个事件的
+ *    时机不保证）。
+ * ③ 魂符收回（{@code MaidAndItemTransformEvent.ToItem}）：TLM 收女仆进魂符的唯一汇聚点。**注意
+ *    storeMaidData 是"先存 NBT 快照、再 post ToItem"**——所以只清活体标记晚了一步（标记已进快照），
+ *    必须把 {@code event.getData()} 一起洗掉，否则放出来时会连同"临时建造"任务读回 → 建造不停 + 僵住。
  */
 public class IndexStoneInterruptHandler {
 

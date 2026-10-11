@@ -383,23 +383,12 @@ public final class BlueprintCatalog {
     }
 
     /**
-     * 解析 JSON 蓝图 → 步骤列表（失败返回 null，原因见 {@link #lastJsonError()}）。
-     *
-     * <p>【实测八百三十一·图纸存不成蓝图的老坑】这里以前把「主 LLM 现场 JSON」的三条**策略**
-     * 上限（±maxRange / y≤maxHeight / 白名单）当成了解析器的门槛，而 parseJson 是所有 JSON
-     * 蓝图的**唯一**入口：smart_build 现场 JSON、smart_design 子 Agent 自绘蓝图、落盘后
-     * scanExternalBlueprints 重新加载 JSON 文件、玩家自己往 config/maid_smart/blueprints/
-     * 放的 JSON——全都过它。于是：
-     * <ul>
-     *   <li>smart_design 的宽松校验（v1.5.197 特意放宽到 designMaxBlocks）**根本轮不到执行**——
-     *       parseJson 先返回 null，玩家看到的是「建筑师返回的蓝图格式不对」；</li>
-     *   <li>落盘后的 JSON 文件重新加载时同样被 null → 「存下来了但手册里看不到 / 建不了」；</li>
-     *   <li>20 格高的树（y&gt;8）、±12 外的庭院、白名单外的 cherry_leaves 全被误杀。</li>
-     * </ul>
-     * 现在 parseJson 只做【结构 + 物理兜底】，策略上限交回各自入口：
-     * smart_build 现场 JSON → {@code BlueprintLib.validate()}（白名单 + 小上限，防模型单次
-     * 喷巨量参数）；smart_design 自绘蓝图 → {@code SmartDesignTool.looseValidate()}
-     * （只限 designMaxBlocks）；JSON 蓝图文件 → structureMaxBlocks（与 .nbt/.schem 同一条上限）。
+     * 解析 JSON 蓝图 → 步骤列表（失败返回 null，原因见 {@link #lastJsonError()}）。parseJson 是所有
+     * JSON 蓝图的**唯一**入口（smart_build 现场 JSON / smart_design 自绘 / 落盘后重加载 / 玩家自放），
+     * 所以这里**只做结构 + 物理兜底**，策略上限交回各自入口：smart_build → {@code BlueprintLib
+     * .validate()}（白名单 + 小上限）；smart_design → {@code SmartDesignTool.looseValidate()}（只限
+     * designMaxBlocks）；JSON 蓝图文件 → structureMaxBlocks。旧版把三条策略上限当解析器门槛，导致
+     * smart_design 宽松校验轮不到、落盘重加载被 null、20 格高的树与 ±12 外庭院被误杀。
      */
     public static List<String> parseJson(String json) {
         LAST_JSON_ERROR = null;

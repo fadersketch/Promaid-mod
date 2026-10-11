@@ -13,8 +13,6 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * v1.3.0(beta) 实测七百一十【自推鞘翅：不靠烟花也能飞的那一类模组鞘翅】。
- *
  * ──
  * <pre>
  *   "我现在又安装了伊卡洛斯之翼和神秘遗物+，加完模组之后有两种鞘翅不需要烟花也可以起飞。
@@ -22,75 +20,12 @@ import java.util.UUID;
  *    然后同时也需要考虑一下他们的运动逻辑是怎么样的，看看怎么安排在女仆身上。
  *    之后其他的类似物品看有没有一个通解通法。"
  * </pre>
- *
  * ── 一、这两家到底加了什么（反编译实证，逐条）──
  * <b>伊卡洛斯之翼</b>（1.21.1：{@code locusazzurro_icaruswings-1.21-0.7.0}）：
  * <ul>
  *   <li>{@code feather_wings} / {@code colored_feather_wings} / {@code golden_feather_wings}
  *       / {@code paper_wings} / {@code magic_wings} / {@code flandre_magic_wings}
- *       —— 普通 {@code ElytraItem}（{@code FeatherWings} / 匿名 {@code AbstractWings}），
- *       <b>没有任何自推</b>，只是耐久不同。<b>不列进本表</b>（列了也没用：
- *       {@link #paramsOf} 认不出它们，只会走兜底模型）。</li>
- *   <li>{@code ikaros_wings} / {@code nymph_wings} / {@code astraea_wings} / {@code chaos_wings}
- *       / {@code hiyori_wings} / {@code melan_wings} —— {@code SynapseWings}，**自推**：
- *       {@code FlyingEventsHandler.onPlayerTick}（{@code PlayerTickEvent.Pre}）里，
- *       只要她在滑翔就每 tick 加一份推力
- *       {@code v += (look·d + (look·i − v)·t) · c}（d/i/t 见 {@link #paramsOf}，
- *       c = 它自己的配置 {@code wings_speed_mod}，默认 1）。**不需要按跳跃键**。</li>
- * </ul>
- * <b>神秘遗物 / 神秘遗物+</b>：
- * <ul>
- *   <li>1.21.1（{@code enigmaticlegacyplus-1.21.1-1.1.2}）：{@code majestic_elytra}（壮丽鞘翅）与
- *       {@code chaos_elytra}（混沌之傲）继承 {@code BaseElytraItem}，它把
- *       {@code canElytraFly} 直接写成 {@code true}（**不看是不是玩家**）→ 女仆穿得上、滑得起来。
- *       自推在 {@code flyingBoost(player)}：**按住跳跃键**时
- *       {@code v = v×0.48 + look×0.64}（壮丽）/ {@code v = v×0.5 + look×k}（混沌，
- *       k = 它自己的 {@code flyingSpeedModifier}，默认 0.8）。</li>
- *   <li>1.20.1（{@code EnigmaticLegacy-2.30.1} / {@code enigmaticaddons-1.2.6}）：**不可用**——
- *       两件的 {@code canElytraFly} 都写死 {@code entity instanceof Player && ...}
- *       （{@code EnigmaticElytra.java:204}、{@code ChaosElytra.java:312} 实证），
- *       女仆**连滑翔都做不到**，穿上去就是一件普通胸甲。所以 1.20.1 树里本表为空、
- *       功能自然不生效（手册里写明，不做 hack 去强改别人的类）。</li>
- * </ul>
- *
- * ── 二、为什么"认物品"远远不够：三家都只推玩家 ──
- * 上面的自推入口**全部**挂在 {@code PlayerTickEvent} / {@code instanceof ServerPlayer} /
- * 客户端跳跃键包上。**女仆不是 Player**，所以：
- * 只把它算作"推进剂"的结果是——她跳起来、展开滑翔、然后**一路往下沉**（没有任何东西在推）。
- * 所以本类真正的活是 <b>由我们替她施加推力</b>（{@link #tick}），
- * "认物品"只是资格凭证（{@link #hasWings}）。
- *
- * ── 三、通解通法：同一个形状、各自的小数 ──
- * 三家的推力公式其实是**同一个形状**（每 tick 把速度往视线方向拉一档）：
- * <pre>
- *   v ← v×GAIN + look×add        // GAIN/add 因型号而异
- * </pre>
- * 原版挂载烟花也是这一条（{@code v ← v×0.5 + look×0.85}，不动点 = 视线×1.7）。
- * 所以通解 = <b>一张表（{@link #paramsOf}：物品 id → 这条公式的两个系数）+ 一个窗口
- * （{@link #tick}）+ 一条接入链（空袭/飞行跟随各一处调用）</b>。
- * 以后再有同类模组，只要往 {@link com.maidsmart.config.MaidSmartConfig#COMBAT_SELF_WINGS_ITEMS}
- * 里加 id —— 认不出具体型号就走 {@link #FALLBACK} 兜底模型，**不需要改代码**。
- *
- * ── 四、刻意做的三件事（与其它推进剂的边界）──
- * <ol>
- *   <li><b>不消耗、不扣额外耐久</b>：模组那边对玩家自推是**额外扣耐久**的
- *       （伊卡洛斯 {@code elytraFlightTick} 每 20 tick 扣、神秘遗物自推时每 5 tick 扣），
- *       女仆这边**只按原版滑翔的节奏扣**（{@code updateFallFlying} 自己每 20 tick 扣 1）——
- *       与"烟花/羽扇/激流"那几条腿的"按它自己的口径扣"区分开：
- *       那两个是我们**借它的动作**，这里只是借它的**物理**，不该替它扣钱。
- *       想让她飞得更贵？把 {@code combat.selfWingsScale} 调小（慢）而不是罚耐久。</li>
- *   <li><b>排在补推链最末</b>：扇子 → 烟花 → 法术 → 激流 → **自推鞘翅**。前三样存在的存档
- *       手感一字不变（与 实测六百三十三 加激流那条腿时同一个纪律）。</li>
- *   <li><b>窗口收敛、不会飞走</b>：这条公式本身是收敛的（不动点 = 视线 × add/(1−GAIN)），
- *       窗口开着时速度往那一个值收敛，不会"越推越快一路飞走"；窗口到期（
- *       {@link #WINDOW_TICKS} 40 tick = 2 秒）就交还滑翔，掉高了由链路的 {@code shouldBoost}
- *       按同一个判据（速度 &lt; 0.35）再补一次。</li>
- * </ol>
- *
- * ── 五、与"仿创造飞行"（{@code MISC_FREE_FLIGHT}）的分工 ──
- * 那个是**另一个功能**：给女仆"创造模式飞行"（悬浮+自由升降，不需要鞘翅、也不是滑翔）。
- * 本类走的是**鞘翅滑翔**这条物理（原版滑翔位 + 滑翔阻力），两者互不干涉：
- * 资格物品表也各自独立（那个默认空、这个默认放自推鞘翅），可以同时开。
+ *       —— 普通 {@code ElytraItem}（{@code FeatherWings} / 匿名 {@code AbstractWings}）， <b>没有任何自推</b>，只是耐久不同。<b>不列进本表</b>（列了也没用： {@link #paramsOf} 认不出它们，只会走兜底模型）。</li> <li>{@code ikaros_wings} / {@code nymph_wings} / {@code astraea_wings} / {@code chaos_wings} / {@code hiyori_wings} / {@code melan_wings} —— {@code SynapseWings}，**自推**： {@code FlyingEventsHandler.onPlayerTick}（{@code PlayerTickEvent.Pre}）里， 只要她在滑翔就每 tick 加一份推力 {@code v += (look·d + (look·i − v)·t) · c}（d/i/t 见 {@link #paramsOf}， c = 它自己的配置 {@code wings_speed_mod}，默认 1）。**不需要按跳跃键**。</li> </ul> <b>神秘遗物 / 神秘遗物+</b>： <ul> <li>1.21.1（{@code enigmaticlegacyplus-1.21.1-1.1.2}）：{@code majestic_elytra}（壮丽鞘翅）与 {@code chaos_elytra}（混沌之傲）继承 {@code BaseElytraItem}，它把 {@code canElytraFly} 直接写成 {@code true}（**不看是不是玩家**）→ 女仆穿得上、滑得起来。 自推在 {@code flyingBoost(player)}：**按住跳跃键**时 {@code v = v×0.48 + look×0.64}（壮丽）/ {@code v = v×0.5 + look×k}（混沌， k = 它自己的 {@code flyingSpeedModifier}，默认 0.8）。</li> <li>1.20.1（{@code EnigmaticLegacy-2.30.1} / {@code enigmaticaddons-1.2.6}）：**不可用**—— 两件的 {@code canElytraFly} 都写死 {@code entity instanceof Player && ...} （{@code EnigmaticElytra.java:204}、{@code ChaosElytra.java:312} 实证）， 女仆**连滑翔都做不到**，穿上去就是一件普通胸甲。所以 1.20.1 树里本表为空、 功能自然不生效（手册里写明，不做 hack 去强改别人的类）。</li> </ul> ── 二、为什么"认物品"远远不够：三家都只推玩家 ── 上面的自推入口**全部**挂在 {@code PlayerTickEvent} / {@code instanceof ServerPlayer} / 客户端跳跃键包上。**女仆不是 Player**，所以： 只把它算作"推进剂"的结果是——她跳起来、展开滑翔、然后**一路往下沉**（没有任何东西在推）。 所以本类真正的活是 <b>由我们替她施加推力</b>（{@link #tick}）， "认物品"只是资格凭证（{@link #hasWings}）。 ── 三、通解通法：同一个形状、各自的小数 ── 三家的推力公式其实是**同一个形状**（每 tick 把速度往视线方向拉一档）： <pre> v ← v×GAIN + look×add        // GAIN/add 因型号而异 </pre> 原版挂载烟花也是这一条（{@code v ← v×0.5 + look×0.85}，不动点 = 视线×1.7）。 所以通解 = <b>一张表（{@link #paramsOf}：物品 id → 这条公式的两个系数）+ 一个窗口 （{@link #tick}）+ 一条接入链（空袭/飞行跟随各一处调用）</b>。 以后再有同类模组，只要往 {@link com.maidsmart.config.MaidSmartConfig#COMBAT_SELF_WINGS_ITEMS} 里加 id —— 认不出具体型号就走 {@link #FALLBACK} 兜底模型，**不需要改代码**。 ── 四、刻意做的三件事（与其它推进剂的边界）── <ol> <li><b>不消耗、不扣额外耐久</b>：模组那边对玩家自推是**额外扣耐久**的 （伊卡洛斯 {@code elytraFlightTick} 每 20 tick 扣、神秘遗物自推时每 5 tick 扣）， 女仆这边**只按原版滑翔的节奏扣**（{@code updateFallFlying} 自己每 20 tick 扣 1）—— 与"烟花/羽扇/激流"那几条腿的"按它自己的口径扣"区分开： 那两个是我们**借它的动作**，这里只是借它的**物理**，不该替它扣钱。 想让她飞得更贵？把 {@code combat.selfWingsScale} 调小（慢）而不是罚耐久。</li> <li><b>排在补推链最末</b>：扇子 → 烟花 → 法术 → 激流 → **自推鞘翅**。前三样存在的存档 手感一字不变（与 实测六百三十三 加激流那条腿时同一个纪律）。</li> <li><b>窗口收敛、不会飞走</b>：这条公式本身是收敛的（不动点 = 视线 × add/(1−GAIN)）， 窗口开着时速度往那一个值收敛，不会"越推越快一路飞走"；窗口到期（ {@link #WINDOW_TICKS} 40 tick = 2 秒）就交还滑翔，掉高了由链路的 {@code shouldBoost} 按同一个判据（速度 &lt; 0.35）再补一次。</li> </ol> ── 五、与"仿创造飞行"（{@code MISC_FREE_FLIGHT}）的分工 ── 那个是**另一个功能**：给女仆"创造模式飞行"（悬浮+自由升降，不需要鞘翅、也不是滑翔）。 本类走的是**鞘翅滑翔**这条物理（原版滑翔位 + 滑翔阻力），两者互不干涉： 资格物品表也各自独立（那个默认空、这个默认放自推鞘翅），可以同时开。
  */
 public final class MaidSelfPropelledWings {
 
@@ -129,7 +64,6 @@ public final class MaidSelfPropelledWings {
     /**
      * 认不出具体型号时的**兜底模型**：{@code v ← v×0.5 + look×0.5}
      * （不动点 = 视线 ×1.0 格/tick）。
-     *
      * <p>取值理由：原版挂载烟花是 1.7 倍视线（太快，那是"点火一冲"的量级），
      * 而自推是**持续巡航**——空域系里最慢的型号（{@code ALPHA/DEFAULT}）不动点约 0.7、
      * 最快（{@code DELTA}，d=0.3/i=1.6/t=0.5）约 2.2。取中间偏保守的 1.0：
@@ -139,25 +73,11 @@ public final class MaidSelfPropelledWings {
 
     /**
      * 内置参数表：物品注册名 → 这条公式的系数。**逐条来自反编译**（见类注释）。
-     *
      * <p>【为什么硬编码而不是反射问对方】① 名字一改我们就崩，硬编码至少崩在编译期看不到、
      * 运行期也只是"退回兜底模型"；② 1.20.1 树不该 import 1.21.1 才有的类；
      * ③ 这些数值是"物理常量"，抄进注释里比"运行时去问"更容易核对（本模组一贯做法，
      * 见 {@code TwilightFanKit} 抄暮色森林的公式）。
-     *
-     * <p>【伊卡洛斯空域系的换算】源码是 {@code v + (look·d + (look·i − v)·t)}：
-     * {@code gain = 1 − t}、{@code add = d + i·t}，c（{@code wings_speed_mod}，默认 1）
-     * 整体乘在括号里，所以这里按 c=1 折算（玩家改了对方的配置我们这边不跟——那是"它自己的手感"，
-     * 本模组的倍数旋钮是 {@code combat.selfWingsScale}）。
-     * <pre>
-     *   型号      d     i     t     → gain  add   不动点
-     *   ALPHA   0.1   0.5   0.5       0.5   0.35    0.70
-     *   BETA    0.08  1.2   0.5       0.5   0.68    1.36
-     *   DELTA   0.3   1.6   0.5       0.5   1.10    2.20
-     *   EPSILON 0.04  1.2   0.5       0.5   0.64    1.28
-     *   ZETA    0.08  1.1   0.5       0.5   0.63    1.26
-     *   THETA   0.1   0.5   0.5       0.5   0.35    0.70
-     * </pre>
+     * <p>【伊卡洛斯空域系的换算】源码是 {@code v + (look·d + (look·i − v)·t)}： {@code gain = 1 − t}、{@code add = d + i·t}，c（{@code wings_speed_mod}，默认 1） 整体乘在括号里，所以这里按 c=1 折算（玩家改了对方的配置我们这边不跟——那是"它自己的手感"， 本模组的倍数旋钮是 {@code combat.selfWingsScale}）。 <pre> 型号      d     i     t     → gain  add   不动点 ALPHA   0.1   0.5   0.5       0.5   0.35    0.70 BETA    0.08  1.2   0.5       0.5   0.68    1.36 DELTA   0.3   1.6   0.5       0.5   1.10    2.20 EPSILON 0.04  1.2   0.5       0.5   0.64    1.28 ZETA    0.08  1.1   0.5       0.5   0.63    1.26 THETA   0.1   0.5   0.5       0.5   0.35    0.70 </pre>
      */
     private static final Map<String, Params> TABLE = new HashMap<>();
 
@@ -351,11 +271,9 @@ public final class MaidSelfPropelledWings {
     /**
      * 【补推】开一扇推力窗（或给已开的那扇续期）。返回 true = 这一口确实开了
      * （调用方按"本次补推已发生"处理：记间隔、日志）。
-     *
      * <p>与 {@code MaidRiptideBoost.ignite} 的分工：那一条**点火后立刻推第一下**（它是"一记"），
      * 这一条**不推第一下**——因为 {@link #tick} 就在同一个 tick 里稍后被调用
      * （两条飞行链里 {@code tick} 的位置紧随补推之后），推一次就够，重复推会白多一份。
-     *
      * @return 这一口是否开了（没资格 / 开关关 / 不在滑翔 → false，调用方继续试下一条腿）
      */
     public static boolean ignite(EntityMaid maid) {

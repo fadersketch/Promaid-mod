@@ -12,28 +12,18 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * v1.2.2 实测五百九十八【粉色火焰：边点边换】。
- *
- * 原版点火只有一条路径：任何一处"放一格火"最终都落到
- * {@code BaseFireBlock.getState(level, pos)}（javap 实证：爆炸的
- * {@code Explosion.finalizeExplosion}、火自己蔓延的 {@code FireBlock.getState}、打火石/火焰弹的
- * {@code getStateForPlacement} 全部经过它）。所以这一个点就能接管"世界上出现的每一格火"——
- * 而本模组要的**只是她自己那一炸点着的那些**，于是用窗口把范围框死。
- *
+ * 【粉色火焰：边点边换】——世界上出现的每一格火都由 {@code BaseFireBlock.getState(level, pos)} 创建（javap
+ * 实证：爆炸的 {@code Explosion.finalizeExplosion}、火蔓延的 {@code FireBlock.getState}、打火石/火焰弹的
+ * {@code getStateForPlacement} 全部经过它），所以这**一个点**就能接管所有新火；本模组只要"她自己那一炸
+ * 点着的那些"，故用窗口把范围框死：
  * ── 什么时候换 ──
- * {@link MaidBombing} 在 {@code level.explode(...)} 前后开/关窗口（爆炸是同步调用链，窗口不跨
- * tick），窗口内把返回值翻译成粉色火：那一炸点着的每一格直接就是粉色火，与距离无关
- * （实测日志：`粉色火焰：这一炸点着的 119 格火直接生成为粉色火`），也没有"先橙后粉"的中间态。
- *
- * ── 什么时候不换（范围边界，实测六百〇一收回来的一步）──
- * 实测六百 曾经把这里改成"开关开着就换**所有**新火"（为了兜住窗口之外那些烧到人的火）。
- * 反馈
- *
- * 关掉（含玩家自己点的火）。现在恢复成**只在窗口内换**：打火石 / 闪电 / 火焰弹 / 岩浆 /
- * 别的模组 / 世界里早就存在的原版火一概不碰。
- *
- * 【静态注入的写法】目标是 vanilla 的静态方法，处理函数必须是 static；SRG 名写死在
- * 注解里（与 LeavesBlockMixin 等一致：手工编译没有 refmap，Forge 运行期就是 SRG）。
+ * {@link MaidBombing} 在 {@code level.explode(...)} 前后开/关窗口（爆炸是同步调用链，窗口不跨 tick），
+ * 窗口内把返回值翻译成粉色火：那一炸点着的每一格直接就是粉色火、与距离无关，也没有"先橙后粉"的中间态。
+ * ── 什么时候不换（范围边界）──
+ * **只在窗口内换**：打火石 / 闪电 / 火焰弹 / 岩浆 / 别的模组 / 世界里早就存在的原版火一概不碰（曾试过
+ * "开关开着就换所有新火"，会把玩家自己点的火也染粉，已收回）。
+ * 【静态注入】目标是 vanilla 的静态方法，处理函数必须是 static；方法名写死在注解里（手工编译无 refmap，
+ * Forge 运行期是 SRG 名、Neo 树是 Mojmap 名）。
  */
 @Mixin(BaseFireBlock.class)
 public abstract class BaseFireBlockPinkMixin {

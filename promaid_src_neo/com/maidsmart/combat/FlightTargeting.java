@@ -6,95 +6,18 @@ import net.minecraft.world.entity.ai.behavior.EntityTracker;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 
 /**
- * v1.2.0 实测五百二十一（1.21.1 NeoForge）：空袭专用索敌器。
+ * 空袭/扫帚/载具共用的索敌器，完全绕开 TLM 的"传感器扫盒子→可见列表→任务选"链路，每 tick
+ * 自己维持目标。为什么绕开：{@code EntityMaid.searchDimension()} 按排班活动分流，只有活动为
+ * WORK 时才用任务自己的扫描盒，其余时段走 idle 默认口径（垂直硬编码 4 格）；她爬高十几格后
+ * 敌人就掉出盒子 → {@code StartAttacking} 选不到 → 行为 canStillUse 失败即停止、状态被
+ * {@code forget} 清空，她在高空滑翔却无朝向指令，顺惯性飘出战场（"飞太高→丢目标→飘走"）。
  *
- * 【需求原文】"将两个空袭状态下的索敌范围强制改为以自身为圆心，半径 50 格。不走 TLM 原版的
- * 机制。现在这个版本近战空袭有一个非常奇怪的点，女仆很容易因为飞的太高然后丢失了自己的目标，
- * 然后就在空中往其他地方飞了，直接脱离了战场。我们要做的是持续瞄准，让女仆往那个方向飞。"
- *
- * 【与 1.20.1 树同源】两树本类逻辑逐行一致，差别只在命名（Mojmap）与个别 API：
- * {@code getUUID()} / {@code level()} / {@code getBrain()} / {@code canAttack()} /
- * {@code isWithinRestriction()} / {@code distanceToSqr()} / {@code Sensor.isEntityAttackable()}。
- * 设计理由与取证过程见 1.20.1 树同名类的注释，此处只留结论。
- *
- * ── 为什么必须绕开 TLM 那条链路（CFR 反编译实证）──
- * TLM 索敌是"传感器扫盒子 → 写可见列表 → 任务从列表里选"：
- * <pre>
- *   MaidNearestLivingEntitySensor.doTick:
- *       AABB box = maid.searchDimension();
- *       list = level.getEntitiesOfClass(LivingEntity.class, box, e -&gt; e != maid &amp;&amp; e.isAlive());
- *       brain.setMemory(NEAREST_VISIBLE_LIVING_ENTITIES, new NearestVisibleLivingEntities(maid, list));
- * </pre>
- * 而 {@code EntityMaid.searchDimension()} **按排班活动分流**：
- * <pre>
- *   if (getScheduleDetail() == Activity.WORK) return getTask().searchDimension(this);
- *   return TaskManager.getIdleTask().searchDimension(this);   // ← 非 WORK 一律走这里
- * </pre>
- * 我们两个空袭任务覆写的 50 格盒子**只在活动恰为 WORK 时参与**；其余时段走 idle 任务的默认
- * 口径（{@code inflate(searchRadius, 4.0, searchRadius)}，**垂直硬编码 4 格**）。她爬高十几格
- * 后敌人就掉出盒子 → 可见列表里没有它 → 目标丢失。
- *
- * ── "飞太高 → 丢目标 → 飘走"的链条 ──
- * 目标掉出列表后 {@code StartAttacking} 再也选不到它；空袭行为的 canStillUse 又要求"有目标"，
- * 目标一丢行为立刻停止、状态被 {@code forget} 整清，她在高空保持滑翔却**没有任何朝向指令**，
- * 于是顺惯性飘出战场。
- *
- * ── 现在的口径 ──
- * 把索敌从 TLM 链路**完全摘出来**，每 tick 自己维持：① 自己扫以自身碰撞箱为中心、半径 50 格的
- * **球**（AABB 粗筛 + 距离平方精筛），**不看排班活动**；② 目标选定后**每 tick 回写**
- * {@code ATTACK_TARGET}/{@code LOOK_TARGET}，TLM 什么时候擦都不影响我们；③ 已锁定目标只要
- * "活着 + 能攻击 + 在活动范围内 + 仍在 {@link #HOLD_RANGE} 内"就继续用、**不再要求视线**——
- * 这正是"持续瞄准"的实质：飞高时视线常被地形/树叶/怪物身体挡住，旧口径会因此放弃目标。
- *
- * 【与 TLM "隔墙不出手"无冲突】新锁定仍要过一道视线 raycast
- * （{@code SelfPreservationBehavior.hasSight}，与实测五百零五给自保近战补的是同一个方法），
- * 墙后的怪不会被新锁定；改变的只是"已打起来的目标不会因为她飞高、视线被挡一下就被丢掉"。
- *
- * ── v1.2.0 实测五百二十四（本类的第二处修正，来自实测日志）──
- * 上一版（五百二十一）留下两个会把"持续瞄准"重新打断的洞，本轮补齐：
- * <ol>
- *   <li>{@link #scan} 的视线门当年误用了 {@code Sensor.isEntityAttackable}——反编译实证它
- *       **内含 {@code range(16.0)}**，于是"50 格索敌"实际只能在 16 格内生效。她一旦被起飞
- *       弧线推到 16 格外就再也拿不回目标（实测日志里大片
- *       {@code 候选=3 → 可攻击=1 → 有视线=0 → 选中=-}）；</li>
- *   <li>维持锁定与新锁定共用 50 格上限——**起飞那口气就把她推出 50 格**
- *       （实测：锁定监守者时 7.1 格，放烟花起飞 2 秒后目标就没了）。现拆成
- *       {@link #RANGE}（发现）/ {@link #HOLD_RANGE}（维持）。</li>
- * </ol>
- *
- * 【纯服务端】不写网络、不碰渲染。状态表由
- * {@code MaidFlightCombatBehavior.forget/clearAll/pauseRound} 与
- * {@code MaidBroomBehavior.stop} 在女仆移除、服务器停止、换任务、以及行为中途停止时清理。
- *
- * ── v1.3.0(beta) 实测六百八十五：扫帚模式也并入本索敌器 ──
- * 【用户
- *
- *
- *
- * 【为什么偏偏是扫帚】差别只有一条：**空袭有自己的索敌器（本类），扫帚没有**。扫帚那边
- * （{@code MaidBroomBehavior.currentTarget}）读的是 TLM 那条链，而那条链的"维持"判据是
- * 援护半径（WORK 活动 16 格、其余时段 8 格）+ 传感器盒子（非 WORK 时段垂直硬编码 4 格）：
- * boss 一掉下去、距离一过线，目标当场作废；TLM 每 tick 重挑时既没有 128 格兜底、盒子也
- * 够不着 → 再也拿不回来。扫帚行为随后落进"没目标"那一档，而**挂着主人时那一档的出口正是
- * 原地悬停**（{@code MaidBroomBehavior} ⑥ 的拴绳分支）——"骑在扫帚上悬停、一动不动"就是它。
- * 这也解释了为什么空袭没事而扫帚有事：空袭的 canStillUse 要求"有目标"，目标一丢它自己就
- * 停下来收尾（不会僵在原地），扫帚则是**一直在跑、只是每 tick 都走悬停那一支**。
- *
- * 【现在的口径】扫帚任务一并纳入本类：发现 50 格 / 维持 128 格 / 每 tick 回写
- * {@code ATTACK_TARGET} 与 {@code LOOK_TARGET}，与空袭**同一套数字、同一套判据**（用户要的
- * "像空袭那样不容易丢"就是字面意思——同一个索敌器）。扫帚侧新增的两个接入点是
- * {@code MaidBroomBehavior.aimTarget()}（先问本类、问不到才退回 TLM 链，所以今天能锁到的
- * 目标一个都不会丢）与它 {@code stop()} 里的 {@link #forget}。
- *
- * 【为什么不新建一套"扫帚索敌器"】那会有两份"什么算有效目标"的判据，将来必然漂移——本模组
- * 反复强调的红线是"口径只有一处"（见 {@code MaidBroomDrive} 对扫帚/空袭同款公式的说明）。
- *
- * ── v1.3.0(beta) 实测七百八十五：固定翼单列一档（发现改"以主人为圆心、水平 50 格"）──
- * 【用户
- * 根因是几何：她接敌时在敌人上方 40+ 格，而"50 格发现"量的是 3D 距离 ⇒ 水平窗口只剩
- * {@code sqrt(50²−44²)≈24} 格；再加上固定翼一次通场就飞出上百格（以自身为圆心扫不到主人身边的
- * 战场），于是"锁不到、只在头顶才开火"。本档两处改动（**只动固定翼**）：度量换水平、圆心换主人。
- * 详见 {@link #AIRCRAFT_RANGE}。
+ * 本类口径：① 自扫球（AABB 粗筛 + 距离平方精筛），不看排班活动；② 每 tick 回写
+ * {@code ATTACK_TARGET}/{@code LOOK_TARGET}；③ 已锁定目标只要活着、能攻击、在活动范围内、
+ * 仍在 {@link #HOLD_RANGE} 内就继续用，**不再要求视线**（视线只作新锁定门槛，见
+ * {@code SelfPreservationBehavior.hasSight}）。
+ * 【纯服务端】不写网络、不碰渲染；状态表由各行为的 forget/clearAll/pause/stop 清理。
+ * 发现/维持半径的拆分见 {@link #HOLD_RANGE}，固定翼单独一档见 {@link #AIRCRAFT_RANGE}。
  */
 public final class FlightTargeting {
 
@@ -103,50 +26,22 @@ public final class FlightTargeting {
     private static final double RANGE_SQR = RANGE * RANGE;
 
     /**
-     * 维持锁定半径（格）——**已打起来的目标不再按 50 丢**。
-     *
-     * 【v1.2.0 实测五百二十四：为什么必须与 RANGE 分开】
-     * 空袭的起飞动作是**主动背离敌人 + 抬头 62°**去把烟花推力吃满（见
-     * {@code MaidFlightCombatBehavior.faceAwayAndUp} 与 {@code LAUNCH_TICKS_MELEE}），
-     * 这一口气就能把她推出 50 格外——实测日志（本机 1.21.1，2026-09-16 22:20:25）：
-     * 锁定监守者时距离 7.1 格、放烟花起飞，**2 秒后就已经没有目标了**。
-     * 旧口径"超过 RANGE 就丢锁"= 每一轮起飞都在半路自我解除瞄准，行为随即停止、
-     * 状态被整清，她在高空保持滑翔却**没有任何朝向指令** → 顺着惯性飘出战场。
-     * 这正是"飞得特别高就失去方向"的来源。
-     *
-     * 所以：**50 只管发现，打起来之后由 128 兜底**（起飞弧线最坏约 60 格；
-     * 128 有约两倍余量，同时仍能防住"追着跑出战场"）。真正该收尾的情形（目标死了 /
-     * 打不着 / 越出活动范围）由 {@link #keepable} 里其余几条负责，与新锁定同一口径。
+     * 维持锁定半径（格）——已打起来的目标不按发现半径 {@link #RANGE}(50) 丢，由 128 兜底。
+     * 起飞动作（背离敌人 + 抬头 62° 吃满烟花推力）一口气能把她推出 50 格外（实测：锁定监守者
+     * 7.1 格，起飞 2 秒后目标即丢），旧口径"超过 RANGE 就丢锁"= 每轮都在半路自我解除瞄准。
+     * 128 约为最坏起飞弧线（约 60 格）的两倍余量，同时仍能防"追着跑出战场"。真正该收尾的情形
+     * （目标死 / 打不着 / 越出活动范围）由 {@link #keepable} 其余几条负责，与新锁定同一口径。
      */
     private static final double HOLD_RANGE = 128.0;
     private static final double HOLD_RANGE_SQR = HOLD_RANGE * HOLD_RANGE;
 
     /**
-     * 【实测七百八十五】固定翼（AC-130H 这类）的**发现半径**（格，度量是**水平距离**），
-     * 圆心取**主人**（拿不到主人才回落到她自己）。
-     *
-     * <h2>为什么固定翼必须单独一档（实机日志 + 几何双实证）</h2>
-     *
-     * 实机日志（2026-10-03 06:59~07:05，784 那份 jar）里 {@code 固定翼巡航档} 每 5 秒一行：
-     * 巡航时她稳定在「地形净空（地面上 44 格）」上（{@code 高差=-41→0}），接敌档则是
-     * {@code 距目标=29~63格 高差=-29}——也就是**敌人在她脚下四十多格**。
-     * 而本索敌器的发现判据是"以自身为圆心的 50 格**球**"（3D 距离）：
-     * {@code sqrt(50² − 44²) ≈ 23.7} ⇒ 她在空中真正能"发现"的只有**水平 24 格以内**的敌人，
-     * 而 780 起巡航速度被顶到 2.5~3.9 格/拍，那个窗口几拍就飞过去了——"离得很近才开火"、
-     * "根本锁不到敌"就是这条几何。
-     *
-     * <h2>两处改动（都只作用在固定翼这一档）</h2>
-     * <ol>
-     *   <li><b>度量换水平</b>：高度差是她自己的站位造成的（接敌高度 = 敌上 15 + 固定翼加高 30），
-     *       不该从"能不能看见"的预算里扣掉。{@link #keepable} 与 {@link #scan} 对固定翼改用
-     *       {@link #horizontalDistSqr}；直升机 / 飞艇 / 扫帚 / 地面载具一个字节不变（仍 3D）。</li>
-     *   <li><b>圆心换主人</b>：固定翼一次通场 + 掉头就要飞出上百格（780 的转弯半径
-     *       {@code r ≈ v/0.0298}，实机 2.5~3.9 格/拍 ⇒ 84~131 格），按自身为圆心等于
-     *       "只在头顶那几十格里找"。而这场仗发生在**主人**身边——玩家要的"支援主人"就是
-     *       "从主人身边找敌人"。所以固定翼的**新锁定**以主人为圆心扫
-     *       {@link #AIRCRAFT_RANGE} 格（维持锁定仍按她自己算，用的是 {@link #HOLD_RANGE}）。</li>
-     * </ol>
-     * 半径沿用玩家在 实测五百一十三 点名要的 50 格（与扫帚同一套数字），只是换了圆心与度量。
+     * 固定翼（AC-130H 等）的发现半径（格，度量用**水平**距离），圆心取**主人**（取不到才回落到她）。
+     * 为何单列一档：固定翼接敌时稳定在敌上 40+ 格（实测高差 -29~-41），若发现按 3D 距离算，
+     * 水平窗口只剩 {@code sqrt(50²−44²)≈24} 格；且一次通场+掉头就飞出上百格，以自身为圆心
+     * 等于"只在头顶几十格里找"，而这场仗发生在主人身边。故 {@link #keepable}/{@link #scan}
+     * 对固定翼改用 {@link #horizontalDistSqr}、圆心改 {@link #scanCenter}；直升机/飞艇/扫帚/
+     * 地面载具一个字节不变（仍以自身为圆心的 50 格球）。半径仍是 50，与扫帚同一套数字。
      */
     public static final double AIRCRAFT_RANGE = 50.0;
     private static final double AIRCRAFT_RANGE_SQR = AIRCRAFT_RANGE * AIRCRAFT_RANGE;
@@ -177,13 +72,10 @@ public final class FlightTargeting {
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
-     * 同 tick 去重表：女仆 UUID → 本 tick 已解析出的 gameTime。
-     *
-     * 【为什么需要】{@link #resolve} 会被空袭行为**同一 tick 调三次**
-     * （{@code checkExtraStartConditions} / {@code canStillUse} / {@code tick}，各自都要拿目标）。
-     * 不去重的话 keepable 的判据（注册名查询、配置列表扫描）与 brain 写入都做三遍；更要紧的是
-     * **三次必须给出同一个答案**——否则会出现"启动判定看到一个目标、运行中维持的是另一个"的分裂。
-     * 命中本表就直接复用 {@link #LOCKED} 里的结果。
+     * 同 tick 去重表：女仆 UUID → 本 tick 已解析出的 gameTime。{@link #resolve} 被空袭行为同一
+     * tick 调三次（checkExtraStartConditions / canStillUse / tick），不去重则 keepable 判据与
+     * brain 写入做三遍；更要紧的是三次必须给出同一答案，否则会"启动看到 A、运行中维持 B"。
+     * 命中本表直接复用 {@link #LOCKED} 里的结果。
      */
     private static final java.util.Map<java.util.UUID, Long> RESOLVED_TICK =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -209,16 +101,11 @@ public final class FlightTargeting {
     }
 
     /**
-     * v1.2.0 实测五百二十四：行为中途停止时的**轻量清理——保留锁定**。
-     *
-     * 【为什么不能沿用 forget】空袭行为每次"停一下"都走 forget()，而 forget 会把
-     * {@link #LOCKED} 一起清掉。可空袭一轮里行为本来就会短暂停：三件不齐的那两拍、
-     * 以及 canStillUse 判定与 tick 之间的边界。锁定一清，她就得重新走"限频扫描 +
-     * 视线门"那一整套——而她此刻多半正在高空（对地面目标经常不过视线门），于是变成
-     * **有敌人却拿不到目标**：日志里大片 `候选=3 → 可攻击=1 → 有视线=0 → 选中=-`
-     * 就是这个状态，表现即"失去方向、自动飘走"。
-     * 现在：停止只清"每 tick 的缓存"，**瞄准跨过这次停止**——这才是"持续瞄准"。
-     * 真正该断的情况（女仆移除、切走空袭任务、服务器停止）仍走 {@link #forget} / {@link #clearAll}。
+     * 行为中途停止时的轻量清理——只清每 tick 缓存（{@link #NEXT_SCAN}），**保留 {@link #LOCKED} 锁定**。
+     * 空袭一轮里行为本就会短暂停（三件不齐的两拍、canStillUse 与 tick 的边界）；若按 {@link #forget}
+     * 连锁定一起清，她得重走"限频扫描 + 视线门"，而她此刻多半在高空、对地面目标常不过视线门，于是
+     * "有敌人却拿不到目标"（日志大片 候选=3→可攻击=1→有视线=0→选中=-），表现为失去方向、自动飘走。
+     * 真正该断的情况（女仆移除、切走任务、服务器停止）仍走 {@link #forget} / {@link #clearAll}。
      */
     public static void pause(java.util.UUID maidId) {
         if (maidId != null) {
@@ -347,17 +234,11 @@ public final class FlightTargeting {
     }
 
     /**
-     * 【实测七百三十八】她是不是"被骑乘指挥棒绑在一只**卓越前线载具**上"的女仆——飞行与地面
-     * 都算。
-     *
-     * <p>
-     *
-     * （{@code RideBindManager} 里新加的）同样需要"发现 50 格"这套索敌，否则她只能看见 TLM
-     * 那条 16/8 格援护半径里的敌人，绕圈半径才 2.5 格却"发现不了"几格外的目标。
-     *
-     * <p>判据：指挥棒绑着 + 骑的是卓越前线载具（{@code Kind.VEHICLE}）。原版兽不在此列（它们走
-     * TLM 自己那条链，历来如此）；冰火传说的龙是"悬空鞍位"、她不是乘客，{@code getVehicle()} 为
-     * null，天然落不进来。
+     * 她是不是"被骑乘指挥棒绑在一只卓越前线载具上"的女仆（飞行与地面载具都算）。
+     * 这类骑乘也要"发现 50 格"这套索敌，否则她只能看见 TLM 16/8 格援护半径里的敌人，
+     * 绕圈半径才 2.5 格却"发现不了"几格外的目标。判据：指挥棒绑着 + 骑的是载具
+     * （{@code Kind.VEHICLE}）；原版兽走 TLM 自己那条链，冰火传说的龙是悬空鞍位、她不是乘客
+     * （{@code getVehicle()} 为 null），天然落不进来。
      */
     private static boolean isVehicleMountRider(EntityMaid maid) {
         try {
@@ -372,13 +253,10 @@ public final class FlightTargeting {
     }
 
     /**
-     * 【实测七百八十五】她是不是"被骑乘指挥棒绑在一只**固定翼**上"的女仆（{@code AIRCRAFT}
-     * 引擎：AC-130H / A-10 / J-16 / Ju-87）。
-     *
-     * <p>
-     * 固定翼要单独一档的两条理由（飞得高、不守在主人身边）与两处改动见 {@link #AIRCRAFT_RANGE}。
-     * 判据走载具自己的引擎名（{@link MaidMountCompat#isAircraft}，反射拿不到 → false，一个字节
-     * 都不碰）；直升机 / 飞艇 / 扫帚 / 地面载具一个都不在此列。
+     * 她是不是"被骑乘指挥棒绑在一只固定翼上"的女仆（{@code AIRCRAFT} 引擎：AC-130H / A-10 /
+     * J-16 / Ju-87）。固定翼要单独一档的理由与改动见 {@link #AIRCRAFT_RANGE}。判据走载具
+     * 自己的引擎名（{@link MaidMountCompat#isAircraft}，反射拿不到 → false）；直升机 / 飞艇 /
+     * 扫帚 / 地面载具一个都不在此列。
      */
     private static boolean isAircraftRider(EntityMaid maid) {
         try {
@@ -423,22 +301,12 @@ public final class FlightTargeting {
     }
 
     /**
-     * 该目标是否还值得**继续锁定**（维持锁定用的判据，比新锁定少一条视线）。
-     *
-     * 逐条理由：
-     * <ul>
-     *   <li>存活——目标死了当然要换；</li>
-     *   <li>同维度——跨维度她过不去，交给调用方收尾；</li>
-     *   <li>{@code maid.canAttack(e)}——即 {@code EntityMaid.canAttack} → {@code IAttackTask
-     *       .canAttack} → {@code DefaultMonsterType.canAttack}：排除玩家/盔甲架/宠物/村民，
-     *       中立生物要记仇。与 TLM 原版同一口径（也顺带保证被驯服后不会再被锁）；</li>
-     *   <li>{@code isWithinRestriction}——有 home/工作点限制时不能越界追；</li>
-     *   <li>距离 ≤ {@link #HOLD_RANGE}——**不是**新锁定用的 {@link #RANGE}：起飞那一口气
-     *       就会把她推出 50 格，按 50 丢锁 = 每轮都在半路自我解除瞄准（详见 HOLD_RANGE 注释）。
-     *       【实测七百八十五】固定翼这一档改用**水平**距离（见 {@link #AIRCRAFT_RANGE}）——
-     *       她接敌时在敌人上方 40+ 格，3D 距离里那一截高度差会把维持半径也一起吃掉；</li>
-     *   <li>{@code FriendlyFireGuard.isFriendly}——主人/同主女仆/友军双保险。</li>
-     * </ul>
+     * 该目标是否还值得**继续锁定**（维持判据，比新锁定少一条视线）。
+     * 存活 / 同维度（跨维度她过不去，交给调用方收尾）/ {@code maid.canAttack(e)}（排除玩家/
+     * 盔甲架/宠物/村民，中立生物记仇，与 TLM 同一口径）/ {@code isWithinRestriction}（有 home/
+     * 工作点限制时不越界追）/ 距离 ≤ {@link #HOLD_RANGE}（不是发现用的 {@link #RANGE}；固定翼
+     * 这一档改用水平距离，见 {@link #AIRCRAFT_RANGE}）/ {@code FriendlyFireGuard.isFriendly}
+     * （主人/同主女仆/友军双保险）。
      */
     private static boolean keepable(EntityMaid maid, LivingEntity e, boolean aircraft) {
         try {
@@ -479,15 +347,11 @@ public final class FlightTargeting {
     }
 
     /**
-     * 扫 50 格，取最近的合法目标（新锁定用，**含视线门**）。
-     *
-     * <p>两步筛：先用 AABB 膨胀半径那么多格粗筛（{@code inflate} 三轴独立膨胀，等价于边长
-     * 两倍半径的立方盒——它比球宽松，斜角方向会多捞进来一些），再用距离平方精筛。这样实际
-     * 生效范围就是用户要的"以圆心为圆心、半径 50 格"，而粗筛仍是引擎最擅长的 AABB 查询。
-     *
-     * <p>【实测七百八十五】固定翼两处不同（见 {@link #AIRCRAFT_RANGE}）：圆心取**主人**
-     * （{@link #scanCenter}）、半径 {@link #AIRCRAFT_RANGE}、精筛用**水平**距离。直升机 /
-     * 飞艇 / 扫帚 / 地面载具仍是以她自身为圆心的 50 格**球**，一个字节不变。
+     * 扫半径那么多格，取最近的合法目标（新锁定用，**含视线门**）。
+     * 两步筛：先 AABB 膨胀粗筛（三轴独立膨胀 = 边长两倍半径的立方盒，比球宽松，斜角会多捞些），
+     * 再用距离平方精筛，实际生效范围正好是"以圆心为圆心、半径 50 格"，粗筛仍是引擎最擅长的 AABB。
+     * 固定翼两处不同（见 {@link #AIRCRAFT_RANGE}）：圆心取主人（{@link #scanCenter}）、精筛用水平
+     * 距离；直升机 / 飞艇 / 扫帚 / 地面载具仍是以她自身为圆心的 50 格球，一个字节不变。
      */
     private static LivingEntity scan(EntityMaid maid, boolean aircraft) {
         try {
@@ -517,36 +381,12 @@ public final class FlightTargeting {
                 if (d > rangeSqr) {
                     continue; // 精筛成球（固定翼：水平圆）
                 }
-                // 视线门：**这一环曾经是"50 格索敌"整个失效的原因**（v1.2.0 实测五百二十四）。
-                //
-                // 【旧口径为什么错】旧版这里调的是 `Sensor.isEntityAttackable(maid, e)`，
-                // 想当然地把它当成"视线判定"。`javap` 反编译 1.21.1 客户端 jar 实证：
-                //
-                //     static {
-                //         TARGET_CONDITIONS = TargetingConditions.forCombat().range(16.0);
-                //         ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING =
-                //                 forCombat().range(16.0).ignoreInvisibilityTesting();
-                //     }
-                //     isEntityAttackable(a, b) {
-                //         if (a.getBrain().isMemoryValue(ATTACK_TARGET, b))
-                //                 return ATTACK_TARGET_CONDITIONS_IGNORE_INVISIBILITY_TESTING.test(a, b);
-                //         return TARGET_CONDITIONS.test(a, b);
-                //     }
-                //     TargetingConditions.test: d = a.distanceToSqr(b);
-                //                               if (d > (range * visibility)²) return false;
-                //
-                // 两个变体**都带 `range(16.0)`**，也就是这一环真正卡的是"**16 格以内**"
-                // （1.21.1 两个变体都仍然要求视线；1.20.1 那对里有一个忽略视线的变体）。
-                // 于是：我们扫的是 50 格球、候选也都捞进来了（日志 `候选=3 存活=2 可攻击=1`），
-                // 却**在 16 格这一关被全数否决**（日志 `有视线=0 → 选中=-`）。
-                // 她一旦被起飞弧线推到 16 格外，就再也拿不回目标——高空无目标 = 无朝向
-                // 指令 → 顺惯性飘出战场，正是用户报的"飞得特别高就失去方向"。
-                //
-                // 【现在的口径】改用本模组自有的 `SelfPreservationBehavior.hasSight`：
-                // 一次纯 raycast（`ClipContext.Block.COLLIDER`，中心点上抬 1.2 格），
-                // **没有距离上限**——"隔墙不出手"照样成立（墙后的怪仍然被挡在这里），
-                // 但"能不能发现"重新交回给用户指定的 50 格球。与实测五百零五给自保
-                // 近战链路补视线时用的是同一个方法，口径统一。
+                // 视线门：新锁定必须过这道 raycast（{@code SelfPreservationBehavior.hasSight}，"隔墙不出手"）。
+                // 不能用 {@code Sensor.isEntityAttackable}——反编译实证它内含 {@code range(16.0)}
+                // （TargetingConditions 里 {@code d > (16*visibility)²} 即 false），真正卡的是"16 格以内"，
+                // 视线只是顺带；于是 50 格扫出的候选会在 16 格这一关被全数否决（日志 候选=3→可攻击=1→
+                // 有视线=0→选中=-），她一旦被起飞弧线推到 16 格外就再也拿不回目标。hasSight 是纯 raycast
+                // （{@code ClipContext.Block.COLLIDER}，中心点上抬 1.2 格）、无距离上限，与自保近战同一方法。
                 if (!SelfPreservationBehavior.hasSight(maid, e)) {
                     continue;
                 }
@@ -563,14 +403,10 @@ public final class FlightTargeting {
 
     /**
      * 把目标写回 brain（每 tick 调用 = 抵抗 TLM 那边的擦除）。
-     *
-     * 两件一起写，缺一不可：
-     * <ul>
-     *   <li>{@code ATTACK_TARGET}——原版/TLM 的攻击行为读它；空袭行为自己也读它；</li>
-     *   <li>{@code LOOK_TARGET}——{@code LookAtTargetSink}（CORE 组，任何活动都跑）读它来
-     *       转头，不写她就会"身体朝一边、眼睛看另一边"。{@code EntityTracker} 是
-     *       {@code PositionTracker} 的子类，与 {@code StartAttacking} 的配套写法同款。</li>
-     * </ul>
+     * 两件一起写、缺一不可：{@code ATTACK_TARGET}（原版/TLM 攻击行为与空袭行为都读它）与
+     * {@code LOOK_TARGET}（{@code LookAtTargetSink} 在 CORE 组任何活动都跑，不写就"身体朝一边、
+     * 眼睛看另一边"）。{@code EntityTracker} 是 {@code PositionTracker} 子类，与
+     * {@code StartAttacking} 的配套写法同款。
      */
     private static void writeBrain(EntityMaid maid, LivingEntity target) {
         try {

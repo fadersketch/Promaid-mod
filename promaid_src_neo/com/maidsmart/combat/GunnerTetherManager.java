@@ -24,13 +24,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * v1.3.7 实测六百六十七【武装拴绳】——粉丝点单的「武装直升机二号位」（1.21.1 NeoForge 版）。
- *
  * 需求原文："众所周知酒狐会魔法，酒狐在空中飞的时候，是否可以让玩家挂在酒狐下方？让玩家能够
  * 与酒狐一同攻击，八宝粥行动那样武装直升机，玩家挂在2号位开火。这边要引入一个新道具，应该类似
  * 于一个不会扯断，而且长度只有一格的拴绳。可以将玩家和女仆锁在一起。使用方法跟拴绳一样，右击
  * 女仆就行。解除也是同样的方式。"
- *
  * ── 实现口径（为什么是"真乘客 + positionRider 定位"，而不是绳子拉力模拟）──
  * 把玩家 startRiding(force) 上女仆（她当载具），再在 {@link com.maidsmart.mixin.EntityGunnerHangMixin}
  * 里把乘客定位从"骑在头顶"改成"悬挂在下方 hang 格"（那个 mixin 注入的是 **Entity** 的
@@ -39,86 +36,7 @@ import java.util.UUID;
  *   <li>**位移零仿真**：乘客跟着载具走是原版机制（客户端插值、多人同步、俯冲/爬升/烟花加速
  *       全部自动正确），自己写"弹簧拉力"会跟玩家本地输入打架（橡皮筋 + 抖动）；</li>
  *   <li>**她照常飞行开火**：javap 实证 TLM {@code EntityMaid} 没有覆写
- *       {@code getControllingPassenger}——玩家乘客不会抢走驾驶权，她的大脑/远程空袭
- *       一切照旧，"一号位她开火、二号位你开火"就是这么来的；</li>
- *   <li>**骑乘关系零成本同步**：乘客关系由原版 SetPassengersPacket 同步，绳子渲染只要知道
- *       "谁是她的枪手"（S2C 包，见 GunnerTetherNetworking）；</li>
- *   <li>**"长度只有一格"**：默认悬挂距离 1.8 格（可调 0.5~4.0），绳子画在女仆腰部与玩家手之间。</li>
- * </ul>
- *
- * ── 【实测六百七十二：座位是"两半"的，且她不再替你定高度】──
- * 扫帚上的换座是**一对互逆**的动作，都在右击这一次里完成（不依赖 TLM 的事件泄漏）：
- * <ul>
- *   <li>玩家**骑在扫帚驾驶位**上右击她 → 下扫帚、挂到她身上（换到二号位）；</li>
- *   <li>**绑定态**右击她（她在扫帚上）→ 解除拴绳 + 玩家坐回扫帚**驾驶位**（她在第二乘客）。</li>
- * </ul>
- * 另外，拴着的时候她**不再被指定高度**：空袭（671）与扫帚（672）都改成"保持她自己当前高度 /
- * 原地悬停"——去哪个高度由她自己的战斗链路决定，拴绳只负责"绑住人"。玩家在地面时改为并肩站位，
- * 见 {@link #seatOffset}。
- *
- * ── 【实测六百七十三：多一个"牵绳档"，外加第一人称半透明】──
- * 又一轮实测反馈（三条"可以优化"）落地成三件事：
- * <ul>
- *   <li><b>① 坐回扫帚后能立刻再绑上</b>：换座态（玩家在扫帚驾驶位、她在第二乘客）里准星前方
- *       **一个实体都没有**，客户端射线是 MISS，右击走的是 Forge 的 {@code RightClickItem} 而不是
- *       {@code EntityInteract}——旧版只监听后者，于是"坐在扫帚上右击切不到绑定模式"。
- *       现在补上了那个入口（{@link #onUseItem}）。</li>
- *   <li><b>② 空袭档多一档"牵绳"</b>：绑定空袭模式的女仆时，**她还没起飞就先不挂人**——玩家照常
- *       活动、她跟着走（原版拴绳观感，绳子照画）；她真的起飞才把玩家挂到二号位，落地满 2 秒再
- *       放下来回到牵绳。
- *
- *   <li><b>③ 第一人称下她半透明</b>：挂在下面时她的模型会挡视野，但继续降低悬挂高度会让人更容易
- *       被打中——所以改成**渲染层面**解决：只对"挂着的那位玩家 + 第一人称"把她的模型画成半透明
- *       （{@code com.maidsmart.client.MaidGhostRender}，透明度可配）。服务端一行都不用改。</li>
- * </ul>
- *
- * ── 【实测六百七十四：三点修正 + 一层金边标记】──
- * <ul>
- *   <li><b>① 半透明默认 0.35 → 0.1</b>，而且**扫帚本体**也一起半透明（{@code MaidGhostRender} / {@code MaidGhostBroomMixin}）。</li>
- *   <li><b>② 修「玩家坐到空袭女仆头上」</b>：牵绳 → 起飞挂载时**没重发相位包**，客户端不认这个枪手 → 悬挂定位不生效、人被原版摆在**她头顶**；现在相位变一次发一次（{@code sync}）。</li>
- *   <li><b>③ 被拴绳选中 = 金色描边</b>（原版发光标记 + 客户端金边，同光灵箭的渲染），她**正式起飞**（牵绳 → 悬挂）的那一刻解除。</li>
- * </ul>
- *
- * ── 【实测六百七十五：一只绳子只牵一只 + 魂符残留 + 扫帚档下沉】──
- * <ul>
- *   <li><b>① 换绑先松旧的</b>：牵绳档玩家**不是**乘客，所以理论上能同时牵好几只女仆（绳子会画好几根、
- *       她一起飞就打架）。现在 {@link #attach} 第一件事就是把这位玩家**已有的那条链路**先解除
- *       （连带她的金色标记、绳子、以及"他还骑在她身上"的话把他放下来），再绑新的。
- *       "如果同时用武装拴绳绑定了多个女仆，怎么办？…如果标记了第2个女仆。那么会自动把第1个女仆
- *       相关的标记先清掉。"</li>
- *   <li><b>② 魂符收放的残留</b>：金边标记（{@code Glowing}）是写进女仆 NBT 的，收进魂符再放出来
- *       会跟着回来，但拴绳链路不会——旧版于是"边框还在、效果却没了"。现在女仆**重新入世界**
- *       就走 {@link #onMaidJoin}：人还挂在她身上（区块重载/跨维度）就当场把链路重建；否则把标记
- *       与残留键一起清掉。这一枪挂在放出的**最后一步**（EntityJoinLevelEvent），不碰魂符本身的流程。</li>
- *   <li><b>③ 扫帚档再往下让 0.3 格</b>：扫帚模式下她是骑在扫帚上的，扫帚模型比她的脚底更低，
- *       只按悬挂距离吊着还是会有少量重叠——{@link #hangFor} 在扫帚档把绳长加长
- *       {@code combat.tether.broomExtra}（默认 0.3，面板可调）。</li>
- * </ul>
- *
- * ── 【实测六百七十八：换座不再把她请下扫帚 + 左上角"绑定中"】──
- * <ul>
- *   <li><b>① 换座全程不下鞍</b>：
- *
- *       旧版换座会先把所有人请下扫帚再逐个放回去，她**真的被下过一次鞍**，而且第二下失败就把她
- *       留在空中。现在改用原版 {@code Entity.addPassenger} 自带的"玩家插队"规则（玩家插到第 0 位
- *       = 驾驶位）——她的骑乘关系一个字节都不动，见 {@link #seatBackOnBroom}。</li>
- *   <li><b>② 左上角蓝色"绑定中"</b>：
- *
- *       {@code CooldownHudRenderer}，左上角同一条竖直串、同样的带阴影文字），只是配色改成蓝色；
- *       数据由 {@link #hudBound} 提供，冷却 HUD 关掉也照常显示（那是两件事）。</li>
- * </ul>
- *
- * ── 安全网（都做进 tick 校验）──
- * 她落地/入水超过 0.6 秒 → 自动把玩家放下（免得挂着拖地闷在水里）；玩家潜跳自行下鞍 /
- * 被别的模组拽下去 → 下一次校验自动解除；解除瞬间人在空中 → 5 秒摔伤豁免（不搞"刚松手就摔死"）；
- * 挂着时卡墙/挤墙伤全免（贴着树冠飞是常态）；她本人对主人的伤害由 {@link FriendlyFireGuard}
- * 三层总闸拦（挂载者必须是主人，天然被覆盖）。
- *
- * 【持久化】挂载标记写在女仆的 persistentData（{@code maid_smart_gunner}），存档重载后由
- * 每 30 秒一次的恢复扫描重建（骑乘关系本身由原版存档恢复）。
- *
- * 【事件】手持武装拴绳右击女仆 = 挂载/解除（与 IndexStoneInteractHandler 同款骨架：
- * EntityInteract 事件比 TLM 的 mobInteract 先到，cancel 掉就不会误开女仆 GUI）。
+ *       {@code getControllingPassenger}——玩家乘客不会抢走驾驶权，她的大脑/远程空袭 一切照旧，"一号位她开火、二号位你开火"就是这么来的；</li> <li>**骑乘关系零成本同步**：乘客关系由原版 SetPassengersPacket 同步，绳子渲染只要知道 "谁是她的枪手"（S2C 包，见 GunnerTetherNetworking）；</li> <li>**"长度只有一格"**：默认悬挂距离 1.8 格（可调 0.5~4.0），绳子画在女仆腰部与玩家手之间。</li> </ul> ── 【实测六百七十二：座位是"两半"的，且她不再替你定高度】── 扫帚上的换座是**一对互逆**的动作，都在右击这一次里完成（不依赖 TLM 的事件泄漏）： <ul> <li>玩家**骑在扫帚驾驶位**上右击她 → 下扫帚、挂到她身上（换到二号位）；</li> <li>**绑定态**右击她（她在扫帚上）→ 解除拴绳 + 玩家坐回扫帚**驾驶位**（她在第二乘客）。</li> </ul> 另外，拴着的时候她**不再被指定高度**：空袭（671）与扫帚（672）都改成"保持她自己当前高度 / 原地悬停"——去哪个高度由她自己的战斗链路决定，拴绳只负责"绑住人"。玩家在地面时改为并肩站位， 见 {@link #seatOffset}。 ── 【实测六百七十三：多一个"牵绳档"，外加第一人称半透明】── 又一轮实测反馈（三条"可以优化"）落地成三件事： <ul> <li><b>① 坐回扫帚后能立刻再绑上</b>：换座态（玩家在扫帚驾驶位、她在第二乘客）里准星前方 **一个实体都没有**，客户端射线是 MISS，右击走的是 Forge 的 {@code RightClickItem} 而不是 {@code EntityInteract}——旧版只监听后者，于是"坐在扫帚上右击切不到绑定模式"。 现在补上了那个入口（{@link #onUseItem}）。</li> <li><b>② 空袭档多一档"牵绳"</b>：绑定空袭模式的女仆时，**她还没起飞就先不挂人**——玩家照常 活动、她跟着走（原版拴绳观感，绳子照画）；她真的起飞才把玩家挂到二号位，落地满 2 秒再 放下来回到牵绳。 <li><b>③ 第一人称下她半透明</b>：挂在下面时她的模型会挡视野，但继续降低悬挂高度会让人更容易 被打中——所以改成**渲染层面**解决：只对"挂着的那位玩家 + 第一人称"把她的模型画成半透明 （{@code com.maidsmart.client.MaidGhostRender}，透明度可配）。服务端一行都不用改。</li> </ul> ── 【实测六百七十四：三点修正 + 一层金边标记】── <ul> <li><b>① 半透明默认 0.35 → 0.1</b>，而且**扫帚本体**也一起半透明（{@code MaidGhostRender} / {@code MaidGhostBroomMixin}）。</li> <li><b>② 修「玩家坐到空袭女仆头上」</b>：牵绳 → 起飞挂载时**没重发相位包**，客户端不认这个枪手 → 悬挂定位不生效、人被原版摆在**她头顶**；现在相位变一次发一次（{@code sync}）。</li> <li><b>③ 被拴绳选中 = 金色描边</b>（原版发光标记 + 客户端金边，同光灵箭的渲染），她**正式起飞**（牵绳 → 悬挂）的那一刻解除。</li> </ul> ── 【实测六百七十五：一只绳子只牵一只 + 魂符残留 + 扫帚档下沉】── <ul> <li><b>① 换绑先松旧的</b>：牵绳档玩家**不是**乘客，所以理论上能同时牵好几只女仆（绳子会画好几根、 她一起飞就打架）。现在 {@link #attach} 第一件事就是把这位玩家**已有的那条链路**先解除 （连带她的金色标记、绳子、以及"他还骑在她身上"的话把他放下来），再绑新的。 "如果同时用武装拴绳绑定了多个女仆，怎么办？…如果标记了第2个女仆。那么会自动把第1个女仆 相关的标记先清掉。"</li> <li><b>② 魂符收放的残留</b>：金边标记（{@code Glowing}）是写进女仆 NBT 的，收进魂符再放出来 会跟着回来，但拴绳链路不会——旧版于是"边框还在、效果却没了"。现在女仆**重新入世界** 就走 {@link #onMaidJoin}：人还挂在她身上（区块重载/跨维度）就当场把链路重建；否则把标记 与残留键一起清掉。这一枪挂在放出的**最后一步**（EntityJoinLevelEvent），不碰魂符本身的流程。</li> <li><b>③ 扫帚档再往下让 0.3 格</b>：扫帚模式下她是骑在扫帚上的，扫帚模型比她的脚底更低， 只按悬挂距离吊着还是会有少量重叠——{@link #hangFor} 在扫帚档把绳长加长 {@code combat.tether.broomExtra}（默认 0.3，面板可调）。</li> </ul> ── 【实测六百七十八：换座不再把她请下扫帚 + 左上角"绑定中"】── <ul> <li><b>① 换座全程不下鞍</b>： 留在空中。现在改用原版 {@code Entity.addPassenger} 自带的"玩家插队"规则（玩家插到第 0 位 = 驾驶位）——她的骑乘关系一个字节都不动，见 {@link #seatBackOnBroom}。</li> <li><b>② 左上角蓝色"绑定中"</b>： {@code CooldownHudRenderer}，左上角同一条竖直串、同样的带阴影文字），只是配色改成蓝色； 数据由 {@link #hudBound} 提供，冷却 HUD 关掉也照常显示（那是两件事）。</li> </ul> ── 安全网（都做进 tick 校验）── 她落地/入水超过 0.6 秒 → 自动把玩家放下（免得挂着拖地闷在水里）；玩家潜跳自行下鞍 / 被别的模组拽下去 → 下一次校验自动解除；解除瞬间人在空中 → 5 秒摔伤豁免（不搞"刚松手就摔死"）； 挂着时卡墙/挤墙伤全免（贴着树冠飞是常态）；她本人对主人的伤害由 {@link FriendlyFireGuard} 三层总闸拦（挂载者必须是主人，天然被覆盖）。 【持久化】挂载标记写在女仆的 persistentData（{@code maid_smart_gunner}），存档重载后由 每 30 秒一次的恢复扫描重建（骑乘关系本身由原版存档恢复）。 【事件】手持武装拴绳右击女仆 = 挂载/解除（与 IndexStoneInteractHandler 同款骨架： EntityInteract 事件比 TLM 的 mobInteract 先到，cancel 掉就不会误开女仆 GUI）。
  */
 @EventBusSubscriber(modid = "promaid")
 public final class GunnerTetherManager {
@@ -152,7 +70,6 @@ public final class GunnerTetherManager {
     /**
      * "闭区间"朝主人的**接近速度上限**（格/tick）：0.215 ≈ 原版 {@code followLeashSpeed} 那个量级
      * （普通生物的行走速度属性 0.25 ≈ 4.3 格/秒，与玩家的行走速度同档）。
-     *
      * <p>【为什么不是原版那行 {@code navigation.moveTo}】原版在 2~6 格这一档是**每 tick 重新算一条
      * A* 路径**（被拴的牛就是这么走的）。女仆一多，每 tick 一次寻路就是服务器灾难；而且她本来就有
      * 自己的跟随链路在算路（{@code MaidFlightFollowBehavior}）。所以我们只补**速度**、不碰导航：
@@ -211,17 +128,11 @@ public final class GunnerTetherManager {
     private static final Map<UUID, Double> RIDE_LAST_Y = new HashMap<>();
     /**
      * 单次采样（2 tick）下降少于此值就不算"真在下坠"：把累计钳回 1.0。
-     *
      * <p>【实测六百八十四】1.0 → 0.2（= 0.1 格/tick ≈ 2 格/秒）。旧值照抄原版
      * {@code checkSlowFallDistance} 那条"0.5 格/tick"口径，但本模组的飞行器**都飞不到那个下降率**
      * （扫帚竖直上限 0.30 格/tick，空袭收翅俯冲前那几拍也常在 0.3 以下），一次 2 tick 采样最多
      * 0.6 格 &lt; 1.0 → 永远被判"慢降"、累计被钳在 1.0（低于原版 1.5 的猛击门槛）→ 一锤猛击都
-     * 砸不出来（）。
-     * 而"悬停时那点漂移"（到点那一支把速度乘 0.75 收干，实际 dy≈0）照样被这一档滤掉，
-     * 不至于慢慢飘着也攒出超重击。
-     *
-     * <p>【实测六百八十六】这一档现在**只服务空袭**（见 {@link #trackRideFall} 开头那道闸）：
-     * 扫帚档不记账，所以这个阈值调多少都不再影响扫帚。
+     * 砸不出来（）。 而"悬停时那点漂移"（到点那一支把速度乘 0.75 收干，实际 dy≈0）照样被这一档滤掉， 不至于慢慢飘着也攒出超重击。 <p>【实测六百八十六】这一档现在**只服务空袭**（见 {@link #trackRideFall} 开头那道闸）： 扫帚档不记账，所以这个阈值调多少都不再影响扫帚。
      */
     private static final float RIDE_SLOW_MIN = 0.2f;
     /** 能用猛击的最低下落格数：原版 {@code MaceItem.SMASH_ATTACK_FALL_THRESHOLD}（= 1.5） */
@@ -279,17 +190,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百八十二】这只女仆此刻的"战斗模式档"——只用来判"绑定期间她换模式了没有"。
-     *
      * <p>{@code broom} = 任务在扫帚模式**或**此刻正骑着世界里的扫帚（{@link #isBroomRelated} 同款口径）；
      * {@code flight} = 任务在空袭（近战 / 远战）；{@code mount} = 此刻正骑着一台坐骑/载具
      * （【v1.3.9.4】——她骑着直升机/坐骑
      * 时照样能拴，模式档也得认出来，否则下面那道"换模式自动松开"会在一秒后把绳子自己拆了）；
      * {@code none} = 都不是（换成了别的任务）。
-     *
-     * <p>为什么"骑着扫帚"也算 broom：——
-     * 那时她已经被 {@link #isBroomRelated} 归到扫帚档（悬挂距离也按扫帚算），链路本来就不该
-     * 还停在"牵绳"上。
+     * <p>为什么"骑着扫帚"也算 broom：—— 那时她已经被 {@link #isBroomRelated} 归到扫帚档（悬挂距离也按扫帚算），链路本来就不该 还停在"牵绳"上。
      */
     public static String modeKind(EntityMaid maid) {
         try {
@@ -345,13 +251,10 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十五】这位乘客实际要吊多深 = 悬挂距离 + 扫帚档的额外下沉。
-     *
      * <p>
      * 扫帚模式下她是**骑在扫帚上**的，扫帚模型比她的脚底更低，所以同一个悬挂距离在扫帚档会显得
      * 偏浅。判据用 {@link #isBroomRelated}（任务在扫帚模式，或此刻正骑着世界里的扫帚）——
      * 与"这一档永远保持悬挂、不参与牵绳翻档"是同一个口径。
-     *
      * <p>{@link com.maidsmart.mixin.EntityGunnerHangMixin} 走这一个入口，别再自己拼算式
      * （"口径只有一处"）。
      */
@@ -453,7 +356,6 @@ public final class GunnerTetherManager {
      *  于是"离地 3 格悬停"这个**绝对高度目标**彻底没有消费方了。留着一个没人调、又带着一整套
      *  "往下扫地面"逻辑的方法，等于给下一个人准备好第二份高度口径（本项目"口径只有一处"的铁律），
      *  所以连 javadoc 一起删干净——"她该多高"这件事现在只有一个答案：她原来多高就多高。
-     *
      *  （树上的证据：实测日志里"不断攀升"那一段，她的高度来自**反复上/下扫帚时每次重开的起飞相位**，
      *   以及这条绝对高度目标；672 两处都处理了，见 MaidBroomDrive.startTakeoff / broomlessLongEnough。） */
 
@@ -464,25 +366,8 @@ public final class GunnerTetherManager {
      * 退回原版"站在她身上"，下一拍地形变了又吊回 hang 格下面——两个位置之间每 tick 直跳。
      * "被绑定以后，玩家会在女仆的上下反复横跳"。根因就是**两个相差 2 格以上的位置之间没有插值**
      * （不是碰撞：javap 实证原版 {@code Entity.push} 对"载具与其自身乘客"本来就互推豁免）。
-     *
      * <p>【实测六百七十二：多加一档"并肩"，并把"回到 0"这条死路堵掉】只把"跳到 0"改成"滑到 0"
-     * 还不够——**0 就是玩家站在她脚底**，两个建模完全重叠。
-     *
-     *
-     * {@code onGround}：几何自己就说明了状态，而且"贴着地面滑飞"也不会漏）：
-     * <ul>
-     *   <li><b>悬挂</b>（下方有空间 = 她在飞）：吊在她脚底下方 hang 格（老规矩）；</li>
-     *   <li><b>并肩</b>（下方一点空间都没有 = 她站在地上 / 贴着地形）：沿"她 → 玩家上一拍位置"
-     *       的方向**水平拉开**绳长，高度贴她脚底——两个建模并排站着、绳子看得见，就是被拴着伴走
-     *       的样子（玩家要的"原版拴绳逻辑"）。方向取自玩家上一拍在哪、而不是她的朝向：她转身时
-     *       玩家不会绕着她荡一圈，而且这是个收敛的不动点（她往前走 = 玩家自然跟在后头）。</li>
-     * </ul>
-     *
-     * <p>两档之间**有粘滞**（{@link #SEAT_SIDE}）：进"并肩"要真的没空间，回"悬挂"要有满 0.5 格
-     * 余量——中间那条带就是"别在 0 和 hang 之间来回跳"的迟滞，也就是实测反馈㊁"反复横跳"的解药。
-     *
-     * <p>两侧各存一份（mixin 服务端/客户端都会跑同一个算式）：键是**玩家 UUID**、值是"当前偏移
-     * 向量"。包不参与同步——滑变只是观感，两侧各自算出来的差别在半格以内。
+     * 还不够——**0 就是玩家站在她脚底**，两个建模完全重叠。 {@code onGround}：几何自己就说明了状态，而且"贴着地面滑飞"也不会漏）： <ul> <li><b>悬挂</b>（下方有空间 = 她在飞）：吊在她脚底下方 hang 格（老规矩）；</li> <li><b>并肩</b>（下方一点空间都没有 = 她站在地上 / 贴着地形）：沿"她 → 玩家上一拍位置" 的方向**水平拉开**绳长，高度贴她脚底——两个建模并排站着、绳子看得见，就是被拴着伴走 的样子（玩家要的"原版拴绳逻辑"）。方向取自玩家上一拍在哪、而不是她的朝向：她转身时 玩家不会绕着她荡一圈，而且这是个收敛的不动点（她往前走 = 玩家自然跟在后头）。</li> </ul> <p>两档之间**有粘滞**（{@link #SEAT_SIDE}）：进"并肩"要真的没空间，回"悬挂"要有满 0.5 格 余量——中间那条带就是"别在 0 和 hang 之间来回跳"的迟滞，也就是实测反馈㊁"反复横跳"的解药。 <p>两侧各存一份（mixin 服务端/客户端都会跑同一个算式）：键是**玩家 UUID**、值是"当前偏移 向量"。包不参与同步——滑变只是观感，两侧各自算出来的差别在半格以内。
      */
     private static final Map<UUID, Vec3> SEAT_NOW = new HashMap<>();
     /** 「并肩」这一档的粘滞标记：键是玩家 UUID、值是"这一拍是不是并肩那一档" */
@@ -533,14 +418,10 @@ public final class GunnerTetherManager {
     /**
      * 【v1.3.9.4】吊挂的**锚点实体**：她骑着载具（直升机 / 龙 / 陆行坐骑…）时锚点是**那台载具**，
      * 否则锚点就是她本人。
-     *
      * <p>她骑在直升机上时，
      * 玩家当然应该吊在**直升机**下面（那才是二号位），而不是吊在坐在机舱里的她下面——
      * 后者会被机壳夹住、也够不着机炮。锚点换掉之后，下面的悬挂/并肩两档几何全部照旧，
-     * 只是"以谁为参照"变了（同一个算式、同一套粘滞，口径仍然只有一处）。
-     *
-     * <p>服务端与客户端都能自己算出来（{@code getVehicle()} 是原版同步的），所以这套判据
-     * 不必走包——与 {@code seatOffset} 的滑变状态同一个道理。
+     * 只是"以谁为参照"变了（同一个算式、同一套粘滞，口径仍然只有一处）。 <p>服务端与客户端都能自己算出来（{@code getVehicle()} 是原版同步的），所以这套判据 不必走包——与 {@code seatOffset} 的滑变状态同一个道理。
      */
     public static Entity anchorOf(EntityMaid maid) {
         try {
@@ -560,8 +441,7 @@ public final class GunnerTetherManager {
      * <pre>
      *   ① 挑档：这一拍下方能吊多远（{@link #hangTarget}，0 = 一点空间都没有）
      *           → 没空间就"并肩"、有余量就回"悬挂"，中间 0~0.5 那条带保持上一拍的选择（迟滞）
-     *   ② 滑变：把**当前**偏移朝这一拍的目标偏移挪一步（各分量限速）
-     * </pre>
+     *   ② 滑变：把**当前**偏移朝这一拍的目标偏移挪一步（各分量限速） </pre>
      */
     public static Vec3 seatOffset(EntityMaid maid, Entity passenger, double hang) {
         try {
@@ -594,15 +474,11 @@ public final class GunnerTetherManager {
 
     /**
      * 「并肩」那一档的目标偏移：沿"她 → 玩家上一拍位置"的方向水平拉开，高度贴她脚底。
-     *
      * <p>方向为什么取"玩家上一拍在哪"而不是她的朝向：取朝向的话她一转身玩家就得绕着她荡半圈；
      * 取上一拍位置则是收敛的——她往前走，玩家自然被留在后头（就是被拴着伴走的样子）。
      * 只有"刚绑上那一拍玩家还在她身上"（长度≈0，没有方向可言）才退化成朝她**背后**拉开
      * （MC 偏航约定：面朝 {@code (-sin, cos)}，所以背后是 {@code (sin, -cos)}）。
-     *
-     * <p>距离取绳长、夹在 1.2~3.0；拉开的那一格也被 {@link #roomFor} 检一遍，堵住了就沿同一方向
-     * 收到 0.6 / 0.35 倍（窄过道里仍然并排站着，而不是把玩家塞进墙里）。连贴身位都没空间
-     * （1×1 竖井）才退回 0——那种地方本来也没法"拉开"。
+     * <p>距离取绳长、夹在 1.2~3.0；拉开的那一格也被 {@link #roomFor} 检一遍，堵住了就沿同一方向 收到 0.6 / 0.35 倍（窄过道里仍然并排站着，而不是把玩家塞进墙里）。连贴身位都没空间 （1×1 竖井）才退回 0——那种地方本来也没法"拉开"。
      */
     private static Vec3 sideTarget(Entity anchor, Entity passenger, double hang) {
         double d = Math.max(SIDE_MIN, Math.min(hang, SIDE_MAX));
@@ -709,18 +585,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十八】左上角"绑定中"指示要的那一行数据：{@code {女仆名, 相位}}——
      * 相位是 {@code "leash"}（牵绳档：你自由活动、她跟着走）或 {@code "hang"}（二号位：你吊在她下面）。
      * 这位玩家此刻没拴着任何一只 → {@code null}。
-     *
      * <p>
-     *
      * （{@code CooldownHudPacket} → {@code com.maidsmart.client.CooldownHudRenderer}），
      * 于是左上角的位置、字体、行高、三秒无数据自动清空全套行为都与冷却计时完全一致，
-     * 只是那一段的配色是蓝色。口径只有一处：谁在拴着谁，只有 {@link #LINKS} 一个来源。
-     *
-     * <p>一趟线性扫描（链路表本来就只有"一位玩家 ↔ 她"的规模），异常一律吞掉——HUD 永远不该
-     * 影响游戏逻辑。
+     * 只是那一段的配色是蓝色。口径只有一处：谁在拴着谁，只有 {@link #LINKS} 一个来源。 <p>一趟线性扫描（链路表本来就只有"一位玩家 ↔ 她"的规模），异常一律吞掉——HUD 永远不该 影响游戏逻辑。
      */
     public static String[] hudBound(ServerPlayer player) {
         try {
@@ -746,14 +616,11 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十四】把当前相位广播出去——**一个出口**（挂载 / 翻档 / 解除 / 恢复全走它）。
-     *
      * <p>为什么必须补这一发：六百七十三的「牵绳 → 起飞挂载」是在 tick 里 startRiding 的，
      * 而当时发的还是 {@code attach} 那一刻的包——**那一刻玩家还不是她的乘客**，于是
      * {@code getFirstPassenger()} 为 null、riderId 记 -1，客户端收到就把这一对清掉了。
      * 结果：客户端不认"他是她的枪手"→ {@code EntityGunnerHangMixin} 不生效 → 玩家被原版摆在
      * **她头顶**（不是吊在身下），牵绳档的绳子也画不出来。
-     *
      * 现在相位每变一次就重发一次（riderId 从链路里取，不看乘客关系）。
      */
     private static void sync(EntityMaid maid) {
@@ -856,16 +723,13 @@ public final class GunnerTetherManager {
             return;
         }
         // 【实测六百六十九：门槛按模式分两档】
-        //
         //  · 扫帚模式：**必须已经飞在空中**（地面上挂上去 = 她会把人拖进地里；她本来也要先起飞）
         //  · 空袭模式（flight_combat / flight_ranged）：照玩家要求**随时能挂**——地面上也安全，
         //    因为①悬挂点没空间时 mixin 会沿她身体往上收（EntityGunnerHangMixin 的滑变定位），
         //    ②滑变是平滑的，既不会把玩家按进方块里、也不会上下横跳
-        // 【实测六百七十一：扫帚这一档放宽到"她真的骑在扫帚上"】。
         //  她低空掠地/刚起飞时 onGround() 为真，旧版那一道"等我飞起来再右击我"会把人挡在门外。
         //  现在：只要她**已经骑在扫帚上**（isRidingBroom）就放行，不再要求此刻不在她面上；
-        //  "扫帚模式但还没骑上、又站在地上"这一档仍然拒绝（那种情况下挂上去就是把人拖进地里）。
-        //  另外她骑着**世界里的扫帚**（任务不是扫帚模式）时也认——"在乘坐扫帚状态下"就算数。
+        //  "扫帚模式但还没骑上、又站在地上"这一档仍然拒绝（那种情况下挂上去就是把人拖进地里）。 另外她骑着**世界里的扫帚**（任务不是扫帚模式）时也认——"在乘坐扫帚状态下"就算数。
         if (!leash && broomMode && !ridingBroom && maid.onGround()) {
             deny(maid, "等我飞起来再右击我，你先抓好绳子～");
             return;
@@ -969,19 +833,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十五】把这位玩家**已经有的**拴绳链路全部解除（{@code except} 那一只除外）。
-     *
      * <p>
-     *
-     *
      * <p>为什么真能"同时绑两只"：牵绳档（空袭的女仆还没起飞）玩家**不是**她的乘客，所以既不占
      * 座位也不互相顶开——旧版于是会同时存在两条链路：两根绳子一起画、她俩一起飞的时候抢座位
      * （谁先 startRiding 谁赢，另一条下一拍被"玩家离鞍"判掉）。现在绑第二只之前先把第一只**完整
      * 松开**：走 {@link #detach}（撤金色标记、清 persistentData、清相位包、把他从她身上放下来、
-     * 空中给 5 秒摔伤豁免），日志里写一行"换绑"。
-     *
-     * <p>只认"链路里的玩家 == 这位玩家"：别人牵着别人的女仆，一根都不动。
-     * 先收集再解除（{@code detach} 会改 {@code LINKS}，边走边删会炸迭代器）。
+     * 空中给 5 秒摔伤豁免），日志里写一行"换绑"。 <p>只认"链路里的玩家 == 这位玩家"：别人牵着别人的女仆，一根都不动。 先收集再解除（{@code detach} 会改 {@code LINKS}，边走边删会炸迭代器）。
      */
     private static void releaseOtherLinks(ServerPlayer player, EntityMaid except) {
         try {
@@ -1045,48 +902,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十二：绑定态右击 = 坐回扫帚】
-     *
-     *
      * <p>旧版之所以"能坐回去"，靠的其实是一个**副作用**：旧 {@link #resolveMaid} 在目标是扫帚时
      * 只看第一个乘客，解析不出女仆 → 这次右击**没被取消** → 落到 TLM 自己的
      * {@code EntityBroom.interact} 上把玩家接上扫帚（javap 实证它的门是
      * {@code !isDiscrete && !isPassenger && !(getControllingPassenger instanceof Player)} 且
      * 乘客数 ≤1 → {@code player.startRiding(this)}），我们随后的 tick 看到"玩家离鞍"才把挂载表清掉。
-     * 671 把 {@code resolveMaid} 改成"扫全部乘客"之后，右击扫帚**总能**解析到女仆，于是稳定走解除
-     * 分支 = 人直接掉下去（实测日志 13:48:55 / 13:49:09 的「解除(右击)」）。
-     *
-     * <p>靠"别取消事件、让 TLM 接人"来换座位是**撞运气**——同一版里的 13:49:21 就变成了"接上扫帚"
-     * （因为那一瞬间她恰好不在扫帚上）。所以这里改成**显式**换座，不依赖任何副作用。
-     *
-     * <p>座位顺序是有意义的：TLM 的 {@code getControllingPassenger()} 只在**第一乘客是玩家**时
-     * 才非空，而"玩家驾驶"那条链路（{@code PlayerBroomControl}）与我们 mixin 的"有玩家驾驶就
-     * 一个字不改"都看它。玩家坐第一乘客 = 他开、她开火，与"玩家自己放一把扫帚再让她上"的天然
-     * 顺序完全一致（实测旧日志里那句「玩家在驾驶这把扫帚」就是这个状态）。
-     *
-     * ── 【实测六百七十八：换座不再把她请下扫帚】
-     * "当玩家坐在扫帚上，女仆处于扫帚模式时，玩家拿着武装拴绳对着女仆进行右击的时候，不应该把
-     * 女仆的骑乘状态也解除掉。这样子可能会导致失控。"
-     *
-     * <p>旧版（672-677）的换座是"先把**所有人**请下扫帚 → 玩家坐进第一乘客 → 再把她放回第二乘客"
-     * ——她真的被 {@code stopRiding()} 过一次，而且那两下如果第二下失败（她没上得去 / 那只扫帚已经
-     * 不可用），她就**留在扫帚外面**：她只有 20 血，从空中掉下去就是死。这就是。
-     *
-     * <p>现在**一次都不用叫她下鞍**——原版 {@code Entity.addPassenger} 自己就有"玩家插队"这条规则
-     * （javap 实证，1.21.1 {@code Entity.addPassenger} 与 1.20.1 {@code Entity.m_20348_} 字节码逐条
-     * 同形）：新乘客是 {@code Player}、且**第一乘客不是** {@code Player} 时，走
-     * {@code List.add(0, passenger)} 插到**第 0 位**（否则才 append）。她的扫帚上第一乘客正是她
-     * 自己（女仆）→ 玩家一上鞍就自动坐进驾驶位，她的座次原地不动（还是第一/唯一那位，只是往后
-     * 挪了一格变成第二乘客），骑乘关系、载具引用、碰撞位置全程一个字节都没变。
-     *
-     * <p>顺带把 672 那句"靠副作用撞运气"彻底了结：这里仍然是**显式**调用
-     * {@code startRiding(broom, force)}，只是不再需要那段"请所有人下鞍"的舞蹈。
-     *
-     * <p>整段包在 try 里：任何意外都返回 false，调用方退回"普通解除"——绝不让一次换座把绳子卡住。
-     * 玩家上不去扫帚时**她也照旧好好骑在扫帚上**（旧版会把两个人一起丢在空中），只是这一下换座
-     * 没成功、绳子照常解除。
-     *
-     * @return true = 已按"坐回扫帚"处理完（挂载表已清）；false = 她没骑扫帚 / 绑的不是他 → 走普通解除
+     * 671 把 {@code resolveMaid} 改成"扫全部乘客"之后，右击扫帚**总能**解析到女仆，于是稳定走解除 分支 = 人直接掉下去（实测日志 13:48:55 / 13:49:09 的「解除(右击)」）。 <p>靠"别取消事件、让 TLM 接人"来换座位是**撞运气**——同一版里的 13:49:21 就变成了"接上扫帚" （因为那一瞬间她恰好不在扫帚上）。所以这里改成**显式**换座，不依赖任何副作用。 <p>座位顺序是有意义的：TLM 的 {@code getControllingPassenger()} 只在**第一乘客是玩家**时 才非空，而"玩家驾驶"那条链路（{@code PlayerBroomControl}）与我们 mixin 的"有玩家驾驶就 一个字不改"都看它。玩家坐第一乘客 = 他开、她开火，与"玩家自己放一把扫帚再让她上"的天然 顺序完全一致（实测旧日志里那句「玩家在驾驶这把扫帚」就是这个状态）。 ── 【实测六百七十八：换座不再把她请下扫帚】 "当玩家坐在扫帚上，女仆处于扫帚模式时，玩家拿着武装拴绳对着女仆进行右击的时候，不应该把 女仆的骑乘状态也解除掉。这样子可能会导致失控。" <p>旧版（672-677）的换座是"先把**所有人**请下扫帚 → 玩家坐进第一乘客 → 再把她放回第二乘客" ——她真的被 {@code stopRiding()} 过一次，而且那两下如果第二下失败（她没上得去 / 那只扫帚已经 不可用），她就**留在扫帚外面**：她只有 20 血，从空中掉下去就是死。这就是。 <p>现在**一次都不用叫她下鞍**——原版 {@code Entity.addPassenger} 自己就有"玩家插队"这条规则 （javap 实证，1.21.1 {@code Entity.addPassenger} 与 1.20.1 {@code Entity.m_20348_} 字节码逐条 同形）：新乘客是 {@code Player}、且**第一乘客不是** {@code Player} 时，走 {@code List.add(0, passenger)} 插到**第 0 位**（否则才 append）。她的扫帚上第一乘客正是她 自己（女仆）→ 玩家一上鞍就自动坐进驾驶位，她的座次原地不动（还是第一/唯一那位，只是往后 挪了一格变成第二乘客），骑乘关系、载具引用、碰撞位置全程一个字节都没变。 <p>顺带把 672 那句"靠副作用撞运气"彻底了结：这里仍然是**显式**调用 {@code startRiding(broom, force)}，只是不再需要那段"请所有人下鞍"的舞蹈。 <p>整段包在 try 里：任何意外都返回 false，调用方退回"普通解除"——绝不让一次换座把绳子卡住。 玩家上不去扫帚时**她也照旧好好骑在扫帚上**（旧版会把两个人一起丢在空中），只是这一下换座 没成功、绳子照常解除。 @return true = 已按"坐回扫帚"处理完（挂载表已清）；false = 她没骑扫帚 / 绑的不是他 → 走普通解除
      */
     private static boolean seatBackOnBroom(ServerPlayer player, EntityMaid maid) {
         try {
@@ -1165,15 +986,11 @@ public final class GunnerTetherManager {
 
     /**
      * 【v1.3.9.4】她此刻正骑着一台坐骑/载具吗（直升机 / 龙 / 陆行载具 / 原版坐骑…）。
-     *
      * <p>
-     *
      * <p>判据直接复用骑乘链路那份口径（{@link com.maidsmart.combat.MaidRideKit#ridingMount}）：
      * 它已经排除掉"载具是女仆"（那是拴绳自己这一档）与家具（椅子/坐垫）。所以这里拿到的就是
      * 一台**真载具**——扫帚不在此列（扫帚走 {@link #isBroomRelated} 那一档，两边互不重叠）。
-     *
-     * <p>为什么这一条要用来放行绑定：她骑在直升机上时，玩家吊在**她**下面 = 吊在直升机下面，
-     * 二号位开火这件事就成了；她骑在陆行坐骑上时，玩家吊在她下面 = 跟着坐骑走。
+     * <p>为什么这一条要用来放行绑定：她骑在直升机上时，玩家吊在**她**下面 = 吊在直升机下面， 二号位开火这件事就成了；她骑在陆行坐骑上时，玩家吊在她下面 = 跟着坐骑走。
      */
     public static boolean ridesMount(EntityMaid maid) {
         try {
@@ -1244,55 +1061,12 @@ public final class GunnerTetherManager {
     /* ==================== 实测六百七十六：二号位重锤猛击 ==================== */
 
     /**
-     * 【实测六百七十六】替他记"她这一段俯冲，吊在下面的他跟着下落了多少格"。
-     *
      * <p>
-     *
-     *
-     *
      * <p><b>【为什么原来吃不到：反编译实证（1.21.1）】</b>重锤的下落加成只读
      * {@code LivingEntity.fallDistance} 这一个字段：
      * <ul>
      *   <li>{@code MaceItem.getAttackDamageBonus} → {@code canSmashAttack(entity)} =
-     *       {@code entity.fallDistance > 1.5f && !entity.isFallFlying()}，然后按 4f / 12+2(f-3) /
-     *       22+(f-8) 三段算加成；</li>
-     *   <li>{@code Player.attack} 里唯一那次读取：{@code $$1 += this.getWeaponItem()
-     *       .getAttackDamageBonus(target, $$1, source)}（1.21.1 {@code Player.java} 第 209 行），
-     *       猛击命中后 {@code MaceItem.hurtEnemy} 还会放音效 / 周围击退 / 免摔
-     *       （{@code setIgnoreFallDamageFromCurrentImpulse}），{@code postHurtEnemy} 再
-     *       {@code resetFallDistance()}；</li>
-     *   <li>而 {@code fallDistance} 只在 {@code Entity.move}（{@code Entity.java} 第 656 行）→
-     *       {@code Entity.checkFallDamage(dy, onGround, ...)}（第 1135 行）里累加/清零。
-     *       <b>乘客根本不走 {@code move}</b>：{@code Entity.rideTick} 先把
-     *       {@code deltaMovement} 清零、再由载具的 {@code positionRider} 直接
-     *       {@code setPos}（我们的 {@link com.maidsmart.mixin.EntityGunnerHangMixin} 也正是这么
-     *       定位的）→ 所以吊在她下面的你 {@code fallDistance} 恒为 0，一锤都砸不出猛击。</li>
-     * </ul>
-     *
-     * <p><b>【现在怎么算】</b>既然真正在动的是她，就按**玩家的实际下降**替他记一份
-     * （{@code y} 的下降量，只累加不抵消），再到 {@code Player.attack} 的 HEAD 把这份值写回
-     * {@code player.fallDistance}（{@link com.maidsmart.mixin.PlayerMaceRideFallMixin}）——
-     * 之后原版那整套自己就跑通了。
-     *
-     * <p><b>三条口径</b>：
-     * <ul>
-     *   <li><b>她落地 = 清零</b>：与 {@code Entity.checkFallDamage} 里 {@code onGround} 那一支
-     *       （{@code fallOn} + {@code resetFallDistance}）同一个时机；</li>
-     *   <li><b>慢降/悬停不计</b>：单次采样下降不足 {@link #RIDE_SLOW_MIN}（≈原版 0.5 格/tick）
-     *       就把累计钳回 1.0 —— 照抄原版 {@code Entity.checkSlowFallDistance} 的口径（滑翔时它把
-     *       {@code fallDistance} 钳在 1.0，低于 1.5 门槛 = 原版就不给猛击），免得慢慢飘着也攒出
-     *       超重击；</li>
-     *   <li><b>一次下落只换一锤</b>：{@link #consumeRideFall} 取用即清零。</li>
-     * </ul>
-     *
-     * <p>参数 {@code maid} 只用来判"她是不是落地了"；异常一律静默（最坏 = 这一趟吃不到加成，
-     * 绝不影响挂载本身）。
-     *
-     * <p><b>【实测六百八十六：只对空袭那一档生效】</b>
-     *
-     * 判据就是开头那句 {@link #isBroomRelated}：扫帚档（任务在扫帚模式、或此刻正骑着扫帚）不记账，
-     * 空袭档照旧。近战空袭那条链本身也正好是"收翅俯冲"（{@code MaidFlightCombatBehavior.hitOne}
-     * 那一侧同样按下落格数结算），所以这一档按下落算是有来由的；扫帚是运输、平飞慢降不该换来猛击。
+     *       {@code entity.fallDistance > 1.5f && !entity.isFallFlying()}，然后按 4f / 12+2(f-3) / 22+(f-8) 三段算加成；</li> <li>{@code Player.attack} 里唯一那次读取：{@code $$1 += this.getWeaponItem() .getAttackDamageBonus(target, $$1, source)}（1.21.1 {@code Player.java} 第 209 行）， 猛击命中后 {@code MaceItem.hurtEnemy} 还会放音效 / 周围击退 / 免摔 （{@code setIgnoreFallDamageFromCurrentImpulse}），{@code postHurtEnemy} 再 {@code resetFallDistance()}；</li> <li>而 {@code fallDistance} 只在 {@code Entity.move}（{@code Entity.java} 第 656 行）→ {@code Entity.checkFallDamage(dy, onGround, ...)}（第 1135 行）里累加/清零。 <b>乘客根本不走 {@code move}</b>：{@code Entity.rideTick} 先把 {@code deltaMovement} 清零、再由载具的 {@code positionRider} 直接 {@code setPos}（我们的 {@link com.maidsmart.mixin.EntityGunnerHangMixin} 也正是这么 定位的）→ 所以吊在她下面的你 {@code fallDistance} 恒为 0，一锤都砸不出猛击。</li> </ul> <p><b>【现在怎么算】</b>既然真正在动的是她，就按**玩家的实际下降**替他记一份 （{@code y} 的下降量，只累加不抵消），再到 {@code Player.attack} 的 HEAD 把这份值写回 {@code player.fallDistance}（{@link com.maidsmart.mixin.PlayerMaceRideFallMixin}）—— 之后原版那整套自己就跑通了。 <p><b>三条口径</b>： <ul> <li><b>她落地 = 清零</b>：与 {@code Entity.checkFallDamage} 里 {@code onGround} 那一支 （{@code fallOn} + {@code resetFallDistance}）同一个时机；</li> <li><b>慢降/悬停不计</b>：单次采样下降不足 {@link #RIDE_SLOW_MIN}（≈原版 0.5 格/tick） 就把累计钳回 1.0 —— 照抄原版 {@code Entity.checkSlowFallDistance} 的口径（滑翔时它把 {@code fallDistance} 钳在 1.0，低于 1.5 门槛 = 原版就不给猛击），免得慢慢飘着也攒出 超重击；</li> <li><b>一次下落只换一锤</b>：{@link #consumeRideFall} 取用即清零。</li> </ul> <p>参数 {@code maid} 只用来判"她是不是落地了"；异常一律静默（最坏 = 这一趟吃不到加成， 绝不影响挂载本身）。 <p><b>【实测六百八十六：只对空袭那一档生效】</b> 判据就是开头那句 {@link #isBroomRelated}：扫帚档（任务在扫帚模式、或此刻正骑着扫帚）不记账， 空袭档照旧。近战空袭那条链本身也正好是"收翅俯冲"（{@code MaidFlightCombatBehavior.hitOne} 那一侧同样按下落格数结算），所以这一档按下落算是有来由的；扫帚是运输、平飞慢降不该换来猛击。
      */
     private static void trackRideFall(ServerPlayer player, EntityMaid maid) {
         try {
@@ -1333,17 +1107,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十六】攻击那一刻取用（由
      * {@link com.maidsmart.mixin.PlayerMaceRideFallMixin} 在 {@code Player.attack} 的 HEAD 调）：
      * 返回"这一段俯冲已下落格数"，并把它**花掉**。
-     *
      * <p>取用即清零的理由与 {@code MaceItem.postHurtEnemy} 的 {@code resetFallDistance()} 一致：
      * 这一下下落已经被兑换成猛击了，想再来一锤就得再俯冲一次。
      * 不在二号位（挂载表里没有他）时恒返回 0 → 原版行为一个字不改。
-     *
-     * <p>【实测六百八十六】扫帚档**不记账**（见 {@link #trackRideFall} 开头那道闸），所以他挂在
-     * 扫帚下面时这里恒返回 0 → 混入什么都不写 → 等于"扫帚档完全恢复原版"（玩家口径：
-     * 「把这边的后门开了，扫帚模式不要开」）。
+     * <p>【实测六百八十六】扫帚档**不记账**（见 {@link #trackRideFall} 开头那道闸），所以他挂在 扫帚下面时这里恒返回 0 → 混入什么都不写 → 等于"扫帚档完全恢复原版"（玩家口径： 「把这边的后门开了，扫帚模式不要开」）。
      */
     public static float consumeRideFall(Player player) {
         try {
@@ -1546,25 +1315,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十五】女仆**重新入世界**（魂符收放 / 区块重载 / 跨维度传送）时的收尾。
-     *
      * <p>
-     *
-     *
-     *
-     *
      * <p>根因：金色描边标记是**原版发光位**（{@code Glowing} 写进女仆 NBT），收进魂符会被一起
      * 保存、放出时一起带回来；而拴绳链路（{@code LINKS}）只活在内存里，收符那一刻就没了。旧版
      * 只有 30 秒一次的 {@link #restore} 兜底，而且它要求"主人此刻在线"——所以经常看到"边框还在、
      * 效果却没了"。这一枪挂在**入世界事件**上（对魂符放出而言就是最后一步，魂符本身的流程一个字
-     * 不动），分两支：
-     * <ul>
-     *   <li><b>骑乘关系还在</b>（区块重载 / 跨维度：她 NBT 里的主人还在、而且他确实还乘客在她身上）
-     *       → 当场把悬挂档链路重建，别等那 30 秒（绳子不会有一段时间消失）；</li>
-     *   <li><b>其余情况</b>（魂符收放 / 真解除了）→ 把金色标记与两个残留键一起清掉。</li>
-     * </ul>
-     * 清理动作只在"她真的带着我们的标记位"（{@link #TAG_LEASH_MARK}，只在真的打了发光标记时写）
-     * 时才动手，所以绝不会去动一只"单纯中了光灵箭"的女仆的发光状态。
+     * 不动），分两支： <ul> <li><b>骑乘关系还在</b>（区块重载 / 跨维度：她 NBT 里的主人还在、而且他确实还乘客在她身上） → 当场把悬挂档链路重建，别等那 30 秒（绳子不会有一段时间消失）；</li> <li><b>其余情况</b>（魂符收放 / 真解除了）→ 把金色标记与两个残留键一起清掉。</li> </ul> 清理动作只在"她真的带着我们的标记位"（{@link #TAG_LEASH_MARK}，只在真的打了发光标记时写） 时才动手，所以绝不会去动一只"单纯中了光灵箭"的女仆的发光状态。
      */
     public static void onMaidJoin(EntityMaid maid) {
         if (maid == null) {
@@ -1663,14 +1419,9 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百六十九：修"手持拴绳右击骑着扫帚的女仆 → 变成骑上扫帚"】
-     *
-     *
-     *
      * <p>根因**不是**事件优先级不够：本 handler 在 TLM 的 {@code EntityBroom.interact} 之前就会跑到，
      * cancel 掉就能挡住那次 {@code startRiding}。真正的问题是**目标认错了人**——她骑着扫帚时，
      * 客户端射线命中的是**载具（扫帚实体）**，{@code event.getTarget()} 拿到的是 {@code EntityBroom}，
-     * 旧版 {@code instanceof EntityMaid} 直接不成立就 return，交互于是落到 TLM 那边去骑乘了。
      * 这里把"目标是扫帚"也解析成它背上的女仆 → 手持拴绳右击 = 绑定优先于骑乘。
      */
     private static EntityMaid resolveMaid(Entity target) {
@@ -1707,28 +1458,12 @@ public final class GunnerTetherManager {
     /* ==================== 事件 ==================== */
 
     /**
-     * 【实测六百七十七】拉扯：每 tick（在她的 tick **之前**）把原版拴绳那套力学作用在她身上。
-     *
      * <p>
-     *
      * <p>【为什么挂在 {@code MaidTickEvent} 上，而不是本类那个每 2 tick 的 {@link #tick}】
      * 两个理由，都是字节码实证：
      * <ol>
      *   <li><b>时机</b>：TLM 的 {@code EntityMaid.tick()} 第一件事就是 post 这个事件，然后才
-     *       {@code super.tick()}（1.20.1 / 1.21.1 两版 javap 都是这个顺序）。原版拴绳的拉力
-     *       也正是在"她自己的这一拍里、{@code travel()} 之前"给的——写在这里，速度才会真的
-     *       走进这一 tick 的位移；写在 {@code tick()}（= 服务端 tick 末）那只会在下一 tick 被她
-     *       自己的飞行控制覆盖掉。</li>
-     *   <li><b>频率</b>：原版那记冲量是**每 tick**一次的量级，2 tick 一次等于把拉力砍半。</li>
-     * </ol>
-     * <p>事件两侧都会发（{@code tick()} 在客户端也会跑），所以这里先挡客户端：拉力只由服务端给
-     * （{@code LINKS} 本来也只有服务端有）。
-     *
-     * <p>【为什么跳过"他正骑着她"】悬挂档里玩家就吊在她身下 hang 格（默认 2.6，扫帚档 2.9），
-     * 那个位置是 {@link com.maidsmart.mixin.EntityGunnerHangMixin} 每拍刚性摆出来的：对绳子使劲
-     * 只会跟骑乘定位打架（而且悬挂距离最大可配到 6.3 格，一过 6 格就会变成"每 tick 朝自己乘客
-     * 加速"的荒唐场景）。**受力的是牵绳档**——
-     *
+     *       {@code super.tick()}（1.20.1 / 1.21.1 两版 javap 都是这个顺序）。原版拴绳的拉力 也正是在"她自己的这一拍里、{@code travel()} 之前"给的——写在这里，速度才会真的 走进这一 tick 的位移；写在 {@code tick()}（= 服务端 tick 末）那只会在下一 tick 被她 自己的飞行控制覆盖掉。</li> <li><b>频率</b>：原版那记冲量是**每 tick**一次的量级，2 tick 一次等于把拉力砍半。</li> </ol> <p>事件两侧都会发（{@code tick()} 在客户端也会跑），所以这里先挡客户端：拉力只由服务端给 （{@code LINKS} 本来也只有服务端有）。 <p>【为什么跳过"他正骑着她"】悬挂档里玩家就吊在她身下 hang 格（默认 2.6，扫帚档 2.9）， 那个位置是 {@link com.maidsmart.mixin.EntityGunnerHangMixin} 每拍刚性摆出来的：对绳子使劲 只会跟骑乘定位打架（而且悬挂距离最大可配到 6.3 格，一过 6 格就会变成"每 tick 朝自己乘客 加速"的荒唐场景）。**受力的是牵绳档**——
      */
     @SubscribeEvent
     public static void onMaidTick(com.github.tartaricacid.touhoulittlemaid.api.event.MaidTickEvent event) {
@@ -1772,15 +1507,11 @@ public final class GunnerTetherManager {
 
     /**
      * 原版拴绳力学的两档（第三档">10 格撒手"按本项目的"不会断的绳"改成继续拉）。
-     *
      * <p>分档与字面量逐条对着两版反编译源码核过（1.21.1 {@code Leashable.tickLeash} 调
      * {@code elasticRangeLeashBehaviour} / {@code closeRangeLeashBehaviour}；1.20.1 是
      * {@code PathfinderMob.customServerAiStep} 里那一段 if-else 链，两边一模一样）：
      * <pre>
-     *   dist &gt; 6  → 每轴 {@code copySign(d²×0.4, d)} 的冲量（原版"拽"的那一下）
-     *   dist ≤ 6  → 走到离持有者 2 格处（原版是寻路，我们是速度补足，见 PULL_WALK_SPEED）
-     * </pre>
-     * <p>距离取的是原版那个 **3D 中心距**（{@code Entity.distanceTo}），不是水平距——原版也是这么量的。
+     *   dist &gt; 6  → 每轴 {@code copySign(d²×0.4, d)} 的冲量（原版"拽"的那一下） dist ≤ 6  → 走到离持有者 2 格处（原版是寻路，我们是速度补足，见 PULL_WALK_SPEED） </pre> <p>距离取的是原版那个 **3D 中心距**（{@code Entity.distanceTo}），不是水平距——原版也是这么量的。
      */
     private static void pullTick(EntityMaid maid, ServerPlayer player) {
         try {
@@ -1868,17 +1599,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十三：修"坐在扫帚上右击仍然切不到绑定模式"】
-     *
-     *
      * <p>根因是**这一下右击根本没有变成 EntityInteract**：换座之后玩家是扫帚的第一乘客（驾驶位）、
      * 女仆在第二乘客（他身后），准星前方一个实体都没有 → 客户端射线结果是 MISS →
      * 发的是 ServerboundUseItemPacket，落到 Forge 的 RightClickItem；而本类原来只监听
      * EntityInteract，于是这一下什么都不会发生——"右击不灵"就是这么来的。
-     *
      * <p>所以补上这个入口：**手持武装拴绳 + 这次右击没打到任何实体 + 玩家正骑着一把载着他女仆的
-     * 扫帚**时，等价于右击那只女仆（走同一个 {@link #toggle}：没绑就绑上、绑着就换座/解除）。
-     * 只认"自己扫帚上的那只女仆"——对着空气挥绳子不会触发任何东西。
+     * 扫帚**时，等价于右击那只女仆（走同一个 {@link #toggle}：没绑就绑上、绑着就换座/解除）。 只认"自己扫帚上的那只女仆"——对着空气挥绳子不会触发任何东西。
      */
     @SubscribeEvent
     public static void onUseItem(PlayerInteractEvent.RightClickItem event) {
@@ -1912,19 +1638,12 @@ public final class GunnerTetherManager {
     }
 
     /**
-     * 【实测六百七十六】玩家此刻骑的**就是**"他自己拴着的那只女仆"吗（悬挂档：他吊在她下方）。
-     *
      * <p>为什么不靠准星射线：悬挂档里她在玩家**头顶上方** hang 格（默认 2.6，扫帚档 2.9），
      * 玩家的视线基本是水平的（还常在往下看地形）——射线根本扫不到她的碰撞箱，客户端发的是
      * {@code ServerboundUseItemPacket}（落到 {@code RightClickItem}），而不是打到实体的
      * {@code EntityInteract}。旧版这一档只认"骑着载着她女仆的扫帚"，于是悬挂档这一下右击是**空的**：
-     * 实测日志里能看到"挂载 2.9 格 → 十几秒后 解除(玩家离鞍)"，中间**既没有「换座」也没有
      * 「解除(右击)」**——那一下右击我们的 handler 压根没跑到（玩家最后是潜跳下鞍下来的）。
-     * 六百七十二 那条"坐回扫帚"本身是对的，问题一直在于**它有时候根本不会被触发**。
-     *
-     * <p>认人规则：他骑的实体是女仆 + 挂载表里这一对正好是"她 ↔ 他"。别人拴的女仆、别人的乘客
-     * 一律不认；射线打中方块时走的是 {@code RightClickBlock} 那一档，本项目没接（那一档要动方块
-     * 交互，风险比收益大）。
+     * 六百七十二 那条"坐回扫帚"本身是对的，问题一直在于**它有时候根本不会被触发**。 <p>认人规则：他骑的实体是女仆 + 挂载表里这一对正好是"她 ↔ 他"。别人拴的女仆、别人的乘客 一律不认；射线打中方块时走的是 {@code RightClickBlock} 那一档，本项目没接（那一档要动方块 交互，风险比收益大）。
      */
     private static EntityMaid linkedMaidImRiding(ServerPlayer player) {
         try {

@@ -11,19 +11,15 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 实测七百〇二【1.20.1 精简版】"本来要走路过去的活"交给仿创造飞行——直连寻路注入点。
- *
  * ── 为什么挂在 {@code moveTo} 上 ──
  * 她的移动有三条来源：①大脑的 {@code WALK_TARGET}（由 {@code MoveToTargetSink} 消费，最终走
  * {@code PathNavigation.moveTo(Path, double)}）；②**直连寻路**（挖矿 / 伐木 / 农活这些驱动每 tick
  * 自己调 {@code moveTo(x, y, z, speed)}，即本注入点的四参重载）；③别处直接写速度。
  * "本来要走过去的活"主要落在 ② 上，所以这里只掐 ② 这一个重载——**判据窄、影响面清楚**：
  * {@code MoveToTargetSink} 走的是 {@code moveTo(Path, double)}，一个字都不碰。
- *
  * ── 与 {@code SpawnerTorchNavGuardMixin} 的关系 ──
  * 那个注入点是"刷怪笼插火把优先"的走位所有权闸；本注入点是"她要去的地方太远 / 要上下 → 改飞"。
  * 两者都在 HEAD 上、都返回 false，同时命中时结果一致，不冲突。
- *
  * ── 描述符为什么写全 ──
  * {@code PathNavigation.moveTo} 有多个重载，只写方法名会让 Mixin 目标歧义（加载期报错），
  * 所以连参数表一起写死：{@code (DDDD)Z}（SRG 名 {@code m_26519_}，javap 实证）。

@@ -16,13 +16,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * v1.3.0(beta)【鞘翅自有外观·三段式解析】——把女仆背上那对翅膀画成**那件鞘翅自己的样子**，
  * 而不是一律原版 {@code textures/entity/elytra.png}。
- *
  * <p>【
- *
- *
- *
  * <h2>为什么不能"完全不认识任何模组也画对"</h2>
  * 因为没有共享 API——NeoForge 的 {@code IClientItemExtensions} 里**根本没有**
  * "告诉我你的鞘翅贴图"这个钩子（javap 实证：1.21.1 只有 getFont/getArmPose/
@@ -31,37 +26,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * shouldBobAsEntity——没有 elytra 贴图）。原版 1.21.1 的 {@code ElytraLayer} 虽然加了可覆写的
  * {@code getElytraTexture(ItemStack, T)}，但那是**图层自己的**方法，模组物品无法从外部被问到。
  * 所以"万能解"不存在。
- *
  * <h2>能做到的最通用形态：三段式解析（本类）</h2>
  * <ol>
- *   <li><b>先问模组自己</b>——反射它**已经公开**的取值口。伊卡洛斯之翼就把答案摆在外面：
- *       {@code AbstractWings.getType()} → {@code WingsType.getTexture()} /
- *       {@code getTextureReversed()}（javap 实证两树都是 public、都返回 {@code ResourceLocation}）。
- *       本类用**鸭子类型**探测：只要这件物品有一个无参 {@code getType()}，且其返回对象有一个
- *       返回 {@code ResourceLocation} 的无参 {@code getTexture()}，就采信它。**不写死任何类名**——
- *       所以该模组日后再加翅膀物品，我们零改动即可画对。另探测物品自身可能公开的
- *       {@code getElytraTexture(ItemStack[, LivingEntity])}（同样是"作者主动告诉我们"的口径）。</li>
- *   <li><b>问不到再查静态表</b>（{@link #TEXTURE}）——只为"贴图藏在私有图层里、没有公开取值口"
- *       的模组保留（神秘遗物+：它的 {@code TEXTURE_MAP} 是 private static，反射它等于抄实现，
- *       太脆）。这张表已降级为**覆盖/兜底**，不再是主要来源。</li>
- *   <li><b>仍认不出退回原版</b> {@code textures/entity/elytra.png}——绝不画错，只是外观是原版的。</li>
- * </ol>
- * 效果：已支持模组以后新增翅膀零代码；换一个全新模组仍需加一条解析规则（或它恰好符合第 1 档的
- * 鸭子类型就也不用加）。在没有共享 API 的前提下，这是能达到的最通用的程度。
- *
- * <h2>已收录（逐条反编译核实）</h2>
- * <b>伊卡洛斯之翼</b>（{@code locusazzurro_icaruswings}）：第 1 档反射即可全覆盖
- * （{@code textures/entity/<名字>_wings.png}，空域系另有 {@code _reversed}）；下面静态表里那几条
- * **是冗余的安全网**（万一某版本反射失手仍能画对），不是必须。
- * <br><b>神秘遗物+</b>（{@code enigmaticlegacyplus}）：{@code textures/models/misc/} 下
- * {@code majestic_elytra.png} / {@code chaos_elytra.png}（模组自己的
- * {@code EnigmaticElytraLayer.TEXTURE_MAP} 就是这两条，private static → 只能静态收录）。
- *
- * <h2>这张表与"自推鞘翅资格表"互相独立</h2>
- * 能不能自己飞由 {@code combat.selfWingsItems} 管；长什么样由本类管——一件普通鞘翅（羽毛系）
- * 也能有自己的外观，只是它不会自推。
- *
- * <p>【两树同一份】除静态表的命名空间（1.20.1 与 1.21.1 的神秘遗物 id 不同）外逐字相同。
+ *   <li><b>先问模组自己</b>——反射它**已经公开**的取值口。伊卡洛斯之翼就把答案摆在外面： {@code AbstractWings.getType()} → {@code WingsType.getTexture()} / {@code getTextureReversed()}（javap 实证两树都是 public、都返回 {@code ResourceLocation}）。 本类用**鸭子类型**探测：只要这件物品有一个无参 {@code getType()}，且其返回对象有一个 返回 {@code ResourceLocation} 的无参 {@code getTexture()}，就采信它。**不写死任何类名**—— 所以该模组日后再加翅膀物品，我们零改动即可画对。另探测物品自身可能公开的 {@code getElytraTexture(ItemStack[, LivingEntity])}（同样是"作者主动告诉我们"的口径）。</li> <li><b>问不到再查静态表</b>（{@link #TEXTURE}）——只为"贴图藏在私有图层里、没有公开取值口" 的模组保留（神秘遗物+：它的 {@code TEXTURE_MAP} 是 private static，反射它等于抄实现， 太脆）。这张表已降级为**覆盖/兜底**，不再是主要来源。</li> <li><b>仍认不出退回原版</b> {@code textures/entity/elytra.png}——绝不画错，只是外观是原版的。</li> </ol> 效果：已支持模组以后新增翅膀零代码；换一个全新模组仍需加一条解析规则（或它恰好符合第 1 档的 鸭子类型就也不用加）。在没有共享 API 的前提下，这是能达到的最通用的程度。 <h2>已收录（逐条反编译核实）</h2> <b>伊卡洛斯之翼</b>（{@code locusazzurro_icaruswings}）：第 1 档反射即可全覆盖 （{@code textures/entity/<名字>_wings.png}，空域系另有 {@code _reversed}）；下面静态表里那几条 **是冗余的安全网**（万一某版本反射失手仍能画对），不是必须。 <br><b>神秘遗物+</b>（{@code enigmaticlegacyplus}）：{@code textures/models/misc/} 下 {@code majestic_elytra.png} / {@code chaos_elytra.png}（模组自己的 {@code EnigmaticElytraLayer.TEXTURE_MAP} 就是这两条，private static → 只能静态收录）。 <h2>这张表与"自推鞘翅资格表"互相独立</h2> 能不能自己飞由 {@code combat.selfWingsItems} 管；长什么样由本类管——一件普通鞘翅（羽毛系） 也能有自己的外观，只是它不会自推。 <p>【两树同一份】除静态表的命名空间（1.20.1 与 1.21.1 的神秘遗物 id 不同）外逐字相同。
  */
 public final class MaidWingSkins {
 
@@ -130,14 +97,11 @@ public final class MaidWingSkins {
 
     /**
      * 胸甲槽这件鞘翅该用哪张贴图——三段式：先问模组自己（反射）→ 再查静态表 → 退回原版。
-     *
      * <p>注意：**没有**对第 1 档结果做缓存——{@code getElytraTexture(ItemStack,...)} 这类口
      * 允许按 ItemStack 的 NBT 给不同贴图（同一物品类不同皮肤），按类缓存会画错。每帧反射调用
      * 一次的成本极低（方法引用早已解析），静态表那一路本来就不缓存。
-     *
      * @param chest 胸甲槽物品栈（调用方已确认它能渲染）
-     * @param maid  穿着者（判"正在滑翔"决定要不要用反向贴图）；null 时不取反向
-     * @return 那件鞘翅自己的贴图；认不出型号 → 原版鞘翅贴图
+     * @param maid  穿着者（判"正在滑翔"决定要不要用反向贴图）；null 时不取反向 @return 那件鞘翅自己的贴图；认不出型号 → 原版鞘翅贴图
      */
     public static ResourceLocation textureFor(ItemStack chest, EntityMaid maid) {
         try {

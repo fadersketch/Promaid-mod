@@ -19,14 +19,11 @@ import java.util.UUID;
 import net.neoforged.neoforge.common.NeoForge;
 
 /**
- * v1.1.0 实测九十：险境脱离——追问："如果女仆已经是处于这些危险方块上了，
  * 那么会怎么办？"
- *
  * 寻路避让（八十九）只管"别走进去"；已经站在岩浆/岩浆块/火上、或身处火里的
  * 女仆会持续掉血，旧机制要等到血量跌破 30% 触发自保才动手，中间白挨大量伤害。
  * 本处理器每 0.5 秒巡检一次：站立柱（脚格/头顶/脚下）命中危险表的女仆，
  * 立即挪到最近的安全格并应急灭火。
- *
  * 语义与边界：
  * - 【救命优先】home 模式的女仆也会被挪——但只挪几格脱离险境，不是传送到主人
  *   身边，与"看家不响应传送"的语义不冲突（基岩顶不是家，火面也不是家）；
@@ -34,8 +31,7 @@ import net.neoforged.neoforge.common.NeoForge;
  *   两套系统打架；这两态女仆仍受自保体系兜底；
  * - 【自保中让位】自保会话有自己的岩浆逃生链路（珍珠/放水/垫高），不重复干预；
  * - 【无处可逃】周围安全格全无（四面环岩浆中央）→ 记冷却后交给自保的资源链路；
- * - 【应急灭火】逃离火源时清除剩余着火时间（setRemainingFireTicks(-1)）——离开源头后 vanilla
- *   仍会烧完剩余 tick，救急不彻底等于没救。
+ * - 【应急灭火】逃离火源时清除剩余着火时间（setRemainingFireTicks(-1)）——离开源头后 vanilla 仍会烧完剩余 tick，救急不彻底等于没救。
  */
 public class DangerEscapeHandler {
     private static final org.slf4j.Logger LOGGER =
@@ -145,8 +141,7 @@ if (++this.throttle < 10) {
      * 且【没有被实体占用】。
      * （空气判定天然排除火/岩浆本身——它们不是空气。）
      * v1.1.0 实测一百二十七：实体占用排除——旧版不查，闭环岩浆测试里唯一的
-     * 近距"安全格"是主人脚下那格，脱离会把女仆传进玩家身体，碰撞再把女仆
-     * 挤回岩浆（反复循环掉血、永远站不上安全格）。
+     * 近距"安全格"是主人脚下那格，脱离会把女仆传进玩家身体，碰撞再把女仆 挤回岩浆（反复循环掉血、永远站不上安全格）。
      */
     private static BlockPos findNearestSafe(ServerLevel level, BlockPos from) {
         for (int r = 0; r <= SEARCH_RADIUS; r++) {

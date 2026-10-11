@@ -13,21 +13,17 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
- * v1.1.0 实测一百一十三：Home 模式守卫巡逻（呆立根治）。
+ * Home 模式守卫巡逻（呆立根治）。
  *
- * 背景（javap 反编译 TLM 实证）：home 模式女仆的移动驱动只有三个——
- * ①SchedulePos.tick 每 2 秒的回家走位（仅【出圈】时才给目标，站在 home 中心
- * 直接早退）；②IDLE/WORK 活动的 MaidRunOne 随机散步；③follow 任务每 tick
- * 启动占位（home 下 maidStateConditions 全分支空转）。三个驱动各有断点：
- * 排班路径不设 home 锚点（实测一百一十二已修）、isNonCombatWork 漏排跟随
- * 导致 SchedulePosTickMixin 把 tick 整段 cancel（实测一百一十三已修）、
- * 站在 home 中心时 tick 范围内早退不给走位。叠加 → home 女仆没有任何移动
- * 驱动 → 原地呆站。
+ * 背景（javap 反编译 TLM 实证）：home 模式女仆的移动驱动只有三个——① {@code SchedulePos.tick} 每 2 秒的
+ * 回家走位（仅**出圈**时才给目标，站在 home 中心直接早退）；② IDLE/WORK 活动的随机散步；③ follow 任务
+ * 每 tick 启动占位（home 下全分支空转）。三者各有断点（排班路径不设 home 锚点、{@code isNonCombatWork}
+ * 漏排跟随导致 {@code SchedulePosTickMixin} 把 tick 整段 cancel、站在 home 中心时早退不给走位）→ 叠加后
+ * home 女仆没有任何移动驱动 → 原地呆站。
  *
- * 修复：对【非干活】的 home 模式女仆每 4 秒在 home 锚点附近随机选点给
- * WALK_TARGET（MoveToTargetSink 每 tick 消费，与大脑活动无关）——女仆在
- * 家的范围内持续巡逻走动，不再呆立。干活的（挖矿/农活/建造等由任务驱动）、
- * 战斗/自保/战术/站桩/坐姿/骑乘一律不干扰。
+ * 修复：对**非干活**的 home 模式女仆每 4 秒在 home 锚点附近随机选点给 {@code WALK_TARGET}
+ * （{@code MoveToTargetSink} 每 tick 消费，与大脑活动无关）——在家范围内持续巡逻走动，不再呆立。干活的
+ * （挖矿/农活/建造等由任务驱动）、战斗/自保/战术/站桩/坐姿/骑乘一律不干扰。
  */
 public final class HomePatrolHandler {
     private static int throttle = 0;

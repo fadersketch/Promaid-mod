@@ -172,38 +172,22 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.142：建造强制坐下标记（persistentData）——进入建造任务即坐下，
      *  玩家无法让她站起（每 tick 重新按压坐下姿势）；切出建造任务自动站起。
-     * v1.1.0 实测二百七十二：建造拟真化——不再强制坐下（女仆会瞬移到工地旁站立
      *  放置，见 teleportToWorkSite）；本方法改为【确保站立】+【保留全部锁移动】：
      *  - 处于建造任务 → 若仍是坐姿则站起（setOrderedToSit false，TLM override 连坐姿一起清）；
      *    锁移动逻辑原样保留（清 WALK_TARGET/停导航/清水平速度 + BUILD_SIT_TAG 标记，
      *    MaidMoveSuppressMixin/MaidStationaryMixin 的移动源头锁继续生效）——
-     *    她瞬移到位置后站定放置，不会被跟随/行为拉走。
-     *  - 切出建造任务 → 清标记（与旧版一致）。
+     *    她瞬移到位置后站定放置，不会被跟随/行为拉走。 - 切出建造任务 → 清标记（与旧版一致）。
      */
     public static final String BUILD_SIT_TAG = "maid_smart_build_sitting";
 
     /**
-     * v1.5.142：建造模式强制坐下（每 tick 由 MaidToolAutoEquipBehavior 调用，
      * core 行为任何 activity 都跑——覆盖夜晚切休息班等行为停摆窗口）：
      * - 处于建造任务 → 强制 setInSittingPose(true)（setInSittingPose，TLM 原生坐姿）。
      *   坐下后 TLM 跟随行为（MaidFollowOwnerTask 检查 canBrainMoving = !坐姿）
      *   不再启动 → 建造中不会再被"跟随传送"小范围瞬移拉走；
      *   建造本身是隔空放置（行为从不移动），坐下不影响搭方块。
-     * - 玩家试图让她站起（GUI/交互）→ 下一 tick 被重新按回坐下。
-     * - 切出建造任务 → 恢复站立并清标记（只恢复我们自己按下的坐姿）。
-     * v1.1.0 终审二（反馈："强制坐下很怪，坐着还会小幅移动——玩家 shift+右键
-     * 坐下那种绝大部分情况不会动"）：根因是两种坐状态不一致——玩家 shift+右键
-     * 走的是 setOrderedToSit（setOrderedToSit，指令位），TLM 脑内多处判定（含
-     * canBrainMoving 与 RandomStroll 挂载的 Await 行为）都认【指令位】，
-     * 只按姿势位（setInSittingPose 顺带设了指令位，但玩家"解除坐下"只清指令位、
-     * 姿势位残留 → 脑子以为能动的边缘态）。改为与玩家操作完全同款：
-     * 每 tick 直接 setOrderedToSit(true)（TLM override 会同时按姿势位），
-     * 两个位始终一致——与 shift+右键坐下完全同状态，不再有边缘态小幅挪动。
-     * v1.1.0 实测二百七十二：建造拟真化——不再强制坐下，改为【确保站立】
-     * （女仆瞬移到工地旁站立放置，见 teleportToWorkSite）。玩家 shift+右键
-     * 让她坐下 → 下一 tick 站起（建造中不再"坐着隔空施法"）。
+     * - 玩家试图让她站起（GUI/交互）→ 下一 tick 被重新按回坐下。 - 切出建造任务 → 恢复站立并清标记（只恢复我们自己按下的坐姿）。 坐下那种绝大部分情况不会动"）：根因是两种坐状态不一致——玩家 shift+右键 走的是 setOrderedToSit（setOrderedToSit，指令位），TLM 脑内多处判定（含 canBrainMoving 与 RandomStroll 挂载的 Await 行为）都认【指令位】， 只按姿势位（setInSittingPose 顺带设了指令位，但玩家"解除坐下"只清指令位、 姿势位残留 → 脑子以为能动的边缘态）。改为与玩家操作完全同款： 每 tick 直接 setOrderedToSit(true)（TLM override 会同时按姿势位）， 两个位始终一致——与 shift+右键坐下完全同状态，不再有边缘态小幅挪动。 （女仆瞬移到工地旁站立放置，见 teleportToWorkSite）。玩家 shift+右键 让她坐下 → 下一 tick 站起（建造中不再"坐着隔空施法"）。
      */
     public static void tickBuildSit(EntityMaid maid) {
         boolean building = BlueprintBuildExecutor.isBuildingTask(maid);
@@ -401,17 +385,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         }
         // v1.5.121：曾恢复"进入建造 → 强制 home 模式"（v1.5.117 撤销后建造不执行：
         // 非 home 模式下 TLM MaidFollowOwnerTask 会启动，把女仆从 WORK 拉向跟随）。
-        //
-        // v1.5.393 实测八百零三【不再强制 home（玩家要求）】：
         // 当初撤销失败是【当时】没有后来这几道源头闸（teleportToOwner 建造拦截、
         // BuildActivityForceMixin 把 activity 钉在 WORK、Work_STILL/BUILD_SIT 的移动源头锁）。
         // 现在跟随即便启动也动不了她，不再需要借 home 来压制它。
         // 而 home 的副作用很重：它是 TLM 拿来复用原版「限制圈」的开关——hasRestriction 恒真、
         // 圈心取 SchedulePos 的 work/idle/sleep 锚点、出圈传送/走回。建造行为只置 home 不配锚点
-        // → 圈心落在原点，把排班、召回、救援、区块保载、主人死亡传送等整条链路拖进互相打架
-        // （玩家实测的冲突根源）。
-        // 现在改为【不强制 home + 禁非玩家意愿的自动传送】（见 build.noForceHome /
-        // MaidBuildBehavior.homeInert）；关掉 build.noForceHome 即回退本段旧行为。
+        // → 圈心落在原点，把排班、召回、救援、区块保载、主人死亡传送等整条链路拖进互相打架 （玩家实测的冲突根源）。 现在改为【不强制 home + 禁非玩家意愿的自动传送】（见 build.noForceHome / MaidBuildBehavior.homeInert）；关掉 build.noForceHome 即回退本段旧行为。
         if (!com.maidsmart.config.MaidSmartConfig.BUILD_NO_FORCE_HOME.get()) {
             maid.setHomeModeEnable(true);
         }
@@ -1014,12 +993,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             // v1.5.66：缺口补建（苦力怕炸洞/方块消失）——完成时扫描所有步骤的真实
             // 存在性，位置空了/变地形则重新补建（材料按正常流程计算：创造无限/
             // 生存从女仆+主人背包取，不够则提示等补料）。补完后再回来检查，无缺口才完成
-            // v1.5.84：完成执行/汇报【统一由工头】——工头最大的价值就是上报。
             // 非工头女仆发现完成（cursor 到尽头且延后清空）时【等待工头执行】——
             // 不再自己 clear（旧版非工头先完成会清掉 GLOBAL_PLAN，把工头挡在
             // 完成分支外 → 无人汇报）。isForeman 语义：工头本人 → true 执行；
             // 无工头/工头失效/工头暂停 → true（任何女仆接管）；非工头（工头在场）→ false 等待。
-            // v1.5.79：附悬空重力方块提示（图纸悬浮设计——解冻后会落下）
             if (!BuildPlan.isForeman(maid)) {
                 return;
             }
@@ -1027,13 +1004,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             // 成功放置）直接进入收尾，省去 55 万步蓝图完成瞬间的 O(N) parseStep +
             // 世界状态检查 tick 尖峰（放置成功的方块已完成 canSurvive+掉落双重验证
             // 不会自行消失；外力破坏的洞重新下达蓝图即可补建）
-            // v1.5.252ab：红石激活提前到缺口检查【之前】——旧版在 scanGaps 之后，
             // scanGaps 发现缺口（哪怕 1 个）就 return → recalcRedstone 永不执行 →
             // 红石机器建好不运行（实测：甘蔗农场红石机器无法运行）
-            // v1.5.316：红石机器改革——机器走活建造（flag 3）+ 专属顺序，红石/水流
             // 在放置时已自然就位；完工不再"唤醒/不唤醒"（recalcRedstone/activateWater
-            // 对机器均多余）。轰炸机类完工自动放矿车（spawnStartMinecarts）启动复制循环。
-            // 开关 BUILD_MACHINE_SMART 关闭时机器完整回退旧行为（静默+完工唤醒）。
+            // 对机器均多余）。轰炸机类完工自动放矿车（spawnStartMinecarts）启动复制循环。 开关 BUILD_MACHINE_SMART 关闭时机器完整回退旧行为（静默+完工唤醒）。
             boolean machineSmart = BlueprintLib.isMachineBlueprint(ps.blueprintId)
                     && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
             // v1.5.331：完工激活前延长 TNT 点火保护窗口——覆盖 recalcRedstone/
@@ -1149,15 +1123,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.328：TNT 建造期防自燃放置——flag 2 静默挡不住 TntBlock.onPlace
      * （LevelChunk.setBlockState 服务端无条件调 onPlace，字节码实证），活建造下
      * TNT 挨着已带电红石线放置即自燃 → "放置后目标仍空气" → 320 个 TNT 全延后 →
      * 机器游标走到底卡死（旧计划日志实证）。放置 TNT 时挂 BuildTntGuard 护栏
      * （MixinTntBuildGuard 在 onPlace 头部 cancel），TNT 以稳定方块落地。
-     * v1.5.331：每次放置都【延长保护时间窗】——覆盖"观察者→活塞→推 TNT"这类
      * 发生在 doPlace 之外的点火链（天机屠龙炮"刚建好炸膛"根因），窗口宽度 =
-     * BUILD_TNT_IGNITION_GRACE（秒）；完工结算见 BlueprintLib.settleTntIgnition，
-     * 宽限期满后机器按正常红石逻辑点火——"建好就能跑/手动触发"不受影响。
+     * BUILD_TNT_IGNITION_GRACE（秒）；完工结算见 BlueprintLib.settleTntIgnition， 宽限期满后机器按正常红石逻辑点火——"建好就能跑/手动触发"不受影响。
      */
     private static void placeTntSafe(ServerLevel level, BlockPos pos, BlockState state, int flag) {
         com.maidsmart.build.BuildTntGuard.suppressTntFor(level,
@@ -1175,14 +1146,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.40：放置方块 + 恢复精确状态/门上半/方块实体 + 挥臂音效（材料已由调用方消耗）。
-     *  v1.5.45：返回 false = 支撑缺失未放置（调用方延后等支撑块建好，防悬空掉落）
-     *  v1.5.51：补支撑（时间静止）——支撑格是空气且蓝图无该格步骤（挖空版/图纸缺陷
      *  的悬空方块）时自动垫一块石头再放置；物品不会因物理法则掉落，建造不会卡住。
      *  蓝图有该格步骤（支撑后建）→ 维持延后等待支撑步骤先建。
-     *  v1.5.77：修复支撑格判定坐标系——plannedPositions 用【蓝图相对坐标】编码，
-     *  旧版把世界坐标塞进去查，原点非 (0,0,0) 时永远查不到 → 补石头无视蓝图步骤
      *  乱放（石头覆盖房间方块/草方块 → 女仆覆盖回去 → 反复循环）。
-     *  v1.5.252i：force=true（延后重试 ≥3 次的强制模式）——支撑格是空气/流体时
      *  【无视蓝图步骤直接补支撑】；放置后 canSurvive 失败时【无条件把支撑格换成
      *  合法支撑】（甘蔗→沙子、植物→泥土、其他→石头）再重放——根治外部蓝图
      *  "大量悬空放不上"（蓝图作者在创造模式画的悬空活板门/火把/甘蔗/横幅等，
@@ -1267,18 +1233,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // 红石块/拉杆放置时不激活邻居 → 活塞/机械冻结，不再"推掉刚建的墙"互搏
         // （红石住宅 282 个活塞，95 个有激活源：线一放好就通电推墙 → 女仆补建
         // → 再推 → 无限循环"石头跟石英块过不去"）。
-        // v1.5.316：机器活建造——live=true 时 flag 3（正常更新，红石/水流随放随算），
         // 配合机器专属顺序（动力源最后落位）机器建好即自然运行，无需完工唤醒；
         // 普通建筑保持 flag 2 静默（机械冻结）。
-        // v1.5.317：TNT 与液体（水/岩浆）始终 flag 2 静默——
         // TNT 防放置时被已带电的信号点燃（TNT 大炮实证）；液体静默放置全部源块
-        // 后由完工 activateWater 批激活 → 统一流动/气泡柱成形（逐个活放会因相邻
-        // 水源先流过来而跳过后续源块 → 气泡柱/水道不完整）。
-        // v1.5.328：flag 2 挡不住 TntBlock.onPlace（LevelChunk.setBlockState 服务端
-        // 无条件调 onPlace，字节码实证）——TNT 放置改走 placeTntSafe 挂护栏
-        // （MixinTntBuildGuard 在 onPlace 头部 cancel），TNT 以稳定方块落地；
-        // 机器运行时红石翻转/触发走 neighborChanged 正常点燃。
-        // 支撑由 v1.5.51 补支撑保证；掉落验证仍兜底。
+        // 后由完工 activateWater 批激活 → 统一流动/气泡柱成形（逐个活放会因相邻 水源先流过来而跳过后续源块 → 气泡柱/水道不完整）。 无条件调 onPlace，字节码实证）——TNT 放置改走 placeTntSafe 挂护栏 （MixinTntBuildGuard 在 onPlace 头部 cancel），TNT 以稳定方块落地； 机器运行时红石翻转/触发走 neighborChanged 正常点燃。 支撑由 v1.5.51 补支撑保证；掉落验证仍兜底。
         int flag = 2;
         if (live && !(placed instanceof net.minecraft.world.level.block.TntBlock)
                 && !(placed instanceof net.minecraft.world.level.block.LiquidBlock)) {
@@ -1288,19 +1246,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.48：放置后掉落验证——支撑检查覆盖不到的类型（雪层/甘蔗/花/藤蔓等
         // 漏网方块）放置后若立即掉落（悬空），回收掉落物并返回 false → 延后/跳过，
         // 杜绝"女仆挥臂成功（有动作有声音）但方块消失"的假进展
-        // v1.5.51：先尝试补下方石头重放一次（漏网类型自动补支撑），仍失败才跳过
-        // v1.5.82：加 canSurvive 验证（isRedstoneConductor）——支撑不合法（如甘蔗下方是补的
         // 石头）时静默放置看似成功，但邻居更新时会被破坏（"放置又被打掉"循环）；
         // 补【合法】支撑（甘蔗→沙子、植物→泥土）后重放，仍不合法才延后
-        // v1.5.252i：支撑格【无条件换成合法支撑】再重放——下方是石头/水/台阶等
         // 不合法支撑（外部蓝图常见：甘蔗种石头上/水边、活板门下是台阶）时旧版
         // 只补"空气/流体"格，其余直接失败 → 3 次跳过
-        // v1.5.252ad：bad 判定放宽——目标已是目标方块（placed 或解析状态同方块）
-        // → 成功。旧版 !canSurvive 对已放置的玻璃/树叶/活塞/观察者/漏斗等误判失败
-        // （日志实证：484 玻璃、96 树叶…"目标现=目标方块"却 place-fail）→ 全方块
-        // 延后 3 次 → 大量跳过（实测"甘蔗农场跳过 130 个"）。canSurvive 对
-        // 解析出的状态（stateSnbt）在部分方块上返回 false 的原因待查，但目标方块
-        // 已在 = 放置成功，不应判失败。
+        // → 成功。旧版 !canSurvive 对已放置的玻璃/树叶/活塞/观察者/漏斗等误判失败 （日志实证：484 玻璃、96 树叶…"目标现=目标方块"却 place-fail）→ 全方块 延后 3 次 → 大量跳过（实测"甘蔗农场跳过 130 个"）。canSurvive 对 解析出的状态（stateSnbt）在部分方块上返回 false 的原因待查，但目标方块 已在 = 放置成功，不应判失败。
         BlockState targetState = level.getBlockState(target);
         boolean bad = targetState.isAir()
                 || (targetState.getBlock() != placeState.getBlock()
@@ -1492,9 +1442,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  其他→fallback（蓝图主要建材，无则石头）。旧版一律补石头：甘蔗下方是石头时
      *  canSurvive 失败（MC 甘蔗只认沙子/泥土/甘蔗），静默放置看似成功，但邻居更新
      *  （flag 3）触发检查时被打掉 → 反复"放置又被打掉"循环。
-     *  v1.5.252aa：fallback 用蓝图主要建材——旧版无中生有补石头 → 建筑里出现
      *  材料表没有的石头（实测：甘蔗农场大量石头）——改用蓝图自己的材料视觉一致
-     *  v1.5.263：红石科技件固定石头——fallback（蓝图主要建材）可能是甘蔗/水等
      *  非 canSupportRigidBlock 方块 → 红石线/中继器补在甘蔗上 canSurvive 失败
      *  → 3 次永久跳过（实测："悬浮的红石放不上"） */
     private static net.minecraft.world.level.block.Block supportBlockFor(Block placed, Block fallback) {
@@ -1574,9 +1522,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  半透明层），玻璃/粘液块即时可见。
      *  v1.5.328【修复无效根因】：旧版 LAST_CHUNK_RESEND = Long.MIN_VALUE——首次调用
      *  now - Long.MIN_VALUE 整数溢出为负 → 节流判定恒 <40 → return，重发【从不执行】
-     *  （"修复了但还是看不见"的确切原因）。改 0（游戏刻恒 ≥0，首次即生效）。
-     *  另：待重发集合改【静态跨轮累积】（PENDING_RESEND_CHUNKS）——旧版每轮新建
-     *  局部集，节流 2 秒窗口内"非触发轮"的放置会漏发；累积集在重发成功后一次清空。 */
+     *  （"修复了但还是看不见"的确切原因）。改 0（游戏刻恒 ≥0，首次即生效）。 另：待重发集合改【静态跨轮累积】（PENDING_RESEND_CHUNKS）——旧版每轮新建 局部集，节流 2 秒窗口内"非触发轮"的放置会漏发；累积集在重发成功后一次清空。 */
     private static final java.util.Set<Long> PENDING_RESEND_CHUNKS = new java.util.HashSet<>();
 
     private static long LAST_CHUNK_RESEND = 0;
@@ -1680,13 +1626,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.2.0 实测四百八十二【搭一个扣一个】：为"自动补支撑"额外扣 1 块材料。
-     *
      * 补支撑（把目标格下方/附着方向换成合法支撑方块，见 doPlace）也是**真实放置了一块**，
-     * 旧版却是裸 `setBlock` 不扣料 → 每补一次就白送一块，生存模式可刷。
      * 这里与主放置同口径：优先女仆背包（含手部栏），其次主人背包（`tryTakeFromOwner`
      * 会把一组材料转给女仆）；创造模式主人无限。
-     *
      * @return true = 确实扣到了 1 块（或创造模式豁免）；false = 没料，调用方应延后
      */
     private static boolean consumeExtraBlock(EntityMaid maid, Block support) {
@@ -1866,28 +1808,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.393 实测八百零三：建造/指标石临时搭建中，她的 home 状态是否「一律按无效处理」。
-     *
      * <p>【口径（
      * 我们一个字都不碰；但<b>建造时 home 的所有代码对建造无效</b>。即无论她此刻是不是 home
      * （玩家手动开的 / 排班表开的），都不让它参与进来跟建造打架。
-     *
      * <p>【为什么必须这样】TLM 的 home 在字节码里就是原版限制圈的开关（{@code hasRestriction()}
      * = {@code isHomeModeEnable()}），一旦为真：{@code SchedulePos.tick} 每 40 tick 做
-     * restrictTo + 出圈传送/走回，{@code MaidFollowOwnerTask} 的跟随与
-     * {@code teleportToOwner} 也各按「她的跟随半径 + 4」判距。这些全部按【限制圆圆心的距离】
-     * 算，而建造从不配锚点 → 圈心是原点/上一次排班留下的旧工位。结果就是玩家实测的"冲突"：
-     * 她要么被按旧锚点拽走（建造停止），要么被 TLM 跟随按错误的距离判据传送走。
-     *
-     * <p>返回 true = 对她而言 home 视为不存在：自动传送类链路让位（她留在工地），
-     * 读限制圈 / 按圈钳位的选点逻辑一律按"无圈"走（见 {@code BuildHomeInertMixin}）。
-     *
-     * <p>【只禁非玩家意愿的】玩家主动操作一律不受影响：一键集合 / 排班表「传送到我身边」
-     * （走 {@code summonMaidTo}）、建造/指标石自己的 {@code teleportToWorkSite}
-     * （玩家要的"先瞬移到工地旁再放置"）。受困救援（真虚空 / 下界基岩顶）同样放行——
-     * 那是保命，且她若真在虚空里也不在盖房子。
-     *
-     * <p>开关 build.noForceHome（默认开）；关掉即回退旧行为（建造强制 home、home 照旧生效）。
+     * restrictTo + 出圈传送/走回，{@code MaidFollowOwnerTask} 的跟随与 {@code teleportToOwner} 也各按「她的跟随半径 + 4」判距。这些全部按【限制圆圆心的距离】 算，而建造从不配锚点 → 圈心是原点/上一次排班留下的旧工位。结果就是玩家实测的"冲突"： 她要么被按旧锚点拽走（建造停止），要么被 TLM 跟随按错误的距离判据传送走。 <p>返回 true = 对她而言 home 视为不存在：自动传送类链路让位（她留在工地）， 读限制圈 / 按圈钳位的选点逻辑一律按"无圈"走（见 {@code BuildHomeInertMixin}）。 <p>【只禁非玩家意愿的】玩家主动操作一律不受影响：一键集合 / 排班表「传送到我身边」 （走 {@code summonMaidTo}）、建造/指标石自己的 {@code teleportToWorkSite} （玩家要的"先瞬移到工地旁再放置"）。受困救援（真虚空 / 下界基岩顶）同样放行—— 那是保命，且她若真在虚空里也不在盖房子。 <p>开关 build.noForceHome（默认开）；关掉即回退旧行为（建造强制 home、home 照旧生效）。
      */
     public static boolean homeInert(EntityMaid maid) {
         try {
@@ -1977,20 +1903,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.3.0 实测八百一十五【床只剩半张、挖了也不掉】——床的另一半补全。
-     *
      * <p>【根因】蓝图解码旧版把 {@code part=head} 当"二次半块"跳过（注释写着"MC 自动补全"），
      * 可床根本没有补全机制：只有 {@code foot} 半扇真被放下，而**原版床的掉落表只在
      * {@code part=head} 时才给物品**——于是半张床挖了什么都不掉。门早就单补了
      * {@code ensureDoorUpper}（同一类问题），床一直没有对应物。
-     *
      * <p>【补哪一格】原版 {@code BedBlock.getNeighbourDirection} 字节码实证：
-     * {@code foot.relative(facing) == head}；即 head 的配对格在 facing 的**反方向**、
-     * foot 的配对格在 facing 方向。两种情形都在这里补全（蓝图可能只留 head——
-     * 当配对 foot 缺席时我们保留了 head）。
-     *
-     * <p>【安全性】与 {@code ensureDoorUpper} 同款：配对格必须是空气（不覆盖已建方块）、
-     * 且不被主人/其他女仆碰撞箱占着。**不扣料**——一件床物品对应两格，扣料发生在主格。
+     * {@code foot.relative(facing) == head}；即 head 的配对格在 facing 的**反方向**、 foot 的配对格在 facing 方向。两种情形都在这里补全（蓝图可能只留 head—— 当配对 foot 缺席时我们保留了 head）。 <p>【安全性】与 {@code ensureDoorUpper} 同款：配对格必须是空气（不覆盖已建方块）、 且不被主人/其他女仆碰撞箱占着。**不扣料**——一件床物品对应两格，扣料发生在主格。
      */
     private static void ensureBedHalf(ServerLevel level, EntityMaid maid, BlockPos target,
                                      BlockState state) {

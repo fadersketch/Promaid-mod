@@ -5,25 +5,15 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.server.level.ServerLevel;
 
 /**
- * PAD 情绪层（v1.5.95，借鉴 maidsoulcore AffectEngine 简化版）。
+ * PAD 情绪层（借鉴 maidsoulcore AffectEngine 简化版）——独立于 TLM 好感等既有系统的
+ * 【第四套数值】，只做"情绪状态 + 注入文本"，不改任何现有系统数值。
  *
- * 独立于 TLM 好感等既有数值系统的【第四套数值】——
- * 只做"情绪状态 + 注入文本"，不改任何现有系统数值。
- *
- * 维度（对齐 maidsoul AffectProfile 精简）：
- * - PAD：valence 愉悦(-1~1) / arousal 唤醒(0~1) / dominance 支配(0~1)
- * - 关系：intimacy 亲密 / conflict 冲突 / longing 思念
- * - 修复债务：hurtDebt 受伤债 / repairDebt 修复债（被主人打了之后，需要
- *   互动/时间偿还——"修复债务"概念，决定原谅的节奏）
- *
- * 事件驱动（对齐 AffectEngine.applyEventImpulse）：
- * - 主人对话 → intimacy+ / conflict-
- * - 主人打女仆 → valence- / conflict+ / hurtDebt+ / intimacy-
- * - 女仆被世界伤害 → conflict+ / hurtDebt+
- * - 静默恢复 → 情绪自然回落（longing+ / repairDebt-）
- *
- * 注入：作为 ai_affect 上下文注册（对话 <context> 附带情绪快照，LLM 据此调整语气）。
- * 落盘：<世界存档>/promaid_memory/<uuid>/affect.json（独立文件，零依赖）。
+ * 维度（对齐 maidsoul AffectProfile 精简）：PAD 愉悦/唤醒/支配；关系 亲密/冲突/思念；修复债务
+ * hurtDebt 受伤债 / repairDebt 修复债（被主人打后需互动/时间偿还，决定原谅的节奏）。
+ * 事件驱动：主人对话 → 亲密+/冲突-；主人打女仆 → 愉悦-/冲突+/受伤债+/亲密-；女仆被世界伤害
+ * → 冲突+/受伤债+；静默恢复 → 情绪自然回落（思念+/修复债-）。
+ * 注入：作为 {@code ai_affect} 上下文注册（对话附带情绪快照，LLM 据此调整语气）。
+ * 落盘：{@code <存档>/promaid_memory/<uuid>/affect.json}（独立文件，零依赖）。
  */
 public final class AffectManager {
     public static final String AFFECT_FILE = "affect.json";

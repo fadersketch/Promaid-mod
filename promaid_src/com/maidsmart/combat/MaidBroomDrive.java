@@ -14,8 +14,6 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * v1.3.0「扫帚模式」的骑乘 / 悬停 / 战斗盘旋驱动（两树镜像）。
- *
  * ── 为什么必须由我们驱动（TLM 的扫帚 API 不够用）──
  * TLM 的扫帚是**真载具**（{@code EntityBroom extends AbstractEntityFromItem extends LivingEntity}），
  * 也确实留了 {@code IBroomControl} 扩展点。但字节码实证：
@@ -28,63 +26,7 @@ import java.util.UUID;
  * 也就是说 {@code IBroomControl} 的**每一个回调都要求一个 Player 参数**——它是给
  * "玩家驾驶、女仆搭乘"设计的。**女仆单骑**这条路上没有任何回调点：她一个人骑上去，
  * {@code getControllingPassenger()} 返回 null，扫帚直接自由落体。
- * 所以"女仆独立骑扫帚"只能由我们在 {@code EntityBroom.travel} 上接管
- * （见 {@link com.maidsmart.mixin.EntityBroomMaidTravelMixin}）：
- * **没有玩家驾驶时**，用本类写下的推进意图替它飞；**有玩家驾驶时一个字都不改**。
- *
- * ── 本类与行为的分工 ──
- * <ul>
- *   <li>{@link MaidBroomBehavior} 是"大脑"：决定**去哪**（打谁、跟谁、守在哪）、以及
- *       什么时候进入"起飞 / 战斗爬升"这两个相位；</li>
- *   <li>本类是"手"：把"去哪"翻译成**这一 tick 的速度矢量与朝向**，写在 {@link #THRUST} /
- *       {@link #YAW} 里，由 mixin 读取并消费。</li>
- * </ul>
- * 写在表里而不是直接 {@code move()}，是因为**行为 tick 与实体 tick 的先后顺序不保证**
- * （服务端按实体列表顺序），中间隔一 tick 的延迟完全无感，但"谁在什么时候动"这件事
- * 必须只有一个执行者——真正调 {@code move()} 的永远只有 mixin 那一处。
- *
- * ── 为什么"骑扫帚时反复被拉回"（实测六百五十六）——三段因果，全在 vanilla ──
- * <pre>
- *   ServerLevel.tickNonPassenger(载具) → 载具先 tick（扫帚移动 + positionRider 把她摆上鞍位）
- *   ServerLevel.tickPassenger(载具, 乘客) → 乘客 rideTick():
- *        Entity.rideTick():  setDeltaMovement(ZERO)
- *                            this.tick()            ← 【她照样跑自己的整条 aiStep】
- *                            getVehicle().positionRider(this)  ← 【再被按回鞍位】
- * </pre>
- * 也就是说：**每个 tick 都先让乘客按自己的逻辑走一步、再把她拽回鞍位**。对一个没有移动
- * 输入的普通生物这无感；可本模组有一整套"地面走位"（战斗战术的 navigateAway/Orbit、
- * 自保的垫高/逃跑/setPos、威胁驱动的直连导航），它们会在这半拍里把她推走，紧接着被扫帚
- * 拉回来——每 tick 重演一次，玩家看到的就是「女仆在乘坐扫帚的时候会反复被拉回」。
- * 修法不在本类，而在那一整套走位：**她骑扫帚期间全体让位**
- * （见 {@code MaidCombatTacticsBehavior.isTacticsEnabled}、{@code SelfPreservationBehavior.tick}
- * 与 {@code NeutralThreatDriver.navigateTo} 里 {@code MaidBroomKit.isBroomAirborne} 那三处闸）。
- *
- * ── 移动速度：照搬原版，一点不加 ──
- * 。所以物理参数不是我们
- * 拍的，全部来自 TLM 给玩家驾驶写的那份 {@code PlayerBroomControl.travel}（字节码实证）：
- * <pre>
- *   float forward  = zza * 0.375f;            // W 全按
- *   float vertical = 0.25f;                   // 跳跃键（潜行是 -0.2）
- *   double speed   = max(playerFlySpeed - 0.1, 0) * 2.5 + 0.1;   // 玩家默认 = 0.1
- *   Vec3 target    = new Vec3(strafe, vertical, forward).scale(speed * 20.0).yRot(-yawRad);
- *   broom.setDeltaMovement(currentMotion.lerp(target, 0.25));    // 有输入
- *   broom.setDeltaMovement(currentMotion.scale(0.75));           // 无输入
- * </pre>
- * 换算成"速度上限"就是：水平 {@code 0.375 × 0.1 × 20 = 0.75} 格/tick、竖直（跳跃键那一档）
- * {@code 0.5}。本类**照这个包络做比例导引**（{@link #MAX_H_SPEED} / {@link #MAX_V_SPEED}），
- * 并照搬它的两个阻尼系数（{@link #BLEND} 有输入、{@link #IDLE_DECAY} 无输入），
- * 所以"手感"与原版一致、**速度一分不加**；不同的是目标速度由"距离"算出来而不是由键盘
- * 开关决定——因为 AI 没有键盘，而"按满 W 直到冲过目标点"在自动飞行里只会变成绕圈。
- *
- * ── 两个相位（实测六百五十六，
- * <ol>
- *   <li><b>起飞</b>：「如果拿到了扫帚，原地往上飞 1 格悬停（头顶如果被顶住了那就悬停在此处）」
- *       ——见 {@link #takeoffTarget}；</li>
- *   <li><b>接敌爬升</b>：「遇到敌人之后，先向上飞 8 格（头顶如果被顶住了，那就悬停在此处），
- *       然后绕着敌人盘旋」——见 {@link #combatClimbTarget}。</li>
- * </ol>
- * 两条都走同一套"爬升相位"（{@link #CLIMB}）：**升不动就算到底**——靠"连续几 tick 没长高"
- * 判断头顶被顶住（原版 {@code move} 撞到方块自然就升不上去），不需要另外查一遍方块。
+ * 所以"女仆独立骑扫帚"只能由我们在 {@code EntityBroom.travel} 上接管 （见 {@link com.maidsmart.mixin.EntityBroomMaidTravelMixin}）： **没有玩家驾驶时**，用本类写下的推进意图替它飞；**有玩家驾驶时一个字都不改**。 ── 本类与行为的分工 ── <ul> <li>{@link MaidBroomBehavior} 是"大脑"：决定**去哪**（打谁、跟谁、守在哪）、以及 什么时候进入"起飞 / 战斗爬升"这两个相位；</li> <li>本类是"手"：把"去哪"翻译成**这一 tick 的速度矢量与朝向**，写在 {@link #THRUST} / {@link #YAW} 里，由 mixin 读取并消费。</li> </ul> 写在表里而不是直接 {@code move()}，是因为**行为 tick 与实体 tick 的先后顺序不保证** （服务端按实体列表顺序），中间隔一 tick 的延迟完全无感，但"谁在什么时候动"这件事 必须只有一个执行者——真正调 {@code move()} 的永远只有 mixin 那一处。 ── 为什么"骑扫帚时反复被拉回"（实测六百五十六）——三段因果，全在 vanilla ── <pre> ServerLevel.tickNonPassenger(载具) → 载具先 tick（扫帚移动 + positionRider 把她摆上鞍位） ServerLevel.tickPassenger(载具, 乘客) → 乘客 rideTick(): Entity.rideTick():  setDeltaMovement(ZERO) this.tick()            ← 【她照样跑自己的整条 aiStep】 getVehicle().positionRider(this)  ← 【再被按回鞍位】 </pre> 也就是说：**每个 tick 都先让乘客按自己的逻辑走一步、再把她拽回鞍位**。对一个没有移动 输入的普通生物这无感；可本模组有一整套"地面走位"（战斗战术的 navigateAway/Orbit、 自保的垫高/逃跑/setPos、威胁驱动的直连导航），它们会在这半拍里把她推走，紧接着被扫帚 拉回来——每 tick 重演一次，玩家看到的就是「女仆在乘坐扫帚的时候会反复被拉回」。 修法不在本类，而在那一整套走位：**她骑扫帚期间全体让位** （见 {@code MaidCombatTacticsBehavior.isTacticsEnabled}、{@code SelfPreservationBehavior.tick} 与 {@code NeutralThreatDriver.navigateTo} 里 {@code MaidBroomKit.isBroomAirborne} 那三处闸）。 ── 移动速度：照搬原版，一点不加 ── 。所以物理参数不是我们 拍的，全部来自 TLM 给玩家驾驶写的那份 {@code PlayerBroomControl.travel}（字节码实证）： <pre> float forward  = zza * 0.375f;            // W 全按 float vertical = 0.25f;                   // 跳跃键（潜行是 -0.2） double speed   = max(playerFlySpeed - 0.1, 0) * 2.5 + 0.1;   // 玩家默认 = 0.1 Vec3 target    = new Vec3(strafe, vertical, forward).scale(speed * 20.0).yRot(-yawRad); broom.setDeltaMovement(currentMotion.lerp(target, 0.25));    // 有输入 broom.setDeltaMovement(currentMotion.scale(0.75));           // 无输入 </pre> 换算成"速度上限"就是：水平 {@code 0.375 × 0.1 × 20 = 0.75} 格/tick、竖直（跳跃键那一档） {@code 0.5}。本类**照这个包络做比例导引**（{@link #MAX_H_SPEED} / {@link #MAX_V_SPEED}）， 并照搬它的两个阻尼系数（{@link #BLEND} 有输入、{@link #IDLE_DECAY} 无输入）， 所以"手感"与原版一致、**速度一分不加**；不同的是目标速度由"距离"算出来而不是由键盘 开关决定——因为 AI 没有键盘，而"按满 W 直到冲过目标点"在自动飞行里只会变成绕圈。 ── 两个相位（实测六百五十六， <ol> <li><b>起飞</b>：「如果拿到了扫帚，原地往上飞 1 格悬停（头顶如果被顶住了那就悬停在此处）」 ——见 {@link #takeoffTarget}；</li> <li><b>接敌爬升</b>：「遇到敌人之后，先向上飞 8 格（头顶如果被顶住了，那就悬停在此处）， 然后绕着敌人盘旋」——见 {@link #combatClimbTarget}。</li> </ol> 两条都走同一套"爬升相位"（{@link #CLIMB}）：**升不动就算到底**——靠"连续几 tick 没长高" 判断头顶被顶住（原版 {@code move} 撞到方块自然就升不上去），不需要另外查一遍方块。
  */
 public final class MaidBroomDrive {
 
@@ -116,9 +58,7 @@ public final class MaidBroomDrive {
     private static final Map<UUID, Climb> CLIMB = new HashMap<>();
     /**
      * 女仆 UUID → **这一场遭遇的盘旋高度**（相对敌人脚底的格数）。
-     *
      * <p>【为什么需要它（v1.3.3 实测六百五十八，
-     *
      * 写死成 {@code 目标脚底 + combat.broomHover}（默认 2），而接敌爬升是"在她自己脚下 +8"——
      * 两处对高度的口径不一样，于是"先爬 8 格、再滑回敌上 2 格"，爬升白爬。
      * 现在把两处接起来：**爬升相位的唯一职责就是决定这一场遭遇的盘旋高度**
@@ -126,20 +66,12 @@ public final class MaidBroomDrive {
      */
     private static final Map<UUID, Double> COMBAT_ALT = new HashMap<>();
     /**
-     * 【实测六百九十二】女仆 UUID → **她这场守家巡逻的高度**（绝对 Y + 当时那个圈心）。
-     *
      * <p>
-     *
-     *
-     *
      * <p>它是 {@link #homeOrbitPoint} 在"**脚下找不到地**"时的唯一参照：{@link #groundYOrNaN} 找不到
      * 地面（虚空 / 她比地形高出 {@link #GROUND_SCAN} 格以上）时，目标高度取
      * {@code min(她当前高度, 这份记忆)} —— **只降不升**。旧版那一档是 {@code fromY + homeAlt}
      * （"没找到地就当她悬在虚空上原地不动" + 离地偏移），于是在地形之上每拍都 +8 格 = 无上限爬升，
-     * 正是。
-     *
-     * <p>只在"能算出地面高度"的时候刷新（并记下当时的圈心：换了一个工作区就不认旧记忆）；
-     * 圈心对不上 / 还没巡逻过 → 记忆为空，那一档退化成"停在现在的高度"（不升也不降）。
+     * 正是。 <p>只在"能算出地面高度"的时候刷新（并记下当时的圈心：换了一个工作区就不认旧记忆）； 圈心对不上 / 还没巡逻过 → 记忆为空，那一档退化成"停在现在的高度"（不升也不降）。
      */
     private static final Map<UUID, PatrolAlt> HOME_ALT = new HashMap<>();
 
@@ -209,15 +141,11 @@ public final class MaidBroomDrive {
     private static final double RISE_BLOCKS = 1.0;
     // 【实测六百七十八】接敌爬升的高度**不再写死 8 格**：改成配置项 {@code combat.broom.climb}
     //  （实测六百八十六 起默认 12，2~32，面板「移动与行为 → 扫帚模式 → 接敌爬升高度」可调），见下面的 climbCfg()。
-    //
-    //
     //  她飞高一点，你脚下才有余量、不会一路蹭着树冠/地面。旧存档里写死的 8 不会自动变。
     /**
      * 爬升相位的目标 Y 写在"想抬的高度 + 这个余量"处（{@link #ARRIVE} 格）。
      * <p>
-     * 为什么要这个余量：她到位的方式是 {@link #steerTo} 的比例导引，而那一支在距目标
-     * {@link #ARRIVE} 格时就判定"到点、收干悬停"——所以想让她**真的抬满 1 / 10 格**，
-     * 目标就得写在"到点线"之上 {@link #ARRIVE} 格处。两边共用同一个常量，改一处两边一起动。
+     * 为什么要这个余量：她到位的方式是 {@link #steerTo} 的比例导引，而那一支在距目标 {@link #ARRIVE} 格时就判定"到点、收干悬停"——所以想让她**真的抬满 1 / 10 格**， 目标就得写在"到点线"之上 {@link #ARRIVE} 格处。两边共用同一个常量，改一处两边一起动。
      */
     private static final double CLIMB_LEAD = ARRIVE;
     /** 爬升相位的触发起飞标识（与"目标 UUID"这种 key 并列，只有一个语义：这一次爬升是谁要的） */
@@ -227,17 +155,11 @@ public final class MaidBroomDrive {
     private static final float DEG = 57.295776F;
     /**
      * 爬升相位的"升不动"判定：连续这么多 tick 没有长高就算头顶被顶住（见 {@link Climb#stalled}）。
-     *
      * <p>【实测六百八十四】4 → 10。4 tick（0.2 秒）比"起手加速"还短：{@link #BLEND} 那一支从
      * 零起步的第一拍只涨 0.075 格，只要有一次方块角/叶子的擦碰把这一拍抹平，本场遭遇的盘旋高度
      * 就被钉在地板上（实测日志里 2.00 / 2.93 / 3.66 格就是这么来的）。
-     *
      * <p>【实测六百八十六】10 → 20（1 秒），并且**配合下面那条"整段净涨 &lt; 0.5 格"一起判**
-     * （{@link #STALL_MIN_PROGRESS}）：`stall` 数的是"这一拍涨了没有"，而她在被 boss 撞一下、
-     * 被风弹吹一下、客户端/服务端位置同步抖一下的时候都可能连着几拍不涨——只看这个计数，10 拍
-     * （0.5 秒）仍然太短，一抖就被判成"顶头"，本场盘旋高度当场被钉到"敌上 2 格"（
-     * 「只是在比敌人稍微高一点点的地方盘旋，就是不升高自己的高度」）。正常爬满 12 格要走 2.4 秒，
-     * 20 拍该涨 6 格，所以"20 拍里净涨不到半格"才是那个不会误判的判据。
+     * （{@link #STALL_MIN_PROGRESS}）：`stall` 数的是"这一拍涨了没有"，而她在被 boss 撞一下、 被风弹吹一下、客户端/服务端位置同步抖一下的时候都可能连着几拍不涨——只看这个计数，10 拍 （0.5 秒）仍然太短，一抖就被判成"顶头"，本场盘旋高度当场被钉到"敌上 2 格"（ 「只是在比敌人稍微高一点点的地方盘旋，就是不升高自己的高度」）。正常爬满 12 格要走 2.4 秒， 20 拍该涨 6 格，所以"20 拍里净涨不到半格"才是那个不会误判的判据。
      */
     private static final int STALL_TICKS = 20;
     /**
@@ -250,17 +172,12 @@ public final class MaidBroomDrive {
      */
     private static final double STALL_MIN_PROGRESS = 0.5;
     /**
-     * 【实测六百八十四】头顶被顶住之后，最多隔这么久再试一次爬升（tick）。
-     *
      * <p>旧版是"一场遭遇只爬一次"，于是她只要在低矮房间里挨过第一次爬升，**整场**都按那几格飞，
      * 走进开阔地也升不回去（实测日志：16:46:15 钉在 3.66 格 →「以后一直保持这个高度」）。
      * 重试还要过一个"头顶现在是不是空气"的探针（见 {@link Climb#roomNow}）：房间里照样是顶的
      * 时候一次都不试，她不会为了够一个够不到的高度在原地一抽一抽。
-     *
      * <p>【实测六百八十六】100 → 40（2 秒）：等待从"5 秒起、翻倍到 60 秒"缩到"2 秒起、翻倍到
-     * 30 秒"。旧门槛下，"被 boss 撞得几拍没涨"这种一次性的误判要 5 秒以上才自愈，玩家看到的
-     * 就是"一整场都在敌人上方两格盘旋、怎么都不升高"（他的
-     * "真被天花板压着"那一档挡住了（房间里的头顶一直是方块 → 一次都不试），所以把等待压短是安全的。
+     * 30 秒"。旧门槛下，"被 boss 撞得几拍没涨"这种一次性的误判要 5 秒以上才自愈，玩家看到的 就是"一整场都在敌人上方两格盘旋、怎么都不升高"（他的 "真被天花板压着"那一档挡住了（房间里的头顶一直是方块 → 一次都不试），所以把等待压短是安全的。
      */
     private static final int CLIMB_RETRY_TICKS = 40;
     /**
@@ -281,9 +198,7 @@ public final class MaidBroomDrive {
      */
     private static final double ORBIT_SPEED = 0.14;
     /**
-     * 【实测七百零一】接敌后**离敌的最小距离**（格）的**兜底默认值**（配置
      * {@code combat.broom.minStandoff} 读不到时用它，见 {@link #minStandoffCfg}）。
-     *
      * <p>。旧版的环绕近端由"基础盘旋距离 × 0.75"
      * 现算（默认 8 × 0.75 = 6 格），**没有独立的下限**——玩家把「离敌最远距离」调小到 4，
      * 近端就塌到 3 格，她正好飘进近战怪的攻击范围。现在近端取
@@ -303,14 +218,7 @@ public final class MaidBroomDrive {
      * 【"找"的两档（v1.3.4 实测六百五十九，）】
      * <pre>
      *   ① 世界里**已经放着**的那把扫帚实体（{@code EntityBroom}）——走过去骑上（首选）；
-     *   ② 地上掉着的那把扫帚**物品**——走过去收进背包（次选：收进来之后由
-     *      {@link #ensureMounted} 照 v1.3.0 的老规矩放出来骑）。
-     * </pre>
-     * 两档都排在"跟随主人"之前——没扫帚时她不会先去跟主人（见 {@link #seekBroom}）。
-     * <p>
-     * 【哪些扫帚不碰】背包/精妙背包里躺着的那不叫"找"叫"取"——归 {@link #ensureMounted}
-     * 直接抽出来放骑，这里不重复；**已经有乘客的扫帚不抢**（玩家正骑着的那把，或别的女仆
-     * 已经骑上的那把）——只认空着的那种。
+     *   ② 地上掉着的那把扫帚**物品**——走过去收进背包（次选：收进来之后由 {@link #ensureMounted} 照 v1.3.0 的老规矩放出来骑）。 </pre> 两档都排在"跟随主人"之前——没扫帚时她不会先去跟主人（见 {@link #seekBroom}）。 <p> 【哪些扫帚不碰】背包/精妙背包里躺着的那不叫"找"叫"取"——归 {@link #ensureMounted} 直接抽出来放骑，这里不重复；**已经有乘客的扫帚不抢**（玩家正骑着的那把，或别的女仆 已经骑上的那把）——只认空着的那种。
      */
     private static final double HUNT_RADIUS = 16.0;
     /**
@@ -332,20 +240,11 @@ public final class MaidBroomDrive {
 
     /**
      * 确保她骑在一把扫帚上（已经骑着就原样返回）。
-     *
      * 【扫帚从哪来】用她背包里的——主手 → 副手 → 背包 → 精妙背包/旅行者背包这类额外容器，
      * 抽走 1 件，在**她脚下**放出一把 {@code EntityBroom}（与玩家手持扫帚右键放置同款：
      * {@code setOwnerUUID(主人)} + 入世界 + 消耗那件物品），然后骑上去。收工时把**这一件**
      * 精确还回她背包（见 {@link #dismount}），所以扫帚不会损耗、也不会掉在地上。
-     *
-     * 【为什么认"主人"而不是"她"】{@code EntityBroom.canMaidRide} 要求女仆与扫帚的
-     * ownerUUID 相等（字节码实证）；写成女仆自己会让别的女仆被 {@code pushEntities}
-     * 顺带拽上来。挂主人头上与玩家自己放置完全一致。
-     *
-     * 【骑上即起一个"起飞相位"】玩家要求"原地往上飞 1 格悬停"。相位登记在这里，
-     * 由 {@link MaidBroomBehavior} 每 tick 消费（见 {@link #takeoffTarget}）。
-     *
-     * @return 骑上的那把扫帚；null = 没扫帚 / 放不出来（调用方按"缺扫帚"处理）
+     * 【为什么认"主人"而不是"她"】{@code EntityBroom.canMaidRide} 要求女仆与扫帚的 ownerUUID 相等（字节码实证）；写成女仆自己会让别的女仆被 {@code pushEntities} 顺带拽上来。挂主人头上与玩家自己放置完全一致。 【骑上即起一个"起飞相位"】玩家要求"原地往上飞 1 格悬停"。相位登记在这里， 由 {@link MaidBroomBehavior} 每 tick 消费（见 {@link #takeoffTarget}）。 @return 骑上的那把扫帚；null = 没扫帚 / 放不出来（调用方按"缺扫帚"处理）
      */
     public static EntityBroom ensureMounted(ServerLevel level, EntityMaid maid) {
         if (level == null || maid == null) {
@@ -434,43 +333,9 @@ public final class MaidBroomDrive {
      * 接敌爬升相位的目标 Y：「遇到敌人之后，先向上飞 N 格，然后绕着敌人盘旋」——
      * N = 配置 {@code combat.broom.climb}（**实测六百八十六 起默认 12**，面板可调 2~32；
      * 六百八十二 起 15、六百七十八 起 10，再往前是写死的 8）。
-     *
      * <p>**以目标（敌人）为单位起相位**：换了一个敌人就重新爬一次（同一场遭遇里
      * 只爬一次——所以相位做完是**留在表里打 done 标记**而不是删掉，删掉的话下一 tick
-     * 又会当"新相位"从头爬，变成无限上蹿）。相位结束（到位 / 顶头）后返回 null，
-     * 调用方转去 {@link #combatPoint} 盘旋。丢目标时由 {@link #clearClimb} 清掉，
-     * 于是下一次接敌会重新爬。
-     *
-     * <p>── v1.3.3【"先升 8 格又慢慢掉下来"的修正】──
-     * 旧版这里的目标 Y 是 {@code 她自己脚下 + N}，而盘旋高度是 {@code 目标脚底 + broomHover}：
-     * 两处口径不同 → 爬完 N 格立刻按另一套高度往回落，玩家看到的正是"升上去又掉下来"，
-     * 爬升毫无意义。现在爬升的 Y 改成 **{@code 目标脚底 + N}**（相对敌人，与盘旋同一个参照系），
-     * 并在相位收尾（到位 / 顶头）那一刻把**这一场遭遇的盘旋高度**记进 {@link #COMBAT_ALT}
-     * （顶头了就记实际抬到的高度，但至少 {@code broomHover}）——于是"爬 N 格"不是在演一段
-     * 动画，而是在**决定盘旋高度**：升到敌上 N 格，就一直在敌上 N 格打。
-     *
-     * <p>── 实测六百八十四【"只比敌人高三格"的两个来源，都在这一个方法里】──
-     *
-     *
-     * 读出来就是 15.0，开阔处「爬升到位（y -58.81 → -44.93）→ 本场盘旋高度 = 敌人上方 15.00 格」
-     * 一模一样地兑现）。问题在**这个相位把降下来的高度钉死了一整场遭遇**，加上换目标就重爬：
-     * <pre>
-     *   ① 目标来回换 → 重爬 → 谁在被顶住的高度低，就按谁的高度钉住（15 ↔ 3.66 来回跳）；
-     *   ② 钉住之后不再重试 → 走进开阔地也升不回去（她只能一直"敌人上方 3 格"）。
-     * </pre>
-     * 现在改成：本场遭遇只爬一次、换目标只改写 key（①）；被顶住的高度照旧先按它飞，但每
-     * {@link #CLIMB_RETRY_TICKS} 一次、且**头顶探针说现在有空间**时才重试爬升（②）。
-     *
-     * <p>── 实测六百八十六【"就是不升高自己的高度"的第三处根因】──
-     *
-     *
-     * **"顶头"的判据太敏感、而且一顶就把高度钉死**——连 10 拍（0.5 秒）没涨就算顶头（boss 撞一下、
-     * 风弹吹一下、位置同步抖一下都够），顶头那一刻就把 {@link #COMBAT_ALT} 写成"此刻相对敌人的
-     * 高度"（日志里 2.00 / 2.93 / 3.66 格就是这么来的），此后整场都按那个数飞，要等重试把它抬回来。
-     * 现在两处一起改：判据加一条"整段净涨不到 {@link #STALL_MIN_PROGRESS}"（见 {@link Climb#stalled}），
-     * 且 {@link #COMBAT_ALT} **只升不降**（一次顶头抬不高，但绝不会把已经飞到的高度拽下来）。
-     *
-     * @param target 当前敌人（取它的 UUID 当相位的 key、取它的脚底当高度参照）
+     * 又会当"新相位"从头爬，变成无限上蹿）。相位结束（到位 / 顶头）后返回 null， 调用方转去 {@link #combatPoint} 盘旋。丢目标时由 {@link #clearClimb} 清掉， 于是下一次接敌会重新爬。 <p>── v1.3.3【"先升 8 格又慢慢掉下来"的修正】── 两处口径不同 → 爬完 N 格立刻按另一套高度往回落，玩家看到的正是"升上去又掉下来"， 爬升毫无意义。现在爬升的 Y 改成 **{@code 目标脚底 + N}**（相对敌人，与盘旋同一个参照系）， 并在相位收尾（到位 / 顶头）那一刻把**这一场遭遇的盘旋高度**记进 {@link #COMBAT_ALT} （顶头了就记实际抬到的高度，但至少 {@code broomHover}）——于是"爬 N 格"不是在演一段 动画，而是在**决定盘旋高度**：升到敌上 N 格，就一直在敌上 N 格打。 <p>── 实测六百八十四【"只比敌人高三格"的两个来源，都在这一个方法里】── 读出来就是 15.0，开阔处「爬升到位（y -58.81 → -44.93）→ 本场盘旋高度 = 敌人上方 15.00 格」 一模一样地兑现）。问题在**这个相位把降下来的高度钉死了一整场遭遇**，加上换目标就重爬： <pre> ① 目标来回换 → 重爬 → 谁在被顶住的高度低，就按谁的高度钉住（15 ↔ 3.66 来回跳）； ② 钉住之后不再重试 → 走进开阔地也升不回去（她只能一直"敌人上方 3 格"）。 </pre> 现在改成：本场遭遇只爬一次、换目标只改写 key（①）；被顶住的高度照旧先按它飞，但每 {@link #CLIMB_RETRY_TICKS} 一次、且**头顶探针说现在有空间**时才重试爬升（②）。 <p>── 实测六百八十六【"就是不升高自己的高度"的第三处根因】── **"顶头"的判据太敏感、而且一顶就把高度钉死**——连 10 拍（0.5 秒）没涨就算顶头（boss 撞一下、 风弹吹一下、位置同步抖一下都够），顶头那一刻就把 {@link #COMBAT_ALT} 写成"此刻相对敌人的 高度"（日志里 2.00 / 2.93 / 3.66 格就是这么来的），此后整场都按那个数飞，要等重试把它抬回来。 现在两处一起改：判据加一条"整段净涨不到 {@link #STALL_MIN_PROGRESS}"（见 {@link Climb#stalled}）， 且 {@link #COMBAT_ALT} **只升不降**（一次顶头抬不高，但绝不会把已经飞到的高度拽下来）。 @param target 当前敌人（取它的 UUID 当相位的 key、取它的脚底当高度参照）
      */
     public static Double combatClimbTarget(EntityMaid maid, LivingEntity target) {
         if (maid == null || target == null) {
@@ -549,13 +414,11 @@ public final class MaidBroomDrive {
 
     /**
      * 结束爬升相位（没目标了 / 收了工）——顺带作废这一场遭遇的盘旋高度。
-     *
      * <p>【实测七百〇四：顺手把随机环绕与接敌机动也丢干净】，
      * 根因就在这一格：{@link CombatOrbit} 与 {@link CombatManeuver} 的状态**只在换任务/下线时**
      * （{@link #forgetMaid}）才清，而"一场遭遇结束"（丢目标、下鞍、玩家接管）走的是本方法——
      * 于是 {@code CombatManeuver.begin} 的幂等语义变成了"一次抽签用一整天"：她第一场抽到环绕，
-     * 之后每一场都还是环绕。本方法现在是**这一场遭遇的收尾点**，两套随机都从这里重掷，
-     * 「每场遭遇抽一种」才真的成立（下一场一定看得见换打法）。
+     * 之后每一场都还是环绕。本方法现在是**这一场遭遇的收尾点**，两套随机都从这里重掷， 「每场遭遇抽一种」才真的成立（下一场一定看得见换打法）。
      */
     public static void clearClimb(EntityMaid maid) {
         if (maid != null) {
@@ -692,15 +555,12 @@ public final class MaidBroomDrive {
         }
 
         /**
-         * 【实测六百八十四】这一拍该不该重试爬升——两个前提都要满足：
          * <pre>
          *   ① 隔够了这一次的等待时间（{@link #CLIMB_RETRY_TICKS} 起、每失败一次翻倍、
          *      {@link #CLIMB_RETRY_MAX_TICKS} 封顶）；
          *   ② {@link #roomNow}：她头顶现在是空气（真有地方可以上去）。
          * </pre>
-         * ②是防抖动的那一半：低矮房间里头顶一直是方块，条件永不成立 → 一次都不重试，
-         * 她照常绕着敌人盘旋（不做"每 5 秒原地一抽"）。等她自己飞进高一点的地方，②立刻成立，
-         * 到点就重爬。读不到方块时按"可以试"处理（最坏 = 多试几次，绝不会把高度钉死）。
+         * ②是防抖动的那一半：低矮房间里头顶一直是方块，条件永不成立 → 一次都不重试， 她照常绕着敌人盘旋（不做"每 5 秒原地一抽"）。等她自己飞进高一点的地方，②立刻成立， 到点就重爬。读不到方块时按"可以试"处理（最坏 = 多试几次，绝不会把高度钉死）。
          */
         boolean retryDue(EntityMaid maid) {
             if (!this.blocked) {
@@ -890,34 +750,11 @@ public final class MaidBroomDrive {
 
     /**
      * 战斗时的目标点：保持在目标的水平外圈、缓慢绕着她转、高度压在她上方一点。
-     *
      * 【为什么要绕而不是直线怼过去】远程女仆必须**持续把距离拉开**才有输出窗口
      * （贴脸会被近战反打），所以这里把"目标点"取成目标周围的**圆周上一点**，
      * 方位角每 tick 转 {@link #ORBIT_SPEED} 换算出来的那一步——表现就是"绕着她转圈打"。
-     *
      * 【高度 = 这一场遭遇爬上来的那个高度（v1.3.3）】由 {@link #combatClimbTarget} 在爬升
-     * 收尾时写进 {@link #COMBAT_ALT}（想抬配置那个数、顶头按实际、下限 {@link #hoverCfg}，
-     * 而且**本场只升不降**，见 combatClimbTarget 里 实测六百八十六 那一段）。
-     * 没有记录（理论上只在爬升还没做完时）才退回配置的悬停高度——**绝不出现"爬到 8 格
-     * 又被另一套高度拽回来"**（那正是）。
-     *
-     * <p>【实测六百八十四 补充】"顶头按实际"是**暂时的**：被顶住那一次按实际高度飞，
-     * 但只要她头顶一开阔（她自己飞到高处 / 房间变高），{@link #combatClimbTarget} 会重试
-     * 爬升并把这个数改回 {@code climb}。所以这一格不会像旧版那样把一整场遭遇钉在地板上。
-     *
-     * <p>【实测六百九十三：半径与旋向都改成随机】
-     *
-     *
-     * 旧版这一格是 {@code Math.max(1.0, rangeCfg())}：**所有**女仆永远同一个半径（8 格），
-     * 切向又是同一个固定方向（{@link #ORBIT_SPEED} / 半径，恒 +）——691 的相位错开只让她们
-     * **起点**不同，跑起来仍然在同一个圆上同向转，敌人一条射线就能串到对面那只。
-     * 现在半径交给 {@link CombatOrbit#radius}（每只女仆各自一个、每 4 秒缓动的比例，区间
-     * {@code [基础距离 × 0.75, orbitMax]}）、旋向交给 {@link CombatOrbit#direction}（UUID 派生，
-     * 一半逆时针一半顺时针）——两只女仆是在圆上**对穿**，不再首尾相接。
-     * {@code orbitMax}（配置 {@code combat.broom.orbitMax}）就是玩家要的那条「离敌最远距离」，
-     * 它同时是随机区间的顶点，所以"随机"不会变成"越飞越远"。
-     *
-     * @return 期望位置（已过 {@link MaidBroomKit#clampToHome} 夹取，见 {@link #steerTo}）
+     * 收尾时写进 {@link #COMBAT_ALT}（想抬配置那个数、顶头按实际、下限 {@link #hoverCfg}， 而且**本场只升不降**，见 combatClimbTarget 里 实测六百八十六 那一段）。 没有记录（理论上只在爬升还没做完时）才退回配置的悬停高度——**绝不出现"爬到 8 格 又被另一套高度拽回来"**（那正是）。 <p>【实测六百八十四 补充】"顶头按实际"是**暂时的**：被顶住那一次按实际高度飞， 但只要她头顶一开阔（她自己飞到高处 / 房间变高），{@link #combatClimbTarget} 会重试 爬升并把这个数改回 {@code climb}。所以这一格不会像旧版那样把一整场遭遇钉在地板上。 <p>【实测六百九十三：半径与旋向都改成随机】 切向又是同一个固定方向（{@link #ORBIT_SPEED} / 半径，恒 +）——691 的相位错开只让她们 **起点**不同，跑起来仍然在同一个圆上同向转，敌人一条射线就能串到对面那只。 现在半径交给 {@link CombatOrbit#radius}（每只女仆各自一个、每 4 秒缓动的比例，区间 {@code [基础距离 × 0.75, orbitMax]}）、旋向交给 {@link CombatOrbit#direction}（UUID 派生， 一半逆时针一半顺时针）——两只女仆是在圆上**对穿**，不再首尾相接。 {@code orbitMax}（配置 {@code combat.broom.orbitMax}）就是玩家要的那条「离敌最远距离」， 它同时是随机区间的顶点，所以"随机"不会变成"越飞越远"。 @return 期望位置（已过 {@link MaidBroomKit#clampToHome} 夹取，见 {@link #steerTo}）
      */
     public static Vec3 combatPoint(EntityMaid maid, LivingEntity target) {
         UUID id = maid.m_20148_();
@@ -1040,32 +877,11 @@ public final class MaidBroomDrive {
 
     /**
      * 守家（工作范围）时的目标点：**沿着工作范围那个圈的边缘慢慢盘旋**（v1.3.6 实测六百六十一）。
-     *
      * <p>【
-     *
      * 于是开着 home 她也只是跟着主人悬停——看不出「守家」。现在平时（没有敌人）改成绕圈巡逻。
-     *
      * <p>【高度：离地 patrolAlt 格，实测六百九十一改；**找不到地时只降不升**，实测六百九十二】
-     * 旧版这一条**不碰高度**（y 取扫帚当前高度），理由是"工作范围是个水平圆、没有纵向语义"。
      * 但起飞相位只抬 {@link #RISE_BLOCKS} 格，于是她整场守家巡逻都贴着地面飞——
-     * 「女仆很喜欢贴地飞行。这个观感太差了。」现在高度改成"**她脚下那块地之上
-     * {@code combat.broom.homeAlt} 格**（默认 8）"，再由 {@link #safeY} 兜住天花板：{@code want}
-     * 太高（头顶有顶）就取放得下的最高一格，一格都放不下就留在现在的高度。参照物仍是水平的那个圈，
-     * 只把"多高"这一项补齐。
-     *
-     * <p>【实测六百九十二："躲建筑不许越躲越高"】
-     *
-     * 地面时**不再加那个离地偏移**（旧版等于每拍 +8 格 = 无上限爬升），而是取
-     * {@code min(她当前高度, 这场巡逻的高度记忆)}——只准降回那个高度，绝不再往上加。
-     *
-     * <p>【半径取「半径 − 余量」】圈内判定是「离圈心 ≤ 半径」，而她的座位在朝向后方半格
-     * （见 {@link #hoverInPlace} 那段因果）——贴着边缘飞容易在边界上反复进出；退 1.5 格留余量，
-     * 视觉上仍然是「贴着圈在转」。
-     *
-     * <p>【转速】与战斗盘旋共用 {@link #ORBIT_SPEED}（恒定**线**速度）：圈大圈小都是同样的
-     * 格/秒，不会出现「圈一大就看起来钉在原地」。
-     *
-     * @return 期望位置；没有工作范围（圈心无效）时返回 null，调用方退回跟主人 / 原地悬停
+     * 「女仆很喜欢贴地飞行。这个观感太差了。」现在高度改成"**她脚下那块地之上 {@code combat.broom.homeAlt} 格**（默认 8）"，再由 {@link #safeY} 兜住天花板：{@code want} 太高（头顶有顶）就取放得下的最高一格，一格都放不下就留在现在的高度。参照物仍是水平的那个圈， 只把"多高"这一项补齐。 <p>【实测六百九十二："躲建筑不许越躲越高"】 地面时**不再加那个离地偏移**（旧版等于每拍 +8 格 = 无上限爬升），而是取 {@code min(她当前高度, 这场巡逻的高度记忆)}——只准降回那个高度，绝不再往上加。 <p>【半径取「半径 − 余量」】圈内判定是「离圈心 ≤ 半径」，而她的座位在朝向后方半格 （见 {@link #hoverInPlace} 那段因果）——贴着边缘飞容易在边界上反复进出；退 1.5 格留余量， 视觉上仍然是「贴着圈在转」。 <p>【转速】与战斗盘旋共用 {@link #ORBIT_SPEED}（恒定**线**速度）：圈大圈小都是同样的 格/秒，不会出现「圈一大就看起来钉在原地」。 @return 期望位置；没有工作范围（圈心无效）时返回 null，调用方退回跟主人 / 原地悬停
      */
     public static Vec3 homeOrbitPoint(EntityMaid maid) {
         try {
@@ -1084,9 +900,6 @@ public final class MaidBroomDrive {
             double z = c.m_123343_() + 0.5 + Math.sin(ang) * r;
             // 【实测六百九十一】高度：她脚下那块地 + 配置的"离地格数"，再压到放得下的高度
             // （旧版这一格是 p.f_82480_ = 扫帚当前高度 → 贴地飞）。
-            // 【实测六百九十二：找不到地时**只降不升**】
-            //
-            //  旧版这一句是 `groundY(...) + homeAltCfg()`，而 groundY 找不到地面时返回的正是
             //  **她当前的高度** → 每拍在她现在的高度上再加 8 格 = 无上限爬升（地形在她脚下 24 格
             //  以外、或她悬在虚空上时必然发生）。现在：找得到地 → 地 + 离地格数（并记进
             //  HOME_ALT 当"这场巡逻的高度"）；找不到地 → 取 min(她当前高度, 那份记忆)，
@@ -1115,16 +928,11 @@ public final class MaidBroomDrive {
 
     /**
      * 每只女仆一个**稳定的盘旋相位**（弧度，0~2π）：从她的 UUID 派生，同一只女仆永远同一个值。
-     *
      * <p>【为什么必须有它（）】
-     * 旧版两个盘旋相位表（{@link #ORBIT} 绕敌人 / {@link #HOME_ORBIT} 绕工作范围）**起点都是
      * 0.0**，而角速度又是同一个 {@link #ORBIT_SPEED} / 半径——于是同一时刻进场、半径相同的两只
      * 女仆目标点**逐 tick 完全重合**：绕着同一个圆心、永远是同一个点，看起来就是叠在一起飞。
      * 现在起点换成"她自己那个相位"，同一批女仆天然错开一整圈；再叠一层 {@link #separate} 兜住
-     * "从两处飞过来撞到一起"的情况。
-     *
-     * <p>【为什么从 UUID 派生、而不是随机】随机会在每次重进世界时换相位（她会在你眼前跳一下），
-     * 而 UUID 是稳定的：同一只女仆在同一个圆上的位置永远一样。
+     * "从两处飞过来撞到一起"的情况。 <p>【为什么从 UUID 派生、而不是随机】随机会在每次重进世界时换相位（她会在你眼前跳一下）， 而 UUID 是稳定的：同一只女仆在同一个圆上的位置永远一样。
      */
     private static double phaseOf(EntityMaid maid) {
         try {
@@ -1139,18 +947,12 @@ public final class MaidBroomDrive {
     /** 两只"载着女仆的扫帚"之间的最小水平间距（格）：近到这个数以内就互相让位 */
     private static final double SEP_R = MaidRideKit.SEP_R;
     /**
-     * 【实测七百零一】**接敌期间**的最小水平间距（格）——比平时的 {@link #SEP_R} 大一档。
-     *
      * <p>。
      * 平时跟主人/守家盘旋时，2 格是"别撞在一起"的观感下限；而**接敌**时两只女仆靠得近
      * 就是活靶子：敌人一箭穿过前面那只还会打到后面那只（正是 实测六百九十三 ）。
      * 所以接敌档把间距放宽到 4 格——半径随机（6~10）+ 旋向对半（{@link CombatOrbit#direction}）
      * + 这条间距，三层一起保证"她与同伴不在同一条射线上"。
-     *
-     * <p>【只推水平、只在接敌】与 {@link #SEP_R} 同一套做法（见 {@link #separate}）。
-     *
-     * <p>【实测七百四十九·点3】取值改为直接引用 {@link MaidRideKit} 的公共常量——坐骑那边
-     * 用的是**同一个** {@link MaidRideKit#SEP_R_COMBAT}，这才叫"统一的标准"。
+     * <p>【只推水平、只在接敌】与 {@link #SEP_R} 同一套做法（见 {@link #separate}）。 <p>【实测七百四十九·点3】取值改为直接引用 {@link MaidRideKit} 的公共常量——坐骑那边 用的是**同一个** {@link MaidRideKit#SEP_R_COMBAT}，这才叫"统一的标准"。
      */
     private static final double SEP_R_COMBAT = MaidRideKit.SEP_R_COMBAT;
     /** 一次让位最多挪出去多少格（封顶：互斥只做修正，绝不把"去哪"整条盖掉） */
@@ -1166,23 +968,11 @@ public final class MaidBroomDrive {
 
     /**
      * **邻近互斥**：目标点附近有别的"载着女仆的扫帚"时，把目标点朝远离她的方向推出去一点。
-     *
      * <p>【为什么写在推进这一层】"别叠罗汉"是横跨跟随 / 战斗盘旋 / 守家盘旋 / 原地悬停四种目标点
      * 的**同一条口径**，写在 {@link #steerTo} 里只此一处；相位错开（{@link #phaseOf}）只解决
      * "同一起点"，互斥负责"追同一个位置 / 半路撞上"。
-     *
      * <p>【只避让"载着女仆的扫帚"】空着的扫帚是她的**目标**（她正要过去骑），玩家自己骑的那把
-     * 也不是她要叠的东西；只把"别的女仆正骑着的扫帚"当障碍，正好就是。
-     *
-     * <p>【只推水平】"叠罗汉"要的是水平方向错开；竖直那一份交给起飞/接敌两个爬升相位，
-     * 互斥插一脚只会让爬升抖动。
-     *
-     * <p>【顺序】互斥作用在"原始目标点"上、**在 {@link MaidBroomKit#clampToHome} 之前**：
-     * 夹取仍有最终话语权（不会被推出工作范围），互斥那点偏置在圈边被夹掉也只是"这一边推不动"。
-     *
-     * <p>【实测七百零一：接敌档间距放宽到 {@link #SEP_R_COMBAT}】
-     *
-     * 是不是在接敌"传进来（口径只有一处：{@code combat} 为真时用那一对更大的数）。
+     * 也不是她要叠的东西；只把"别的女仆正骑着的扫帚"当障碍，正好就是。 <p>【只推水平】"叠罗汉"要的是水平方向错开；竖直那一份交给起飞/接敌两个爬升相位， 互斥插一脚只会让爬升抖动。 <p>【顺序】互斥作用在"原始目标点"上、**在 {@link MaidBroomKit#clampToHome} 之前**： 夹取仍有最终话语权（不会被推出工作范围），互斥那点偏置在圈边被夹掉也只是"这一边推不动"。 <p>【实测七百零一：接敌档间距放宽到 {@link #SEP_R_COMBAT}】 是不是在接敌"传进来（口径只有一处：{@code combat} 为真时用那一对更大的数）。
      */
     private static Vec3 separate(EntityMaid maid, EntityBroom broom, Vec3 aim, boolean combat) {
         if (aim == null || broom == null) {
@@ -1229,18 +1019,11 @@ public final class MaidBroomDrive {
 
     /**
      * 【实测六百九十一】把"想去的高度"压到**她真的放得下**的高度：顶头就低一点，绝不硬塞。
-     *
      * <p>【为什么需要】
-     *
      * 只抬 {@link #RISE_BLOCKS} 格，于是她整场巡逻都贴着地面飞。现在改成"地面之上
      * {@code combat.broom.homeAlt} 格"（见 {@link #homeOrbitPoint}），但**不能直接给一个绝对
      * 高度**：头顶有天花板时那个点在方块里，她会一路顶上去——而她是被原版 {@code positionRider}
-     * 直接摆到座位点的**乘客**，会嵌在方块里扣窒息伤害（与脱困那一档同一个病根）。
-     * 所以这里从"想要的高度"往下找第一个她放得下的高度。
-     *
-     * <p>【判据】她连扫帚要占的 {@code y} 与 {@code y+1} 两格都是空气（她的碰撞箱宽 0.6 / 高 1.5，
-     * 见 {@link #MAID_HALF_W} 那一组常量）。一格都放不下（她头顶就是一格厚的地板）→ 返回
-     * {@code fromY}（她现在的高度 = 原地悬停），不硬抬。
+     * 直接摆到座位点的**乘客**，会嵌在方块里扣窒息伤害（与脱困那一档同一个病根）。 所以这里从"想要的高度"往下找第一个她放得下的高度。 <p>【判据】她连扫帚要占的 {@code y} 与 {@code y+1} 两格都是空气（她的碰撞箱宽 0.6 / 高 1.5， 见 {@link #MAID_HALF_W} 那一组常量）。一格都放不下（她头顶就是一格厚的地板）→ 返回 {@code fromY}（她现在的高度 = 原地悬停），不硬抬。
      */
     private static double safeY(EntityMaid maid, double x, double z, double wantY, double fromY) {
         try {
@@ -1264,18 +1047,12 @@ public final class MaidBroomDrive {
     }
 
     /**
-     * 【实测六百九十一】她脚下（沿着 x/z 往下最多 {@link #GROUND_SCAN} 格）第一块"非空气"方块
      * **之上那一格**的高度 = "离地"的基准；**找不到就返回 {@code NaN}**。
-     *
      * <p>【为什么不用原版高度图】{@code Level.getHeight} 在 1.20.1 与 1.21.1 的名字不一样
      * （SRG / Mojmap），而"从她当前位置往下找第一块地"既不需要多一个两树要映射的名字、
      * 又天然覆盖"她此刻在一个洞里 / 屋里 / 树冠上"这些情况。
-     *
      * <p>【实测六百九十二：找不到地必须是"找不到"，不能是"她当前高度"】旧版返回 {@code fromY}
-     * 兜底，而调用方（{@link #homeOrbitPoint}）紧接着就 {@code + homeAltCfg()} —— 于是"她比地形
-     * 高出 24 格以上 / 悬在虚空上"这条路上，每 tick 的目标高度 = **她自己 + 8 格**：无上限爬升
-     * （）。现在改成 {@code NaN} 明确表达"没找到"，
-     * 由调用方决定怎么办（守家盘旋那一档：只降不升，见 {@link #HOME_ALT}）。
+     * 兜底，而调用方（{@link #homeOrbitPoint}）紧接着就 {@code + homeAltCfg()} —— 于是"她比地形 高出 24 格以上 / 悬在虚空上"这条路上，每 tick 的目标高度 = **她自己 + 8 格**：无上限爬升 （）。现在改成 {@code NaN} 明确表达"没找到"， 由调用方决定怎么办（守家盘旋那一档：只降不升，见 {@link #HOME_ALT}）。
      */
     private static double groundYOrNaN(EntityMaid maid, double x, double z, double fromY) {
         try {
@@ -1305,17 +1082,11 @@ public final class MaidBroomDrive {
 
     /**
      * 原地悬停：目标点 = **扫帚自己现在的位置**。
-     *
      * <p>【为什么不能用她的坐标（v1.3.3 实测六百五十八，
-     *
      * {@code EntityBroom.m_19956_}（positionRider）把她的座位摆在她朝向的**后方 0.5 格**
      * （再叠一个骑乘高度差）——也就是说"扫帚的位置"与"她的位置"永远差着一段固定偏移。
-     * 旧版拿**她的**坐标当"原地不动"的目标点，而 {@link #steerTo} 里那句"到点了吗"比的是
      * **扫帚**到目标点的距离：恒差那 0.5 格，于是永远到不了点、每 tick 被给一个速度，
-     * 方向又正好是背对朝向那一侧。与此同时 {@code faceYaw} 写进去的"朝向主人"是用
-     * **她的**位置算的——她的位置随朝向动，朝向又随她的位置动。两处互相引用，就成了
-     * 每 tick 翻 180° 的回路；客户端对 yRot 做插值，看起来就是"在空中不停地打转"。
-     * 换成扫帚自己的坐标：这一支真的"到点 → 速度乘 0.75 收干"，静止悬停，回路断掉。
+     * 方向又正好是背对朝向那一侧。与此同时 {@code faceYaw} 写进去的"朝向主人"是用 **她的**位置算的——她的位置随朝向动，朝向又随她的位置动。两处互相引用，就成了 每 tick 翻 180° 的回路；客户端对 yRot 做插值，看起来就是"在空中不停地打转"。 换成扫帚自己的坐标：这一支真的"到点 → 速度乘 0.75 收干"，静止悬停，回路断掉。
      */
     public static void hoverInPlace(EntityMaid maid) {
         if (maid == null) {
@@ -1334,18 +1105,12 @@ public final class MaidBroomDrive {
     private static final long PARK_LOG_MS = 20_000L;
 
     /**
-     * 实测六百九十八【待命不许挂在天上】——
-     *
-     *
      * <p>扫帚模式"没目标、也没在跟主人这一趟"那一档（{@link MaidBroomBehavior} 的 ⑥.③）
      * 原先一律 {@link #hoverInPlace}：**目标点就是她现在的坐标**，速度收干 → 她挂在半空
      * 一动不动。她为什么会挂在半空？起飞相位本来就要"原地往上抬 1 格"（实测六百七十七 的
      * 玩家要求），打完一仗也停在高处，主人在别的维度/离得远时更没人管她。
-     *
      * <p>现在改成**降回地面待命**：顺着她脚下探地（{@link #groundYOrNaN}，最多 24 格），
-     * 找到就降到"地面之上 {@link #PARK_ABOVE_GROUND} 格"；探不到地（悬在虚空 / 比地形高出
-     * 24 格以上）就照旧原地悬停——**绝不往下扎**。已经贴地了也照旧悬停（不再上下抖）。
-     * 开关 = 配置 {@code combat.broom.idleLand}（默认开）。
+     * 找到就降到"地面之上 {@link #PARK_ABOVE_GROUND} 格"；探不到地（悬在虚空 / 比地形高出 24 格以上）就照旧原地悬停——**绝不往下扎**。已经贴地了也照旧悬停（不再上下抖）。 开关 = 配置 {@code combat.broom.idleLand}（默认开）。
      */
     public static void parkIdle(EntityMaid maid) {
         if (maid == null) {
@@ -1425,14 +1190,11 @@ public final class MaidBroomDrive {
 
     /**
      * 让**扫帚**朝着某个目标（纯表现：弹道一直按坐标算，不看朝向）。
-     *
      * <p>与 {@link #faceYaw} 只差一处、但很关键：这里的偏航是**从扫帚自己的位置**算出来的，
      * 不是从她的位置算。她是乘客、座位在她朝向的后方 0.5 格；用她的位置算"朝向主人"会
      * 让"她动 → 朝向动 → 她再动"自引用成环（见 {@link #hoverInPlace} 里那段因果）。
      * 从扫帚出发就没有这一环。
-     *
-     * <p>调用约定同 {@link #faceYaw}：**必须在 {@link #steerTo} 之后调**，
-     * 否则会被 steerTo 写进去的"速度方向"盖掉。
+     * <p>调用约定同 {@link #faceYaw}：**必须在 {@link #steerTo} 之后调**， 否则会被 steerTo 写进去的"速度方向"盖掉。
      */
     public static void faceYawTo(EntityBroom broom, net.minecraft.world.entity.Entity target) {
         if (broom == null || target == null) {
@@ -1449,19 +1211,11 @@ public final class MaidBroomDrive {
 
     /**
      * 她身上没有扫帚时：**去找一把**——。
-     *
      * <p>【"找"指什么（v1.3.4 实测六百五十九，）】
      * 按玩家点名的那一档来：<b>世界里已经放着的那把扫帚实体</b>（{@code EntityBroom}）——
      * 她会走过去骑上它，见 {@link #rideWorldBroom}。实在没有实体可骑，才退一步找
      * **地上掉的扫帚物品**（v1.3.3 的老规矩：收进背包之后由 {@link #ensureMounted} 放出来骑）。
-     * 背包/精妙背包里躺着的那不叫"找"叫"取"——归 {@link #ensureMounted} 直接抽出来放骑。
-     *
-     * <p>【怎么找】近了直接上鞍 / 直接收进背包；远了就把原版寻路目标指向它、每 tick 重写一次
-     * （与其它行为同款：真正执行的是 TLM 的 {@code MoveToTargetSink}）。超过
-     * {@link #HUNT_GIVE_UP_MS} 还没到（卡墙、在水里、够不着）就放弃这一轮并进
-     * {@link #HUNT_COOLDOWN} 冷却——免得她对着一个拿不到的扫帚走到天荒地老。
-     *
-     * @return true = 这一 tick 正在为"找扫帚"做事（调用方这 tick 先别管跟随/战斗）
+     * 背包/精妙背包里躺着的那不叫"找"叫"取"——归 {@link #ensureMounted} 直接抽出来放骑。 <p>【怎么找】近了直接上鞍 / 直接收进背包；远了就把原版寻路目标指向它、每 tick 重写一次 （与其它行为同款：真正执行的是 TLM 的 {@code MoveToTargetSink}）。超过 {@link #HUNT_GIVE_UP_MS} 还没到（卡墙、在水里、够不着）就放弃这一轮并进 {@link #HUNT_COOLDOWN} 冷却——免得她对着一个拿不到的扫帚走到天荒地老。 @return true = 这一 tick 正在为"找扫帚"做事（调用方这 tick 先别管跟随/战斗）
      */
     public static boolean seekBroom(ServerLevel level, EntityMaid maid) {
         if (level == null || maid == null) {
@@ -1560,9 +1314,7 @@ public final class MaidBroomDrive {
      * 【与 {@link #ensureMounted} 的区别】那把**不是我们放出去的**：所以不进 {@link #DEBT}
      * ——收工时只下鞍、扫帚原样留在世界里（见 {@link #dismount} 里 {@code debt == null} 那一支），
      * 也就不会把它收进背包、更不会删掉它。
-     * <p>
-     * 【骑上即起"起飞相位"】与"取出自己那把"同款：玩家要求"拿到扫帚就原地往上飞 1 格"
-     * （见 {@link #takeoffTarget}）——不管扫帚是买的还是捡的，拿到手都该腾空。
+     * <p> 【骑上即起"起飞相位"】与"取出自己那把"同款：玩家要求"拿到扫帚就原地往上飞 1 格" （见 {@link #takeoffTarget}）——不管扫帚是买的还是捡的，拿到手都该腾空。
      */
     private static boolean rideWorldBroom(EntityMaid maid, EntityBroom broom) {
         try {
@@ -1653,18 +1405,11 @@ public final class MaidBroomDrive {
 
     /**
      * 把"想去哪"变成这一 tick 的速度矢量写进意图表。
-     *
      * <p>目标点先过 {@link MaidBroomKit#clampToHome}：这是"移动逻辑与 home 模式"那条账的落点
      * ——她骑上扫帚后 TLM 自身的范围约束整条失效，圈内这件事只剩这里把关。
-     *
      * <p>── 公式（与 {@code PlayerBroomControl.travel} 同一套包络与阻尼）──
      * <pre>
-     *   目标速度 = 单位方向 × (水平 MAX_H_SPEED / 竖直 MAX_V_SPEED) × 到点减速带
-     *   本 tick 速度 = 上一 tick 速度.lerp(目标速度, 0.25)     ← 原版有输入那一支的阻尼
-     *   到点（&lt; ARRIVE）= 上一 tick 速度 × 0.75               ← 原版无输入那一支 = 悬停
-     * </pre>
-     * "速度 → 位移"是纯一阶（没有累加、没有加速度），所以数学上不可能振荡；而阻尼/衰减
-     * 系数与原版逐字相同，观感也就是原版那把扫帚。**速度上限只到原版全速，一分不加**。
+     *   目标速度 = 单位方向 × (水平 MAX_H_SPEED / 竖直 MAX_V_SPEED) × 到点减速带 本 tick 速度 = 上一 tick 速度.lerp(目标速度, 0.25)     ← 原版有输入那一支的阻尼 到点（&lt; ARRIVE）= 上一 tick 速度 × 0.75               ← 原版无输入那一支 = 悬停 </pre> "速度 → 位移"是纯一阶（没有累加、没有加速度），所以数学上不可能振荡；而阻尼/衰减 系数与原版逐字相同，观感也就是原版那把扫帚。**速度上限只到原版全速，一分不加**。
      */
     public static void steerTo(EntityMaid maid, Vec3 desired) {
         steerTo(maid, desired, false);
@@ -1731,12 +1476,10 @@ public final class MaidBroomDrive {
 
     /**
      * 【v1.3.8 巡逻航迹 / broom_goto】这一个 tick 她该往哪儿飞（给巡逻档用）。
-     *
      * <ol>
      *   <li><b>一次性外部目标</b>（{@code /maid_smart broom_goto <x y z>}）：到点或超时自动摘掉。</li>
      *   <li><b>沿航迹巡逻</b>（{@link com.maidsmart.patrol.PatrolFlight#nextPoint}）：纯追踪。</li>
      * </ol>
-     *
      * <p>返回 null = 这两件都没有 → 调用方走旧链路，一个字节都不改。
      */
     public static Vec3 patrolPoint(EntityMaid maid) {
@@ -1773,17 +1516,12 @@ public final class MaidBroomDrive {
     /** 脱困取点的水平扫描半径（格）——，所以扫小一点、取最近的 */
     private static final int ESCAPE_R = 3;
     /**
-     * 【实测六百九十一】她（作为乘客）相对扫帚的座位偏移与体型——**原版字节码实证**：
      * <pre>
      *   水平：{@code -0.5} 格，沿扫帚朝向旋转 →【朝向的后方半格】
      *         （1.20.1 {@code EntityBroom.m_19956_} / 1.21.1 {@code EntityBroom.getPassengerAttachmentPoint}
      *          两份字节码都是这个数：女仆乘客 -0.5，其它乘客 0，两人时改 ±0.35）
      *   竖直：1.21.1 是 {@code -0.3125}；1.20.1 取 {@code m_6048_() + 乘客.m_6049_()}，
-     *         而 {@code EntityBroom.m_6048_()} 反汇编就是 {@code return 0.0}、女仆也没覆写 m_6049_
-     *         → 0.0。**两个版本都落在同一格**（差 0.31 格不会跨格），所以这里取 -0.3125 这一侧。
-     *   体型：女仆的 {@code EntityType.sized(0.6f, 1.5f)}（宽 0.6 / 高 1.5）
-     * </pre>
-     * 这三个数只服务于一条判据：**"她身体压着的那几格是不是空气"**（见 {@link #bodyFits}）。
+     *         而 {@code EntityBroom.m_6048_()} 反汇编就是 {@code return 0.0}、女仆也没覆写 m_6049_ → 0.0。**两个版本都落在同一格**（差 0.31 格不会跨格），所以这里取 -0.3125 这一侧。 体型：女仆的 {@code EntityType.sized(0.6f, 1.5f)}（宽 0.6 / 高 1.5） </pre> 这三个数只服务于一条判据：**"她身体压着的那几格是不是空气"**（见 {@link #bodyFits}）。
      */
     private static final double SEAT_BACK = 0.5;
     private static final double SEAT_DOWN = 0.3125;
@@ -1797,19 +1535,12 @@ public final class MaidBroomDrive {
     /** 【实测六百九十一】"往下找地面"最多扫这么多格（找不到就当她悬在虚空上，原地不动） */
     private static final int GROUND_SCAN = 24;
     /**
-     * 【实测六百九十二】脱困取格时允许**高出目标点多远**（格）——躲建筑只是暂时调整高度。
-     *
      * <p>
-     *
-     *
      * <p>【为什么必须有这个上限】脱困的取格判据里"离目标更近"用的是 3D 距离，而 {@code goal} 的
      * Y 取的是**她当前那一格**（见 {@link #nearestEscapeCell}）——所以"往上挪"与"往旁边挪"在
      * 距离上等价，楼里横向全被堵死时就只剩"往上"可选。一次脱困最多 +2 格，但**每次卡住都会再来
      * 一次**：实测日志里她在地形之上被一路从 y=15 垫到 40 多（01:32:26 → 01:32:58 那一串
-     * 「被方块顶住 → 先飘到最近的空气格」，Y 一格一格往上走）。现在候选格必须落在
-     * {@code 目标高度 + 本上限} 以下：翻一道坎够用，但**永远爬不过目标高度**——
-     * 一旦越过去，"越飞越高"就会把攻击与链路一起飞没（
-     *
+     * 「被方块顶住 → 先飘到最近的空气格」，Y 一格一格往上走）。现在候选格必须落在 {@code 目标高度 + 本上限} 以下：翻一道坎够用，但**永远爬不过目标高度**—— 一旦越过去，"越飞越高"就会把攻击与链路一起飞没（
      */
     private static final int ESCAPE_UP_MAX = 3;
     /** 同一只女仆的「卡墙」日志最短间隔（毫秒）= 5 秒，防刷屏 */
@@ -1868,23 +1599,11 @@ public final class MaidBroomDrive {
 
     /**
      * 卡墙脱困：朝目标直飞、**被方块顶住原地不动**时，先飘到最近的空气格，再续原来的链路。
-     *
      * <p>【
-     *
-     *
-     *
      * <p>【为什么必然发生】她的位移是"目标速度包络 + 阻尼"算出来的一阶矢量（见 {@link #steerTo}），
      * 撞上方块时 {@code Entity.move(MoverType.SELF, …)} 只是在碰撞面上滑一下，**速度意图一个字
      * 都不变**——下一 tick 照旧朝那个点推。表现就是"盯着那块方块飞"。
-     *
-     * <p>【判据】连 {@link #STUCK_TICKS} tick（0.6 秒）位移小于 {@link #STILL_EPS} 且离目标还远
-     * （&gt; {@link #ARRIVE}）→ 判卡住；悬停/到点/玩家驾驶都不会误判（到点那一支 {@code dist < ARRIVE}）。
-     * 取点：她身边 ±{@link #ESCAPE_R} 格里的**空气格**，要求**上面一格也是空气**（她连扫帚差不多
-     * 两格高）且**离目标比她现在更近**（否则就是原地打转），取最近的那个。走到它（1 格内）或
-     * {@link #ESCAPE_TICKS} 用完就清除脱困状态、回到原链路——**脱困只是绕一步，不改变去哪**。
-     *
-     * <p>异常一律当"没卡"（这个函数在每 tick 的驱动路径上，绝不能抛）。配置
-     * {@code combat.broom.unstick} 可整条关掉（默认开）。
+     * <p>【判据】连 {@link #STUCK_TICKS} tick（0.6 秒）位移小于 {@link #STILL_EPS} 且离目标还远 （&gt; {@link #ARRIVE}）→ 判卡住；悬停/到点/玩家驾驶都不会误判（到点那一支 {@code dist < ARRIVE}）。 取点：她身边 ±{@link #ESCAPE_R} 格里的**空气格**，要求**上面一格也是空气**（她连扫帚差不多 两格高）且**离目标比她现在更近**（否则就是原地打转），取最近的那个。走到它（1 格内）或 {@link #ESCAPE_TICKS} 用完就清除脱困状态、回到原链路——**脱困只是绕一步，不改变去哪**。 <p>异常一律当"没卡"（这个函数在每 tick 的驱动路径上，绝不能抛）。配置 {@code combat.broom.unstick} 可整条关掉（默认开）。
      */
     private static Vec3 unstick(EntityMaid maid, EntityBroom broom, Vec3 aim) {
         if (!unstickCfg()) {
@@ -1933,23 +1652,13 @@ public final class MaidBroomDrive {
                 return new Vec3(st.ex, st.ey, st.ez);
             }
             // ①.5【实测七百〇九】她**此刻正被方块闷住** → 立刻脱困，**不等那 0.6 秒**。
-            //
             // 【为什么"卡住"那条判据救不了这一档】卡住看的是**位移**（连续 {@link #STUCK_TICKS}
             // tick 移动小于 {@link #STILL_EPS}），而扫帚贴着墙"滑"的时候每一 tick 都在动——
             // 位移不为零，`still` 永远攒不满，脱困相位一次都进不去；而**她**（乘客）已经被
             // 按在墙的边角里，每 tick 扣一点 in_wall 伤害。
-            //
             // ——"被挡住的只能是扫帚"正是这段因果：扫帚有自己的碰撞箱，靠 {@code move()} 停在
             // 墙外；她的座位在扫帚**朝向后方半格**（见 {@link #SEAT_BACK}），而原版
-            // {@code positionRider} 是**直接摆位、不做碰撞解算**的，没人替她挡那半格。
-            //
-            // 【判据就用原版那一个】{@link #maidSuffocating} = {@code isInWall()}，它**恰好**
-            // 是"这一 tick 原版要不要扣她 in_wall 伤害"，不比几何判定宽。
-            //
-            // 【选格规则同时放松】① 允许"不比现在更靠近目标"——从方块里退出来本身就是正确方向，
-            // 而旧规则会把唯一可行的"退出去"那一格判成"更远"、全部否掉，于是返回 null、
-            // 她原地继续闷着；② 第一趟仍尊重"5 秒内刚去过"（防两个格子之间横跳），
-            // 一趟选不出来就**放开这条防抖再来一趟**——她的命比"别来回横跳"重要。
+            // {@code positionRider} 是**直接摆位、不做碰撞解算**的，没人替她挡那半格。 【判据就用原版那一个】{@link #maidSuffocating} = {@code isInWall()}，它**恰好** 是"这一 tick 原版要不要扣她 in_wall 伤害"，不比几何判定宽。 【选格规则同时放松】① 允许"不比现在更靠近目标"——从方块里退出来本身就是正确方向， 而旧规则会把唯一可行的"退出去"那一格判成"更远"、全部否掉，于是返回 null、 她原地继续闷着；② 第一趟仍尊重"5 秒内刚去过"（防两个格子之间横跳）， 一趟选不出来就**放开这条防抖再来一趟**——她的命比"别来回横跳"重要。
             if (maidSuffocating(maid)) {
                 net.minecraft.core.BlockPos air = nearestEscapeCell(broom, maid, aim, st, true, false);
                 if (air == null) {
@@ -1992,16 +1701,12 @@ public final class MaidBroomDrive {
     }
 
     /**
-     * 【实测七百〇九】她**此刻正被方块闷住**吗——判据就是原版那一个：{@code isInWall()}。
-     *
      * <p>【为什么用原版这个而不是自己判几何】{@code LivingEntity.isInWall()} 正是"这一 tick
      * 原版要不要扣她 {@code in_wall} 伤害"的那道判据（{@code LivingEntity.m_6075_} 字节码：
      * {@code if (isInWall()) hurt(damageSources().inWall(), 1.0F)}），它按**眼位 + 0.8×宽度**
      * 的小盒去撞方块的 {@code isSuffocating} 形状。用它 = "她真在挨窒息伤害"，不会比实伤更宽
      * （自己另写一套几何判据容易出现"看着嵌进去了、其实没扣血"的误触发）。
-     *
-     * <p>【为什么不能靠"卡住"那条判据兜住】见 {@link #unstick} 里 ①.5 那一段：扫帚贴墙滑行时
-     * **位移一直不为零**，"连续 0.6 秒没动"永远攒不满，脱困相位一次都进不去。
+     * <p>【为什么不能靠"卡住"那条判据兜住】见 {@link #unstick} 里 ①.5 那一段：扫帚贴墙滑行时 **位移一直不为零**，"连续 0.6 秒没动"永远攒不满，脱困相位一次都进不去。
      */
     private static boolean maidSuffocating(EntityMaid maid) {
         try {
@@ -2038,40 +1743,11 @@ public final class MaidBroomDrive {
 
     /**
      * 她身边最近的、**能容下她整个人**的空气格：水平 ±{@link #ESCAPE_R}、上下 ±2。
-     *
      * <p>【实测六百九十一：
-     *
-     *
      * 而那两格是"**扫帚**那一格"的上下——**窒息的是她、不是扫帚**：她是乘客，原版
      * {@code positionRider} 把她的座位摆在扫帚**朝向的后方 0.5 格**（{@link #SEAT_BACK} 那段
      * 字节码实证），她身体压的格子与扫帚那一格**差半格**；而乘客的位置是直接摆上去的、
-     * 不走碰撞——扫帚能停在那格、她却被按进邻格/上格的方块里扣窒息伤害，就是这么来的。
-     *
-     * <p>【现在的条件（缺一不可）】
-     * <ol>
-     *   <li>候选格与它上面一格是空气（扫帚那一格：扫帚的碰撞箱 {@code 1.375 × 0.5625}，扁但宽）；</li>
-     *   <li><b>她身体的每一格都是空气</b>（{@link #bodyFits}）：按座位偏移把她的碰撞箱
-     *       （宽 0.6 / 高 1.5）铺进方块网格逐格判——**这就是"拿那个窒息的那个格子来判定"**。
-     *       这一条同时挡住了"钻一格"：她离格边界正好半格，身体会**同时压住候选格与来路那一格**，
-     *       所以一格宽的墙洞（来路那格是墙）直接不合格——那正是玩家看到的"往一格里面钻、然后窒息"；</li>
-     *   <li>**不是死洞**（{@link #isPocket}）：候选格两层、东南西北四邻全是方块 → 进去就出不来，不去；</li>
-     *   <li>**5 秒内没去过**（{@link Stuck#recentlyVisited}）：刚寻路到过的空气格不再选，
-     *       免得她在两个格子之间反复横跳（）；</li>
-     *   <li>【实测六百九十二】**不比目标点高过 {@link #ESCAPE_UP_MAX} 格**：躲建筑只是暂时调整
-     *       高度，越躲越高会把攻击与链路一起飞没（那一段因果见 {@link #ESCAPE_UP_MAX}）。</li>
-     * </ol>
-     * 剩下的照旧：**离目标比现在更近**（否则脱困变成原地打转）、取最近的那个。
-     * 一条都不合格 → 返回 null，**宁可原地不动也不把她按进方块里**（调用方会留一行日志）。
-     *
-     * <p>【实测七百〇九：上面这两条（"更靠近目标"、"不许超过目标高度"）在**保命那一档**必须让位】
-     *
-     *
-     * 往往在墙角外侧（= 离目标更远）或者要抬过目标高度，旧规则会把它们**全部否掉**、返回 null，
-     * 于是她原地继续挨窒息伤害。所以 {@code suffocating} 为真时：① 不再要求"更靠近目标"
-     * （从方块里退出来本身就是正确方向，方向由"哪一格放得下她"决定）；② 不再封 {@link #ESCAPE_UP_MAX}
-     * 那个高度（但仍**取最近的合格格**，所以并不会变成往上爬）；{@code desperate} 为真时
-     * 进一步放开"5 秒内刚去过"与"死洞"这两条防抖——**一趟选不出来就再来一趟**，
-     * 她的命比"别来回横跳"重要。
+     * 不走碰撞——扫帚能停在那格、她却被按进邻格/上格的方块里扣窒息伤害，就是这么来的。 <p>【现在的条件（缺一不可）】 <ol> <li>候选格与它上面一格是空气（扫帚那一格：扫帚的碰撞箱 {@code 1.375 × 0.5625}，扁但宽）；</li> <li><b>她身体的每一格都是空气</b>（{@link #bodyFits}）：按座位偏移把她的碰撞箱 （宽 0.6 / 高 1.5）铺进方块网格逐格判——**这就是"拿那个窒息的那个格子来判定"**。 这一条同时挡住了"钻一格"：她离格边界正好半格，身体会**同时压住候选格与来路那一格**， 所以一格宽的墙洞（来路那格是墙）直接不合格——那正是玩家看到的"往一格里面钻、然后窒息"；</li> <li>**不是死洞**（{@link #isPocket}）：候选格两层、东南西北四邻全是方块 → 进去就出不来，不去；</li> <li>**5 秒内没去过**（{@link Stuck#recentlyVisited}）：刚寻路到过的空气格不再选， 免得她在两个格子之间反复横跳（）；</li> <li>【实测六百九十二】**不比目标点高过 {@link #ESCAPE_UP_MAX} 格**：躲建筑只是暂时调整 高度，越躲越高会把攻击与链路一起飞没（那一段因果见 {@link #ESCAPE_UP_MAX}）。</li> </ol> 剩下的照旧：**离目标比现在更近**（否则脱困变成原地打转）、取最近的那个。 一条都不合格 → 返回 null，**宁可原地不动也不把她按进方块里**（调用方会留一行日志）。 <p>【实测七百〇九：上面这两条（"更靠近目标"、"不许超过目标高度"）在**保命那一档**必须让位】 往往在墙角外侧（= 离目标更远）或者要抬过目标高度，旧规则会把它们**全部否掉**、返回 null， 于是她原地继续挨窒息伤害。所以 {@code suffocating} 为真时：① 不再要求"更靠近目标" （从方块里退出来本身就是正确方向，方向由"哪一格放得下她"决定）；② 不再封 {@link #ESCAPE_UP_MAX} 那个高度（但仍**取最近的合格格**，所以并不会变成往上爬）；{@code desperate} 为真时 进一步放开"5 秒内刚去过"与"死洞"这两条防抖——**一趟选不出来就再来一趟**， 她的命比"别来回横跳"重要。
      */
     private static net.minecraft.core.BlockPos nearestEscapeCell(EntityBroom broom, EntityMaid maid,
                                                                 Vec3 aim, Stuck st,
@@ -2139,14 +1815,11 @@ public final class MaidBroomDrive {
 
     /**
      * 她（**作为乘客**）在"扫帚停在 {@code p} 那一格"时，身体压着的每一格是不是都是空气。
-     *
      * <p>座位偏移与体型见 {@link #SEAT_BACK} 那一组常量（原版字节码实证）。这里把它落成一条算式：
      * <pre>
      *   她身体中心 = 候选格中心 − 0.5 × 单位方向(从扫帚现在的位置 → 候选格)   ← 水平（朝向的后方）
      *   她的脚     = 候选格中心 − 0.3125                                   ← 竖直
-     *   碰撞箱     = 宽 0.6 / 高 1.5 → 铺进方块网格逐格查空气
-     * </pre>
-     * 方向取"从她现在的位置到候选格"，是因为 {@link #steerTo} 把朝向写成速度方向（飞过去就是那个朝向）。
+     *   碰撞箱     = 宽 0.6 / 高 1.5 → 铺进方块网格逐格查空气 </pre> 方向取"从她现在的位置到候选格"，是因为 {@link #steerTo} 把朝向写成速度方向（飞过去就是那个朝向）。
      */
     private static boolean bodyFits(net.minecraft.world.level.Level level, EntityBroom broom,
                                     net.minecraft.core.BlockPos p) {
@@ -2323,13 +1996,11 @@ public final class MaidBroomDrive {
 
     /**
      * 每只女仆上一次"起飞相位"开始的 gameTime。
-     *
      * <p>【为什么必须去抖】起飞相位（原地抬 1 格）的目标是**相对她当前高度**算的
      * （{@link #startClimb} 收 {@code 她当前 y + RISE_BLOCKS}），所以"上一秒骑上、下一秒又下"
      * 这种循环里，每一轮都会再抬一格——实测日志里她就是这样从 y −60.00 一路升到 +3.67 的
      * （「爬升到位」记的 y 依次是 −58.94 → −9.14 → −53.60 → +3.67，中间还夹着 5~11 次/秒的
      * 「骑上了世界里放着的那把扫帚」）。
-     *
      */
     private static final Map<UUID, Long> TAKEOFF_AT = new HashMap<>();
     /** 起飞相位去抖窗口（tick）= 5 秒 */
@@ -2564,16 +2235,11 @@ public final class MaidBroomDrive {
     }
 
     /**
-     * 【实测六百九十一】守家盘旋高度（格，**离地**）：配置 {@code combat.broom.homeAlt}，默认 8。
-     *
      * <p>
-     * 旧版守家盘旋的目标高度是"扫帚当前高度"（起飞只抬 {@link #RISE_BLOCKS} 格 → 整场贴地飞），
      * 现在改成"她脚下那块地之上这么多格"，再由 {@link #safeY} 兜住天花板。
      * 这一项只影响**守家巡逻**这一档，接敌照旧走 {@code combat.broom.climb}。
-     *
      * <p>【为什么不复用「接敌爬升高度」】那个数是"相对敌人"（没有敌人时根本没有那个参照物），
      * 这个数是"离地"，两个参照系不同；合成一个数只会让其中一边永远不对。
-     *
      * <p>配置没挂上时退回 8——与配置里的默认值对齐（本项目的老规矩：兜底值必须跟着默认值走）。
      */
     private static double homeAltCfg() {

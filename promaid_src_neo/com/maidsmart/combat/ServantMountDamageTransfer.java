@@ -8,29 +8,19 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 
 /**
- * v1.3.0(beta)（1.21.1）实测七百七十【模组仆从坐骑·伤害转移】。
+ * 模组仆从坐骑·伤害转移——"如果女仆受到了伤害，会将伤害转移给身下坐着的仆从"。属"模组仆从坐骑"这一
+ * 单独区间，判据只在 {@link MaidRideKit#isNoSaddleRideable} 上（原版马/骆驼、卓越前线载具、冰火传说龙、
+ * 别的模组生物、通用骑乘逻辑一律不受影响）。
  *
- * <h2>
- * 「如果女仆受到了伤害，会将伤害转移给身下坐着的仆从。」（本条与"只赋速度、其余归它自己的 AI"
- * 同属"模组仆从坐骑"这一个单独区间，判据只在 {@link MaidRideKit#isNoSaddleRideable} 上——
- * 原版马/骆驼、卓越前线载具、冰火传说龙、别的模组生物、通用骑乘逻辑一律不受影响。）
- *
- * <h2>做法</h2>
- * 在受伤链最上游（{@code LivingIncomingDamageEvent}，NeoForge 1.21.1 把旧的
- * Attack/Hurt/Damage 三个事件并成了一个）拦下"她正在被我们棍子绑坐骑的、无鞍可骑模组仆从"这一档：
- * 取消她自己的这一记伤害，再把**等量的同一来源**打到她身下的仆从上——她背靠仆从挡刀，攻击者的
- * 仇恨也顺势落到仆从身上（原版 {@code hurt} 会把伤害源记进仆从的复仇目标）。
- *
- * <h2>不转移的那几类（环境自伤）</h2>
- * {@code outOfWorld}（虚空）与 {@code inWall} / {@code cramming} / {@code flyIntoWall}
- * （卡墙/挤压/撞墙）**不转移**：这几条都是**每拍重复**的环境伤害，而"她们俩通常在同一处"
- * ——她卡墙时仆从自己也在卡墙、本来就在吃同一类伤害；再把她那一份转过去只会变成**死亡螺旋**
- * （两个一起被挤死），且卡墙是"位置没摆好"的施工问题，不该由这条保护来兜。其余一切（近战/弹射物/
- * 爆炸/火/岩浆/毒…）一律转移。总开关见 {@link MaidRideKit#servantTransferEnabled}。
- *
- * <h2>不碰谁</h2>
- * 只在"受害者是女仆 + 她此刻正骑着一只无鞍可骑模组仆从 + 是我们棍子绑的"时生效；其余任何实体
- * 受伤（含仆从自己受伤）本类**直接 return**，原版/别的模组/别的守卫链一个字节不动。
+ * 【做法】在受伤链最上游拦下"她正被我们棍子绑坐骑的、无鞍可骑模组仆从"这一档：取消她自己这一记伤害，
+ * 再把**等量的同一来源**打到她身下的仆从上——她背靠仆从挡刀，攻击者仇恨也顺势落到仆从身上（原版
+ * {@code hurt} 会把伤害源记进仆从的复仇目标）。
+ * 【不转移的那几类】{@code outOfWorld}（虚空）与 {@code inWall}/{@code cramming}/{@code flyIntoWall}
+ * （卡墙/挤压/撞墙）**不转移**：这几条都是**每拍重复**的环境伤害，而"她俩通常在同一处"——再把她那份
+ * 转过去只会变成**死亡螺旋**（一起被挤死），且卡墙是施工问题、不该由这条保护兜。其余一律转移。总开关
+ * {@link MaidRideKit#servantTransferEnabled}。
+ * 【不碰谁】只在"受害者是女仆 + 她正骑一只无鞍可骑模组仆从 + 是我们棍子绑的"时生效；其余任何实体受伤
+ * 本类**直接 return**。与另一树同名类同口径（那份走各自加载器的上游伤害事件）。
  */
 @EventBusSubscriber(modid = "promaid")
 public final class ServantMountDamageTransfer {

@@ -12,33 +12,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
-     * v1.1.0 实测八十九：女仆寻路【危险方块避让】——需求："让他可以自己避开
-     * 一些危险的方块"。
-     *
-     * 原理：注入原版 WalkNodeEvaluator 的逐节点方块路径类型评估（m_7209_ =
-     * getBlockPathType(BlockGetter, x, y, z, Mob)，带被寻路生物上下文）。当被寻路的
-     * 生物是女仆、且目标格子命中危险表（岩浆/火/灵魂火/岩浆块/仙人掌/甜浆果丛/
-     * 凋零玫瑰/细雪/石笋，配置面板可增删）时，把评估结果强制改判为 BLOCKED——
-     * 该节点直接从寻路图中剔除，女仆规划路径时会绕开岩浆湖岸边、火焰地面等，
-     * 宁可停下等 TLM 的过远传送兜底也不往里走。
-     *
-     * 三个细节：
-     * - 【起点格不拦】女仆已经身处险境时（掉进岩浆边、着火），必须允许"逃出来"
-     *   的路径存在，否则她会在原地冻死；
-     * - 【三格判定】站立格本体 / 脚下方块（站上去就出事的）/ 头顶一格灼烧型，
-     *   任一命中即拦——判定逻辑在 DangerBlocks 工具类（与险境脱离处理器共享）；
-     * - 【仅女仆生效】mob 参数 instanceof 过滤，其余生物寻路零影响。
-     *
-     * 1.21.1 移植：方法名 getPathType（mojmap 直名），签名改为
-     * (PathfindingContext, x, y, z)——评估器不再携带 mob 参数，PathfindingContext
-     * 也不持有 mob 引用，故【仅女仆生效】的 instanceof 守卫移除，改为全体生物
-     * 共享危险避让（对 TLM 女仆与原版生物均生效；误伤面小，实测阶段再收紧）。
-     *
-     * v1.1.0 实测一百二十七：多类目标加入 FlyNodeEvaluator（飞行女仆）——
-     * javap 实证 1.20.1 FlyNodeEvaluator 自己覆写了 m_7209_（不走父类），飞行
-     * 女仆的节点评估完全不经过旧版 @Mixin(WalkNodeEvaluator) 的注入 → 飞行中
-     * 直接越过岩浆/火面。多类 @Mixin 同一 handler 同时覆盖两种评估器。
-     */
+ * 女仆寻路【危险方块避让】——让她自己避开危险方块。
+ *
+ * 原理：注入原版 {@code WalkNodeEvaluator} 的逐节点路径类型评估（1.21.1 官方名 {@code getPathType}，签名
+ * {@code (PathfindingContext, x, y, z)}）。当目标格命中危险表（岩浆/火/灵魂火/岩浆块/仙人掌/甜浆果丛/凋零
+ * 玫瑰/细雪/石笋，面板可增删）时，把结果强制改判为 BLOCKED——该节点从寻路图剔除，她会绕开岩浆湖岸、火焰
+ * 地面，宁可停下等 TLM 过远传送兜底也不往里走。
+ *
+ * 三个细节：① **起点格不拦**（已身处险境必须允许"逃出来"的路径，否则原地冻死）；② **三格判定**（站立格 /
+ * 脚下方块 / 头顶一格灼烧型，任一命中即拦——逻辑在 DangerBlocks，与险境脱离处理器共享）；③ **1.21.1 无
+ * mob 上下文**：评估器不再携带 mob，{@code PathfindingContext} 也不持有它，故"仅女仆生效"的 instanceof
+ * 守卫移除，改为全体生物共享危险避让（误伤面小，实测阶段再收紧）。
+ * 【多类目标】{@code FlyNodeEvaluator} 同 1.20.1 一样自己覆写该方法（不走父类），故两类同挂一个 handler。
+ */
     @Mixin({WalkNodeEvaluator.class, net.minecraft.world.level.pathfinder.FlyNodeEvaluator.class})
     public abstract class MaidDangerPathMixin {
 

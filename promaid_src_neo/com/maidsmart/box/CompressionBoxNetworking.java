@@ -17,32 +17,18 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import java.util.List;
 
 /**
- * 压缩盒网络层（v1.2.2 实测六百一十六；六百一十八加「鼠标上那一叠」）。
+ * 压缩盒网络层。"打开的是哪一个盒子"用**手**来指认（主手 / 副手），不传坐标：盒子是纯道具，服务端
+ * 每次操作都重新确认那只手里还是压缩盒（见 {@link CompressionBoxService}）。
  *
- * 「打开的是哪一个盒子」用**手**来指认（主手 / 副手），不传坐标：盒子是纯道具，
- * 服务端每次操作都重新确认那只手里还是压缩盒（见 {@link CompressionBoxService}）。
- *
- * 包清单：
- * <ul>
- *   <li>0 {@link BoxStatePacket}（S2C）：「开屏 / 刷新」——手序号 + 5 格内容 +
- *       **鼠标上那一叠** + 是否开屏。内容里的大堆（114514）走 {@link #writeItems} 自己编：
- *       **物品本体只写 1 个**（原版编解码），真实数量另写一个 int——两棵树用同一套口径，
- *       原版那边数量字段的取值范围就碰不到它；</li>
- *   <li>1 {@link BoxActionPacket}（C2S）：一次点击（手 + 动作 + 格子号 + 左右键 + 是否 Shift）
- *       → 交给 {@link CompressionBoxService} 搬东西，然后 S2C 回一份新内容。</li>
- * </ul>
- *
- * 【为什么 600 十八要动协议号】{@link BoxActionPacket} 多了「左右键 / Shift」两个字节，
- * {@link BoxStatePacket} 多了「手上那一叠」一段：老客户端连上新服务端会把后面那段
- * 当成别的包读，直接错位。协议号从 "1" 提到 "2"，版本对不上的客户端连不进来
- * ——这正是 NeoForge 这套 {@code PayloadRegistrar} 校验存在的意义。
- *
- * 【 600 二十 又提到 "3"】{@link BoxStatePacket} 末尾多了一段「这次为什么没成」
- * （{@link CompressionBoxService#noticeOf}）：裁决在服务端，玩家得在界面上看见
- * 那句话。老客户端少读一段 = 内容错位，所以同样要提号。
- *
- * 客户端侧的类（{@code CompressionBoxScreen}）只在 S2C 的 enqueueWork 里被加载，
- * 专用服务器不会碰到它（与排班表/药剂手册同款约定）。
+ * 包清单：① {@link BoxStatePacket}（S2C）「开屏 / 刷新」——手序号 + 5 格内容 + **鼠标上那一叠** +
+ * 是否开屏；内容里的大堆（114514）走 {@link #writeItems} 自己编：**物品本体只写 1 个**（原版编解码），
+ * 真实数量另写一个 int（原版 {@code writeItem} 把数量写成 1 字节，直接发 114514 会变成 82）。
+ * ② {@link BoxActionPacket}（C2S）一次点击（手 + 动作 + 格子号 + 左右键 + 是否 Shift）→ 交给
+ * {@link CompressionBoxService} 搬东西，然后 S2C 回一份新内容。
+ * 【协议号提号史】给 Action 加「左右键/Shift」、给 State 加「手上那一叠」→ 号 "1"→"2"；再给 State
+ * 末尾加「这次为什么没成」（{@link CompressionBoxService#noticeOf}）→ 号 →"3"。老客户端少读一段 =
+ * 内容错位，故必须提号（各加载器的 payload 注册都会校验版本）。
+ * 客户端类（{@code CompressionBoxScreen}）只在 S2C 的 enqueueWork 里被加载，专用服务器不碰它。
  */
 @EventBusSubscriber(modid = "promaid", bus = EventBusSubscriber.Bus.MOD)
 public final class CompressionBoxNetworking {

@@ -16,7 +16,6 @@ import java.util.WeakHashMap;
 
 /**
  * AI 记忆存储（v1.5.86，对齐 maidsoulcore v2 的四表 jsonl + 生命周期维护）。
- *
  * 落盘：<世界目录>/promaid_memory/<女仆UUID>/ 下五张 jsonl（逐行 JSON，可人工检查）：
  * - paragraphs.jsonl：段落（记忆本体）
  * - entities.jsonl   ：实体（自动 upsert，出现次数累计）
@@ -24,7 +23,6 @@ import java.util.WeakHashMap;
  * - episodes.jsonl   ：事件片段（按事件时间窗聚合）
  * - profiles.jsonl   ：人物画像快照（带证据段落 hash）
  * - meta.json        ：提取位置 / 每日回顾标记
- *
  * 生命周期（对齐 v2 维护策略 exact_dedupe + structural_merge + solidify + age_decay）：
  * - 写入时精确去重：同 hash 段落合并（salience 取 max，更新时间）
  * - prune()：同 tag 桶 ngram-Jaccard 结构合并 + 非永久条目 30 天未访问衰减删除
@@ -693,12 +691,7 @@ public final class AiMemoryStore {
      *    → permanent + protectedUntil = now + 30 天（与写入策略 AiMemoryWriteStrategy 对齐）
      * 2. 年龄衰减：非保护且 7 天未更新、salience>1、无访问 → salience-1；
      *    且 30 天（memory.decayDays）未访问、salience ≤ decaySalience → deleted
-     * 3. accessCount 半衰：14 天未访问 → 减半（防无限增长）
-     * 4. 关系置信度衰减：非永久、无访问、年龄 ≥ memory.relationDecayDays（60 天）
-     *    → confidence×0.85；<0.15 → inactive（不再注入/检索）
-     * 5. error_mark 传播：被主人否定的段落 → 同类（同话题/结构相似 jaccard≥0.42）
-     *    段落打 error_affected + salience 封顶 2（主动会话不再提起）
-     * 有变化才落盘 + 写 maintenance_log.jsonl。
+     * 3. accessCount 半衰：14 天未访问 → 减半（防无限增长） 4. 关系置信度衰减：非永久、无访问、年龄 ≥ memory.relationDecayDays（60 天） → confidence×0.85；<0.15 → inactive（不再注入/检索） 5. error_mark 传播：被主人否定的段落 → 同类（同话题/结构相似 jaccard≥0.42） 段落打 error_affected + salience 封顶 2（主动会话不再提起） 有变化才落盘 + 写 maintenance_log.jsonl。
      */
     public synchronized MaintenanceReport runMaintenance(long now) {
         final long DAY = 86400000L;

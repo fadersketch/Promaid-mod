@@ -55,15 +55,16 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     static {
         addId("minecraft:nether_wart");
-        addId("minecraft:glistering_melon_slice"); // 治疗
-        addId("minecraft:golden_carrot");          // 夜视
-        addId("minecraft:blaze_powder");           // 力量
-        addId("minecraft:sugar");                  // 迅捷
-        addId("minecraft:rabbit_foot");            // 跳跃
-        addId("minecraft:magma_cream");            // 防火
-        addId("minecraft:pufferfish");             // 水肺
-        addId("minecraft:ghast_tear");             // 再生
-        addId("minecraft:phantom_membrane");       // 缓降
+        /** 可入酿造台的清单（各物品对应效果见手册/配方解析）。 */
+        addId("minecraft:glistering_melon_slice");
+        addId("minecraft:golden_carrot");
+        addId("minecraft:blaze_powder");
+        addId("minecraft:sugar");
+        addId("minecraft:rabbit_foot");
+        addId("minecraft:magma_cream");
+        addId("minecraft:pufferfish");
+        addId("minecraft:ghast_tear");
+        addId("minecraft:phantom_membrane");
     }
 
     private static void addId(String id) {
@@ -154,11 +155,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测二百八十一：缺料报告（气泡 + 主人系统消息，30 秒冷却 + 同材料不重复）。
      * 气泡走字符串（服务端拼中文映射）；系统消息用 translatable 组件——客户端
      * 渲染时按客户端语言本地化，物品名天然正确。
-     *
-     * v1.1.0 实测三百一十（共享存储防抢误报，方案 B）：多女仆可能抢同一材料——
      * A 刚取走、B 提取瞬间为空。若立刻报缺料会误导玩家。方案 B：缺料判定改为
      * 【双通道确认】——第一次取不到只记 pending（不报），下一轮处理周期重试；
      * 两轮都取不到才真报缺料。补上材料后 pending 清除。
@@ -359,7 +357,6 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.2.4 实测六百三十七：**没台子可酿时的闲逛**（"别把自己冻在原地"）——
      * 与 {@code MaidCookBehavior.wander} 一字同款（那边有完整来龙去脉）：
      * WORK_STILL 是"彻底静止"（MaidMoveSuppressMixin 每 tick 停导航），
      * 而本任务关了 TLM 随机散步、外部三条驱动也都不管她，所以旧版的
@@ -392,19 +389,12 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.25 全自动酿药（重写）。
      * 旧版致命缺陷：金萝卜/烈焰粉/糖等材料【不能直接作用于水瓶】——必须先
      * 水瓶+下界疣 → awkward，再 awkward+材料 → 真药水（两阶段）。旧版不管
      * 基底直接塞槽3 → 酿造台永不反应 → 观感"乱塞材料不酿药"。
-     *
-     * v1.1.0 实测二百七十七（女仆药剂手册）：按手册配置驱动——
      * - 批量模式（默认）：按槽0 阶段补水瓶/疣/正向材料，再按配置的强化路线
      *   （红石延长/萤石强化）与成品形态（饮用/喷溅/滞留）补强化/形态材料；
-     *   收成品判定匹配配置（未到目标形态不收）
-     * - 定向模式：按目标药水的配方链（BrewRecipeResolver 反推）精确下料，
-     *   缺料停止下料等待（半成品留在酿造台，补料后自动继续，不换材料凑合）；
-     *   槽里非目标链上的药水收走腾位
-     * 燃料槽 4 始终优先补烈焰粉；槽3 已有材料时不动（酿造台自动续酿消耗）。
+     *   收成品判定匹配配置（未到目标形态不收） - 定向模式：按目标药水的配方链（BrewRecipeResolver 反推）精确下料， 缺料停止下料等待（半成品留在酿造台，补料后自动继续，不换材料凑合）； 槽里非目标链上的药水收走腾位 燃料槽 4 始终优先补烈焰粉；槽3 已有材料时不动（酿造台自动续酿消耗）。
      */
     private void processStand(EntityMaid maid, Container stand) {
         IItemHandler maidInv = maid.getAvailableBackpackInv();
@@ -424,10 +414,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         }
         // 2. 收成品：槽0-2 里是"最终状态"（water/awkward 之外的一切药水）→ 收走
         //    （平凡/浓稠是无效果死路也收，腾出位置重新酿）
-        //    v1.1.0 实测二百七十七：定向模式只收【目标链上的最终成品】——链上
         //    中间产物（如 awkward→healing 链里的 healing 之前）不收，非目标
         //    药水（无关的成品/死路）收走腾位
-        //    v1.1.0 实测二百九十二：批量模式收成品前检查配置——未到目标强化
         //    （红石延长/萤石强化）或形态（喷溅/滞留）的成品【不收】，留在酿造台
         //    继续推进（反馈："3 分钟的夜视不会自动合成 8 分钟的"——根因：旧版
         //    收成品不检查配置，3 分钟夜视一出现就被收走，processForm 的强化步骤
@@ -551,14 +539,12 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     }
 
     /** 批量模式：槽内药水是否达到配置的最终状态（强化 + 形态）。
-     *  v1.1.0 实测二百九十二：未到目标强化/形态的成品【不收】，留在酿造台继续
      *  推进（旧版收成品不检查配置——3 分钟夜视一出现就被收走，红石延长永远
      *  轮不到，反馈："3 分钟的夜视不会自动合成 8 分钟的"）。
      *  - 平凡/浓稠（无效果死路）：直接收走腾位
      *  - 形态：formOf(s) < cfg.form → 不收（等 processForm 推进）
      *  - 强化：配置红石/萤石且当前瓶无对应变体（long_/strong_ 前缀）→ 先测
-     *    原版配方表（mix）该药水是否有变体——无变体（如 healing 无延长版）
-     *    放行，有变体但未强化 → 不收
+     *    原版配方表（mix）该药水是否有变体——无变体（如 healing 无延长版） 放行，有变体但未强化 → 不收
      */
     private boolean isBatchFinal(net.minecraft.server.level.ServerLevel level, ItemStack s, com.maidsmart.brew.BrewConfig cfg) {
         if (s.isEmpty() || !(s.getItem() instanceof net.minecraft.world.item.PotionItem)) {
@@ -814,11 +800,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      *   （PotionBrewing.mix）判定当前瓶+红石/萤石能否出结果，能则下料
      * - 形态：饮用→喷溅（火药）→滞留（龙息），逐级推进
      * 槽3 已有材料时不动（酿造台自动续酿消耗）。
-     *
-     * v1.1.0 实测三百一十八（反馈："女仆手上一直有动作，但是一直放不进去药"）：
-     * 强化材料双测——配置材料（红石/萤石）无配方时自动测另一种（配置萤石但
-     * 夜视只有红石延长版 → 下红石；反之亦然）。旧版只测配置材料：配置萤石 +
-     * 背包红石 → 永远报缺萤石卡死，3 分钟夜视永远变不成 8 分钟。
+     * 强化材料双测——配置材料（红石/萤石）无配方时自动测另一种（配置萤石但 夜视只有红石延长版 → 下红石；反之亦然）。旧版只测配置材料：配置萤石 + 背包红石 → 永远报缺萤石卡死，3 分钟夜视永远变不成 8 分钟。
      */
     private void processForm(EntityMaid maid, Container stand, int slot, ItemStack s,
                              com.maidsmart.brew.BrewConfig cfg) {

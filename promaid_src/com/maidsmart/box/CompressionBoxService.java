@@ -14,40 +14,18 @@ import java.util.UUID;
 
 /**
  * 压缩盒的取放服务（v1.2.2 实测六百一十六；六百一十八改成箱子式鼠标取放）。
- *
  * 玩家打开界面时手上那件压缩盒就是「打开的这一个」：每次操作都**重新确认那只手
  * 里还是压缩盒**（{@link #handle}），换了东西/丢掉了就直接拒绝——不需要追踪
  * 会话，也不存在「界面开着、物品已经不在」的错位。
- *
  * 为什么是「服务端说了算」：这个界面**不是原版容器界面**（没有 Menu），客户端只发
  * 「我在第几格点了哪个键」，搬多少、搬到哪、剩不剩，全在这里算。客户端伪造包最多
  * 只能让自己多搬几次，搬不出合同以外的东西（每次操作都要真实存在的东西才动）。
- *
  * ── 六百一十八：鼠标上那一叠（{@link #carryOf}） ──
  * 用户要的是「像往箱子里存东西一样，用鼠标把物品拖进去」。原版是「左键拿起、
  * 再左键放下」，光标上一直挂着那一叠——这需要**服务端也有一份**，否则关界面/掉线
  * 时那一叠就凭空没了（客户端自己记账 = 想变多少变多少，等于送物品）。
  * 所以这里的口径是：
- * <ul>
- *   <li>那一叠存在服务端（{@link #CARRIES}），客户端看到的只是服务端告诉它的样子；</li>
- *   <li>**任何路径都不许把它弄丢**：关界面（{@link #CARRY_DROP}）、换手、掉线、
- *       每 tick 的兜底（{@link #tickPlayer}）都会把它**放回背包，装不下才掉在脚边**；</li>
- *   <li>一次点击只走一条路（盒子格或背包格），而且**先在副本上把账算完再动真东西**
- *       （{@link CompressionBoxData#duplicate}）——见下面 {@link #clickBox} 的说明。</li>
- * </ul>
- *
- * 动作清单（与 {@link CompressionBoxNetworking} 的常量一一对应）：
- * <ul>
- *   <li>{@link #TAKE_ONE} / {@link #TAKE_STACK} / {@link #TAKE_ALL}：旧口径的取（直接进背包）。
- *       **界面已经不用它们**，保留是因为自检与老客户端都要走；（六百一十八起界面走 {@link #SLOT_CLICK}）</li>
- *   <li>{@link #DEPOSIT_STACK} / {@link #DEPOSIT_ONE}：旧口径的存（Shift+点背包格）；</li>
- *   <li>{@link #SLOT_CLICK}：**箱子式**——index = 槽位号（{@code < SLOTS} 是盒子格，
- *       {@code >= SLOTS} 是背包格，减 SLOTS 就是背包槽位），button = 0 左 / 1 右，shift = 快速移动；</li>
- *   <li>{@link #CARRY_DROP}：把手上的东西还回去（关界面/ESC 时发）。</li>
- * </ul>
- * 背包满时多出来的部分**掉在玩家脚边**（与原版拿取习惯一致），提示写在界面里。
- * 压缩盒本身**永远不往下存**（见 {@link #deposit}）——盒子装盒子既看不见里面，
- * 又是「把自己装进去就整盒消失」那个 bug 的入口。
+ * <ul> <li>那一叠存在服务端（{@link #CARRIES}），客户端看到的只是服务端告诉它的样子；</li> <li>**任何路径都不许把它弄丢**：关界面（{@link #CARRY_DROP}）、换手、掉线、 每 tick 的兜底（{@link #tickPlayer}）都会把它**放回背包，装不下才掉在脚边**；</li> <li>一次点击只走一条路（盒子格或背包格），而且**先在副本上把账算完再动真东西** （{@link CompressionBoxData#duplicate}）——见下面 {@link #clickBox} 的说明。</li> </ul> 动作清单（与 {@link CompressionBoxNetworking} 的常量一一对应）： <ul> <li>{@link #TAKE_ONE} / {@link #TAKE_STACK} / {@link #TAKE_ALL}：旧口径的取（直接进背包）。 **界面已经不用它们**，保留是因为自检与老客户端都要走；（六百一十八起界面走 {@link #SLOT_CLICK}）</li> <li>{@link #DEPOSIT_STACK} / {@link #DEPOSIT_ONE}：旧口径的存（Shift+点背包格）；</li> <li>{@link #SLOT_CLICK}：**箱子式**——index = 槽位号（{@code < SLOTS} 是盒子格， {@code >= SLOTS} 是背包格，减 SLOTS 就是背包槽位），button = 0 左 / 1 右，shift = 快速移动；</li> <li>{@link #CARRY_DROP}：把手上的东西还回去（关界面/ESC 时发）。</li> </ul> 背包满时多出来的部分**掉在玩家脚边**（与原版拿取习惯一致），提示写在界面里。 压缩盒本身**永远不往下存**（见 {@link #deposit}）——盒子装盒子既看不见里面， 又是「把自己装进去就整盒消失」那个 bug 的入口。
  */
 public final class CompressionBoxService {
 
@@ -71,14 +49,11 @@ public final class CompressionBoxService {
 
     /**
      * 「这一下为什么没成」——最近一次被拒的原因文案（v1.2.2 实测六百二十）。
-     *
      * 【为什么要有】六百一十八起界面点击的裁决在服务端，而服务端拒了就什么都不发生：
      * 玩家只看得到「点了没反应」。界面上那几条红字是**客户端自己算的**（压缩盒/附魔
      * 这两条写死的判据，客户端读得到同一份 {@link CompressionBoxFilter}）；但真正的
      * 裁决在服务端，只有它说得清「这一次为什么没成」。所以这里记一句人话，
-     * 随下一次内容同步发给客户端画出来
-     * （{@link CompressionBoxNetworking.BoxStatePacket} 的 notice 字段）。
-     * 与 {@link #CARRIES} 一样：所有访问都在服务端主线程，用普通 HashMap。
+     * 随下一次内容同步发给客户端画出来 （{@link CompressionBoxNetworking.BoxStatePacket} 的 notice 字段）。 与 {@link #CARRIES} 一样：所有访问都在服务端主线程，用普通 HashMap。
      */
     private static final Map<UUID, String> NOTICES = new HashMap<>();
 
@@ -299,18 +274,11 @@ public final class CompressionBoxService {
 
     /**
      * 把玩家背包第 slot 格存进盒子（旧入口：Shift+点背包格）。
-     *
      * <b>压缩盒一律不存</b>（v1.2.2 实测六百一十七修的 bug）：先取出来再发现塞不进去、
      * 或者干脆把自己装进自己——界面开着时 Shift+点手上那一格就是这个动作，而那时
      * 取出来的正好是「打开着的这个盒子」，写标签的对象已经不在背包里，整盒东西就没了。
      * 所以在**动手取之前**就拒掉（{@link CompressionBoxData#mergeInto} 里还有一道，
-     * 防的是女仆背包那条路）。
-     *
-     * 【六百一十八：顺序改成「先落盘、再从背包扣」】旧版是「先从背包取出来、再合进盒子」，
-     * 中间任何一步抛异常（写标签失败、合并不下）都会让那份东西**只离开背包、没进盒子**
-     * ——正是用户报的「存进去就消失了」。现在先在**副本**上把能装多少算清楚
-     * （{@link CompressionBoxData#merge} 在副本上跑，算不动真列表），写盒子成功之后
-     * 才去扣背包：错了也只是盒子先收下、背包没扣（多一份），不会少一份。
+     * 防的是女仆背包那条路）。 【六百一十八：顺序改成「先落盘、再从背包扣」】旧版是「先从背包取出来、再合进盒子」， 中间任何一步抛异常（写标签失败、合并不下）都会让那份东西**只离开背包、没进盒子** ——正是用户报的「存进去就消失了」。现在先在**副本**上把能装多少算清楚 （{@link CompressionBoxData#merge} 在副本上跑，算不动真列表），写盒子成功之后 才去扣背包：错了也只是盒子先收下、背包没扣（多一份），不会少一份。
      */
     private static boolean deposit(ServerPlayer player, IItemHandler inv, ItemStack box,
                                    List<ItemStack> items, int slot, int amount) {
@@ -351,15 +319,10 @@ public final class CompressionBoxService {
     /**
      * 鼠标点了某一格。槽位号约定：{@code < SLOTS} = 盒子格；{@code >= SLOTS} = 背包格
      * （减 SLOTS 就是玩家背包槽位，与 {@link PlayerMainInvWrapper} 一致）。
-     *
      * 动作与「往箱子里存东西」的原版手感对齐：
      * <ul>
      *   <li>左键空格子…手里空 → **拿起**（盒子格最多 64，因为不可堆叠的东西一次只该拿它自己能堆的那么多）；
-     *       手里有 → **放下**（能塞多少塞多少，塞不下的继续挂在手上）；</li>
-     *   <li>右键：手里空 → 拿 1 个（背包格按原版拿一半）；手里有 → 放 1 个；</li>
-     *   <li>Shift+左键：**快速移动**——盒子格 → 背包（最多 64），背包格 → 盒子；</li>
-     *   <li>背包格上「手里有、那格也有别的物品」→ **交换**（与原版一致）。</li>
-     * </ul>
+     *       手里有 → **放下**（能塞多少塞多少，塞不下的继续挂在手上）；</li> <li>右键：手里空 → 拿 1 个（背包格按原版拿一半）；手里有 → 放 1 个；</li> <li>Shift+左键：**快速移动**——盒子格 → 背包（最多 64），背包格 → 盒子；</li> <li>背包格上「手里有、那格也有别的物品」→ **交换**（与原版一致）。</li> </ul>
      */
     private static boolean click(ServerPlayer player, IItemHandler inv, ItemStack box,
                                  List<ItemStack> items, int handOrdinal, int index, int button,
@@ -427,17 +390,11 @@ public final class CompressionBoxService {
 
     /**
      * 左/右键点背包某一格（拿起 / 放下 / 合并 / 交换）。背包是**真列表**（不像盒子要先落盘）。
-     *
      * 六百二十【用户要的「压缩盒在这个界面内无法被鼠标选中」】：这一格装的是压缩盒时，
      * 鼠标对它**什么都不做**——不能被拿起来（挂着走 = 之后每一次点击都会被服务端的
      * 「那只手里还是不是盒子」判据挡掉，看着像界面坏了），也不能被「交换」那一路
      * 顶到鼠标上去。全库只有这里能改变鼠标上挂着的东西，所以挡在入口就够：
-     * <ul>
-     *   <li>手里空 + 这一格是盒子 → 不拿（原来会整叠拿起来）；</li>
-     *   <li>手上有东西 + 这一格是盒子 → 不换（原来会走「交换」把手上的东西塞进去、
-     *       把盒子提到鼠标上）。</li>
-     * </ul>
-     * 拒绝时回一句「压缩盒不能装进压缩盒」——这正是用户要的那句再次提示。
+     * <ul> <li>手里空 + 这一格是盒子 → 不拿（原来会整叠拿起来）；</li> <li>手上有东西 + 这一格是盒子 → 不换（原来会走「交换」把手上的东西塞进去、 把盒子提到鼠标上）。</li> </ul> 拒绝时回一句「压缩盒不能装进压缩盒」——这正是用户要的那句再次提示。
      */
     private static boolean clickInv(ServerPlayer player, IItemHandler inv, int slot, Carry c,
                                     int button) {

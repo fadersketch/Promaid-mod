@@ -10,8 +10,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
 /**
- * v1.3.9【巡逻航图】物品（1.21.1）——
- *
  * <ol>
  *   <li><b>右键</b>：打开界面。第一次进去只有「＋ 创建一个轨道」；建好之后每条轨道有
  *       「管理 / 改名 / 删除」。再右键一次永远是"回到这个界面"（标记期间也一样）。</li>
@@ -22,15 +20,9 @@ import net.minecraft.world.level.Level;
  *   <li><b>标记管理页</b>（v1.3.9.2）：列出这条轨道上的每一个标记，可逐条删 / 删最后一个 / 清空。</li>
  *   <li><b>再次右键</b>回到界面 → 点「连接」：**没有门槛**，点了就闭环；原来的点数/坡度/自交/
  *       半径/挡路方块判据都只回一句 ⚠ 提醒（v1.3.9.3，
- *
  *       {@link PatrolAdapt} 抬一抬，她自己也会绕开（见 {@code MaidBroomDrive.steerTo}）。</li>
  * </ol>
- *
- * <p>标记只在**手持航图**时于世界里可见（菱形核 + 地面光环 + 竖针，首点青绿、末点品红；
- * v1.3.9.2 起换掉了原来的立方体轮廓）——见 {@code PatrolPreviewClient}。
- * 右键女仆不再有任何巡逻含义（绑定/解绑都在界面里点）。
- *
- * <p>光效沿用管理道具惯例（{@code isFoil} 恒 true）。
+ * <p>标记只在**手持航图**时于世界里可见（菱形核 + 地面光环 + 竖针，首点青绿、末点品红； 右键女仆不再有任何巡逻含义（绑定/解绑都在界面里点）。 <p>光效沿用管理道具惯例（{@code isFoil} 恒 true）。
  */
 public class PatrolChartItem extends Item {
 

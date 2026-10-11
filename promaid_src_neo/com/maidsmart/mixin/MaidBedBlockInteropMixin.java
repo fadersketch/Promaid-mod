@@ -29,7 +29,6 @@ import java.util.Optional;
 /**
  * 床铺互通·方向二（v1.1.0 实测四百一十八，反馈："让女仆床和玩家床的代码互通。
  * 女仆和玩家可以互相使用对方的床"）。1.21.1 NeoForge 版（Mojmap 名）。
- *
  * TLM 的女仆床对玩家是"死"的，NeoForge 版堵点有三处：
  * ① {@code BlockMaidBed.isBed(...)} 只在 {@code entity instanceof EntityMaid} 时返回
  *    true，玩家（以及重生点解析传的 null）恒 false——睡不进去；
@@ -37,17 +36,10 @@ import java.util.Optional;
  * ③ NeoForge 的 {@code getRespawnPosition}（IBlockExtension 默认）恒返回 empty()，
  *    而 1.21.1 的重生点解析只在【非强制】分支问这个钩子——不实现的话，玩家睡是睡
  *    下了、重生点也"设"了，但死亡复活时会报"重生方块缺失"并回世界出生点。
- *
  * 本 mixin 把三道门都打开（不改 TLM 源码）：
  * - isBed：玩家 / null 认；女仆仍走 TLM 原 EntityMaid 分支；
  * - useItemOn：染料仍走 TLM 染色；否则服务端调 player.startSleepInBed(head)；
- * - getRespawnPosition：直接在本 mixin 声明同签名方法（合并进 BlockMaidBed 覆盖接口
- *   默认），委托原版 BedBlock.canSetSpawn + findStandUpPosition——与睡原版床的落地
- *   算法完全一致。
- *
- * BlockMaidBed 的 OCCUPIED/PART 与 BedBlock 是同一 Property 实例、FACING 来自
- * HorizontalDirectionalBlock，所以 setBedOccupied/getBedDirection 用 NeoForge 默认
- * 实现即可。开关 MISC_BED_INTEROP 关掉后全部恢复 TLM 原版行为。
+ * - getRespawnPosition：直接在本 mixin 声明同签名方法（合并进 BlockMaidBed 覆盖接口 默认），委托原版 BedBlock.canSetSpawn + findStandUpPosition——与睡原版床的落地 算法完全一致。 BlockMaidBed 的 OCCUPIED/PART 与 BedBlock 是同一 Property 实例、FACING 来自 HorizontalDirectionalBlock，所以 setBedOccupied/getBedDirection 用 NeoForge 默认 实现即可。开关 MISC_BED_INTEROP 关掉后全部恢复 TLM 原版行为。
  */
 @Mixin(BlockMaidBed.class)
 public abstract class MaidBedBlockInteropMixin {

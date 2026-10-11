@@ -10,13 +10,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 【实测六百七十六】二号位重锤猛击：吊在女仆下方时，把"她这一段俯冲下落了多少格"写回
  * {@code player.fallDistance}，让玩家自己手里的重锤**也能吃到下落加成**。
- *
  * <p><b>
- *
- *
- *
  * <p><b>为什么原来吃不到（反编译实证，1.21.1）</b>：重锤那条链路只有一次读
  * {@code fallDistance}——{@code Player.attack} 第 209 行
  * {@code $$1 += this.getWeaponItem().getAttackDamageBonus(target, $$1, source)}；
@@ -27,44 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * {@code postHurtEnemy} 再 {@code resetFallDistance()}。
  * 而 {@code fallDistance} **只在 {@code Entity.move} → {@code Entity.checkFallDamage} 里累加**
  * （{@code Entity.java} 656 / 1135 行），**乘客不走 move**：{@code Entity.rideTick} 先把速度清零、
- * 再由载具的 {@code positionRider} 直接 {@code setPos}（我们的
- * {@link EntityGunnerHangMixin} 也正是这么定位的）→ 吊在她下面的玩家 {@code fallDistance}
- * 恒为 0 → 打不出猛击。
- *
- * <p><b>所以做法是"只补那一个字段"</b>：不改原版任何判据，只在攻击那一刻把
- * {@link GunnerTetherManager#consumeRideFall}（他自己那一份"已下落格数"）写进
- * {@code fallDistance}，后面原版那整套自己就跑通了。写法与女仆那边
- * （{@code MaidFlightCombatBehavior} / {@code MaidMaceSmashBehavior} 强制写
- * {@code maid.fallDistance}）**同一个套路**，只是主体换成了玩家。
- *
- * <p><b>为什么收窄到"手里真是重锤"</b>：{@code fallDistance} 是个被很多东西读的公共字段
- * （暴击判定、摔伤、其它模组的加成…）。只在"这一锤本来就是重锤"时写，爆炸半径最小：
- * 原版猛击成功会自己 {@code resetFallDistance()}，不会留下"莫名摔伤"的后遗症。
- *
- * <p><b>两侧与时机</b>：{@code Player.attack} 客户端也会调（本地预测），这里只认服务端
- * （{@code isClientSide} 直接返回）——伤害、音效、击退本来就是服务端算的。
- * {@code HEAD} 注入保证"写在那一次读取之前"。
- *
- * <p>── 实测六百八十四【补留痕】──
- *
- *
- * <p>查了 2026-09-26 那一局（<b>promaid.log</b> 里 {@code [重锤门]} 共 1295 行、{@code 触发}
- * 1295 次**全部**是 {@code 不触发}）：那些行**全是女仆那一侧**的判定（{@code 主手=…} 是她手里的
- * 东西），玩家这一侧旧版**一个字节都不打**——"他有没有吃到猛击"在日志里根本无从查起。
- * 现在这里补一行 {@code [重锤门] 玩家=…（挂在女仆下面）}：写回成功写"写回 fallDistance=N 格"，
- * 没到门槛写"不到门槛"，一眼就能分辨。只在"他确实挂在下面"（
- * {@link GunnerTetherManager#isHangRiding}）时打，免得他在平地上挥锤也刷一行。
- *
- * <p>本模组手工编译、无 refmap，{@code method} 按**运行时名**逐字匹配；1.21.1 运行时是官方名，
- * 所以这里写 {@code attack}（1.20.1 那边没有重锤，本混入不进那棵树）。
- *
- * <p>── 实测六百八十六【扫帚那一档不开这个后门】──
- *
- *
- * 实际生效范围由 {@link GunnerTetherManager#consumeRideFall} 决定：**近战空袭那一档**照旧记账
- * （她驮着你收翅俯冲时，这一锤按你跟着下落了多少格算，增伤与密度/破甲/风爆一并生效），
- * **扫帚那一档恒返回 0** → 这里 {@code ride = 0} → 不写 {@code fallDistance} → 原版猛击要的下落
- * 距离在乘客身上本来就不累积，等于"扫帚档完全恢复原版"。日志（「玩家=…」那一行）同理只在空袭档出现。
+ * 再由载具的 {@code positionRider} 直接 {@code setPos}（我们的 {@link EntityGunnerHangMixin} 也正是这么定位的）→ 吊在她下面的玩家 {@code fallDistance} 恒为 0 → 打不出猛击。 <p><b>所以做法是"只补那一个字段"</b>：不改原版任何判据，只在攻击那一刻把 {@link GunnerTetherManager#consumeRideFall}（他自己那一份"已下落格数"）写进 {@code fallDistance}，后面原版那整套自己就跑通了。写法与女仆那边 （{@code MaidFlightCombatBehavior} / {@code MaidMaceSmashBehavior} 强制写 {@code maid.fallDistance}）**同一个套路**，只是主体换成了玩家。 <p><b>为什么收窄到"手里真是重锤"</b>：{@code fallDistance} 是个被很多东西读的公共字段 （暴击判定、摔伤、其它模组的加成…）。只在"这一锤本来就是重锤"时写，爆炸半径最小： 原版猛击成功会自己 {@code resetFallDistance()}，不会留下"莫名摔伤"的后遗症。 <p><b>两侧与时机</b>：{@code Player.attack} 客户端也会调（本地预测），这里只认服务端 （{@code isClientSide} 直接返回）——伤害、音效、击退本来就是服务端算的。 {@code HEAD} 注入保证"写在那一次读取之前"。 <p>── 实测六百八十四【补留痕】── <p>查了 2026-09-26 那一局（<b>promaid.log</b> 里 {@code [重锤门]} 共 1295 行、{@code 触发} 1295 次**全部**是 {@code 不触发}）：那些行**全是女仆那一侧**的判定（{@code 主手=…} 是她手里的 东西），玩家这一侧旧版**一个字节都不打**——"他有没有吃到猛击"在日志里根本无从查起。 现在这里补一行 {@code [重锤门] 玩家=…（挂在女仆下面）}：写回成功写"写回 fallDistance=N 格"， 没到门槛写"不到门槛"，一眼就能分辨。只在"他确实挂在下面"（ {@link GunnerTetherManager#isHangRiding}）时打，免得他在平地上挥锤也刷一行。 <p>本模组手工编译、无 refmap，{@code method} 按**运行时名**逐字匹配；1.21.1 运行时是官方名， 所以这里写 {@code attack}（1.20.1 那边没有重锤，本混入不进那棵树）。 <p>── 实测六百八十六【扫帚那一档不开这个后门】── 实际生效范围由 {@link GunnerTetherManager#consumeRideFall} 决定：**近战空袭那一档**照旧记账 （她驮着你收翅俯冲时，这一锤按你跟着下落了多少格算，增伤与密度/破甲/风爆一并生效）， **扫帚那一档恒返回 0** → 这里 {@code ride = 0} → 不写 {@code fallDistance} → 原版猛击要的下落 距离在乘客身上本来就不累积，等于"扫帚档完全恢复原版"。日志（「玩家=…」那一行）同理只在空袭档出现。
  */
 @Mixin(Player.class)
 public abstract class PlayerMaceRideFallMixin {

@@ -143,10 +143,8 @@ public final class AutoCombatTargeting {
             return true;
         }
         // v1.1.0 实测八十七：中立生物激怒即通行证
-        // v1.1.0 实测三百一十八：驯服宠物记仇【主人】也算——狼记仇的是主人不是
         // 女仆，isAngryAt(女仆) 恒 false → 女仆被发狂驯服狼咬不参战（反馈："狼打我
         // 女仆一点反应都没"）。记仇主人的驯服宠物咬女仆 = 真实威胁，帮打合理。
-        // v1.1.0 实测三百四十四【行为化兜底】：魔改生物不实现 NeutralMob/Tamable
         // 接口（类型判定恒 false），但攻击前必写 getTarget——正在锁定【受害女仆
         // 或其主人】的任意 Mob 都算真实威胁（与 isTargetingOurSide 同口径）。
         // 野狼咬女仆时 getTarget 可能仍指向主人（记仇主人但顺手咬近身的女仆），
@@ -340,17 +338,13 @@ public final class AutoCombatTargeting {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ignored);
         }
         // 实测八百二十三【参战顺手把作息切成「全天」】——
-        //
-        //
         // ── 为什么只切任务她不动手 ──
         // TLM 的攻击任务行为（近战/弓/弩/三叉戟/弹幕…）**全部注册在 WORK 活动**里，而当前
         // 活动由 TLM 自家作息（DAY/NIGHT/ALL）按游戏时间映射：夜里白班女仆处于 REST（睡觉），
         // WORK 不是活动 → 攻击行为根本不 tick → 任务切了却站着不动。
         // ── 怎么办 ──
         // 参战时把作息临时换成 ALL（= WORK 常驻活动），她才会真的起身还手；威胁消失后
-        // （默认 200 tick = 10 秒安全期）restorePrevMode 用上面存的 COMBAT_PREV_SCHEDULE_TAG
-        // 把作息**一起复原**——不必新增还原逻辑，既有闭环已覆盖。排班开着时参战本就整体
-        // 让位（本方法上游 isOn 门），不会走到这里。
+        // （默认 200 tick = 10 秒安全期）restorePrevMode 用上面存的 COMBAT_PREV_SCHEDULE_TAG 把作息**一起复原**——不必新增还原逻辑，既有闭环已覆盖。排班开着时参战本就整体 让位（本方法上游 isOn 门），不会走到这里。
         if (com.maidsmart.config.MaidSmartConfig.COMBAT_FORCE_ALL_SCHEDULE.get()) {
             try {
                 if (maid.getSchedule() != MaidSchedule.ALL) {

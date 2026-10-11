@@ -123,9 +123,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private static boolean customOresLoaded = false;
 
     /**
-     * v1.5.88：从配置面板的"可挖掘方块表"（mine.oreValues：modid:block=价值）加载
      * 自定义矿表——适配其他 mod 的矿石。首次扫描/配置保存后调用。
-     * v1.0.3.1：先 clear 再按配置重建——旧版只 put 不 remove，界面取消勾选矿物后
      * WOOD_VALUE 残留该方块 → 女仆仍继续挖（"取消勾选不生效"根因）。
      * 配置 oreValues 是唯一事实源：从配置删除的矿（含曾 add 的模组矿如银矿石、
      * 以及从默认列表删掉的内置矿）立即从 WOOD_VALUE 消失；删光矿 = 女仆不挖矿，
@@ -174,14 +172,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测一百一十九：目标方块 AABB 上离女仆最近点的距离平方。
      * 玩家手长的正确语义：方块【任一点】够得着就能挖。旧版取方块中心距离——
      * 垂直边界场景（站进砍空的树洞/树基处挖正上方的木头）下一根木头的中心
      * 恰好压在 4.5 格伸手边界上，女仆实体水平偏移 0.1 格（走进树洞/寻路抖动）
      * 就 distSq > reachSq → 永远进搭路分支 → 搭方块被防窒息/没材料挡住 →
      * 原地发呆（看门狗重置后几何不变照样冻死，"砍树发呆修不好"的根因）。
-     * 最近点判定后：正上方的木头底面对女仆只有 4.0 格（dy=4）甚至更近，
-     * 稳定够得着，逐节往上啃；够不着的（dy≥5）才走搭方块爬树。
+     * 最近点判定后：正上方的木头底面对女仆只有 4.0 格（dy=4）甚至更近， 稳定够得着，逐节往上啃；够不着的（dy≥5）才走搭方块爬树。
      */
     private static double distSqToBlock(EntityMaid maid, BlockPos pos) {
         double x = Math.max(pos.m_123341_(), Math.min(maid.m_20185_(), pos.m_123341_() + 1));
@@ -383,15 +379,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.87：软方块判定（徒手可挖：硬度 0~1，如草/土/沙）——
      * 开路不耗镐子耐久、穿透预算不计阻挡；硬方块（矿/石头/箱子/基岩）反之。
      */
     /**
-     * v1.5.139：软方块判定 = "镐不是正确工具"的方块（草/土/沙/粘土——铲或徒手挖）。
      * 旧判定 hardness ≤ 1 会把低硬度的 mod 矿物（如匠魂/魔法 mod 的 1 硬度矿石）
      * 误判为"软方块"→ softNoDurability=true 时挖矿物也不扣耐久（反馈
-     * "就算挖的是矿物也不会掉耐久"的根因）。改为按"镐是否为正确工具"判定：
-     * 镐是正确工具的方块（原版+mod 全部矿物/石头/深板岩，无论硬度）一律算硬，必扣。
+     * "就算挖的是矿物也不会掉耐久"的根因）。改为按"镐是否为正确工具"判定： 镐是正确工具的方块（原版+mod 全部矿物/石头/深板岩，无论硬度）一律算硬，必扣。
      */
     private static boolean isSoft(ItemStack pick, BlockState st) {
         if (pick.m_41619_() || !(pick.m_41720_() instanceof net.minecraft.world.item.DiggerItem d)) {
@@ -901,11 +894,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             if (this.targetPos == null) {
                 // v1.5.113（A1）：扫描节流——每 20 tick 一次廉价校验（全量重建由
                 // findWood 内部按 5 秒 TTL 控制，旧版每 3 tick 全量扫 8.9 万格）
-                // v1.5.124：20 → 10 tick——挖完一块后找下一块矿更快（缓存轮只校验
                 // 已记录矿的位置，廉价），"原地愣几秒"减少一半
-                // v1.5.127：10 → 5 tick——缓存轮空时 findWood 已改为立即全量重建，
                 // 此节流只控制"挖完后重新评估"的频率，再减半让块间衔接更紧凑
-                // v1.1.0 实测六十五（自查修复）：分帧扫描进行中【不受节流、每 tick 推进】
                 // ——节流在扫描期会把实际吞吐压到预算的 1/5（默认预算下扫完一框从
                 // 0.85 秒变成 20 秒，女仆干等）；节流只该管"发起新一轮扫描"
                 if (!WOOD_SCANS.containsKey(maid.m_19879_()) && this.scanCooldown-- > 0) {
@@ -1192,16 +1182,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 不再逐个挖（旧版"自动连挖"看不出连锁效果，反馈）
         this.chainBreakAll(level, maid, mainHand);
         markProgress(maid, gameTime); // 实测六十九：喂看门狗（真实进展）
-        // v1.1.0 实测三十（反馈："树冠清理不自然——直接整个树冠一下子清掉；
         // 我要的只是以女仆为中心 3×3×3 范围内的树叶被破坏，带音效和特效"）：
         // 删除 clearTreeTop 整冠 BFS 清除（一次性清掉整棵树的树叶不自然）。
         // 树叶清理完全交给 burstNearbyLeaves——它本来就在行为激活期间每 20 tick
         // 以女仆为中心清 3×3×3，女仆走过去自然会"经过"整片树冠逐层清完。
         // （实测九已有的机制，本次让它成为唯一的树叶清理路径）
-        // v1.1.0 实测二百二十八（反馈："种树逻辑直接分开来就好——与伐木不相关"）：
         // 伐木内部的补种已移除——「随手种树」是独立行为（MaidPlantSaplingBehavior，
-        // 手里有苗+附近有可种土块就种，什么都不干时也种）；本行为回归纯砍树/清叶。
-        // 树叶掉落的树苗仍直接进背包（自动收集开关之外的单品规则），供随手种树取用。
+        // 手里有苗+附近有可种土块就种，什么都不干时也种）；本行为回归纯砍树/清叶。 树叶掉落的树苗仍直接进背包（自动收集开关之外的单品规则），供随手种树取用。
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
@@ -1277,11 +1264,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测九：冲破身边树叶——以女仆为中心的 3×3×3 立方体内所有树叶
      * 直接摧毁。掉落物走 getDrops（树苗/苹果/木棍按概率），autoCollect 开着
      * 直接进背包，否则落地（走原版掉落，拾取任务后续处理）。只清树叶——
      * 立方体内的原木不碰（那是正常挖掘目标，走挖掘流程有工具加成）。
-     * v1.1.0 实测三十（反馈："每块树叶要有破坏音效和破坏特效"）：每块树叶
      * 破坏时各自播 levelEvent 2001（同玩家挖方块——音效+粒子一起），不再
      * 只在中心播一次（旧版静默清除观感突兀）。树冠清理（clearTreeTop）删除后
      * 本方法是唯一的树叶清理路径：女仆走动经过树冠就逐层清 3×3×3。
@@ -1486,16 +1471,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             // → 旧版就此卡死：不垫、不走、也不挖头顶的木头，"站树洞里发呆"根因）。
             // 修复：把目标改为头顶正上方第一块木材（下一 tick 走正常挖掘入口——
             // 伸手范围内直接挖掉，逐节往上啃完整棵树，不需要垫方块）
-            // v1.1.0 实测五十四：目标已经是头顶木材（above == t，垫块冷却中/没材料
             // /防窒息暂不可垫）→ 原地等待重试，【不再跌进 walkToWoodBase】——头顶
             // 目标的"站立点"全是导航去不了的空中格（findStandNearWood 兜底已删，
-            // 但 walkTargetFor 仍可能选出树冠里的悬空格），走到垃圾目标 = 发呆。
-            // 等待期间 15 秒目标超时照常生效（够不着且零进度 → 弃置换树）
-            // v1.1.0 实测二百二十六：水平偏开时的"原地等"修正——旧版 above == t 无
-            // 条件等待：女仆站在树干旁 1~2 格时"等"= 站到超时/看门狗重置循环。
-            // 现在她水平偏开 >1 格就先走到【树干柱底最近可站格】（她已挖穿的树洞
-            // 底部或柱下地面——可站格沿柱向下找，第一个空气且脚下有支撑的格），
-            // 走位到正下方后挖掘入口自然接管（正头上方木材伸手可及）。
+            // 但 walkTargetFor 仍可能选出树冠里的悬空格），走到垃圾目标 = 发呆。 等待期间 15 秒目标超时照常生效（够不着且零进度 → 弃置换树） 条件等待：女仆站在树干旁 1~2 格时"等"= 站到超时/看门狗重置循环。 现在她水平偏开 >1 格就先走到【树干柱底最近可站格】（她已挖穿的树洞 底部或柱下地面——可站格沿柱向下找，第一个空气且脚下有支撑的格）， 走位到正下方后挖掘入口自然接管（正头上方木材伸手可及）。
             BlockPos above = this.firstWoodAbove(level, maid);
             if (above != null) {
                 if (!above.equals(t)) {
@@ -1583,18 +1561,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测四十七：找女仆头顶上方（同列）最近的木材块（最多 10 格）。
      * 用于"站树洞里头顶就是树干"场景——pillarUpStep 防窒息拒绝垫块时，
      * 改挖头顶树干逐节往上啃，不再站桩发呆。
-     * v1.1.0 实测一百一十九：起始 dy 2 → 1——树基的木头被砍掉后女仆站进树洞，
      * 下一根木头就在她【头平齐】的 dy=1 处（不是 2），旧版从 dy=2 起跳会漏掉
      * 它：扫描/链式都给不出目标时对着近在咫尺的头顶木头发呆。
-     * v1.1.0 实测二百二十六（反馈："对树上比自己高几格的木头站在木头下一动不动"）：
-     * 旧版只搜【女仆自己所在列】——站在树干旁 1~2 格（走位/寻路落点差一格、从树冠
      * 上滑落）时头顶列是空气/树叶，找不到木材 → 搭高失败后跌回 walkToWoodBase
-     * （最近可站格恰是她脚下）→ 原地站到 15 秒超时/看门狗重置 → 反复循环。
-     * 改为【5×5 列簇】：离女仆最近的列（|dx|+|dz| 环序）优先、列内 dy 从 1 起——
-     * 覆盖"站在树干旁一两格"的全部场景；找到后设为目标即可正常挖（无需垫块）。
+     * （最近可站格恰是她脚下）→ 原地站到 15 秒超时/看门狗重置 → 反复循环。 改为【5×5 列簇】：离女仆最近的列（|dx|+|dz| 环序）优先、列内 dy 从 1 起—— 覆盖"站在树干旁一两格"的全部场景；找到后设为目标即可正常挖（无需垫块）。
      */
     private BlockPos firstWoodAbove(ServerLevel level, EntityMaid maid) {
         BlockPos feet = maid.m_20183_();
@@ -1619,12 +1591,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.116：设置移动目标——目标没变 且 导航仍在行进 → 不重设。
      * 导航每次收新目标都要停下重新寻路（PathNavigation.recomputePath），
-     * 旧版 walkToWoodBase 每 8 tick 无条件重设 → 女仆"走一下顿一下"鬼畜。
-     * v1.5.121：±1 容差（相邻站立格抖动不重设）——但去掉 !isDone 条件导致
      * 女仆到达站立点后永远不再重设 = "完全不会走路"卡死（回归，v1.5.122 修复）。
-     * v1.5.122：容差 + 导航行进中（!isDone）才跳过；导航到达/失败（isDone）时
      * 重设以重新激活寻路，女仆不会停在原地。
      */
     private void setWalkTarget(EntityMaid maid, BlockPos stand, float speed) {
@@ -1643,9 +1611,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 直接 moveTo 后走路全程无中断；到达/搭路判定由行为自己的 distSq 控制（不变）。
         // 注意：m_26519_ 内部同目标寻路有缓存（f_26496_ 复用），配合上面的
         // "目标未变且导航行进中跳过"，不会每 tick 重新寻路。
-        // 寻路范围：PathNavigation 的搜索盒 = followRange + 1（女仆约 16~17 格），
-        // 目标更远时 createPath 返回 null → 直接 moveTo 会失败原地不动——超过
-        // 14 格就先朝目标方向走 12 格的中间点（导航到达后再重设，自然接力）。
+        // 寻路范围：PathNavigation 的搜索盒 = followRange + 1（女仆约 16~17 格）， 目标更远时 createPath 返回 null → 直接 moveTo 会失败原地不动——超过 14 格就先朝目标方向走 12 格的中间点（导航到达后再重设，自然接力）。
         double hd = Math.sqrt(
                 (stand.m_123341_() + 0.5 - maid.m_20185_()) * (stand.m_123341_() + 0.5 - maid.m_20185_())
                         + (stand.m_123343_() + 0.5 - maid.m_20189_()) * (stand.m_123343_() + 0.5 - maid.m_20189_()));
@@ -1807,7 +1773,6 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.161：连锁采集——从刚挖掉的位置 BFS（6 方向）找相连的同族矿排队。
      * 匹配规则（借鉴 FTB Ultimine 的 BlockMatcher：同 Block 判定）：
      * - 方块类型与刚挖掉的矿相同（chainBlock）
      * - 在矿表内（isWood，含自定义矿表）——只连锁矿，不连锁石头/泥土
@@ -1907,13 +1872,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.5.25e 借鉴自保 buildUp：女仆实际头顶（bounding box 顶面）上方必须空旷——
         // 快速连续搭高时实体位移滞后，blockPosition 检查不够，必须按真实位置判定，
         // 否则"搭太快把自己埋了"窒息（挖矿搭高也会踩同一坑）
-        // v1.1.0 实测二百四十：isAir → suffocates——树冠场景女仆头顶就是树叶
         // （isSuffocating 恒 false，不闷人），旧版 isAir 检查把树叶当"堵头"拦死
         // 搭高（"伐木不搭方块"根因之二）；只拦真正会闷住她的实心满块。
         // v1.1.0 实测二百四十七（反馈："挖掘一定数量后不再搭方块"）：headPos+1
         // 检查【漏了目标木材排除】——女仆搭了几块柱子后站在柱顶，目标木材就在
-        // 头顶 1~2 格（headPos+1 恰好是目标木材）→ suffocates 拦死后续搭高。
-        // 与 place+1/place+2 同口径：目标木材所在格排除（搭高就是为了够它）。
+        // 头顶 1~2 格（headPos+1 恰好是目标木材）→ suffocates 拦死后续搭高。 与 place+1/place+2 同口径：目标木材所在格排除（搭高就是为了够它）。
         double headY = maid.m_20191_().m_82374_(net.minecraft.core.Direction.Axis.Y);
         BlockPos headPos = new BlockPos((int) maid.m_20185_(), (int) (headY + 0.05), (int) maid.m_20189_());
         if ((this.suffocates(level, headPos) && !headPos.equals(this.targetPos))
@@ -2385,9 +2348,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.113（B1/B2）：滑动锚点迁移——框内确认挖空后，把锚点朝主人方向滑动
      * 一个搜索环宽（新框与旧框错开一半以上），女仆无需走路、马上能挖新框的矿。
-     * 旧版"朝主人走、走出旧框才重埋"有两个致命问题：
      * ① 被墙/悬崖堵住走不动 → 30 秒停滞就地重埋 → 新框与旧框重合 → 又空 → 又迁移
      *    （死循环）；② 迁移期纯走路零产出。
      * 每 5 秒最多滑一次（SLIDE_SINCE 节流），空旷地形也不会高速漂移。
@@ -2547,17 +2508,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.47：找最优矿石（以【锚点】为中心，杜绝"越挖越远"漂移）：
      * score = 距离平方 + 深度惩罚 - 价值加成，取最低分。
      * 穿透预算：女仆到矿之间实心挡路方块 ≤MAX_BREAK_BUDGET 可选（借鉴 maidmining）；
      * 刚弃置的目标跳过一次。
-     *
-     * v1.5.113（A1/A3/B4）：性能与行为优化——
      * - 全量扫描（8.9 万格）每 5 秒一次（WOOD_CACHE_TTL），期间缓存轮只校验
      *   已记录的矿（存在性/框内/可挖性），廉价得多（旧版每 3 tick 全量扫）；
-     * - 挡路预算按矿坐标缓存（缓存轮复用），不再对每个候选重算视线；
-     * - 镐能力判定：主手先查（零开销），主手不够才查背包最高级镐（一次遍历）；
-     * - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
+     * - 挡路预算按矿坐标缓存（缓存轮复用），不再对每个候选重算视线； - 镐能力判定：主手先查（零开销），主手不够才查背包最高级镐（一次遍历）； - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
      */
     private BlockPos findWood(ServerLevel level, EntityMaid maid, BlockPos anchor) {
         // v1.1.0 终审三（反馈：木材空手也能挖，不能因为空手就拒绝工作）：
@@ -2786,19 +2742,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private static final double EYE_HEIGHT = 1.5;
 
     /**
-     * v1.0.4：视线感知（透视感知开关默认关时启用）——女仆像玩家一样只能发现视线无阻的矿物。
      * 从眼睛到矿物中心采样（每 0.5 格，与 countBlocking 同一口径），到达矿物前碰到任何
      * 【非空气、非流体】方块即判定视线被挡 → 不可见。除水/岩浆外一律挡视线：
      * - 泥土/石头/矿石/箱子等自不必说；
      * - 玻璃/半砖/树叶等透明或半格方块也挡——它们不是矿洞天然生成物，玩家手动把矿
      *   裹起来说明不想破坏里面的矿（半格高按一格高算）；
-     * - 水/岩浆是矿洞常见液体，女仆要能挖水下/岩浆旁的矿（岩浆旁的目标另有危险规避）。
-     * 注意与 countBlocking 的区别：那是"挖不挖得过去"（穿透预算），这里是"看不得看见"
-     * （发现层过滤）——关闭透视后视线被挡的矿不进候选，也不产生任何播报。
-     * v1.0.5：眼睛高度改 1.5（按玩家的大正酒狐模型）；判定改多点——矿的中心/顶面/
-     * 底面任一可见即算可见（贴地矿顶面可见、悬空矿底面可见，玩家能看到矿的任何一个
-     * 面就算看见）。凹槽里的矿仍须视线从开口进入：开口顶面低于眼睛时三条线都撞墙，
-     * 依旧不可见（与玩家站在同一位置一致）。
+     * - 水/岩浆是矿洞常见液体，女仆要能挖水下/岩浆旁的矿（岩浆旁的目标另有危险规避）。 注意与 countBlocking 的区别：那是"挖不挖得过去"（穿透预算），这里是"看不得看见" （发现层过滤）——关闭透视后视线被挡的矿不进候选，也不产生任何播报。 底面任一可见即算可见（贴地矿顶面可见、悬空矿底面可见，玩家能看到矿的任何一个 面就算看见）。凹槽里的矿仍须视线从开口进入：开口顶面低于眼睛时三条线都撞墙， 依旧不可见（与玩家站在同一位置一致）。
      */
     private boolean hasClearSight(ServerLevel level, EntityMaid maid, BlockPos target) {
         double sx = maid.m_20185_();

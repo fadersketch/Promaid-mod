@@ -11,18 +11,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * v1.1.0 实测一百三十六/一百三十八：排班开启的女仆【禁止手动改任务与工作模式】——
  * 源头拦截。
- *
  * 背景（反馈："理论上排班中的女仆玩家不应该可以手动修改她的任务的"、"排班名义上
  * 不允许玩家切换模式，但 TLM 本身能切，禁用调整变成无用"）：排班书自己的快捷设置/
  * 批量应用早已拦截，但 TLM 原版 GUI 是【直接调 EntityMaid.setTask / setSchedule】，
  * 绕过拦截——手动改动与调度重试互相顶（任务），或工作模式（DAY/NIGHT/ALL 作息）被
  * 玩家改走、段内去抖键命中后排班不纠正。
- *
  * 判定：排班开启（ScheduleData.isOn）且非【自动系统】的调用（ScheduleSwitchGuard
  * 内部标记——排班调度器与主动战斗系统的 setTask/setSchedule 都用 runInternal 包住）
  * → 直接拒绝。玩家手动改任务、改作息在源头被掐掉；调度/战斗的正常切换、未开排班
  * 时的照常调整都不受影响。
- *
  * 反馈：拒绝时给女仆气泡说明（addTextChatBubble 受 ChatBubbleLimitMixin 5 秒限频，
  * 连续点击不刷屏），并落一条排班日志。
  */

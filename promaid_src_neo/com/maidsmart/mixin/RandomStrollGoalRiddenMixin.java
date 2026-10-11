@@ -10,16 +10,13 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * v1.3.0(beta)（1.21.1）【骑乘链路·坐骑别自己乱逛】：把原版"玩家在骑就别闲逛"的规则，
  * 原样扩展到"本模组的女仆在骑也别闲逛"。
- *
  * <p>{@code RandomStrollGoal.canUse()} 的第一句是
  * {@code if (this.mob.hasControllingPassenger()) return false;}（javap 实证，两版逐字相同）
  * ——原版靠它保证"玩家骑着马时马不自己溜达"。而 {@code hasControllingPassenger()} =
  * {@code getControllingPassenger() != null}，{@code AbstractHorse/Pig/Strider} 的实现都要求
  * **第一乘客是 Player**（猪/炽足兽还要钓竿）→ **女仆当乘客时它恒为 null**，于是载具自己的
  * 随机闲逛仍会跑、跟我们喂的导航抢方向。这一条补上那一格。
- *
  * <p>判据 = {@link com.maidsmart.combat.MaidRideKit#isDriven}，但**模组仆从坐骑（无鞍可骑仆从）
  * 要排除**：实测七百七十起，那一类走的是"单独一个区间"——行动逻辑全归它自己的 AI（含它自己的
  * 闲逛 goal {@code Summoned.WanderGoal}，它继承自 {@code RandomStrollGoal}），我们只赋速度。

@@ -23,47 +23,18 @@ import java.util.Map;
 
 /**
  * 自保行为（v1.5.1）——纯规则实现，零 LLM 延迟。
- *
  * 覆盖范围：不再限定战斗任务——女仆在【任何状态】下（战斗/挖矿/做饭/
  * 跟随/待命/睡觉）血量过低且附近存在威胁时，停止当前一切行为转入自保。
- *
  * 优先级：注册为 core 行为优先级 250。TLM 自身 core 行为最高为 99
  * （MaidBrain.registerCoreGoals 反编译证据：ClearSleep=99、Pickup=10、
  * FollowOwner=3、Panic/Await=1），250 保证自保是全部行为里最高的，
  * 跟随/任务/恐慌全部被压制，不会被任何状态"吃掉"。
- *
  * 状态机（实测三百六十三定稿——核心思想：残血尽可能保命，恢复后赶紧回去支援）：
  * - 进入：HP < 30% 且 12 格内存在威胁（当前攻击目标 或 最近敌对怪物），
  *   或环境危险（岩浆/着火/溺水/卡头）——上升沿触发
  * - 自保手段（承诺窗口制）：
  *   1. 回血：药水/金苹果/食物阶梯——瞬时动作，随时插队不打断当前策略
- *   2. 搭高：贴身围殴时往脚下垫方块，垫到安全高度（默认 5 格）即停 →
- *      塔顶守势（安心回血 + 战术并行反击），血回安全线即下塔归位。
- *      【仅在包里有回血资源时可选】（实测三百六十五——塔的唯一意义是安全
- *      回血，没得回血垫塔纯属干耗，从根上不给这个选项）
- *   3. 小幅走位：朝威胁侧后方挪 2~3 格拉开身位（12 tick 承诺窗口）——
- *      不再远程逃跑/突围（临阵脱逃观感），攻击目标不清、保持战斗姿态
- *   4. 珍珠/水桶/药水buff/贴脸反击：危急时刻的瞬时/爆发手段
- *   移动类策略（搭高/走位）执行到位或承诺期结束才重新评估；环境危险永远
- *   最高优先抢占。
- * - 退出（需连续 20 tick 稳定窗口，防抖）：
- *   - HP ≥ 安全回归线（safeReturnRatio，默认 0.7，实测三百六十四改回）且
- *     无环境危险 → 解除（威胁还在也退——恢复即支援，战斗交还战术、工作
- *     交还任务；滞回带 30~70：重新进场要跌回 30% 以下，不会抖动）
- *   - 完全安全（无威胁+无环境危险）持续 threatGoneExit（默认 20 秒）→
- *     解除【无论血量】（安全这么久危机就算结束；带伤回归，再被打回触发线
- *     会重新进入——回血资源耗尽也不会永久滞留）
- * - 传送两时机（实测三百六十三~三百六十五）：
- *   A. 保命兜底：泡岩浆 / 血 <15% / 弹尽粮绝；搭高进行中与走位承诺期不传
- *      （危急/岩浆除外）；成功传送后走完整冷却（teleportCooldown，默认
- *      30 秒），一场遭遇战最多被接走一次。
- *   B. 恢复后归位支援：解除自保时威胁已散且离主人远 → 传回主人身边。
- *      恢复中不提前接走。
- * - 下塔（实测三百七十三）：专用拆块下塔机制删除（实用性不如直接传送）——
- *   塔顶状态在退出/围困时直接清空：威胁已散 → 传送归位（直接传送下来）；
- *   交战中 → 任务/战术 AI 自然下塔（3~5 格坠落有落地水兜底）。
- *   自保期间不修改任务/跟随/待命设置，解除后 Brain 自动恢复低优先级行为，
- *   女仆回到自保前正在做的事（战斗→重新索敌、挖矿→继续挖、跟随→继续跟）。
+ *   2. 搭高：贴身围殴时往脚下垫方块，垫到安全高度（默认 5 格）即停 → 塔顶守势（安心回血 + 战术并行反击），血回安全线即下塔归位。 【仅在包里有回血资源时可选】（实测三百六十五——塔的唯一意义是安全 回血，没得回血垫塔纯属干耗，从根上不给这个选项） 3. 小幅走位：朝威胁侧后方挪 2~3 格拉开身位（12 tick 承诺窗口）—— 不再远程逃跑/突围（临阵脱逃观感），攻击目标不清、保持战斗姿态 4. 珍珠/水桶/药水buff/贴脸反击：危急时刻的瞬时/爆发手段 移动类策略（搭高/走位）执行到位或承诺期结束才重新评估；环境危险永远 最高优先抢占。 - 退出（需连续 20 tick 稳定窗口，防抖）： - HP ≥ 安全回归线（safeReturnRatio，默认 0.7，实测三百六十四改回）且 无环境危险 → 解除（威胁还在也退——恢复即支援，战斗交还战术、工作 交还任务；滞回带 30~70：重新进场要跌回 30% 以下，不会抖动） - 完全安全（无威胁+无环境危险）持续 threatGoneExit（默认 20 秒）→ 解除【无论血量】（安全这么久危机就算结束；带伤回归，再被打回触发线 会重新进入——回血资源耗尽也不会永久滞留） - 传送两时机（实测三百六十三~三百六十五）： A. 保命兜底：泡岩浆 / 血 <15% / 弹尽粮绝；搭高进行中与走位承诺期不传 （危急/岩浆除外）；成功传送后走完整冷却（teleportCooldown，默认 30 秒），一场遭遇战最多被接走一次。 B. 恢复后归位支援：解除自保时威胁已散且离主人远 → 传回主人身边。 恢复中不提前接走。 - 下塔（实测三百七十三）：专用拆块下塔机制删除（实用性不如直接传送）—— 塔顶状态在退出/围困时直接清空：威胁已散 → 传送归位（直接传送下来）； 交战中 → 任务/战术 AI 自然下塔（3~5 格坠落有落地水兜底）。 自保期间不修改任务/跟随/待命设置，解除后 Brain 自动恢复低优先级行为， 女仆回到自保前正在做的事（战斗→重新索敌、挖矿→继续挖、跟随→继续跟）。
  */
 public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /**
@@ -86,20 +57,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     /**
-     * v1.1.0 实测十七：战斗搭方块追踪表（维度 → 位置 → 放置信息）。
-     *
      * 旧设计：自保（搭高/翻墙/搭桥/封头盖帽/岩浆垫高）搭的方块【永久留下】——
      * 玩家当初选择不清理。现改为与挖矿/伐木/搭路同款的打标签机制：
-     * - 60 秒后自然消失（战斗方块战斗用，打完仗战场该清干净——比挖矿的 10 秒长，
-     *   因为战斗节奏多变，女仆可能还要在塔上待一阵）
-     * - 女仆可以直接破坏自己搭的战斗方块（挡路就拆——实际战斗多变，防止女仆
-     *   自己搭了个死路还逃不出去）
-     * - bridge.reclaimToMaid 开关（垫脚方块回收进背包）同样覆盖这里的回收
-     * - 玩家替换过的方块不误破坏（blockId 比对，与挖矿/搭路同口径）
+     * - 60 秒后自然消失（战斗方块战斗用，打完仗战场该清干净——比挖矿的 10 秒长， 因为战斗节奏多变，女仆可能还要在塔上待一阵） - 女仆可以直接破坏自己搭的战斗方块（挡路就拆——实际战斗多变，防止女仆 自己搭了个死路还逃不出去） - bridge.reclaimToMaid 开关（垫脚方块回收进背包）同样覆盖这里的回收 - 玩家替换过的方块不误破坏（blockId 比对，与挖矿/搭路同口径）
      */
     /**
      * 战斗方块登记（放置点统一调用）
-     * v1.1.0 实测四十二：换 PlacedBlockTracker——绑定搭建女仆 + 魂符收回暂停计时
      */
     static final PlacedBlockTracker COMBAT_TRACKER = new PlacedBlockTracker(
             () -> com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L,
@@ -243,32 +206,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /**
      * 「我卡住了，快喘不过气了！」的播报台账——累计【真的吃到的窒息伤害】。
-     *
      * 用户口径（实测六百四十七
-     *
      * 且形状够实）就播报——她挤过窄缝、被自己/别人放的方块顶一下、上下坡抬头都能
      * 瞬时命中这个几何条件，**一点血都没掉也照样喊"喘不过气"**；再叠加"每次自保
      * 会话进场都会重置播报标记"（{@code sessionEnter} 里 {@code announcedEnv=false}），
-     * 就成了"老不停说自己窒息了"。
-     *
-     * 现在改成：**先记账、再开口**——只有 {@code in_wall}（原版窒息伤害，见
-     * {@code data/minecraft/damage_type/in_wall.json}，1.20.1 与 1.21.1 都是
-     * {@code "message_id": "inWall"}）累计超过 4 点才播报。原版活体是"每 tick 卡在
-     * 可窒息方块里吃 1 点"（{@code LivingEntity.baseTick} 实证），所以真被闷住时
-     * 0.25 秒就能到门槛；反过来，几何命中但没掉血就一个字都不说。
-     *
-     * <p>【实测七百九十九·issue #30 五修：账本改成"滚动窗口 + 记账里带'喊过没有'”】
-     * 旧版有两个毛病，合起来就是反馈者看到的那串重复播报（`99.0 → 107.0 → 113.0 → 2937.0`）：
-     * <ol>
-     *   <li><b>累计不随时间回落</b>：窗口内的"新账"是 `旧账 + 本次伤害`，只要她一直卡着，
-     *       总量就单调往上涨（2937 点）；</li>
-     *   <li><b>"喊过没有"是会话字段</b>（{@code announcedSuffocate}），会被 {@code sessionEnter}
-     *       清成 false，而判据读的是静态台账 → 自保会话每重进一次就能再喊一次。</li>
-     * </ol>
-     * 现在：①账本按**滑动窗口**算——只把"窗口内"那些伤害点加起来（每个伤害点带自己的 tick，
-     * 旧的自动过期），于是"一直卡着"的读数稳定在窗口内的真实累计，而不是无限增长；
-     * ②"喊过没有"（{@code announced}）存进记账本身，复位条件只有一个——**窗口内一点伤害都没有了**
-     * （真的不卡了），会话怎么重进都不影响。
+     * 就成了"老不停说自己窒息了"。 现在改成：**先记账、再开口**——只有 {@code in_wall}（原版窒息伤害，见 {@code data/minecraft/damage_type/in_wall.json}，1.20.1 与 1.21.1 都是 {@code "message_id": "inWall"}）累计超过 4 点才播报。原版活体是"每 tick 卡在 可窒息方块里吃 1 点"（{@code LivingEntity.baseTick} 实证），所以真被闷住时 0.25 秒就能到门槛；反过来，几何命中但没掉血就一个字都不说。 <p>【实测七百九十九·issue #30 五修：账本改成"滚动窗口 + 记账里带'喊过没有'”】 <ol> <li><b>累计不随时间回落</b>：窗口内的"新账"是 `旧账 + 本次伤害`，只要她一直卡着， 总量就单调往上涨（2937 点）；</li> <li><b>"喊过没有"是会话字段</b>（{@code announcedSuffocate}），会被 {@code sessionEnter} 清成 false，而判据读的是静态台账 → 自保会话每重进一次就能再喊一次。</li> </ol> 现在：①账本按**滑动窗口**算——只把"窗口内"那些伤害点加起来（每个伤害点带自己的 tick， 旧的自动过期），于是"一直卡着"的读数稳定在窗口内的真实累计，而不是无限增长； ②"喊过没有"（{@code announced}）存进记账本身，复位条件只有一个——**窗口内一点伤害都没有了** （真的不卡了），会话怎么重进都不影响。
      */
     private static final java.util.Map<java.util.UUID, SuffocateLedger> SUFFOCATE_DAMAGE =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -614,12 +556,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  （honey/milk）。同种药水 CD = 该药水最长效果时长，CD 内【同种不再喝、
      *  其他种照喝】；瞬间治疗短 CD（40 tick）可连喝。
      *  旧版单一 potionCooldown：喝一种药水后所有药水都不能喝（浪费）
-     *  v1.2.2 实测六百二十一：这里原先还写着 golden_apple——那张表**从来没人读过**
      *  （实测六百一十九的 javap/grep 实证），着火连吃那是这么来的。金苹果现在不在
-     *  这张表里：它走 {@link #goldenAppleReady} / {@link #markGoldenAppleUsed} 的
-     *  持久化冷却（吃它和着火吃它两条路共用一条门）。为什么不并回来：本表是
-     *  **实例字段**，而脑重建（切任务/排班切段/战斗参战）会连冷却一起丢掉，
-     *  偏偏"她正烧着"就是切任务的时刻（详见 GOLDEN_APPLE_CD_TAG 的注释）。 */
+     *  这张表里：它走 {@link #goldenAppleReady} / {@link #markGoldenAppleUsed} 的 持久化冷却（吃它和着火吃它两条路共用一条门）。为什么不并回来：本表是 **实例字段**，而脑重建（切任务/排班切段/战斗参战）会连冷却一起丢掉， 偏偏"她正烧着"就是切任务的时刻（详见 GOLDEN_APPLE_CD_TAG 的注释）。 */
     private final java.util.Map<String, Long> potionCds = new java.util.HashMap<>();
 
     private boolean potionReady(String key, long now) {
@@ -641,35 +579,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /* ==================== 金苹果自己的冷却（实测六百一十九） ==================== */
 
     /**
-     * v1.2.2 实测六百一十九【金苹果的冷却失效——着火时连吃到背包空】。
-     *
      * ── 反馈原文（GitHub issue #17）──
      * "女仆一旦着火，背包里的金苹果会在几秒内被全部吃完（一整组、几十个，瞬间清空）……
      *  定位：是 {@code eatGoldenAppleForFire()} 的冷却检查失效。"
-     *
      * ── 根因（与反馈的定位一致）──
      * 着火链路每 tick 调一次 {@link #eatGoldenAppleForFire}，它只问了一句
-     * {@code MaidMealBridge.onFeedCooldown}——而那张表**只在"物品没被消耗"时才写**
-     * （遗物类食物），普通金苹果是 {@code isEdible} 的普通食物，{@code consumed == 1}
-     * → 永远不写 → 每 tick 都答"没有冷却"→ 一口气吃到背包空。
-     * 同一族问题还有一条更隐蔽的：{@link #useGoldenApple}（低血回血阶梯/即时回血）
-     * 里写的 {@code markPotionUsed("golden_apple", …, 40)} **从来没有人读过**
-     * （{@code potionReady("golden_apple")} 在全类里 0 处调用，javap/grep 实证），
-     * 所以那条路也是敞开吃——反馈里说"平时低血回血是正常的"只是因为吸收心不给血量、
-     * 她往往先吃到别的东西；真到"只有金苹果"的时候一样会连吃。
-     *
-     * ── 修法：一条冷却，两条路共用 ──
-     * 冷却值就按这类东西**自己给的效果时长**（类文档里 {@code potionCds} 声明的口径，
-     * 也是反馈建议的第 ① 条）：普通金苹果 = 吸收 2 分钟（2400 tick），附魔金苹果 =
-     * 抗性/抗火 5 分钟（6000 tick，见 {@link #applyGoldenAppleEffects} 的数值）。
-     * 于是"吸收耗尽时才会再吃下一个"，而不是"每 tick 一个"。
-     *
-     * ── 为什么存 {@code getPersistentData} 而不是 {@code potionCds} ──
-     * 本行为是 per-maid 实例（{@code ProMaidExtension.getCoreBehaviors} 里 new 的那个，
-     * 女仆生成/脑重建时被调用一次），**脑重建（切任务、排班切段、强制 refreshBrain）
-     * 会换一个新实例、实例字段全丢**。而"着火"往往正伴随着切战斗任务——冷却若存实例
-     * 字段，最需要它的那一刻恰好会归零。存实体的持久数据则跟着她走，直到她自己消失。
-     * （{@code potionCds} 那一套是既有口径、这次不动它，只是金苹果这条路改走持久数据。）
+     * {@code MaidMealBridge.onFeedCooldown}——而那张表**只在"物品没被消耗"时才写** （遗物类食物），普通金苹果是 {@code isEdible} 的普通食物，{@code consumed == 1} → 永远不写 → 每 tick 都答"没有冷却"→ 一口气吃到背包空。 同一族问题还有一条更隐蔽的：{@link #useGoldenApple}（低血回血阶梯/即时回血） 里写的 {@code markPotionUsed("golden_apple", …, 40)} **从来没有人读过** （{@code potionReady("golden_apple")} 在全类里 0 处调用，javap/grep 实证）， 所以那条路也是敞开吃——反馈里说"平时低血回血是正常的"只是因为吸收心不给血量、 她往往先吃到别的东西；真到"只有金苹果"的时候一样会连吃。 ── 修法：一条冷却，两条路共用 ── 冷却值就按这类东西**自己给的效果时长**（类文档里 {@code potionCds} 声明的口径， 也是反馈建议的第 ① 条）：普通金苹果 = 吸收 2 分钟（2400 tick），附魔金苹果 = 抗性/抗火 5 分钟（6000 tick，见 {@link #applyGoldenAppleEffects} 的数值）。 于是"吸收耗尽时才会再吃下一个"，而不是"每 tick 一个"。 ── 为什么存 {@code getPersistentData} 而不是 {@code potionCds} ── 本行为是 per-maid 实例（{@code ProMaidExtension.getCoreBehaviors} 里 new 的那个， 女仆生成/脑重建时被调用一次），**脑重建（切任务、排班切段、强制 refreshBrain） 会换一个新实例、实例字段全丢**。而"着火"往往正伴随着切战斗任务——冷却若存实例 字段，最需要它的那一刻恰好会归零。存实体的持久数据则跟着她走，直到她自己消失。 （{@code potionCds} 那一套是既有口径、这次不动它，只是金苹果这条路改走持久数据。）
      */
     private static final String GOLDEN_APPLE_CD_TAG = "maid_smart_golden_apple_cd";
 
@@ -757,32 +672,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.199：本次自保是否已播报过环境提示（岩浆/溺水/卡墙，每场一次） */
     private boolean announcedEnv = false;
     /**
-     * v1.3.0(beta) 实测七百一十八【issue #30 重做：窒息播报改成常驻、与自保会话解耦】。
-     *
      * <p>【为什么推倒重来】v717 那版把根因写成"被岩浆那枚共用闩（{@code announcedEnv}）挡死"，
      * 那是**推测**——反馈者（#30）从头到尾没提岩浆，他复现的是"垫脚方块把自己卡住、一直吃窒息
      * 伤害"。按代码事实，岩浆在**没泡岩浆**时压根不参与：{@code announcedEnv} 与
-     * {@code lavaContext} 在他那种场景下本来就不会置位，所以那个根因站不住。真正的结构性
-     * 问题是：这句播报**长在自保会话里**（{@code environmentalEscape} 的第 4 档），于是它同时
-     * 受三件与"卡住"无关的事摆布——
-     * <ol>
-     *   <li>会话得先激活；</li>
-     *   <li>得走到第 4 档（前面岩浆/着火/溺水任何一档 {@code return} 掉就轮不到它）；</li>
-     *   <li>会话给了让位窗口（{@code envGiveUpTick}）时那 5 秒整条 {@code environmentalEscape} 都不跑。</li>
-     * </ol>
-     * 而反馈者要的只是一件事：**真被闷住就说话**。
-     *
-     * <p>现在把它提成**常驻轻量检查**（与 {@code tickCureNegativeEffects} 同一层，会话内外都跑）：
-     * 只看"最近 5 秒累计吃到的 in_wall 伤害到没到门槛"，与岩浆/会话/让位窗口全部无关。
-     * 一阵不卡了（台账清零）就复位，下一回被卡还能再喊——不是"一生一次"。
-     *
-     * <p>【实测七百九十九·issue #30 五修：这个字段已删除】旧版"喊过没有"是**行为实例字段**
-     * （{@code announcedSuffocate}），会被 {@code sessionEnter} 无条件清成 false。可它的判据
-     * （{@code recentSuffocateDamage}）读的是**静态**台账——于是形成这样一条回路：她还卡着 →
-     * 台账 99 点 → 自保会话因别的原因重进（危险态起伏 / 大脑重建 / 切任务）→ 标记被清 →
-     * 下一拍立刻**再喊一次**。反馈者日志里那串 `99.0 → 107.0 → 113.0 → 2937.0` 的重复播报就是它。
-     * 现在"喊过没有"跟着**台账**走（存在 {@link SuffocateLedger#announced} 里），只在台账真的
-     * 清零时复位——会话怎么重进都不影响，同一阵被闷住只说一次。
+     * {@code lavaContext} 在他那种场景下本来就不会置位，所以那个根因站不住。真正的结构性 问题是：这句播报**长在自保会话里**（{@code environmentalEscape} 的第 4 档），于是它同时 受三件与"卡住"无关的事摆布—— <ol> <li>会话得先激活；</li> <li>得走到第 4 档（前面岩浆/着火/溺水任何一档 {@code return} 掉就轮不到它）；</li> <li>会话给了让位窗口（{@code envGiveUpTick}）时那 5 秒整条 {@code environmentalEscape} 都不跑。</li> </ol> 而反馈者要的只是一件事：**真被闷住就说话**。 <p>现在把它提成**常驻轻量检查**（与 {@code tickCureNegativeEffects} 同一层，会话内外都跑）： 只看"最近 5 秒累计吃到的 in_wall 伤害到没到门槛"，与岩浆/会话/让位窗口全部无关。 一阵不卡了（台账清零）就复位，下一回被卡还能再喊——不是"一生一次"。 <p>【实测七百九十九·issue #30 五修：这个字段已删除】旧版"喊过没有"是**行为实例字段** （{@code announcedSuffocate}），会被 {@code sessionEnter} 无条件清成 false。可它的判据 （{@code recentSuffocateDamage}）读的是**静态**台账——于是形成这样一条回路：她还卡着 → 台账 99 点 → 自保会话因别的原因重进（危险态起伏 / 大脑重建 / 切任务）→ 标记被清 → 下一拍立刻**再喊一次**。反馈者日志里那串 `99.0 → 107.0 → 113.0 → 2937.0` 的重复播报就是它。 现在"喊过没有"跟着**台账**走（存在 {@link SuffocateLedger#announced} 里），只在台账真的 清零时复位——会话怎么重进都不影响，同一阵被闷住只说一次。
      */
     /** v1.5.232：本次自保是否已播报过"包里什么都没有，我没招了！救救我！"
      *  （岩浆/着火链路全失败提示，每场一次） */
@@ -886,14 +779,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.135：软环境危险（着火 / 溺水 / 卡墙窒息）——85% 血量以下才逃。
-     *  v1.5.199：卡墙判定收窄为"头部卡实心"（headInSolid）——旧 bodyInSolid
      *  身体中心判定在狭窄地下地形被尸壳推挤/半身卡进方块时误报，导致高血量
      * （95%）也反复触发自保（日志 "self preserve start hp=95%" 刷屏、搭方块
      *  刚放 1-2 块就被打断的根因之一）。
-     *  v1.5.216：着火加抗火豁免——喝了抗火药水后即使身上还在烧（isOnFire 仍
      *  true）也不掉血，不该再惊慌失措/疯狂逃窜（实测："服用抗火药水后
      *  仍然处于惊慌失措状态"）；等火自然灭即可。
-     *  v1.1.0 实测一百五十三/一百五十四：TLM 火焰/溺水保护饰品同豁免——饰品
      *  自己免疫对应伤害（火焰=受伤给抗火+灭火剂；溺水=空气自动补满），
      *  佩戴时对应情境不再算软危险。 */
     private boolean envDangerSoft(EntityMaid maid) {
@@ -909,17 +799,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.395 实测八百二十一：她是否【正站在伤害方块上】——配置危险表里、且不属于
      *  「小接触伤害」家族的那一类。
-     *
      *  <p>【为什么单开一项】营火/灵魂营火每 tick、岩浆块每次踩踏都直接造成伤害，但
      *  【都不会点燃她】——{@code isOnFire()} 恒为 false，所以既进不了上面的「着火」项，
      *  也不是岩浆（{@code envDangerCritical} 不认）。旧版这种格子她只会站着持续掉血、
      *  不主动跑开（"站在营火上反应迟钝"的根因）。这里按【配置危险表】判站立格/脚下一格，
      *  凡是表里、又不是仙人掌/甜浆果丛/石笋/凋零玫瑰这类「接触一下、走位即脱开」的小伤害，
-     *  一律算软危险——所以以后往表里新增任何「踩上去掉血」的方块都自动被兜住（通用）。
-     *
-     *  <p>【为什么不误伤小伤害】v1.5.87 的设计约定：仙人掌/浆果丛这类接触伤害不该触发
-     *  整套逃跑流程（她本来就在正常走路时被蹭一下）。{@link #SOFT_CONTACT_DAMAGE} 把
-     *  这四类排除在外，行为与旧版一致。 */
+     *  一律算软危险——所以以后往表里新增任何「踩上去掉血」的方块都自动被兜住（通用）。 <p>【为什么不误伤小伤害】v1.5.87 的设计约定：仙人掌/浆果丛这类接触伤害不该触发 整套逃跑流程（她本来就在正常走路时被蹭一下）。{@link #SOFT_CONTACT_DAMAGE} 把 这四类排除在外，行为与旧版一致。 */
     private boolean envDamageCell(EntityMaid maid) {
         net.minecraft.world.level.Level level = maid.level();
         BlockPos feet = maid.blockPosition();
@@ -943,17 +828,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             "minecraft:pointed_dripstone", "minecraft:wither_rose");
 
     /**
-     * v1.5.395 实测八百二十一【站在伤害方块上的脱离】——营火/岩浆块这类"每 tick 造成
      * 火焰伤害但不点燃她"的格子，让她【主动走开】；走不出去就瞬移到最近安全格。
-     *
      * <p>【为什么需要这条兜底】DangerEscapeHandler（险境脱离）已在每 0.5 秒做同样的
      * 事情，但它①受总开关 dangerEscape 控制、②8 格内找不到安全格就静默放弃、③坐姿/
      * 骑乘/自保中让位。自保这条兜底不依赖那个开关（由 COMBAT_SELF_PRESERVE 控制），
      * 且用半径 8 的寻路点 + 半径 6 的瞬移点两级尝试，能覆盖"四面皆险"的极端场合。
-     *
-     * <p>【节奏】本行为是单一共享实例，按 UUID 记 {@link #DAMAGE_CELL_HOLD} 限流：
-     * 一次脱离动作后给 {@link #DAMAGE_CELL_RETRY} 个 tick 让她真走出去；窗口过后若仍
-     * 站在伤害方块上就再救一次。到期即从表中移除，不留账。
+     * <p>【节奏】本行为是单一共享实例，按 UUID 记 {@link #DAMAGE_CELL_HOLD} 限流： 一次脱离动作后给 {@link #DAMAGE_CELL_RETRY} 个 tick 让她真走出去；窗口过后若仍 站在伤害方块上就再救一次。到期即从表中移除，不留账。
      */
     private void escapeDamageCell(EntityMaid maid) {
         java.util.UUID id = maid.getUUID();
@@ -1037,27 +917,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.394 实测八百二十：搭高**目标高度**（相对塔基 pillarBaseY 的格数）。
-     *
      * <p>旧口径是固定值 {@link #safePillarHeight}（默认 5 格）——
-     *
      * **爬到比敌人高 {@link #pillarAboveEnemy} 格（默认 30）**：
      * <pre>目标 = (敌人 Y + aboveEnemy) - 塔基 Y</pre>
-     *
      * <p>三道护栏：
      * <ol>
-     *   <li><b>搭高中记住敌方 Y</b>（{@link #pillarThreatY}）：{@code findThreat} 是按
-     *       <b>三维距离</b> &lt; {@code threatDistance}（默认 12 格）判威胁的——她一旦垫高到
-     *       12 格以上，竖直距离本身就超阈值 → 威胁被判"消失" → 只改目标高度她会停在 12 格。
-     *       因此搭高期间用开搭时记住的敌方 Y 继续算目标，直爬到目标高度为止；威胁已散
-     *       （无记忆）才回落兜底；</li>
-     *   <li><b>无威胁 / 无记忆</b> → 回落绝对兜底 {@link #safePillarHeight}
-     *       （威胁已散时的搭高惯性补完不该为了一个不存在的敌人一路爬上去）；</li>
-     *   <li><b>封顶</b>：绝不超过 {@link #pillarMax}（默认 30，可调 5~64）——这是玩家
-     *       在面板上给的总上限，目标口径改了也不能绕开它。</li>
-     * </ol>
-     *
-     * <p>返回值恒 ≥ 1（至少垫一格，避免威胁恰好与自己同高时算出 0 导致"永不搭高"）。
+     *   <li><b>搭高中记住敌方 Y</b>（{@link #pillarThreatY}）：{@code findThreat} 是按 <b>三维距离</b> &lt; {@code threatDistance}（默认 12 格）判威胁的——她一旦垫高到 12 格以上，竖直距离本身就超阈值 → 威胁被判"消失" → 只改目标高度她会停在 12 格。 因此搭高期间用开搭时记住的敌方 Y 继续算目标，直爬到目标高度为止；威胁已散 （无记忆）才回落兜底；</li> <li><b>无威胁 / 无记忆</b> → 回落绝对兜底 {@link #safePillarHeight} （威胁已散时的搭高惯性补完不该为了一个不存在的敌人一路爬上去）；</li> <li><b>封顶</b>：绝不超过 {@link #pillarMax}（默认 30，可调 5~64）——这是玩家 在面板上给的总上限，目标口径改了也不能绕开它。</li> </ol> <p>返回值恒 ≥ 1（至少垫一格，避免威胁恰好与自己同高时算出 0 导致"永不搭高"）。
      */
     private int pillarTargetHeight(EntityMaid maid, LivingEntity threat) {
         int base = Math.max(1, safePillarHeight());
@@ -1227,7 +1092,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.147：御币弹幕还击——TLM DanmakuShoot 链，与 danmaku_attack 任务完全
      * 一致的射击流程（随机颜色/弹型 + 瞄准射击）。伤害/速度/精度公式照抄
      * TaskDanmakuAttack 字节码实证：
      * - 伤害 = 攻击力属性 × (power+1.2)，power=1.0（满蓄）→ ×2.2
@@ -1327,14 +1191,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 硬闸：不但不进会话，已经在会话里的（切飞行任务前触发的）也立刻安静退出——
         // 否则 PRESERVE_TAG 残留会让排班/参战/搭方块永久让位。放在岩浆扫描之前：
         // 空中不需要岩浆避让，顺带省掉方块扫描。
-        // 只拦"自保会话"，不放宽真实伤害：飞行中照样掉血/被击落，只是不再由自保接管。
-        // v1.3.2 实测六百五十六：**骑扫帚飞行**与飞行作战同等对待——她骑上去就是乘客，
-        // 而本行为整条链路都是为"两条腿站在地上"的她写的（垫高/逃跑/瞬移到主人身边/
-        // setPos 微调 23 处）。乘客的位置由扫帚每 tick 覆写（Entity.rideTick 里
-        // "先 tick 她自己、再 positionRider 按回鞍位"），于是自保把她往东挪、扫帚把她
-        // 拉回来，每 tick 重演一次——玩家看到的「乘坐扫帚时反复被拉回」有它一份；
-        // 更糟的是 teleportTo(...) 会直接 unRide() 把她从扫帚上踹下来。
-        // 判定与飞行那一条同源（MaidBroomKit.isBroomAirborne = 扫帚任务 + 正骑着）。
+        // 只拦"自保会话"，不放宽真实伤害：飞行中照样掉血/被击落，只是不再由自保接管。 而本行为整条链路都是为"两条腿站在地上"的她写的（垫高/逃跑/瞬移到主人身边/ setPos 微调 23 处）。乘客的位置由扫帚每 tick 覆写（Entity.rideTick 里 "先 tick 她自己、再 positionRider 按回鞍位"），于是自保把她往东挪、扫帚把她 拉回来，每 tick 重演一次——玩家看到的「乘坐扫帚时反复被拉回」有它一份； 更糟的是 teleportTo(...) 会直接 unRide() 把她从扫帚上踹下来。 判定与飞行那一条同源（MaidBroomKit.isBroomAirborne = 扫帚任务 + 正骑着）。
         boolean airborne = com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)
                 || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid);
         if (airborne) {
@@ -1397,15 +1254,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 危险 → 清导航/寻路目标/速度，任何来源都动不了她（危险时例外：岩浆/着火
         // 必须站起来逃命，不锁；v1.5.213：坐下受伤会立刻站起来，站起来后自然
         // 不再走这个判定——锁只作用于"安然坐着"的状态）
-        //
-        // 【实测七百五十五：骑乘女仆**不吃这把锁**】这把锁的本意是"玩家按她坐下 =
         // 让她待着别动"。可她**骑在坐骑上**时的坐姿**不是玩家下的指令**，是**我们自己
-        // 每拍替她压上去的**（实测七百二十五 setSitting，为了让她用坐姿模型贴鞍）。
-        // 于是这把锁会**每拍把她的导航 stop() 掉**（{@code PathNavigation.stop()} 只
-        // 清 {@code path} → {@code isDone()} 为真 → 读不到目标点），她的战斗走位再也
-        // 活不过一拍——正是「骑上马之后不会用迂回走位」，也是 749~754 那几层补丁怎么
-        // 补都不对的总根源（它们读的就是这条导航）。这里把骑乘女仆排除在锁外：
-        // 她的坐姿由骑乘链路负责，移动由她自己的导航负责，两者互不干扰。
+        // 每拍替她压上去的**（实测七百二十五 setSitting，为了让她用坐姿模型贴鞍）。 于是这把锁会**每拍把她的导航 stop() 掉**（{@code PathNavigation.stop()} 只 清 {@code path} → {@code isDone()} 为真 → 读不到目标点），她的战斗走位再也 活不过一拍——正是「骑上马之后不会用迂回走位」，也是 749~754 那几层补丁怎么 补都不对的总根源（它们读的就是这条导航）。这里把骑乘女仆排除在锁外： 她的坐姿由骑乘链路负责，移动由她自己的导航负责，两者互不干扰。
         boolean sitting = maid.isMaidInSittingPose()
                 && !com.maidsmart.combat.RideBindManager.isRideRider(maid);
         if (sitting && !danger) {
@@ -1440,11 +1290,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 战斗参战、搭方块、险境脱离对这只女仆永久让位。会话外发现"带着标记
             // 但血量健康且环境安全"即清掉（不满足条件时下方本就会重进会话并重新
             // 置位，无竞态）
-            // v1.1.0 实测二百六十五（反馈："全员模式有时无法有效应用，明明已解除
             // 排班有的女仆就是应用不到"）：自愈条件从 exitRatio（70%）放宽到
-            // enterRatio（30%）——进入自保要血 <30%，血在 30%~70% 之间且无危险时
-            // 会话不进、标记残留且永不清理（自愈条件 70% 永远够不到）= 批量应用/
-            // 排班/参战永久跳过。血 ≥30% 且无危险 = 不需要自保 = 标记是残留，清掉。
+            // enterRatio（30%）——进入自保要血 <30%，血在 30%~70% 之间且无危险时 会话不进、标记残留且永不清理（自愈条件 70% 永远够不到）= 批量应用/ 排班/参战永久跳过。血 ≥30% 且无危险 = 不需要自保 = 标记是残留，清掉。
             if (((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(PRESERVE_TAG) && !danger && ratio >= enterRatio()) {
                 ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().putBoolean(PRESERVE_TAG, false);
                 MOVING_SURVIVE.remove(maid.getUUID());
@@ -1615,7 +1462,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // StartAttacking 只会让战术（230）拿不到目标 → "只逃不打"。现在目标
         // 正常存在：自保（250）只做保命动作，战术（230）同 tick 并行战斗——
         // "边打边保命"。仅进场（sessionEnter）清一次残留旧目标。
-        // 实测三百六十三【传送只留保命兜底】：泡岩浆/血量危急/弹尽粮绝（没方块
         // 没珍珠还被围殴）三种情况才传；恢复中（30%~45%）不提前接走——原地
         // 回血，回到安全回归线由退出线收场（威胁已散时顺带触发归位传送）。
         // 搭高进行中/走位承诺期不传（危急/岩浆除外）。
@@ -1740,9 +1586,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
          * 4. 被近身搭高：垫到安全高度（4 块，v1.5.186 统一）后站桩等
          * 5. 逃跑：威胁 4~12 格 → 隐身/迅捷药水 + 反方向撤离
          * 6. 回血：威胁在 8 格外（相对安全）顺带回血
-         * 7. 卡住兜底：逃跑中长时间没位移 → 垫台阶翻越
-         * v1.5.194：搭方块中途顺手对贴身的威胁窒息封头（见 trySuffocateDuringBuild）
-         * ==================================================== */
+         * 7. 卡住兜底：逃跑中长时间没位移 → 垫台阶翻越 ==================================================== */
 
         // 1. 珍珠逃生（脱身 > 拖延：血 30% 以下且威胁贴身，立即瞬移）
         // v1.5.157：已搭高（pillarBaseY/forcedPillar——高处已安全）不再扔珍珠
@@ -1798,12 +1642,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return; // 强制搭高期间不做其他动作
         }
         // 4. 被近身：垫到安全高度后站桩（不再无脑一直搭）
-        //    实测三百六十五【根本断绝】：包里没有任何回血资源（药水/金苹果/
         //    食物，hasHealResource 无副作用探测）→ 搭高【不再是可选项目】——
         //    塔的唯一意义是安全回血，没得回血垫塔纯属干耗（还会白白消耗方块、
         //    挡路 60 秒）。此时被近身 = 小幅走位周旋 + 贴脸反击（上方已跑），
         //    珍珠/危急传送兜底不变。
-        //    实测五百五十二：这条门槛本身是对的、保持不动（五百五十一 改用"材料"
         //    判是错的，已回退）；要修的是 hasHealResource 认不出模组食物/金胡萝卜
         //    这件事——"包里明明有食物，却判成没有"。 */
         int currentY = maid.blockPosition().getY();
@@ -1908,14 +1750,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 实测三百六十三【小幅走位拉身位】（替代旧"突围/逃跑"——反馈："逃跑很像
      * 临阵脱逃，应该小幅度原地走位，但仍然保持战斗姿态"）：
      * - 朝威胁侧后方挪 2~3 格（不再 8 格突围/反方向撤离——不脱离交战圈）；
      * - 8 方向打分：怪物少 + 偏离威胁方向 + 路径无岩浆（保留下来的安全要素）；
      * - 承诺窗口 12 tick（0.6 秒）走完这几步再重新评估——不每 tick 变向；
      * - 攻击目标不清（战术 230 并行继续打）、贴脸反击冷却独立运行——
-     *   走位是战斗姿态下的拉开身位，不是逃离战场。
-     * threat 允许为 null（着火兜底）——无威胁时只按怪物密度选方向。
+     *   走位是战斗姿态下的拉开身位，不是逃离战场。 threat 允许为 null（着火兜底）——无威胁时只按怪物密度选方向。
      */
     private void strafeDisengage(EntityMaid maid, LivingEntity threat) {
         // 承诺窗口：走完当前这几步再重新评估
@@ -2364,16 +2204,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.21：视线检查（raycast，隔墙不算威胁）。v1.5.135 公开给战斗战术共用。
-     *
      * <p>v1.5.394 实测八百零五【穿墙锁敌】：这里就是全局唯一的视线收口——全模组 15 处索敌/出手
      * 判定都走这一条。戴着「大运」在飞的女仆，如果直线上挡路的方块**她本来就会撞开**
      * （{@link com.maidsmart.accessory.DaYunBreaker#canPhaseThrough}：硬度在阈值内、非容器），
      * 那这道视线就算通——见 {@link com.maidsmart.accessory.DaYunWallPhase}。
      * 撞不开的（基岩/屏障/黑曜石/自家箱子）照样挡住。
-     *
-     * <p>**只放宽实体版，不放宽坐标版**：坐标版唯一的调用方是飞行跟随的"起飞前有没有山挡着"，
-     * 那道门禁防的是贴着山壁顶，与锁敌无关，跟着放宽反而会让她一头扎进山里。
+     * <p>**只放宽实体版，不放宽坐标版**：坐标版唯一的调用方是飞行跟随的"起飞前有没有山挡着"， 那道门禁防的是贴着山壁顶，与锁敌无关，跟着放宽反而会让她一头扎进山里。
      */
     public static boolean hasSight(LivingEntity from, LivingEntity other) {
         try {
@@ -2389,14 +2225,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.2.2 实测六百一十四：视线检查的**坐标版**（除下面这一处取值外，与上面那条完全同一套）。
-     *
      * 【为什么要它】飞行跟随的"坐标档"（{@code /maid_smart elytra_goto <x> <y> <z>}，取自
      * 粉丝 Roderick32 的「鞘翅赶路」分支）要追的是**一个坐标**，没有实体可以传给上面那条
      * 重载。行为里"起飞前先看有没有方块挡住"这道门禁是必须留的（不然她会贴着山壁一直顶），
      * 所以把判定抽成坐标版，两条重载共用同一份实现——**不允许各写一份 raycast**，
      * 否则"实体档能飞、坐标档不能飞"这种分裂迟早出现（本仓踩过同类）。
-     *
      * 口径与实体版逐字一致：眼高 +1.2 → 眼高 +1.2，只挡 COLLIDER 方块、不看流体。
      */
     public static boolean hasSight(LivingEntity from, net.minecraft.world.phys.Vec3 to) {
@@ -2533,12 +2366,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.199：临时放水（击退搭高缓冲 / 岩浆灭火 / 着火灭火）——自身格可替换
      *  则放自身格，否则放上方格；3 秒后由 tickRecoverWater 收回，水桶不消耗
      *  （与落地水一致）。
-     *  v1.5.204：放水位置判定重写——1.20.1 液体块的 Properties 没有 replaceable
      *  标志，canOcclude()（1 参 canBeReplaced）对岩浆/水恒为 false；旧版只认
      *  canOcclude() → 没垫方块时站在岩浆里"自身格 + 上方格都是岩浆"判定不可放 →
      *  永远倒不出水（"包里有水桶却不自救"的根因）。现在空气 / 可替换 / 液体
      *  都允许倒水——直接用水替换脚下的岩浆。
-     *  v1.5.230：位置判定加 fallback——自身 → 上方 → 上方 2 格（屋檐下等
      *  头顶被实心堵住的场景：上方 2 格放水，水流下来淋到身上灭火）。 */
     private boolean canPourWaterAt(net.minecraft.world.level.Level level, BlockPos pos) {
         BlockState st = level.getBlockState(pos);
@@ -2845,13 +2676,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //  朝主人走，不逃跑）。
         //（v1.5.208：旧顺序"灭火器 > 找自然水 > 水桶"——附近有河就先傻跑向河、
         //  身上水桶反而不用的根因；水桶水是便宜资源，原地倒水立即灭火最优先；
-        //  v1.5.210：抗火/找水互换——自然水 0 成本先试，抗火药水是消耗品，
         //  留给无水解救（岩浆深陷）的场合；地狱放水瞬间蒸发 → 跳过水桶/自然水，
         //  直接抗火或逃跑；
-        //  v1.5.232：链路重写——有抗火随时否定恢复正常；灭火器→水桶→水坑→
-        //  抗火→金苹果；全失败交回自保；
-        //  v1.5.243：找水后补末影珍珠逃生——灭火/找水失败时瞬移脱离火源区域
-        //  （"着火后跳入水坑和用末影珍珠都没有了"：珍珠此前只在岩浆链路））
+        //  抗火→金苹果；全失败交回自保； （"着火后跳入水坑和用末影珍珠都没有了"：珍珠此前只在岩浆链路））
         if (maid.isOnFire()) {
             // v1.5.232：抗火随时断开——火不伤人，等自然灭即可（isOnFire 仍 true）
             if (hasFireResist(maid)) {
@@ -3586,16 +3413,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  附近有岩浆且无抗火时：若女仆当前水平移动方向 3 格内会踩进岩浆格，
      *  改道离岩浆最远的安全点（cachedFleeSpot，找不到则不动）；方向干净则
      *  完全不干预——建造/跟随/插火把照常，不再进危险态、不打断任何行为。
-     *
      *  <p>【实测七百〇四：探的格子改对了——脚底那一层 + 她的整个身位】
      *  「对于岩浆这种危险环境的判定，可能需要把女仆自身的碰撞伤害算进去。尽可能的让她规避岩浆。」
-     *  旧版探的是 {@code floor(getEyeY())}（**眼高**，脚底往上约 1.62 格）——那正好是"她脚下那一格
      *  之上"的空气格。而岩浆是**流体方块**，贴着地面那一层；她站在地面上时脚下那格才是岩浆面，
-     *  眼高那格是空气 → **恒判干净**，于是这个避让对"贴着地走/走进浅岩浆"几乎完全失效
-     *  （这就是"自己寻路时对危险环境的判定也有点问题，有的时候还是会踩上去"的根因）。
-     *  现在改成探**脚底那一层**（{@code floor(getY())}，与 {@link com.maidsmart.tool.DangerBlocks}
-     *  的站立格口径一致：本体格 + 脚下一格），并按她的碰撞箱宽度横扩（0.6 宽 → ±1 格），
-     *  所以她"擦着岩浆边缘走"时也会被判到。 */
+     *  眼高那格是空气 → **恒判干净**，于是这个避让对"贴着地走/走进浅岩浆"几乎完全失效 （这就是"自己寻路时对危险环境的判定也有点问题，有的时候还是会踩上去"的根因）。 现在改成探**脚底那一层**（{@code floor(getY())}，与 {@link com.maidsmart.tool.DangerBlocks} 的站立格口径一致：本体格 + 脚下一格），并按她的碰撞箱宽度横扩（0.6 宽 → ±1 格）， 所以她"擦着岩浆边缘走"时也会被判到。 */
     private void avoidLavaMovement(EntityMaid maid) {
         if (this.cachedNearLava == null || hasFireResist(maid) || maid.isInLava()) {
             return;
@@ -3759,10 +3580,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /**
      * 垂直垫高（v1.5.20 重写）：像僵尸搭方块一样往自己所在格放方块，被顶起一格——
      * 这才是"真搭高"（旧版只往脚下悬空处垫，地面战斗永不触发）。
-     * v1.5.24 防窒息强化：除了所在格上方 2 格，还检查**女仆实际头顶**
      * （碰撞盒顶面，含移动中的真实位置）上方必须空旷——确保女仆永远是
      * 所在位置"最上面的方块"之上的实体，不会被自己搭的方块夹住窒息。
-     * v1.5.25 再优化：放块位置【脚下格优先】——脚下悬空就垫脚下（人自然站上去，
      * 不夹人）；脚下是实心地面（平地）才放所在格把自己顶起。配合 antiSuffocate
      * 每 tick 兜底，搭高基本不再窒息。
      */
@@ -3940,18 +3759,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.194：搭方块中途的额外判定——威胁还贴在脚下（< 近身距离）时，顺手往
      * 它的【眼睛格】（脚底+1，MC 窒息判定即头部所在格）放方块封头 + 头顶盖帽，
      * 尝试让它窒息。纯被动机制，无任何气泡。
-     *
      * 设计要点（替代旧 v1.5.187 "搭完后糊脸"——旧版等搭到顶/安全高度才操作，
      * 30 格时怪物早丢索敌，封头无意义）：
      * - 只在搭方块（buildUp）成功之后调用，与搭高共享 buildCooldown（4 tick），
-     *   形成"搭一块 → 封一次头 → 再搭一块"的交替节奏；
-     * - 眼睛格已实心 → 直接返回（已封住/已被地形挡住），不重复烧方块；
-     * - 身高 <1.4 的低矮怪（蜘蛛 0.9）跳过——眼睛在自身格内，单方块封不住；
-     * - 每场自保会话最多 3 次尝试（suffocateBudget，start 重置），防耗尽背包；
-     * - 方块永久留下（玩家选择，不自动清理）。
+     *   形成"搭一块 → 封一次头 → 再搭一块"的交替节奏； - 眼睛格已实心 → 直接返回（已封住/已被地形挡住），不重复烧方块； - 身高 <1.4 的低矮怪（蜘蛛 0.9）跳过——眼睛在自身格内，单方块封不住； - 每场自保会话最多 3 次尝试（suffocateBudget，start 重置），防耗尽背包； - 方块永久留下（玩家选择，不自动清理）。
      */
     private void trySuffocateDuringBuild(EntityMaid maid, LivingEntity threat) {
         try {
@@ -4005,23 +3818,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 实测三百六十三【传送时机定稿】——传送只在两个时机启动：
-     *
      * A. 保命兜底（本方法，会话内）：
      * ① 泡岩浆（环境致命）——传送是比任何自救都快的脱身手段；
      * ② 血量危急（<15%）——保命第一，打断搭高/走位也值得；
      * ③ 弹尽粮绝——有威胁、血 <30%、无搭方块材料且无珍珠（走位拉不开
      *    死局，再耗下去会死，交给主人身边更安全）。
-     * 实测三百六十五：塔顶无回血资源被围困不再传送回家——改为下塔接着打
-     *（heallessSiegeTicks → startDescend）。恢复中不提前接走。
-     *
-     * B. 恢复后归位支援：解除自保 → teleportHomeOnExit（退出分支内调用，
-     * 实测三百七十八起为解除必传、绕过冷却闸；主人身边无合法落点/看家模式/
-     * 主人死亡等安全护栏保留）。"残血保命、恢复支援"各归各位。
-     *
-     * 策略承诺窗口：搭高进行中（forcedPillar / pillarBaseY 未到安全高度）或
-     * 走位承诺期内（fleeDirCooldown > 0）不传送——选定策略就执行完，不半路
-     * 拽走；危急（②）与岩浆（①）例外，保命优先于承诺。
+     *（heallessSiegeTicks → startDescend）。恢复中不提前接走。 B. 恢复后归位支援：解除自保 → teleportHomeOnExit（退出分支内调用， 主人死亡等安全护栏保留）。"残血保命、恢复支援"各归各位。 策略承诺窗口：搭高进行中（forcedPillar / pillarBaseY 未到安全高度）或 走位承诺期内（fleeDirCooldown > 0）不传送——选定策略就执行完，不半路 拽走；危急（②）与岩浆（①）例外，保命优先于承诺。
      */
     private void tryTeleportFallback(EntityMaid maid, LivingEntity threat, float ratio, boolean danger) {
         boolean lavaNow = this.envDangerCritical(maid);
@@ -4129,17 +3931,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 实测三百六十四：回血资源探测（无副作用）——包里有药水（任何 PotionItem，
      * 治疗/再生/增益都算"能帮到自己"）/ 金苹果 / 治疗食物（HEAL_FOODS 名单）。
      * 全无 = 塔顶守势没有意义（自然回血都保证不了），围困 10 秒传送兜底。
-     *
-     * 实测五百五十二【判定放宽，门槛不动】：旧版只认上面那一小撮硬编码名单，
      * 于是"包里明明有食物（金胡萝卜、各种模组料理）却判成没有" → 被围殴时一块不搭
      * （实测五百五十一 之所以绕道去改门槛，就是被这个假阴性带偏的）。
      * 现在改成与投喂系统【同一个口径】——{@link com.maidsmart.action.EmotionalActionExecutor#isFeedableFood}
-     * （= TLM 自己的 {@code DefaultMaidHealSelfMeal.isHealMeal} 口径：有食物属性组件且不在
-     * 投喂黑名单里），任何"能吃的东西"都算回血资源；金苹果走上面那条单独判定
-     * （它被投喂黑名单刻意排除，但作为回血资源必须算）。
+     * （= TLM 自己的 {@code DefaultMaidHealSelfMeal.isHealMeal} 口径：有食物属性组件且不在 投喂黑名单里），任何"能吃的东西"都算回血资源；金苹果走上面那条单独判定 （它被投喂黑名单刻意排除，但作为回血资源必须算）。
      */
     private boolean hasHealResource(EntityMaid maid) {
         return healResourceId(maid) != null;
@@ -4215,32 +4012,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.20：无威胁持续一段时间后传送回主人身边。
-     * v1.5.21：加传送冷却（60 秒），防"传回家又被打→又传"循环。
      * 主人主动 TP 女仆不受影响（不走 teleportToOwner）。
-     *
-     * v1.5.91【双判定】曾改为同时判定自己身边与主人身边都无怪才传——v1.5.149
      * 撤销自己身边判定：被怪追着跑时自己身边永远有怪 → 永远不传（反馈
-     * "怪一直在追导致无法传送"）。现只确认【主人身边】安全即可传送（防
-     * "传回主人身边送死"）；传送成功 → 立即结束自保。
-     *
-     * 实测三百六十二【冷却重定义】：调用方已收敛为 tryTeleportFallback（兜底）。
-     * 失败（主人身边有怪/无落点）重试间隔固定 5 秒；【成功】传送后走完整
-     * teleportCooldown（默认 600=30 秒）——一场遭遇战最多被接走一次，根治
-     * "传回家→跑回去→再传回家"的连传循环。
+     * "怪一直在追导致无法传送"）。现只确认【主人身边】安全即可传送（防 "传回主人身边送死"）；传送成功 → 立即结束自保。 失败（主人身边有怪/无落点）重试间隔固定 5 秒；【成功】传送后走完整 teleportCooldown（默认 600=30 秒）——一场遭遇战最多被接走一次，根治 "传回家→跑回去→再传回家"的连传循环。
      */
     /**
-     * v1.3.0(beta) 实测七百一十八【issue #31】——她自己坐下/蹲着时，自保归位传送不拉她走。
-     *
-     * <p>反馈者
-     *
-     * 原版传送早就豁免了（{@code MaidTeleportPreserveMixin} 里 {@code isMaidInSittingPose() ||
-     * isShiftKeyDown()} 那道闸），但**我们自己**的自保传送没查，于是坐/蹲着也会被拉走。
-     * 这里补上同一道闸，两条自保传送路径（{@link #teleportHome} / {@link #teleportHomeOnExit}）
-     * 共用。开关 {@code combat.teleportExemptSitting} 默认开；关掉 = 旧行为。
-     *
-     * <p>【为什么不是"禁止她站起来"】受伤时 {@code onMaidHurt} 本来就会让她起身（v1.5.213），
-     * 起身后这个判据自然为假、传送恢复——玩家要的"停下就别动"与"挨打要能逃"两者不冲突。
+     * <p>反馈者 原版传送早就豁免了（{@code MaidTeleportPreserveMixin} 里 {@code isMaidInSittingPose() || isShiftKeyDown()} 那道闸），但**我们自己**的自保传送没查，于是坐/蹲着也会被拉走。 这里补上同一道闸，两条自保传送路径（{@link #teleportHome} / {@link #teleportHomeOnExit}） 共用。开关 {@code combat.teleportExemptSitting} 默认开；关掉 = 旧行为。 <p>【为什么不是"禁止她站起来"】受伤时 {@code onMaidHurt} 本来就会让她起身（v1.5.213）， 起身后这个判据自然为假、传送恢复——玩家要的"停下就别动"与"挨打要能逃"两者不冲突。
      */
     private static boolean shouldSkipTeleportForParked(EntityMaid maid) {
         try {
@@ -4393,9 +4170,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (this.hasDangerAt(level, new BlockPos(tx, ty, tz))) {
             return false; // 落点危险（岩浆等），不扔
         }
-        // v1.5.91【珍珠落点安全判定（治活埋/卡墙）】：落点不是简单"有地面"就够。
-        // 珍珠瞬移是直接 setPos——落点上下被实心方块夹住 / 头顶封死会窒息或卡墙。
-        // 守卫：脚下是实心可站（防落入岩浆/深渊）+ 站立位与头顶 ≥2 格空气（防窒息）。
+        // v1.5.91【珍珠落点安全判定（治活埋/卡墙）】：落点不是简单"有地面"就够。 珍珠瞬移是直接 setPos——落点上下被实心方块夹住 / 头顶封死会窒息或卡墙。 守卫：脚下是实心可站（防落入岩浆/深渊）+ 站立位与头顶 ≥2 格空气（防窒息）。
         BlockPos standPos = new BlockPos(tx, ty + 1, tz); // 站立格
         BlockPos belowPos = new BlockPos(tx, ty, tz); // 脚下格
         if (!level.getBlockState(belowPos).isAir() // 脚下是实心（非空）
@@ -4670,27 +4445,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.3.0(beta) 实测七百一十八【issue #30 重做：窒息播报改成常驻、与自保会话解耦】。
-     *
      * <p>【为什么从环境逃生链路里搬出来】那句"我卡住了，快喘不过气了！"原先长在
      * {@code environmentalEscape} 的第 4 档（卡墙），于是它同时受三件与"卡住"无关的事摆布：
      * ① 自保会话得先激活；② 得轮到第 4 档（前面岩浆/着火/溺水任何一档 return 掉就轮不到，
      * 尤其"附近有岩浆就绕开"那一档只要半径 3 内有岩浆就抢先 return）；③ 会话进过让位窗口
      * （{@code envGiveUpTick}）时那 5 秒整条逃生链路都不跑。反馈者（#30）报的正是"被自己垫的
-     * 方块闷住、又掉血又吃东西、始终不提示"——他要的只是一件事：**真被闷住就说话**。
-     *
-     * <p>所以搬到这里：常驻轻量检查（与 {@code tickCureNegativeEffects} 同层，会话内外都跑），
-     * 判据只有一个——**最近 5 秒累计吃到的 in_wall 伤害过没过门槛**。挪位置/顶出那个保命动作
-     * 仍留在逃生链路里（那条只管动作、不管提示）。
-     *
-     * <p>【为什么不是"一生一次"】"喊过没有"这个状态存在**静态账本**里（{@link SuffocateLedger#announced}），
-     * 只在窗口内伤害点**全部过期**（她真的不卡了）时复位——同一阵里她若又卡住，还能再喊一次；
-     * 喊过之后若持续被闷着（伤害一直在窗口内），就只说那一次，不刷屏。
-     *
-     * <p>【实测七百九十九·issue #30 五修】旧版把"喊过没有"放在行为字段 {@code announcedSuffocate}
-     * 上，而 {@code sessionEnter} 每次都清它——可判据读的是静态台账，于是自保会话每重进一次就
-     * 能再喊一次（反馈者日志里 `99 → 107 → 113 → 2937` 的重复播报）。现在它跟着账本走，
-     * 与自保会话完全解耦。
+     * 方块闷住、又掉血又吃东西、始终不提示"——他要的只是一件事：**真被闷住就说话**。 <p>所以搬到这里：常驻轻量检查（与 {@code tickCureNegativeEffects} 同层，会话内外都跑）， 判据只有一个——**最近 5 秒累计吃到的 in_wall 伤害过没过门槛**。挪位置/顶出那个保命动作 仍留在逃生链路里（那条只管动作、不管提示）。 <p>【为什么不是"一生一次"】"喊过没有"这个状态存在**静态账本**里（{@link SuffocateLedger#announced}）， 只在窗口内伤害点**全部过期**（她真的不卡了）时复位——同一阵里她若又卡住，还能再喊一次； 喊过之后若持续被闷着（伤害一直在窗口内），就只说那一次，不刷屏。 <p>【实测七百九十九·issue #30 五修】旧版把"喊过没有"放在行为字段 {@code announcedSuffocate} 上，而 {@code sessionEnter} 每次都清它——可判据读的是静态台账，于是自保会话每重进一次就 能再喊一次（反馈者日志里 `99 → 107 → 113 → 2937` 的重复播报）。现在它跟着账本走， 与自保会话完全解耦。
      */
     private void checkSuffocateAnnounce(EntityMaid maid) {
         float suffocate = recentSuffocateDamage(maid);

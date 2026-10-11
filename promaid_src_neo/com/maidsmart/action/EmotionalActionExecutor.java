@@ -34,26 +34,11 @@ public final class EmotionalActionExecutor {
 
     /**
      * v1.2.0 实测五百一十九：这个物品能不能作为【投喂食物】——通用判定 + 黑名单。
-     *
      * 【反馈】"女仆的喂食功能可以喂其他mod的食物吗？检测背包中是否有能够喂食的食物的时候
      * 有没有跳过模组食物？这个提醒是只判定原版食物吗，往女仆背包里塞一堆三明治疯狂跳没食物"
-     *
      * 【旧版问题】这里原本是 21 项**硬编码原版物品白名单**（{@code Set<ItemStack> FOODS}），
      * 按物品身份逐个比对 → 任何模组食物（三明治等）都不在内 → 背包塞满也判"没有食物"
-     * → 疯狂播报"我背包里没有吃的了"。而 TLM 自己"女仆饿了吃"那条链
-     * （{@code DefaultMaidHealSelfMeal.isHealMeal}，javap 实证）判据是
-     * **"有食物属性 && 不在黑名单"**，从不看是不是原版——一个模组里两套食物哲学，
-     * 这正是本问题的根源。
-     *
-     * 【现口径】与 TLM 完全同口径：{@code 有 FoodProperties && 不在黑名单}。
-     * 任何注册了食物属性的物品（含模组三明治）都能喂；可吃但有害/浪费的用黑名单排除。
-     * 黑名单是配置项 {@code AID_FOOD_BLACKLIST}（面板「战斗与自保 → 贴身辅助」可改），
-     * 默认放：腐肉/蜘蛛眼/毒马铃薯/河豚/紫颂果/可疑炖菜 + 全部生食 +
-     * **金苹果/附魔金苹果**（这两个刻意保留给"低血即时增益"路径
-     * {@code MaidAidOwnerBehavior.useGoldenApple}，当普通食物喂掉是浪费）。
-     *
-     * 【与"能吃"的分工】本方法只回答"值得喂给她/主人吗"；真正喂食时的原版前提校验
-     * （1.21.1 是 {@code DataComponents.FOOD} 组件）仍在 {@link #feedFoodDirect} 里，两者不冲突。
+     * → 疯狂播报"我背包里没有吃的了"。而 TLM 自己"女仆饿了吃"那条链 （{@code DefaultMaidHealSelfMeal.isHealMeal}，javap 实证）判据是 **"有食物属性 && 不在黑名单"**，从不看是不是原版——一个模组里两套食物哲学， 这正是本问题的根源。 【现口径】与 TLM 完全同口径：{@code 有 FoodProperties && 不在黑名单}。 任何注册了食物属性的物品（含模组三明治）都能喂；可吃但有害/浪费的用黑名单排除。 黑名单是配置项 {@code AID_FOOD_BLACKLIST}（面板「战斗与自保 → 贴身辅助」可改）， 默认放：腐肉/蜘蛛眼/毒马铃薯/河豚/紫颂果/可疑炖菜 + 全部生食 + **金苹果/附魔金苹果**（这两个刻意保留给"低血即时增益"路径 {@code MaidAidOwnerBehavior.useGoldenApple}，当普通食物喂掉是浪费）。 【与"能吃"的分工】本方法只回答"值得喂给她/主人吗"；真正喂食时的原版前提校验 （1.21.1 是 {@code DataComponents.FOOD} 组件）仍在 {@link #feedFoodDirect} 里，两者不冲突。
      */
     public static boolean isFeedableFood(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
@@ -106,10 +91,8 @@ public final class EmotionalActionExecutor {
 
     /** 主人饥饿时直接喂上一个熟食（v1.5.201：按"饱和度恢复量"选最优——
      *  nutrition × saturationModifier × 2.0，不再按背包槽位顺序；
-     *  v1.5.288：改为【直接喂食】——饱食度直接加到主人（原版 FoodData.eat 语义），
      *  不再塞背包/手上（反馈："投喂食物应该跟本来就有的喂食功能一样是直接喂给
      *  主人饱食度，而不是塞在手上"）；
-     *  v1.5.299：硬编码 15 改读配置阈值（旧版写死 15——主人把投喂阈值调到 20 时
      *  饱食度 15~19 直接被拦，反馈："明明饱食度不满、阈值设了 20 却无法触发"）；
      *  手持食物（主手/副手）纳入选优——旧版只扫 maidInv 背包，肉排拿在手上时
      *  永远找不到（TLM 双手是独立 handsInvWrapper，getMaidInv 不含手部） */
@@ -253,12 +236,7 @@ public final class EmotionalActionExecutor {
             // eat(nutrition,satMod)+heal+手搓音效（与"自己吃"观感不一致）。
             // 注：1.20.1 的 mob eat 不触发 eat 粒子（粒子在 Player eat 路径），
             // 但食物效果/音效与女仆自己吃完全相同。
-            // v1.2.2 实测五百七十九【走物品自己的 finishUsingItem】——原地结算：
-            // 普通食物（Item.finishUsingItem 默认实现）与旧版 eat() **完全等价**；而重写过
-            // 它的物品（例：奇异饰品「永恒牛排」= 吃副本 + 上冷却 + 原栈不消耗）才会按物品
-            // 自己的语义生效，不会被我们手搓的"扣一个"毁掉。
-            // 【必须先取 item 引用】进食后 food（活栈）可能变空，空栈 getItem() 是 AIR，
-            // 下面的蜂蜜分支就认不出来了。
+            // 普通食物（Item.finishUsingItem 默认实现）与旧版 eat() **完全等价**；而重写过 它的物品（例：奇异饰品「永恒牛排」= 吃副本 + 上冷却 + 原栈不消耗）才会按物品 自己的语义生效，不会被我们手搓的"扣一个"毁掉。 【必须先取 item 引用】进食后 food（活栈）可能变空，空栈 getItem() 是 AIR， 下面的蜂蜜分支就认不出来了。
             net.minecraft.world.item.Item fedItem = food.getItem();
             int consumed = com.maidsmart.combat.MaidMealBridge.eatByItemLogic(owner, food);
             // 系统提示喂了什么（getHoverName = getHoverName）

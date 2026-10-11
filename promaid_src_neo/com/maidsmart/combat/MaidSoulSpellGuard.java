@@ -6,11 +6,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * 实测四百零二【低血量自动回魂符】——参考 maid_survival-1.9.5 的 MaidSoulSpellGuard。
  * 实测四百零三【触发口径收紧】：仅【致死伤害且无保命物品】时收符——低血量不再
  * 触发（否则自保的喝药/搭高/珍珠全成小丑）；有绀珠之药/不死图腾等保命物品时
  * 让保命物品生效，不抢收。
- *
  * 机制：
  * - 女仆受到【致死伤害】（伤害 ≥ 当前血量）且【没有保命物品】（绀珠之药/不死
  *   图腾，SelfPreservationBehavior.hasDeathSaveItem 同口径）→ 尝试收进主人背包
@@ -20,13 +18,7 @@ import net.minecraft.world.item.ItemStack;
  * - 动作：新建 SMART_SLAB_HAS_MAID 魂符 → ItemSmartSlab.storeMaidData 存女仆数据 →
  *   魂符打自动标记（冷却时间戳）→ 放入主人背包空槽 → 主人收到提示 +
  *   再生药水效果（时长=冷却）+ 升级音效 → 女仆实体从世界移除（discard discard）；
- * - 冷却：成功收符后女仆 persistentData 写冷却时间戳（默认 180 秒），期间不再触发；
- * - 防收放循环：魂符右键释放（MaidAndItemTransformEvent.ToMaid）时把冷却写回女仆
- *   ForgeData，并清掉魂符上的自动标记——释放后冷却期内不会立刻又被收回去。
- *
- * 与自保的关系：自保是"活着保命"（喝药/搭高/珍珠），本功能是"保不住（要死了）
- * 才收符"的兜底——低血量交给自保，只有必死一击且没有保命物品才收。玩家手动用
- * 魂符收/放女仆不受影响（只认自动标记的魂符）。
+ * - 冷却：成功收符后女仆 persistentData 写冷却时间戳（默认 180 秒），期间不再触发； - 防收放循环：魂符右键释放（MaidAndItemTransformEvent.ToMaid）时把冷却写回女仆 ForgeData，并清掉魂符上的自动标记——释放后冷却期内不会立刻又被收回去。 与自保的关系：自保是"活着保命"（喝药/搭高/珍珠），本功能是"保不住（要死了） 才收符"的兜底——低血量交给自保，只有必死一击且没有保命物品才收。玩家手动用 魂符收/放女仆不受影响（只认自动标记的魂符）。
  */
 public final class MaidSoulSpellGuard {
 
@@ -111,8 +103,6 @@ public final class MaidSoulSpellGuard {
 
     /** 实测四百四十一【收符期间冷却条消失修复】：任何"女仆 → 魂符"转换都把女仆当前
      *  仍在计时的回魂符冷却与名字盖到魂符物品上。
-     *
-     *  旧版的魂符冷却标记只由自动收符路径写入；玩家【手动】用空魂符收女仆时，魂符是
      *  TLM 自己 new 的、不带任何标记 → HUD 扫背包查不到 → 冷却条消失（而冷却其实还
      *  记在女仆数据里继续计时，反馈："虽然实际上还在计时，但那样子观感不太好"）。
      *  TLM 的 storeMaidData 会发 MaidAndItemTransformEvent.ToItem（反编译实证：1.21.1 在
@@ -249,8 +239,6 @@ public final class MaidSoulSpellGuard {
      * HUD 用：这枚【自动魂符】自身的冷却到期 tick（0 = 不是自动魂符 / 无冷却）。
      * 覆盖"女仆已被收进符里、实体不存在"这段窗口——旧实现只扫存活女仆的
      * persistentData，收符瞬间就没有任何条目可显示。
-     *
-     * 实测四百四十一：不再要求 AUTO_SAVED_TAG——手动收符的魂符也由 ToItem 钩子盖了
      * 冷却戳，只要带 COOLDOWN_UNTIL_TAG 就该显示（AUTO_SAVED_TAG 仍只用于"是否在
      * 释放时重算冷却"的语义）。
      */

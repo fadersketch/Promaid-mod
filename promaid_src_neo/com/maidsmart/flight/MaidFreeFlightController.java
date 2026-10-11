@@ -11,13 +11,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 实测六百七十三【仿创造飞行 · 控制器】——让女仆悬浮并自由升降（创造模式飞行的手感）。
- *
  * 【这一步解决什么】整合包里给"创造飞行/悬浮"的手段五花八门（饰品、护甲套装、药水效果、
  * 重力归零类法术……），而它们几乎全部只对**玩家**生效；女仆拿到手上一字不动。本控制器不去
  * 复刻每个物品的物理，而是：**只要她有资格（见 {@link MaidFreeFlightKit}），我们就托住她**——
  * `setNoGravity(true)` + 每 tick 直接给速度，形成"悬停 + 平滑位移"的创造飞行手感。
- *
  * 【为什么挂在事件上而不是 brain 行为（实测六百七十三 记录）】最初写的是 core 行为
  * （priority 40，与其它附加行为同一条注册链）。现场诊断显示：行为**被实例化了**（大脑构建时
  * 确实取用了它），但它的 `checkExtraStartConditions` **从来没有被调用过**——同一条注册链上的
@@ -25,14 +22,8 @@ import java.util.UUID;
  * 事件驱动实现同一套逻辑：不依赖大脑调度，行为等价、挂载点更直接。
  * （TLM 的 `MaidTickEvent` 在 `EntityMaid.tick()` 里**早于** brain tick 发出，所以我们的
  * 速度设置在原版 travel 之前生效。）
- *
  * 【飞行力学：一阶，绝不累加】转向照抄扫帚模式那套已实测的公式
- * （`speed = min(1, dist / 1.5)`，分量限速 0.35/0.22，`dist < 0.35` 直接零速悬停）：速度**直接由
- * 距离算**，不做任何累加——实测六百五十五 的教训是，一旦接管了 travel（没有原版 0.91 阻力），
- * 增量式推进就是无阻尼谐振子，表现为"升空后空中上下摆动"。一阶系统数学上不可能振荡。
- *
- * 【安全底线】收工时若她还在半空 → 先"软着陆"（保持无重力、缓慢下降），落地或超时才交还重力；
- * 异常也保持悬停，绝不因为一次异常摔死她（她只有 20 血）。
+ * （`speed = min(1, dist / 1.5)`，分量限速 0.35/0.22，`dist < 0.35` 直接零速悬停）：速度**直接由 距离算**，不做任何累加——实测六百五十五 的教训是，一旦接管了 travel（没有原版 0.91 阻力）， 增量式推进就是无阻尼谐振子，表现为"升空后空中上下摆动"。一阶系统数学上不可能振荡。 【安全底线】收工时若她还在半空 → 先"软着陆"（保持无重力、缓慢下降），落地或超时才交还重力； 异常也保持悬停，绝不因为一次异常摔死她（她只有 20 血）。
  */
 public final class MaidFreeFlightController {
 
@@ -52,12 +43,9 @@ public final class MaidFreeFlightController {
      * 软着陆"提速线"（秒）：从起算过了这么久她还在下（说明她飞得太高了），把下降速度提到
      * {@link #SOFT_LAND_FAST_SPEED}——只是**更快地软着陆**，仍然保持无重力、仍然每 tick 清零
      * 坠落距离。
-     *
      * <p>【实测六百八十七 改的就是这里】旧版写的是"软着陆最长持续（tick）"`SOFT_LAND_MAX = 120`
      * 而 {@code expired()} 里乘了 20（= 120 秒），注释与代码本身就对不上；更要紧的是它到点那一下
-     * **直接交还重力**——从她当时所在的任意高度自由落体，没有任何防摔兜底（300 格上放手的极端
-     * 情况会直接摔死 20 血的她）。现在超时只提速，真正放手只在**她已经掉到世界底部以下**时发生
-     * （虚空里无重力没有意义，且那时候重力也摔不死她）。
+     * **直接交还重力**——从她当时所在的任意高度自由落体，没有任何防摔兜底（300 格上放手的极端 情况会直接摔死 20 血的她）。现在超时只提速，真正放手只在**她已经掉到世界底部以下**时发生 （虚空里无重力没有意义，且那时候重力也摔不死她）。
      */
     private static final int SOFT_LAND_FAST_AFTER_SECONDS = 20;
     /** 提速之后的下降速度（格/tick）：0.48 ≈ 9.6 格/秒，从 300 格高下来约半分钟 */
@@ -94,13 +82,10 @@ public final class MaidFreeFlightController {
 
     /**
      * 我们此刻是否**正在控制她的移动**（飞行中 / 软着陆中）。
-     *
      * 【给"走位型"链路让位用（实测六百八十）】
-     *
      * 是一边铺方块一边用走路的 move 驱动她，与我们的飞行抢移动。作者给"飞行跟随"已经加过同款
      * 让位（见 {@code BridgeUpBehavior} 里对 {@code MaidFlightFollowBehavior.isFollowing} 的两处检查），
      * 这里照同一套写法给创造飞行补上。
-     *
      * 注意**不含"落地待命"档**（STANDBY）：那一档她已经落地、由 TLM 正常跟随，搭路该照常工作。
      */
     public static boolean isControlling(EntityMaid maid) {
@@ -113,15 +98,11 @@ public final class MaidFreeFlightController {
 
     /**
      * 【实测六百八十七：有创造飞行能力就禁用搭路（需求方口径）】
-     *
      * <p>
-     *
-     *
      * <p>与 {@link #isControlling} 的区别就是"能力"与"正在飞"：搭路（{@code BridgeUpBehavior}）
      * 是"一边铺方块一边用走路驱动她"，而有飞行能力的女仆根本不需要那一套——要过沟、要上坡、要跟上
      * 主人，直接起飞就是（待命档里主人一动她就会起飞，见 {@code shouldTakeOff}）。所以这里问的是
-     * "她此刻**具备**飞行能力"（总开关开 + 没被单独关掉 + 资格物品/效果/重力其一），
-     * **不含**"此刻是否在空中"——落地待命档同样不搭。
+     * "她此刻**具备**飞行能力"（总开关开 + 没被单独关掉 + 资格物品/效果/重力其一）， **不含**"此刻是否在空中"——落地待命档同样不搭。
      */
     public static boolean bridgeDisabled(EntityMaid maid) {
         try {
@@ -208,30 +189,12 @@ public final class MaidFreeFlightController {
     private static final double WORK_NEAR_OWNER_Y = 8.0;
 
     /**
-     * 【实测六百八十八】"本来要走路过去的活"也交给仿创造飞行。
-     *
      * <p>需求方口径（上一批已经按同一句话把**搭路**
      * （{@code BridgeUpBehavior}，垫方块过沟/上坡）整段让位了——这一条是它的对偶面：
      * **不搭路，也不绕路**，要过去就直接飞过去。
-     *
      * <p>调用点：{@code FreeFlightWalkGuardMixin}（{@code PathNavigation.moveTo(DDDD)Z} 的 HEAD，
      * = 挖矿 / 伐木 / 农活这类**直连寻路**）。返回 true = 这一发地面寻路被接管（调用方把返回值改成
-     * false，她不会走），我们已经记下了那一格，接下来每 tick 由 {@link #flyTravel} 把她送过去。
-     *
-     * <p>接管条件（四条全中）：
-     * <ol>
-     *   <li>她此刻**有飞行资格**（{@link #canFly}：总闸 + 没被单独关掉 + 资格物品/效果/重力其一，
-     *       且没坐着/没被骑/没在守家/不是空袭或扫帚任务）；</li>
-     *   <li>开关开着（{@code misc.freeFlightTravel}）且她**在非战斗的工作任务上**
-     *       （{@link #walkTravelAllowed}：挖矿/伐木/农活这类，见那里的排除清单）；</li>
-     *   <li>这一格确实够"费劲"：水平超过 {@code freeFlightTravelDist}（默认 8 格）
-     *       **或**高差超过 {@link #TRAVEL_RISE}（2 格）——近处挪一步照旧走路；</li>
-     *   <li>那一格**底下落得下去**（{@link #landableAt}：沟上 / 虚空上 / 水面上方不接管）。</li>
-     * </ol>
-     *
-     * <p>【为什么"接管的阈值"和"结束的阈值"不是同一个】接管看"够不够远"（8 格），结束看"到没到"
-     * （1.5 格）；中间那段靠 {@link #TRAVEL_FLIGHT} 这条"这趟已经在赶路"的标记继续接管，
-     * 所以她是一路飞到底、不是飞 8 格再走最后一段。
+     * false，她不会走），我们已经记下了那一格，接下来每 tick 由 {@link #flyTravel} 把她送过去。 <p>接管条件（四条全中）： <ol> <li>她此刻**有飞行资格**（{@link #canFly}：总闸 + 没被单独关掉 + 资格物品/效果/重力其一， 且没坐着/没被骑/没在守家/不是空袭或扫帚任务）；</li> <li>开关开着（{@code misc.freeFlightTravel}）且她**在非战斗的工作任务上** （{@link #walkTravelAllowed}：挖矿/伐木/农活这类，见那里的排除清单）；</li> <li>这一格确实够"费劲"：水平超过 {@code freeFlightTravelDist}（默认 8 格） **或**高差超过 {@link #TRAVEL_RISE}（2 格）——近处挪一步照旧走路；</li> <li>那一格**底下落得下去**（{@link #landableAt}：沟上 / 虚空上 / 水面上方不接管）。</li> </ol> <p>【为什么"接管的阈值"和"结束的阈值"不是同一个】接管看"够不够远"（8 格），结束看"到没到" （1.5 格）；中间那段靠 {@link #TRAVEL_FLIGHT} 这条"这趟已经在赶路"的标记继续接管， 所以她是一路飞到底、不是飞 8 格再走最后一段。
      */
     public static boolean takeOverWalk(EntityMaid maid, double x, double y, double z) {
         try {
@@ -280,19 +243,11 @@ public final class MaidFreeFlightController {
 
     /**
      * 这只女仆的直连寻路该不该被我们接管——**只认"本来走过去干活"这一类**。
-     *
      * <p>直连寻路（{@code moveTo(DDDD)Z}）还有几张别的面孔，各有各的语义，一律不碰：
      * <ol>
      *   <li><b>自保逃跑</b>：它的落点是"安全点 / 岸边 / 水面"（贴着地面逃的语义），
      *       被我们吊到空中会毁掉那条链的判据；</li>
-     *   <li><b>战斗类任务的战术走位</b>（{@code MaidCombatTacticsBehavior}）：交战中的走位是打斗的
-     *       一部分，交给战斗链路；</li>
-     *   <li><b>刷怪笼插火把</b>：那条链自己拥有走位所有权（实测六百六十四，见
-     *       {@code SpawnerTorchNavGuardMixin}）；</li>
-     *   <li><b>站桩工作</b>（建筑 / 烹饪 / 酿造）：她该原地不动，不该被吊起来；</li>
-     *   <li><b>idle / 跟随</b>（{@code isNonCombatWork} 为假）：跟随有它自己那套飞行跟随，
-     *       散步 / 闲逛更不该变成飞。</li>
-     * </ol>
+     *   <li><b>战斗类任务的战术走位</b>（{@code MaidCombatTacticsBehavior}）：交战中的走位是打斗的 一部分，交给战斗链路；</li> <li><b>刷怪笼插火把</b>：那条链自己拥有走位所有权（实测六百六十四，见 {@code SpawnerTorchNavGuardMixin}）；</li> <li><b>站桩工作</b>（建筑 / 烹饪 / 酿造）：她该原地不动，不该被吊起来；</li> <li><b>idle / 跟随</b>（{@code isNonCombatWork} 为假）：跟随有它自己那套飞行跟随， 散步 / 闲逛更不该变成飞。</li> </ol>
      */
     private static boolean walkTravelAllowed(EntityMaid maid) {
         try {
@@ -373,12 +328,9 @@ public final class MaidFreeFlightController {
     }
 
     /**
-     * 【实测六百八十八】赶路飞行的每 tick：朝她自己的走位目标飞，到了就落下去把活还给她。
-     *
      * <p>与跟随飞行的两点不同：①{@code ownerPos = null}（不做"面向主人 / 倒退着飞"那套社交朝向，
      * 面朝前进方向就行——她这趟是去干活，不是陪你）；②到位判据用 {@link #TRAVEL_ARRIVE}，
      * 到了就**软着陆 + 释放**（{@code ST_OFF} = 落地即收工、把重力与控制权交回 TLM 的任务链）。
-     *
      * <p>落点安全在接管那一刻已经查过（{@link #landableAt}），所以这里不再重复判一次。
      */
     private static void flyTravel(EntityMaid maid, UUID id, Vec3 aim) {
@@ -413,16 +365,12 @@ public final class MaidFreeFlightController {
     }
 
     /**
-     * 【实测六百八十八】"她正在主人身边干活"——这时候飞行层只负责把她送到活上，
      * **不负责把她拽向主人**。
-     *
      * <p>【不这么判会怎样】落到工位（{@code ST_OFF}）之后，主人的移动会让 {@code shouldTakeOff} 的
      * "主人在动"成立 → 她起飞去追 → 挖矿驱动发现她不在工位、又发一发远距离寻路 → 我们又把她飞回
      * 工位……往复。干活的地方本来就在主人附近（TLM 的工作范围就是围着他划的），所以
      * "在岗 + 主人在旁边" ⇔ "她该在这儿干活"。
-     *
-     * <p>他真走远了（水平 > {@link #WORK_NEAR_OWNER} 格）或者上天了（高差 >
-     * {@link #WORK_NEAR_OWNER_Y} 格）就不算"在身边"，照旧跟上去——那也正是 TLM 换任务的时机。
+     * <p>他真走远了（水平 > {@link #WORK_NEAR_OWNER} 格）或者上天了（高差 > {@link #WORK_NEAR_OWNER_Y} 格）就不算"在身边"，照旧跟上去——那也正是 TLM 换任务的时机。
      */
     private static boolean workingNearOwner(EntityMaid maid, LivingEntity owner) {
         try {
@@ -567,12 +515,9 @@ public final class MaidFreeFlightController {
     }
 
     /**
-     * 【实测六百八十七：把上一局遗留的无重力交还回去】
-     *
      * <p>{@code Entity#noGravity} 是**跟着实体 NBT 存盘**的（原版 {@code addAdditionalSaveData}
      * 就写它），而本类的状态表只活在内存里。她若在飞行中存档退出 / 被卸载，下次进来 STATE 是空的、
      * 谁也不认领她——旧版就会"她带着 NoGravity 永远飘在那儿，叫不下来"（单机退出重进就能复现）。
-     *
      * <p>判据用 **persistentData 里我们自己写的那枚标记**（它同样随实体存盘）：这样只管得住
      * "我们留下的无重力"，绝不会误伤空袭/扫帚或别的代码设的无重力。
      */
@@ -1215,13 +1160,11 @@ public final class MaidFreeFlightController {
 
     /**
      * 她当前要打的敌人（TLM 攻击任务写在 brain 的 {@code ATTACK_TARGET}；兜底认 {@code Mob#getTarget}）。
-     *
      * 【为什么要认它（实测六百七十九）】用户实机反馈的**冲突 bug**：一般战斗模式下她**想在地面
      * 走向敌人并攻击**，而创造飞行却要求她**飞向主人**——两套逻辑打架（这也是"飞行时会强制保持
      * 与主人的距离/高差"的直接后果）。正确姿态是：**飞行是她的"移动层"，要跟着她的意图走**——
      * 有敌人就飞去打，没敌人再回到主人身边/落地待命。
-     * （用户对两种飞行的定位也很清楚：鞘翅＝战斗机、靠高速与爬升俯冲拿优势，作者的"空袭"就是围着
-     * 它设计的；创造飞行＝直升机、慢而稳而灵活，是"配合其他工作"的万金油移动层——两者重合很少。）
+     * （用户对两种飞行的定位也很清楚：鞘翅＝战斗机、靠高速与爬升俯冲拿优势，作者的"空袭"就是围着 它设计的；创造飞行＝直升机、慢而稳而灵活，是"配合其他工作"的万金油移动层——两者重合很少。）
      */
     private static LivingEntity combatTarget(EntityMaid maid) {
         try {

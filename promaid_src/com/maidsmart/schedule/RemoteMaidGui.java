@@ -15,40 +15,19 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * v1.3.4 实测六百五十九 / v1.3.5 实测六百六十「真正的远程开界面」：
  * （玩家, 女仆）这把「这次是我们替她开的」登记处 + 每 tick 的同步泵。
- *
  * ── 为什么要有这个东西 ──
  * TLM 的女仆容器**每 tick** 都要过一遍 {@code AbstractMaidContainer.stillValid}
  * （forge 树 = SRG {@code m_6875_}），其中一条是「玩家到她 ≤ 3 格」（1.21.1 是 4 格）。
  * 玩家在排班表里点「女仆配置」时人可能站在几十上百格外，于是服务端**下一 tick 就把界面关掉**
  * ——客户端看到的就是"点进去一下、立刻闪退"。
- *
  * ── 这个登记处管的是「例外」，不是「规则」 ──
  * 只有**从排班表那条路开出来的**界面才登记（{@link SchedulePacketsMaid.OpenMaidConfigPacket}），
  * 玩家自己右键女仆开的那种**不登记** → 距离照旧由 TLM 管（「走近才能开」的原版手感一点没变）。
  * 界面关掉时由 {@code AbstractMaidContainer.removed} 那条注入收回
  * （见 {@code MaidContainerRemoteOpenMixin}）。
- *
  * ── v1.3.5：距离上限取消了，改成「把同步真做出来」 ──
- * 上一版（v1.3.4）留了一条"别开太远"的边界，理由写的是"客户端根本没同步到她，开出来是残界面"。
- * 那个顾虑本身是对的（字节码实证：{@code AbstractMaidContainer} 构造里按实体网络 id 找她，
- * 找不到就只建一半槽位），但**做法**错了：既然残界面的根因是"没同步"，那就去把同步做出来，
- * 而不是把玩家挡在门外。玩家问过一句：「不是有过一个女仆区块强制加载吗？难道解决不了这样的
- * 问题吗？」——区块票据解决不了（详见 {@code ChunkMapTrackRemoteMixin} 的注释：票据管
- * "她在服务端在不在"，同步门是另一条管线、另一套距离判据），但"强制同步"本身做得到：
- * {@code ChunkMapTrackRemoteMixin} 把这一对塞进原版 {@code seenBy} 并调原版
- * {@code addPairing}，客户端拿到的她与"走近时原版自己配上的"完全一致。
- * 于是**本类里再没有任何距离阈值**——半径这个概念整个不存在了。
- *
- * ── 泵（{@link #pump}）为什么在 ChunkMap.tick 里跑 ──
- * 见 {@code ChunkMapRemotePumpMixin}：① 只有混进 ChunkMap 的 mixin 碰得到 entityMap；
- * ② 「先配对、再开界面」必须在同一次 tick 内按序发这两条包（同一个方法里做完，
- * TCP 有序天然保证客户端先认识她、再打开她的界面）。登记本身只记一笔，真正的同步+打开在泵里做，
- * 所以玩家点下去到界面弹出来最多晚 1~2 tick（≤100 毫秒），肉眼无感。
- *
- * 【线程】登记/泵/查询都在服务端主线程（容器 tick、包处理、区块 tick），表用并发实现，
- * 免得集成服务器上"关界面的那一刻"与"tick 里的判据"撞在一起。
+ * 上一版（v1.3.4）留了一条"别开太远"的边界，理由写的是"客户端根本没同步到她，开出来是残界面"。 那个顾虑本身是对的（字节码实证：{@code AbstractMaidContainer} 构造里按实体网络 id 找她， 找不到就只建一半槽位），但**做法**错了：既然残界面的根因是"没同步"，那就去把同步做出来， 而不是把玩家挡在门外。玩家问过一句：「不是有过一个女仆区块强制加载吗？难道解决不了这样的 问题吗？」——区块票据解决不了（详见 {@code ChunkMapTrackRemoteMixin} 的注释：票据管 "她在服务端在不在"，同步门是另一条管线、另一套距离判据），但"强制同步"本身做得到： {@code ChunkMapTrackRemoteMixin} 把这一对塞进原版 {@code seenBy} 并调原版 {@code addPairing}，客户端拿到的她与"走近时原版自己配上的"完全一致。 于是**本类里再没有任何距离阈值**——半径这个概念整个不存在了。 ── 泵（{@link #pump}）为什么在 ChunkMap.tick 里跑 ── 见 {@code ChunkMapRemotePumpMixin}：① 只有混进 ChunkMap 的 mixin 碰得到 entityMap； ② 「先配对、再开界面」必须在同一次 tick 内按序发这两条包（同一个方法里做完， TCP 有序天然保证客户端先认识她、再打开她的界面）。登记本身只记一笔，真正的同步+打开在泵里做， 所以玩家点下去到界面弹出来最多晚 1~2 tick（≤100 毫秒），肉眼无感。 【线程】登记/泵/查询都在服务端主线程（容器 tick、包处理、区块 tick），表用并发实现， 免得集成服务器上"关界面的那一刻"与"tick 里的判据"撞在一起。
  */
 public final class RemoteMaidGui {
 
@@ -148,22 +127,10 @@ public final class RemoteMaidGui {
     /**
      * 同步泵：每 tick（每维度一次，见 {@code ChunkMapRemotePumpMixin}）把该同步的女仆同步给玩家，
      * 同步落地了就替玩家把配置界面开出来。没登记过任何会话时**第一行就返回**（平时零开销）。
-     *
      * <p>逐对做四件事：
      * <ol>
      *   <li>把玩家与女仆从 uuid 解回来（任何一边不在了 → 等超时后收场并给一句明白话）；</li>
-     *   <li>{@code bridge.promaid$forcePair(player)}：这就是「强制同步」本身——原版的
-     *       {@code seenBy} + {@code addPairing}，客户端由此真的拿到她（spawn + 元数据 + 属性）。
-     *       已经同步着的不会重复发包（{@code add} 的返回值即"这次新加进去没有"）；</li>
-     *   <li>同步成功后（且还没开过）→ {@code openMaidGui}。**顺序不能反**：同一个方法里
-     *       先配对再开，两条包同一条连接按序到达，客户端先认识她、再打开她的界面；</li>
-     *   <li>已经在开着的会话 → 只维持同步（每 tick 补一次，原版中途因为区块滑出视野之类
-     *       把她拆掉也会在下一 tick 补回来）。</li>
-     * </ol>
-     *
-     * @param level     本 tick 的那个维度（{@code ChunkMap.f_140133_}）
-     * @param entityMap {@code ChunkMap} 的实体跟踪表（{@code f_140150_}，key = 实体网络 id）——
-     *                  值 cast 成 {@link RemoteTrackBridge} 就是我们借出来的「强制配对」入口
+     *   <li>{@code bridge.promaid$forcePair(player)}：这就是「强制同步」本身——原版的 {@code seenBy} + {@code addPairing}，客户端由此真的拿到她（spawn + 元数据 + 属性）。 已经同步着的不会重复发包（{@code add} 的返回值即"这次新加进去没有"）；</li> <li>同步成功后（且还没开过）→ {@code openMaidGui}。**顺序不能反**：同一个方法里 先配对再开，两条包同一条连接按序到达，客户端先认识她、再打开她的界面；</li> <li>已经在开着的会话 → 只维持同步（每 tick 补一次，原版中途因为区块滑出视野之类 把她拆掉也会在下一 tick 补回来）。</li> </ol> @param level     本 tick 的那个维度（{@code ChunkMap.f_140133_}） @param entityMap {@code ChunkMap} 的实体跟踪表（{@code f_140150_}，key = 实体网络 id）—— 值 cast 成 {@link RemoteTrackBridge} 就是我们借出来的「强制配对」入口
      */
     public static void pump(ServerLevel level, Int2ObjectMap<?> entityMap) {
         if (SESSIONS.isEmpty() || level == null || entityMap == null) {

@@ -321,6 +321,25 @@
 > `tools/test/test_server.py`（启动到 `Done (`）与 `test_maid_load.py`（女仆大脑装载），
 > 配合 `verify_jar_classes.py` 作为 ④⑤⑥ 动刀前的编译 / 装载校验。
 
+#### 6.1 ④⑤⑥ 实施蓝本（2026-10-12 测绘）
+
+**④ 抽 `MaidWorkBehavior` 基类（挖矿/伐木）**
+- 测绘确认：`task/MaidMineBehavior`(2952) 与 `task/MaidWoodBehavior`(2921) 是**系统性克隆**——公开/私有方法集一一对应，绝大多数只是 Ore↔Wood 词根替换。
+- 参数化点（子类差异）：`isOre/isWood`(+`isWoodState`) 判据；`OreCache/WoodCache` + `OreScanState/WoodScanState` 内部类；`load/ensure/reload{Builtin}`；`findOre/findWood`、`pickFromCache`；伐木独有的 `clearTreeTop`/`burstNearbyLeaves`/`isSaplingItem`/`firstWoodAbove`/`walkTargetFor`；提示文案 `hintNoPickaxe/hintNoAxe`；`requiredTool`/`canHarvest` 的物品集；配置键前缀（`mining.*` vs `wood.*`）。
+- 做法：抽 `abstract class MaidWorkBehavior`，把**无任务特异依赖**的成员上提 `protected`：`reachSq / distSqToBlock / blockCnName / isSoft / hasClearSight / hasClearRay / countBlocking / findBlockingBlock / maybeDropJunk / trackPlaced / expirePlaced / purgeStaleMaids / stuckReset / hardResetStuck / approachSpeed / walkToStep / startStepOn / walkToBlockFace / pillarUpStep / descendStep / slopeStep / takeBuildBlock / antiSuffocate / pillarGuard / watchSample / broadcastCrack` 等；子类只留 task-specific 覆盖点。**两树各做一份**（映射名不同，不能跨树共享源码）。
+- 门槛：DEBT 标注**中风险、需回环测试**。落刀后必须 `compile_promaid/neo` `EXITCODE=0` + `verify_jar_classes` + 实机跑一段挖矿/伐木（开发者「部署」开闸）。**本轮仅测绘，未动刀。**
+
+**⑤ 拆 `PromaidConfigScreen`（7659 行）**
+- 现状：单类含 首页 / 大类页 / 参数页 + 5 组「列表 + 条目」对（BuildBlack/Alt/Cook/Water/Food/Minable 各写一遍增删改重建）+ `client/MaidConfigRowLayout` 辅助。
+- 做法：按 Section 拆成独立面板类（每 Section 一个 `*Section`，共用基类/接口），`PromaidConfigScreen` 只做装配与分页。
+- 门槛：DEBT 标注**高风险、需实机 UI 验收**——拆完必须实机点一遍每个 Section（行高 44 / 翻页 / 手册跳转 / 控件状态）。**本轮仅测绘，未动刀。**
+
+**⑥ 两树共享源目录**
+- 第一步（**本轮已做**）：`tools/verify/check_tree_mirror.py`（只读审计，不设门槛）。现状：同路径 `.java` 459 个，逐字节相同 **47** / 有差异 412（行数一致 160、行数不同 252——多为注释里的映射名引用，合法；行数差 Top 见脚本输出，最大 `GunnerTetherManager` Δ127）。
+- 第二步（未做）：把**纯逻辑、无映射依赖**的文件移入共享源目录（如 `src_shared/`），两侧 `build.gradle` 的 `srcDir` 与 `tools/build/gen_compile*.py` 一并 include。候选先取「逐字节相同」那 47 个（先逐个确认真无映射依赖；已知 `memory/AiMemorySkipList`、`tool/NaturalBlocks`、`tool/StateTables` 相同，而 `build/BlueprintStepMath` 因注释映射名而 DIFF）。**需 gradle 构建验证，本轮未动。**
+
+> ④⑤⑥ 均停在**测绘**：三者都要求运行时 / 实机 UI / 真构建验证，而仓库规矩是「回归只在开发者开闸（『部署』）时跑」——故不在无人验收的情形下盲改。蓝本给出下一步的机械执行清单。
+
 ---
 
 ### 7. 复现本报告

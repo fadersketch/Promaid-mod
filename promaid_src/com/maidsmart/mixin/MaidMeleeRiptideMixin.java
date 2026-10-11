@@ -10,42 +10,19 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * v1.2.0 实测五百三十八 起【持激流三叉戟时，她那一记普通挥砍换成旋转冲击】。
- *
- * ── 需求原文 ──
- * "拿到激流三叉戟的时候需要单独写一条链路：攻击为朝向敌人发动一次旋转冲击然后结算伤害。
- * （在攻击/近战空袭中生效，**替换原本的攻击环节**），其他的如索敌等不变。"
- *
- * ── 为什么注这里（javap 实证 1.20.1）──
- * TLM 的攻击模式近战 = `MaidMeleeAttack.create(cooldown)` 返回的 OneShot，其任务体是
- * `lambda$create$0`（javap -p 实证，两版同名同签名），里面的出手条件与动作是：
- * <pre>
- *   if (!isHoldingUsableProjectileWeapon(maid)      // 拿着远程武器就不近战
- *       &amp;&amp; maid.m_217066_(target)                  // 近战可达
- *       &amp;&amp; nearestVisibleLivingEntities.contains(target)) {
- *       lookTarget.set(...);
- *       maid.m_6674_(MAIN_HAND);        // 挥砍动作
- *       maid.m_7327_(target);           // ← 这一记"结算伤害"
- *       attackCoolingDown.setWithExpiry(true, cooldown / 攻速);
- *   }
- * </pre>
- * 直接把"结算伤害"这一条**换成起手旋转冲击**：起手成功就返回 true（＝这一记算打出去了，
- * TLM 照常吃攻击冷却、照常维持它的节奏）；起不了手（不在攻击模式 / 主手不是激流三叉戟 /
- * 在空中 / 硬直中 / 目标太远）就**原样调回** `m_7327_`，与没装本模组完全一样。
- *
- * ── 实测五百四十一 为什么从"掐判据"改成"换这一记" ──
- * 早先版本是掐 `m_217066_`（近战可达）让整段不执行，加上本模组自己按距离自主起手 ——
- * 实机代价：她会在空袭的起跳/俯冲途中横插一次突进（"突然不会起飞了"），而且玩家完全看不懂
- * 她什么时候会触发（"判定很奇怪，容易被别的行为覆盖，可能是条件过于苛刻"）。
- * 现在起手时机 = **她的攻击时机**，且**绝不吞掉任何一记**：替换失败就落回普通挥砍。
- *
- * ── 必须是 static（实测五百四十 的血债）──
- * 注入目标 `lambda$create$0` 是 **private static** 方法，而 Mixin 的规则是"**静态目标方法只
- * 接受静态回调**"：写成实例方法会在 `MaidMeleeAttack` **首次被加载**（＝女仆生成、构建大脑）
- * 时抛 `InvalidInjectionException: non-static callback method … targets a static method which
- * is not supported`，整个 `MaidMeleeAttack` 变形失败 —— 表现就是**女仆 AI 直接死掉／一动不动，
- * 收回魂符再放下来会消失**。注意 `require = 0` 救不了这种情况：它只容忍"没匹配到"，
- * 不容忍"回调签名非法"。静态回调仍然照常收下 receiver 作为第一个参数。
+ * 【持激流三叉戟时，她那一记普通挥砍换成旋转冲击】（在攻击/近战空袭中生效，**替换原本的攻击环节**）。
+ * 【为什么注这里（javap 实证）】TLM 攻击模式近战 = {@code MaidMeleeAttack.create(cooldown)} 返回的 OneShot，
+ * 任务体是 {@code lambda$create$0}（javap -p 实证，两版同名同签名）：出手条件是"不拿远程武器 && 近战可达 &&
+ * 目标可见"，动作是摆挥砍姿势后调 {@code doHurtTarget}（= 这一记"结算伤害"）。直接把这一条**换成起手旋转
+ * 冲击**：起手成功就返回 true（这一记算打出去了，TLM 照常吃攻击冷却、维持节奏）；起不了手（不在攻击模式 / 主手不是激流三叉戟 / 在空中 / 硬直中 / 目标太远）就**原样调回** {@code doHurtTarget}。
+ * 【为什么从"掐判据"改成"换这一记"】早先是掐"近战可达"让整段不执行、本模组自己按距离自主起手——代价是她会在
+ * 空袭的起跳/俯冲途中横插一次突进（"突然不会起飞了"），玩家也看不懂触发时机。现在起手时机 = **她的攻击时机**，
+ * 且**绝不吞掉任何一记**。
+ * 【必须是 static】注入目标 {@code lambda$create$0} 是 **private static**，而 Mixin 规则是"**静态目标只接受
+ * 静态回调**"：写成实例方法会在 {@code MaidMeleeAttack} **首次被加载**时抛
+ * {@code InvalidInjectionException}，整个类变形失败——表现是**女仆 AI 直接死掉／一动不动**。注意
+ * {@code require = 0} 救不了这种情况（它只容忍"没匹配到"，不容忍"回调签名非法"）。
+ * 【映射】本树 SRG {@code m_217066_}/{@code m_6674_}/{@code m_7327_}；neo 树官方名 {@code isWithinMeleeAttackRange}/{@code swing}/{@code doHurtTarget}。
  */
 @Mixin(MaidMeleeAttack.class)
 public abstract class MaidMeleeRiptideMixin {

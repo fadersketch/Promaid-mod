@@ -13,34 +13,19 @@ import net.minecraftforge.registries.tags.ITagManager;
 import java.util.List;
 
 /**
- * 实测七百〇二【仿创造飞行 · 1.20.1 精简版 · 能力探测】——判断"她身上有什么东西让她能飞"。
- *
  * 【为什么需要这一层】"能不能飞"对**玩家**是 {@code Player#getAbilities().mayfly}，而
  * **女仆没有这套 Abilities**。而且绝大多数"给飞行的模组物品"把逻辑写死在玩家身上
  * （{@code instanceof Player} / Abilities），女仆装着它们**什么都不会发生**。所以这个功能的
  * 本质是**仿创造飞行**：由我们给她悬浮与升降，物品只是"资格凭证"。
- *
  * 【1.20.1 精简版：只有两路探测（1.21.1 那版是三路）】
  * <ol>
  *   <li>{@code freeFlightItems}（默认空）：物品 id 列表，可写 {@code #命名空间:标签} 认整条标签；
  *       扫描范围 = 双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）；</li>
  *   <li>{@code freeFlightEffects}（默认空）：药水效果 id 列表（效果挂在实体上，这一路对女仆天然有效）。</li>
  * </ol>
- *
  * 【1.20.1 砍掉的两路，以及为什么砍】
  * <ul>
- *   <li><b>重力归零启发式</b>：{@code Attributes.GRAVITY} 是 1.20.5 才有的属性，1.20.1 的
- *       {@code Attributes} 里**根本没有这个字段**（javap 两份 SRG jar 对照实证）——这一路在
- *       1.20.1 物理上没有落点。</li>
- *   <li><b>数据组件两路（{@code @组件} / {@code @组件~文本}）</b>：数据组件（
- *       {@code DataComponentType} / {@code stack.getComponents()}）是 1.20.5+ 的机制，
- *       1.20.1 的 {@code ItemStack} 还是 NBT（{@code m_41783_()} 返回 {@code CompoundTag}）。
- *       勉强改写成 NBT 判据不划算（NBT 里"哪个键代表能力"毫无统一约定），先不做。</li>
- * </ul>
- *
- * 【刻意不做的事】不尝试识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料推进**的装备：它们的
- * 推力逻辑绑在玩家身上，我们"仿创造飞行"等于凭空绕过它的燃料，属于作弊。想用请自己往列表里加，
- * 并明白这一点。
+ *   <li><b>重力归零启发式</b>：{@code Attributes.GRAVITY} 是 1.20.5 才有的属性，1.20.1 的 {@code Attributes} 里**根本没有这个字段**（javap 两份 SRG jar 对照实证）——这一路在 1.20.1 物理上没有落点。</li> <li><b>数据组件两路（{@code @组件} / {@code @组件~文本}）</b>：数据组件（ {@code DataComponentType} / {@code stack.getComponents()}）是 1.20.5+ 的机制， 1.20.1 的 {@code ItemStack} 还是 NBT（{@code m_41783_()} 返回 {@code CompoundTag}）。 勉强改写成 NBT 判据不划算（NBT 里"哪个键代表能力"毫无统一约定），先不做。</li> </ul> 【刻意不做的事】不尝试识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料推进**的装备：它们的 推力逻辑绑在玩家身上，我们"仿创造飞行"等于凭空绕过它的燃料，属于作弊。想用请自己往列表里加， 并明白这一点。
  */
 public final class MaidFreeFlightKit {
 

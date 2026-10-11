@@ -15,9 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v1.5.393 实测八百零四：饰品「大运」的破坏引擎——鞘翅飞行途中，把自身周边 N×N×N 内
  * 符合条件的方块直接击毁。
- *
  * <p>【判据（需求原文）】"使用鞘翅飞行的过程中可以直接击毁自身周边 5×5 范围内除
  * 硬度大于等于黑曜石以及硬度&lt;0 的一切方块"。
  * <ul>
@@ -29,16 +27,7 @@ import java.util.List;
  *   <li><b>硬度门槛</b>：只清 {@code 0 <= getDestroySpeed < 50}。黑曜石正好 50 → 被排除；
  *       基岩/屏障/命令方块等为 -1 → 被排除；石头 1.5、深板岩 3、铁块 5 都照清。</li>
  *   <li><b>容器安全</b>：带方块实体（箱子/熔炉/漏斗/潜影盒/刷怪笼…）整个跳过，绝不破坏——
- *       否则一路飞过去会把自家仓库炸成满地战利品。</li>
- *   <li><b>掉落</b>：普通方块按原版战利品表掉落（与原版挖掘一致）。</li>
- * </ul>
- *
- * <p>【性能】每 tick 最多处理 {@code maxBlocksPerTick} 格；顺序是"先收集、清完再统一掉落"，
- * 不会出现"方块还在、物品先掉"的中间态。范围调大后，每 tick 光是"扫一遍空气"的次数也按
- * 边长的立方上升（空中大多为空气、不消耗破坏预算），所以超大范围建议同时把
- * {@code daYunMaxPerTick} 也调大。
- *
- * <p>本类两树各一份：Neo 树用 Mojmap 名（本文件），Forge 树用 SRG 名。
+ *       否则一路飞过去会把自家仓库炸成满地战利品。</li> <li><b>掉落</b>：普通方块按原版战利品表掉落（与原版挖掘一致）。</li> </ul> <p>【性能】每 tick 最多处理 {@code maxBlocksPerTick} 格；顺序是"先收集、清完再统一掉落"， 不会出现"方块还在、物品先掉"的中间态。范围调大后，每 tick 光是"扫一遍空气"的次数也按 边长的立方上升（空中大多为空气、不消耗破坏预算），所以超大范围建议同时把 {@code daYunMaxPerTick} 也调大。 <p>本类两树各一份：Neo 树用 Mojmap 名（本文件），Forge 树用 SRG 名。
  */
 public final class DaYunBreaker {
 
@@ -107,15 +96,11 @@ public final class DaYunBreaker {
 
     /**
      * 对一只正在滑翔的实体执行一次破坏（用默认范围，等价于旧的 5×5×5）。
-     *
      * @param level            服务端世界
      * @param entity           执行者（女仆或玩家）
      * @param maxHardness      硬度上限（&lt; 此值才清；配置项，默认 {@link #OBSIDIAN_HARDNESS}）
      * @param skipContainers   true = 带方块实体的一律跳过（容器安全）
-     * @param dropItems        true = 按战利品表掉落；false = 直接消失
-     * @param breakParticles   true = 喷原版「方块被破坏」粒子+音效（实测八百一十的开关）
-     * @param maxBlocksPerTick 单 tick 上限（性能闸）
-     * @return 实际清掉的方块数
+     * @param dropItems        true = 按战利品表掉落；false = 直接消失 @param breakParticles   true = 喷原版「方块被破坏」粒子+音效（实测八百一十的开关） @param maxBlocksPerTick 单 tick 上限（性能闸） @return 实际清掉的方块数
      */
     public static int sweep(ServerLevel level, LivingEntity entity,
                             float maxHardness, boolean skipContainers,
@@ -125,22 +110,12 @@ public final class DaYunBreaker {
     }
 
     /**
-     * v1.5.397 实测八百一十【玩家飞行"感觉到阻碍"】：带**前进方向**的破坏。
-     *
      * <p>根因是时序：滑翔的移动碰撞在
      * {@code travel} 里结算，而本模组是在移动**之后**才清方块——所以撞上墙的那一 tick
      * 他已经被挡住了，下一 tick 墙才消失。观感就是"一顿一顿地撞过去"。
-     *
      * <p>（女仆侧不明显，是因为空袭本来是上下翻飞的打法，而且她常从高处掠过；玩家一路
      * 平飞赶路时才觉得别扭。）
-     *
-     * <p>现在在**同一个 tick 内**先沿速度方向把前方一段的方块清掉，再让移动照常结算：
-     * 用他的速度反推"这一 tick 会走到哪"（{@code 速度 × 前瞻系数}），沿途按每 1 格采样，
-     * 对每个采样点做一次 N×N×N 的 {@link #clearAround}。于是墙在他撞上之前就没了，
-     * 移动不会被挡、也就没有顿挫。
-     *
-     * @param motion 本 tick 的速度矢量；null = 不前瞻（等价于旧行为）
-     * @param side   破坏立方体的**边长**（实测八百一十三 起可调；偶数自动进一位）
+     * <p>现在在**同一个 tick 内**先沿速度方向把前方一段的方块清掉，再让移动照常结算： 用他的速度反推"这一 tick 会走到哪"（{@code 速度 × 前瞻系数}），沿途按每 1 格采样， 对每个采样点做一次 N×N×N 的 {@link #clearAround}。于是墙在他撞上之前就没了， 移动不会被挡、也就没有顿挫。 @param motion 本 tick 的速度矢量；null = 不前瞻（等价于旧行为） @param side   破坏立方体的**边长**（实测八百一十三 起可调；偶数自动进一位）
      */
     public static int sweepAhead(ServerLevel level, LivingEntity entity,
                                  float maxHardness, boolean skipContainers,
@@ -293,12 +268,9 @@ public final class DaYunBreaker {
     }
 
     /**
-     * v1.5.394 实测八百零五【穿墙锁敌】：这个方块她"撞得开"吗——即「大运」飞行时会不会把它清掉。
-     *
      * <p>与 {@link #sweep} 用**同一个**硬度判据（{@link #isBreakable}），外加容器口径：
      * 配置里开着「跳过容器」时，带方块实体的方块她其实**撞不开**（飞行时会被它挡住），
      * 所以锁敌时也不该穿过去——否则她会隔着自家仓库锁人、冲过去却卡在箱子上。
-     *
      * <p>流体（水/岩浆）算"能穿"：没有硬度概念，而且她本来就能从中飞过去。
      * 未加载区块算"不能穿"（宁可保守，不要让她隔着没加载的地方锁人）。
      */

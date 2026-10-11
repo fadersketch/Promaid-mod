@@ -68,13 +68,9 @@ public abstract class MaidTeleportPreserveMixin {
             // 自保/建造/搭路拦截，坐垫/骑乘/蹲下的女仆仍会被拉走。反馈"蹲下、坐垫全都
             // 固定会这样"正是这条路径（我们 mod 的救援/拉回已豁免，TLM 原版没拦）。
             // 坐垫/骑乘/蹲下 = 玩家明确停放，TLM 原版传送同样不拉。
-            //
-            // 【实测七百六十二·修正 1.21.1 侧映射写错】这里原写 {@code canBreatheUnderwater()}，
             // 注释还标着"= isShiftKeyDown（蹲下）"——但在 1.21.1 里
             // {@code LivingEntity.canBreatheUnderwater()} 是 {@code getType().is(CAN_BREATHE_UNDER_WATER)}
-            // （生物类型标签，1.20.1 的 SRG {@code m_6040_} 才是 isShiftKeyDown，两树因此长期不一致）：
-            // 女仆不在那个标签里 ⇒ 恒 false ⇒ **1.21.1 上"蹲着的女仆免于 TLM 原版传送"这条从来没生效**。
-            // 改用 isShiftKeyDown()，与 1.20.1 树对齐。
+            // （生物类型标签，1.20.1 的 SRG {@code m_6040_} 才是 isShiftKeyDown，两树因此长期不一致）： 女仆不在那个标签里 ⇒ 恒 false ⇒ **1.21.1 上"蹲着的女仆免于 TLM 原版传送"这条从来没生效**。 改用 isShiftKeyDown()，与 1.20.1 树对齐。
             if (maid.isMaidInSittingPose() || maid.isPassenger() || maid.isShiftKeyDown()) {
                 cir.setReturnValue(false);
                 return;
@@ -100,18 +96,10 @@ public abstract class MaidTeleportPreserveMixin {
             //  （isRideRider 要求 getVehicle() 非空），上面 isPassenger() 那道闸已经拦住原版
             //  teleportToOwner。玩家要的"她们也可以被传送过来"走本模组自己那条"连人带坐骑一起搬"
             //  （MaidChunkLoadManager.recallRideRider，内部先 stopRiding 再落座），不经过这一支。
-            //
             // 【实测七百二十四】但"悬空鞍位"（冰火传说的龙）那条**必须补一道**：她**不是乘客**
             //  （降级方案里我们不 startRiding），上面 isPassenger() 拦不住她——于是 TLM 原版
             //  teleportToOwner 会把她从龙背鞍位上拽走，下一拍距离超线就被判定"断开链路"
-            //  （）。这里与坐垫/骑乘/蹲下同口径：停放，不拉。
-            //  玩家要的"她能被传送过来"走本模组自己那条"悬空鞍位：只传她不传龙"。
-            //
-            // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）：
-            //
-            //
-            //  已拦），这里把判据统一成 isSpecialMountRider，语义只有一处、将来漏判也只会漏在
-            //  这一格。TLM 原生 teleportToOwner 是"自动传送"的一种，特殊载具上一律不生效。
+            //  （）。这里与坐垫/骑乘/蹲下同口径：停放，不拉。 玩家要的"她能被传送过来"走本模组自己那条"悬空鞍位：只传她不传龙"。 已拦），这里把判据统一成 isSpecialMountRider，语义只有一处、将来漏判也只会漏在 这一格。TLM 原生 teleportToOwner 是"自动传送"的一种，特殊载具上一律不生效。
             if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                 cir.setReturnValue(false);
                 return;
@@ -128,17 +116,12 @@ public abstract class MaidTeleportPreserveMixin {
     }
 
     /**
-     * v1.3.0(beta) 实测七百五十【issue #27 补最后一条缝：TLM 自己的瞬移】。
-     *
      * <p>717 把"补属性表"接进了本模组的每一条传送链路（{@code teleportCoreTo} /
      * 跨维跟随 / 死亡传送 / 烫伤逃生 / 自保归位），但玩家实测 1.3.0beta「远距传送 1 次，
      * 血上限仍显示为 20」——**漏的正是这里**：TLM 原版 {@code MaidFollowOwnerTask} 在离主人
      * 超过 {@code followRange-2+4}（女仆 64 → 66 格）时直接调 {@code maid.teleportToOwner}，
      * 而那比本模组的 48 格同维拉回**更早触发**（女仆大脑每 tick 跑，我们的扫描 5 秒一次）。
-     * 它内部走 {@code maybeTeleportTo → moveTo}（同维纯位移，**不重追踪、一包属性都不发**），
-     * 于是客户端那只实体的血上限就一直停在 TLM 默认的 20。
-     *
-     * <p>修法与 717 同口径：**只补属性表那一包**（不重建实体），在她真的瞬移成功之后登记。
+     * 它内部走 {@code maybeTeleportTo → moveTo}（同维纯位移，**不重追踪、一包属性都不发**）， 于是客户端那只实体的血上限就一直停在 TLM 默认的 20。 <p>修法与 717 同口径：**只补属性表那一包**（不重建实体），在她真的瞬移成功之后登记。
      */
     @Inject(method = "teleportToOwner", at = @At("RETURN"))
     private void maidSmartResendAttributesAfterTeleport(LivingEntity owner, CallbackInfoReturnable<Boolean> cir) {

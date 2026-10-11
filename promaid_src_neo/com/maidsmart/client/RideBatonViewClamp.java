@@ -36,22 +36,12 @@ public final class RideBatonViewClamp {
     }
 
     /**
-     * 【实测七百四十一·点1】手持骑乘指挥棒**左击** → 请求与女仆互换座位（主驾 ↔ 副驾）。
-     *
      * <p>
-     *
-     *
      * <h2>为什么挂在 {@code InteractionKeyMappingTriggered} 上</h2>
      * 反编译 {@code Minecraft.startAttack()} 实证：左击键在**真正发起攻击之前**会先发这个事件
      * （{@code ClientHooks.onClickInput(keyAttack, MAIN_HAND)}），被取消就**整段跳过**
      * （{@code if (event.isCanceled()) goto 结束}）。所以在这里：
-     * <ol>
-     *   <li>认出"手里拿着指挥棒 + 自己正坐在一辆卓越前线载具上"→ 发换座请求包并**取消这一下**
-     *       （否则左击会顺便打一下自己坐的车，把它敲掉血）；</li>
-     *   <li>其余一切情况**一个字节都不动**（拿别的物品左击、拿指挥棒左击实体/方块——
-     *       后者的"选中/解绑"语义在右击那条链上，左击不该掺和）。</li>
-     * </ol>
-     * 服务端再核一遍（见 {@code RideBindManager.handleSwapSeatRequest}），客户端这份只是"顺手"。
+     * <ol> <li>认出"手里拿着指挥棒 + 自己正坐在一辆卓越前线载具上"→ 发换座请求包并**取消这一下** （否则左击会顺便打一下自己坐的车，把它敲掉血）；</li> <li>其余一切情况**一个字节都不动**（拿别的物品左击、拿指挥棒左击实体/方块—— 后者的"选中/解绑"语义在右击那条链上，左击不该掺和）。</li> </ol> 服务端再核一遍（见 {@code RideBindManager.handleSwapSeatRequest}），客户端这份只是"顺手"。
      */
     private static void onInteractionKey(
             net.neoforged.neoforge.client.event.InputEvent.InteractionKeyMappingTriggered event) {

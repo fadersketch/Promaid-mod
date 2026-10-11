@@ -104,13 +104,11 @@ public abstract class FarmSweepMixin {
     }
 
     /**
-     * v1.5.161：农场连锁收获（misc.chainHarvest，默认关闭）——以目标格为中心 BFS
      * 蔓延（水平 4 方向），连锁收割相连农田里所有成熟作物并顺手补种；一次上限从
      * 配置面板读取（misc.chainHarvestLimit，默认 24 格，大农田多轮任务自然清完），
      * BFS 展开上限 96 防大农场卡顿。
      * 与原逻辑同机制（canHarvest 检查 + 真实消耗种子），无作弊。
      */
-    // v1.5.386：冷却表与 forgetMaid 已抽到 com.maidsmart.build.FarmSweepCache。
     // Mixin 类不能被业务代码当作普通类引用，否则触发 NoClassDefFoundError。
     // FarmSweepMixin 的静态字段通过 FarmSweepCache.HARVEST_CD / PLANT_CD 访问。
 
@@ -176,9 +174,7 @@ public abstract class FarmSweepMixin {
     }
 
     /**
-     * v1.2.4 实测六百三十六：拾取之后仍留在地上的那一份，再试一次"额外容器"
      * （精妙背包 / 旅行者背包，见 {@code MaidExtraContainer}）；收下多少就从掉落物里扣多少。
-     *
      * 【为什么还留着 TLM 那一层】{@code maid.pickupItem} 走的是 TLM 的拾取事件，那里
      * 已经有它自己的额外容器处理（{@code ExtraContainerPickupHandler}）——但那条链路要求
      * Curios 在场且背包真的戴在她饰品栏里；这里再兜一次，是因为 issue 报的现场就是"

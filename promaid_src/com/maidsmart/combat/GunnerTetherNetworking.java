@@ -12,27 +12,17 @@ import net.minecraftforge.network.simple.SimpleChannel;
 import java.util.function.Supplier;
 
 /**
- * v1.3.7 实测六百六十七：武装拴绳网络层（S2C，单包，骨架同 {@link BombMarkNetworking}）。
+ * 武装拴绳网络层（S2C，单包，骨架同 {@link BombMarkNetworking}）。
  *
- * 【为什么必须走包】挂载关系里"谁是她的二号位枪手"是服务端知识（客户端虽然能看到
- * 原版同步的乘客关系，但分不清这个乘客是拴绳挂的、TLM 的可骑还是别的模组干的）——
- * {@link GunnerTetherManager#SYNCED_PAIRS} 供 mixin 定位（挂下方）与绳子渲染，
- * 只能由服务端说了算。
- *
- * 【实测六百七十四：包里多了 state（相位）】
- *
- * （发的是 attach 时刻的，那时玩家还不是乘客 → riderId 记 -1 → 客户端把这一对清掉），
- * 于是客户端不认那个枪手、悬挂定位 mixin 不生效。现在：
- * <ul>
- *   <li>{@code state} 0 = 没挂 / 1 = 牵绳档（没骑她）/ 2 = 悬挂档（吊在她下面）；</li>
- *   <li>{@code riderId} 由**链路**给出（{@link GunnerTetherManager#phaseOf}），不再问
- *       {@code getFirstPassenger}——牵绳档他不是乘客；</li>
- *   <li>服务端每次相位变化都重发一遍（{@code GunnerTetherManager.sync}）。</li>
- * </ul>
- *
- * 【发谁】挂载/解除发"正在追踪这只女仆的玩家 + 她自己背上的枪手"
- * （TRACKING_ENTITY_AND_SELF——枪手骑着女仆，一定在追踪她，但为保险并入 self）；
- * 新玩家开始追踪女仆时由 StartTracking 事件补发当前状态（晚进服/传过来的人也能看到绳子）。
+ * 【为什么必须走包】挂载关系里"谁是她的二号位枪手"是服务端知识（客户端能看到原版同步的乘客关系，但
+ * 分不清这个乘客是拴绳挂的、TLM 的可骑还是别的模组干的）；{@link GunnerTetherManager#SYNCED_PAIRS}
+ * 供 mixin 定位（挂下方）与绳子渲染，只能由服务端说了算。
+ * 【包里带 state（相位）】{@code state} 0 = 没挂 / 1 = 牵绳档（没骑她）/ 2 = 悬挂档（吊在她下面）；
+ * {@code riderId} 由**链路**给出（{@link GunnerTetherManager#phaseOf}），不再问 {@code getFirstPassenger}
+ * ——牵绳档他不是乘客（旧版发的是 attach 时刻的，那时玩家还不是乘客 → riderId=-1 → 客户端把这对清掉、
+ * 悬挂定位不生效）；服务端每次相位变化都重发（{@code GunnerTetherManager.sync}）。
+ * 【发谁】挂载/解除发"正在追踪这只女仆的玩家 + 她自己背上的枪手"；新玩家开始追踪时由 StartTracking
+ * 事件补发当前状态（晚进服/传过来的人也能看到绳子）。
  */
 public final class GunnerTetherNetworking {
     private static final String PROTOCOL_VERSION = "1";

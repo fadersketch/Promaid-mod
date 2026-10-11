@@ -129,6 +129,8 @@ public class ProMaidMod {
         // v1.5.88：全模组配置（COMMON——客户端/服务端都可读，配置面板可热更新）
         net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
                 net.minecraftforge.fml.config.ModConfig.Type.COMMON, com.maidsmart.config.MaidSmartConfig.SPEC);
+        net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
+                net.minecraftforge.fml.config.ModConfig.Type.COMMON, com.maidsmart.config.MaidSmartConfig.INTERNAL_SPEC, "promaid-internal.toml");
         // v1.1.0 实测七十二：穿透预算语义修正后默认 22→6——旧档配置文件里存的
         // 还是旧默认 22，加载时自动迁到 6（玩家手动改过的值 ≠22 不动）
         // v1.2.0【根因修复】ModConfigEvent 是【MOD 总线】事件（implements IModBusEvent，
@@ -425,22 +427,12 @@ public class ProMaidMod {
     }
 
     /**
-     * v1.2.2 实测五百六十一：**配置事件里绝对不要写盘**。
-     *
      * 【事故】1.2.0 起 NeoForge 侧在这里收到配置事件后显式 `save()`（为了让迁移落盘）。
      * 但 NeoForge 用文件监听器盯着 config/*.toml：**写盘 → 监听器触发 → 再发一次
      * {@code ModConfigEvent.Reloading} → 处理器再 save() → …** 无限写盘风暴。
-     * 实测复现（专用服务器，外部把 config 改一次）：20 秒内该文件被重写 **38 次**，
      * 并留下截断的 `promaid-common.new.tmp.toml`。
-     *
      * 玩家侧表现完全对得上反馈：点「保存并返回」= 一次写盘 → 风暴起来 → 客户端卡死/崩；
-     * 下次进游戏时 NeoForge 修正旧键（"Configuration file ... is not correct. Correcting"）
-     * 本身也要写盘 → 同样踩进风暴 → 卡在 mod 加载界面。
-     *
-     * 【现在】事件里只记录 ModConfig 引用，一个字节都不写；迁移改由服务端启动时跑一次
-     * （{@code ProMaidExtension.onServerStarted}），只有真的改过值才
-     * {@link #persistConfigQuietly()} 落盘一次。Forge 侧原本没写盘，这里同步收紧，
-     * 两树行为一致、也防以后有人再加回来。
+     * 下次进游戏时 NeoForge 修正旧键（"Configuration file ... is not correct. Correcting"） 本身也要写盘 → 同样踩进风暴 → 卡在 mod 加载界面。 【现在】事件里只记录 ModConfig 引用，一个字节都不写；迁移改由服务端启动时跑一次 （{@code ProMaidExtension.onServerStarted}），只有真的改过值才 {@link #persistConfigQuietly()} 落盘一次。Forge 侧原本没写盘，这里同步收紧， 两树行为一致、也防以后有人再加回来。
      */
     private void onConfigLoad(net.minecraftforge.fml.event.config.ModConfigEvent event) {
         inConfigEvent = true; // 本方法体内禁止任何落盘（见方法注释）
@@ -473,20 +465,12 @@ public class ProMaidMod {
     }
 
     /**
-     * v1.1.0 实测七十三（反馈："女仆专门不挖铜矿石"）：铜矿 2026-08-21 才首次
      * 进入默认矿表，且更早的默认是【空列表】；而配置文件是唯一事实源（加载时清空
      * 内置表全以文件为准）→ 老玩家存档里的矿表没有铜，女仆永远不选铜矿、甚至把它
-     * 当硬挡路报点。两条迁移规则（只补缺，绝不动玩家已有条目）：
-     * ① 空表 = 从未配置过 → 播种当前默认全家桶；
-     * ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
+     * 当硬挡路报点。两条迁移规则（只补缺，绝不动玩家已有条目）： ① 空表 = 从未配置过 → 播种当前默认全家桶； ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
      */
     /**
-     * v1.5.395 实测八百二十一：把营火/灵魂营火补进老档的危险表（一次性）。
-     *
-     * <p>【为什么必须迁】营火每 tick 直接造成火焰伤害却【不会点燃】她，旧默认危险表里
-     * 没有它 → 她站在营火上只会持续掉血、不主动跑开。改 defineList 的默认值对老 toml
-     * 毫无作用（老档里已写着旧列表）。判据同 {@link #migrateOreTable()}：只【补缺】，
-     * 绝不动玩家已有条目——表里已含营火就什么都不做（玩家自己删过的也不硬塞）。
+     * <p>【为什么必须迁】营火每 tick 直接造成火焰伤害却【不会点燃】她，旧默认危险表里 没有它 → 她站在营火上只会持续掉血、不主动跑开。改 defineList 的默认值对老 toml 毫无作用（老档里已写着旧列表）。判据同 {@link #migrateOreTable()}：只【补缺】， 绝不动玩家已有条目——表里已含营火就什么都不做（玩家自己删过的也不硬塞）。
      */
     private static boolean migrateDangerCampfire() {
         if (com.maidsmart.config.MaidSmartConfig.DANGER_CAMPFIRE_MIGRATED.get()) {

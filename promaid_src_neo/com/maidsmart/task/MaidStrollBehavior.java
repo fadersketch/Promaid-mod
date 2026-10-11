@@ -17,11 +17,9 @@ import java.util.UUID;
 
 /**
  * 空闲散步行为（v1.1.0 实测一百八十三，反馈："增加女仆散步的频率和速度"）。
- *
  * TLM 原生散步 = RandomStroll.stroll(0.3F, 5, 3)（MaidBrain 字节码实证）：
  * 0.3 倍速、5 格半径、触发概率 0.0010×0.09²≈8e-6/tick——平均一两小时才随机走
  * 一次，表现为"女仆站桩不动、活动范围只有几格"。
- *
  * 本行为（core 优先级 50——低于 TLM core 最高 99，只在一切更优先行为都不跑时
  * 生效）按配置间隔给空闲女仆设一个散步目标：
  * - 门禁：战斗/自保/站桩任务占用（复用 isTaskOccupied——挖矿锁定/烹饪酿造/
@@ -44,8 +42,6 @@ public class MaidStrollBehavior extends Behavior<EntityMaid> {
 
     /**
      * 门禁的逐条名字（与 {@link #gates} 同序）——自检/诊断照这个顺序念。
-     *
-     * v1.2.2 实测六百二十：。
      * 速度这一半是配置下限卡死的（见 {@code MaidSmartConfig.MISC_STROLL_SPEED} 的注释），
      * 另一半是「她到底有没有在散步」得能一眼看出来——所以把门禁从
      * {@link #checkExtraStartConditions} 里抽出来，{@code /maid_smart stroll check}
@@ -198,11 +194,9 @@ public class MaidStrollBehavior extends Behavior<EntityMaid> {
 
     /**
      * 找一个**能一路走过去**的远点（v1.2.2 实测六百二十，自检量速度用）。
-     *
      * 八个水平方向各往前踩格子：走不下去就换方向，取「能连续站住的步数最多」的那条
      * （至少 {@code minRun} 步），返回那条直线上最后一格。这样 {@code /maid_smart stroll go}
      * 给出的目标点是她真能走到的——不会因为撞墙/掉坑半路停住，把速度测成 0。
-     *
      * 找不到（她卡在窄坑里、四周都是墙）返回 null，自检会照实报「没找到可走的直线」。
      */
     public static BlockPos pickLongRun(ServerLevel level, EntityMaid maid, int max, int minRun) {

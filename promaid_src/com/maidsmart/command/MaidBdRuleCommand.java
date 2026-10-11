@@ -12,26 +12,18 @@ import net.minecraft.network.chat.Component;
 import java.util.List;
 
 /**
- * 实测 G-9【超越维度·规则名单的玩家入口】——改 {@code config/promaid_bd_rules.json}，改完即存盘。
- *
+ * 超越维度·规则名单的玩家入口——改 {@code config/promaid_bd_rules.json}，改完即存盘。
  * <pre>
- *   /maid_smart bd_rule list                       看当前规则
- *   /maid_smart bd_rule move   &lt;条目&gt;              一定搬（条目 = minecraft:coal 或 tag:c:ores）
- *   /maid_smart bd_rule keep   &lt;条目&gt;              一定不搬（例如 minecraft:golden_carrot）
- *   /maid_smart bd_rule keepN  &lt;个数&gt; &lt;条目&gt;       她背包里最多留几个，多的搬走
- *   /maid_smart bd_rule remove &lt;条目&gt;              删掉某条规则
+ *   /maid_smart bd_rule list                 看当前规则
+ *   /maid_smart bd_rule move   &lt;条目&gt;        一定搬（条目 = minecraft:coal 或 tag:c:ores）
+ *   /maid_smart bd_rule keep   &lt;条目&gt;        一定不搬（例如 minecraft:golden_carrot）
+ *   /maid_smart bd_rule keepN  &lt;个数&gt; &lt;条目&gt; 她背包里最多留几个，多的搬走
+ *   /maid_smart bd_rule remove &lt;条目&gt;        删掉某条规则
  * </pre>
- *
- * <p>条目的两种写法：<b>裸物品 id</b>（等于 {@code item:}）与 <b>{@code tag:命名空间:路径}</b>。
- * 用了 {@code greedyString}，所以带斜杠的标签写法也能直接敲，不用加引号。
- *
- * <p>【1.20.1 差异】命令树走 SRG（{@code m_82127_}=literal、{@code m_82129_}=argument、
- * {@code m_6761_}=hasPermission、{@code m_288197_}=sendSuccess、{@code m_81352_}=sendFailure）；
- * 物品参数与 neo 同口径用原版 {@code ResourceLocationArgument}
- * （{@code m_106984_}=id、{@code m_107011_}=getId）——**绝不能自造未注册的 ArgumentType**：
- * 原版登录时会把整棵命令树序列化下发，自定义类型没登记 serializer 会抛
- * {@code Unrecognized argument type}，玩家直接"进不了世界"
- * （实测：{@code Couldn't place player in world}）。
+ * 条目两种写法：**裸物品 id**（= {@code item:}）与 **{@code tag:命名空间:路径}**。用了
+ * {@code greedyString}，带斜杠的标签也能直接敲、不用加引号。
+ * 【自造 ArgumentType 的坑】物品参数必须用原版 {@code ResourceLocationArgument}——原版登录会把整棵命令
+ * 树序列化下发，自定义类型没登记 serializer 会抛 {@code Unrecognized argument type}，玩家"进不了世界"。
  */
 public final class MaidBdRuleCommand {
 
@@ -88,12 +80,10 @@ public final class MaidBdRuleCommand {
     }
 
     /**
-     * 规则写法自测：{@code /maid_smart bd_rule test <物品> <规则写法>}，例如
-     * {@code /maid_smart bd_rule test minecraft:oak_log tag:minecraft:logs} ——回一句"匹配/不匹配"。
-     *
-     * <p>【1.20.1 改写】物品在前、规则在后；物品用原版 {@code ResourceLocationArgument}
-     * （与 neo 同口径，也是命令树能正常下发的**唯一**选择——见类注释），规则原样传给
-     * {@link MaidBdRules#matches}（标签最容易写错，有这条就不用靠猜）。
+     * 规则写法自测：{@code /maid_smart bd_rule test <物品> <规则写法>}，回一句"匹配/不匹配"。物品在前、
+     * 规则在后：物品用 {@code ResourceLocationArgument}（专为 {@code minecraft:oak_log} 这种写法设计），
+     * 规则段用 greedyString（带斜杠的标签也能直接敲、不用加引号）。标签最容易写错（公共命名空间
+     * {@code c:*} 与原版 {@code minecraft:*} 覆盖面不一样），有这条就不用靠猜。
      */
     private static int test(CommandSourceStack src, String entry, String itemId) {
         net.minecraft.world.item.ItemStack st = com.maidsmart.bd.MaidBdCompat.stackOf(itemId);

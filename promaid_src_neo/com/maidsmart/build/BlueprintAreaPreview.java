@@ -4,11 +4,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * 建造区块标记 + 蓝图投影（客户端渲染）。
- *
  * 历史：v1.5.159 区块显示（金色玩家中心预览）→ v1.5.164 红色固定框 →
- * v1.1.0 实测八十二 幽灵方块投影（金/红双路径）→ 实测九十五 删「区块显示」
  * 独立按钮 + 新增每秒区块同步 → 实测九十六 金色预览回归。
- *
  * v1.1.0 实测九十五【根因修复】：此前携带区块行的包只在打开手册/创建计划时
  * 一次性下发，真正开始建造后玩家关掉手册走到工地，客户端没有任何区块数据 →
  * 橙色幽灵方块从不显示。现在服务端每秒广播 RegionSyncPacket
@@ -17,11 +14,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * - 橙色幽灵方块：按计划原点落地（与实际搭建同一锚点），玩家走近即见建筑最终
  *   形态与朝向，随玩家移动自由观察（>96 格距离剔除省性能）
  * - 计划取消/完成后空列表推送自动清除所有框与投影
- *
- * v1.1.0 实测九十六【金色预览回归】：「建造此图纸」未确认阶段的玩家中心金色框
  * （随移动）+ 青色幽灵方块——show()/wasShown()/resetSeen()/clear() 只服务该
- * 流程；独立的「区块显示」按钮保持删除。点云由 ProjectionRequest/ProjectionData
- * 包按蓝图 id 请求缓存，金/红两态共用。
+ * 流程；独立的「区块显示」按钮保持删除。点云由 ProjectionRequest/ProjectionData 包按蓝图 id 请求缓存，金/红两态共用。
  */
 @net.neoforged.api.distmarker.OnlyIn(net.neoforged.api.distmarker.Dist.CLIENT)
 public final class BlueprintAreaPreview {
@@ -465,16 +459,12 @@ while (com.maidsmart.build.BuildKeysClient.ROTATE_BLUEPRINT != null
     }
 
     /**
-     * v1.1.0 实测二百一十【崩溃二次修复】：二百零九直接把每盒 flush 放在了共享的主
      * bufferSource 上——同一帧里主源的描边（lines）与填充盒（debugFilledBox）共用一个
      * 即时建造器（1.20.1 BufferSource 对未入 map 的渲染类型统一取 f_109904_），中途
      * flush 后本地描边指针指向的建造器已不在"开始"状态 → "BufferBuilder not started"
      * 二次崩溃（实测二百零四的手写顶点崩溃是同一根因的另一面貌）。现在幽灵填充用
      * 【每帧独立的专用 BufferSource】（GhostBufferSource）——每盒 flush 只影响它自己，
-     * 主 bufferSource 完全不受干扰：描边/红框/本模组其他渲染/其他模组的渲染全隔离。
-     * 渲染本体 = DebugRenderer.renderFilledBox（renderFilledBox，vanilla debug 管线，长期
-     * 使用零崩溃）；每盒立即 flush 断掉 TRIANGLE_STRIP 跨盒连接三角形——每盒精确
-     * 1×1×1 满体积、无跨盒面（填充适用距离分档实测二百二十三：近处实心、外圈线框）。
+     * 主 bufferSource 完全不受干扰：描边/红框/本模组其他渲染/其他模组的渲染全隔离。 渲染本体 = DebugRenderer.renderFilledBox（renderFilledBox，vanilla debug 管线，长期 使用零崩溃）；每盒立即 flush 断掉 TRIANGLE_STRIP 跨盒连接三角形——每盒精确 1×1×1 满体积、无跨盒面（填充适用距离分档实测二百二十三：近处实心、外圈线框）。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
                                   net.minecraft.client.Minecraft mc,
@@ -495,18 +485,7 @@ while (com.maidsmart.build.BuildKeysClient.ROTATE_BLUEPRINT != null
         //（离原点 >96 格）也会整片消失（一百四十七"框能显示幽灵必能显示"被这条
         // 独立剔除戳穿）。现在与红框同策略：不剔距离，只受 BUILD_PROJECTION
         // 总开关控制（帧率敏感玩家关总开关即可）。
-        // v1.1.0 实测二百零一：面 alpha 0.20→0.45（2600 个格子从区块外看只有朝玩家的
-        // 外皮几面可见，0.20 极淡基本看不出）。
-        // v1.1.0 实测二百二十三【逐盒距离分档，覆盖全部方块】：旧版填充闸是一道
-        // "距【区块原点】>24 格整片只描边"的全局开关——大蓝图（金字塔 251×124×251，
-        // 玩家 08:43 实测 drawGhost 盒数=3000 远距描边=true）玩家站框内任意位置都算
-        // "远"，整片只剩线框；且数据被 3000 点封顶、按扫描序抽稀成竖条纹 = "零星复刻
-        // 大概形状"。现在：① 数据层上限 3000→12000，点云只发坐标（同带宽 4 倍覆盖、
-        // 采样改确定性洗牌+等距，无竖条纹——见 BlueprintProjectionSampler）；
-        // ② 渲染层每盒按【与相机的 3D 距离】各自判定——≤32 格内的盒全部参与填充
-        // （实心体积跟随玩家），超过 2400 盒时取最近的 2400 个（帧内开销封顶）；
-        // ③ 全部盒无条件画 12 条棱线（lines 单缓冲成批、隔地形透显，与红框同管线）
-        // ——近处满体积、远处线框剪影，任意位置都能看到从近到远的完整形态。
+        // v1.1.0 实测二百零一：面 alpha 0.20→0.45（2600 个格子从区块外看只有朝玩家的 外皮几面可见，0.20 极淡基本看不出）。 "距【区块原点】>24 格整片只描边"的全局开关——大蓝图（金字塔 251×124×251， 玩家 08:43 实测 drawGhost 盒数=3000 远距描边=true）玩家站框内任意位置都算 "远"，整片只剩线框；且数据被 3000 点封顶、按扫描序抽稀成竖条纹 = "零星复刻 大概形状"。现在：① 数据层上限 3000→12000，点云只发坐标（同带宽 4 倍覆盖、 采样改确定性洗牌+等距，无竖条纹——见 BlueprintProjectionSampler）； ② 渲染层每盒按【与相机的 3D 距离】各自判定——≤32 格内的盒全部参与填充 （实心体积跟随玩家），超过 2400 盒时取最近的 2400 个（帧内开销封顶）； ③ 全部盒无条件画 12 条棱线（lines 单缓冲成批、隔地形透显，与红框同管线） ——近处满体积、远处线框剪影，任意位置都能看到从近到远的完整形态。
         var bufferSource = mc.renderBuffers().bufferSource();
         int total = pts.length / 4;
         boolean[] fillSel = null;

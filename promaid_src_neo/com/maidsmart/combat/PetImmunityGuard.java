@@ -11,7 +11,6 @@ import net.neoforged.fml.common.EventBusSubscriber;
 /**
  * 宠物免疫总闸（v1.1.0 实测一百九十三，反馈："如果都被打上了玩家宠物的字样，
  * 那么女仆便不会再对他造成伤害（包括 aoe，防误伤）并去除仇恨"）。
- *
  * 三层防线：
  * ① 目标选取拦截（PetImmunityTargetMixin → IAttackTask.canAttack HEAD）：宠物字样
  *    目标不进入攻击选取——仇恨不进；TLM TaskAttack 的 StopAttackingIfTargetInvalid
@@ -21,11 +20,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
  *    枪械/爆炸溅射全覆盖（扫场溅到宠物也零伤害，防误伤）；
  * ③ 仇恨残留兜底：目标选取层已拦，被扫清除（②只拦伤害不改目标——万一 TLM 其他
  *    入口把宠物塞进攻击记忆，②保零伤害、①保下一 tick 清掉）。
- *
  * 宠物标记判定（isPetMarked）：
- *  a. 显示名包含「玩家宠物」「主人的宠物」（字样全覆盖——铁砧/命名牌取名即标记）
- *  b. 以「MaidNoAttack」开头（对齐 TLM 内置不攻击名，javap 实证其 canAttack 逻辑）
- *  c. 可驯服生物且持有者 = 攻击女仆的主人（主人的猫/狗/鹦鹉等——同主宠物）
+ *  a. 显示名包含「玩家宠物」「主人的宠物」（字样全覆盖——铁砧/命名牌取名即标记） b. 以「MaidNoAttack」开头（对齐 TLM 内置不攻击名，javap 实证其 canAttack 逻辑） c. 可驯服生物且持有者 = 攻击女仆的主人（主人的猫/狗/鹦鹉等——同主宠物）
  */
 @EventBusSubscriber(modid = "promaid")
 public final class PetImmunityGuard {
@@ -46,10 +42,7 @@ public final class PetImmunityGuard {
      * 对接口 target 两种形式都不支持（class mixin：SubType 校验 PREPARE 失败；
      * interface mixin：@Inject 不被接受，APPLY 失败，玩家两次启动崩溃日志实证）。
      * 改为全事件实现：本扫描每 2 秒全维度检查女仆攻击记忆，目标是宠物标记 →
-     * 清掉（去仇恨；TLM StopAttackingIfTargetInvalid 等行为自然接管后续）；
-     * 伤害层由下方 LivingIncomingDamageEvent 总闸兜底（锁定瞬间也零伤害、零溅射）。
-     * 与"锁定优先级"的语义差别：女仆可能先锁定一眼才被清掉（≤2 秒），
-     * 但全程无伤害；可接受。
+     * 清掉（去仇恨；TLM StopAttackingIfTargetInvalid 等行为自然接管后续）； 伤害层由下方 LivingIncomingDamageEvent 总闸兜底（锁定瞬间也零伤害、零溅射）。 与"锁定优先级"的语义差别：女仆可能先锁定一眼才被清掉（≤2 秒）， 但全程无伤害；可接受。
      */
     @SubscribeEvent
     public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {

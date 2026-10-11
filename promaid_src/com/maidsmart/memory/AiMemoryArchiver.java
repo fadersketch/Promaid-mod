@@ -23,9 +23,6 @@ import java.util.UUID;
 
 /**
  * 记忆自动归档器（移植自 Sphantosis computing_engines/memory_archiver.py，
- * v1.5.379 按 promaid 线性架构修订）。
- *
- * v1.5.379 修订（架构适配）：
  * - 【触发】索引生成只发生在【真实睡眠收尾】（SleepFinishedTimeEvent——
  *   全员睡过夜、时间被跳到清晨才触发），熬夜过夜/未入睡不再触发归档；
  *   周期调度退化为纯 pending 重试（每 scanInterval 秒，O(pending) 轻量）
@@ -37,8 +34,7 @@ import java.util.UUID;
  * - 【上下文长度】所有级别索引的事件块增加 indexMaxEvents 上限（超限按
  *   重要度裁剪后再按时间排序；月级另受 indexMonthTopN 更紧约束）——
  *   忙日不会撑爆摘要 prompt
- * - 【跨度管理】多日未睡产生的日级空档不回填——由 3日/周/月 更粗粒度
- *   层级自然覆盖（多级索引自愈），睡觉时只生成"刚结束这一天"+滚动3日
+ * - 【跨度管理】多日未睡产生的日级空档不回填——由 3日/周/月 更粗粒度 层级自然覆盖（多级索引自愈），睡觉时只生成"刚结束这一天"+滚动3日
  */
 public final class AiMemoryArchiver {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
@@ -98,13 +94,9 @@ public final class AiMemoryArchiver {
      * 睡一觉自动处理（移植 Sphantosis 的 start_role_sleep → wrap-up →
      * archiver.tick(force_day_index=True) 链路；由 SleepFinishedTimeEvent
      * 调用——全员真实睡过夜、时间跳到清晨，排除熬夜/未入睡的假触发）。
-     *
      * - 首次调用对齐边界标记（不追溯历史跨度，但仍执行转移）
      * - 跨日：生成刚结束这一天的「日」索引 + 滚动「3日」索引
-     *   （多日未睡的中间空档不逐日回填——由 3日/周/月 粗粒度层级覆盖）
-     * - 跨周/跨月：生成上周/上月索引
-     * - 重试此前失败的索引边界
-     * - 执行短期→长期提升（年龄 + 重要度单遍规则）
+     *   （多日未睡的中间空档不逐日回填——由 3日/周/月 粗粒度层级覆盖） - 跨周/跨月：生成上周/上月索引 - 重试此前失败的索引边界 - 执行短期→长期提升（年龄 + 重要度单遍规则）
      */
     public static void sleepWrapUp(EntityMaid maid, ServerLevel level) {
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
@@ -179,8 +171,7 @@ public final class AiMemoryArchiver {
      * 结束一天的聊天下线（状态机 active/sleeping/offline）。MC 里真人
      * 睡觉 = 退出游戏：登出时把当日（部分天）「日」级日记边界【先持久化进
      * pending 再尝试生成】——单人模式关服后异步响应可能丢失，pending 已
-     * 落盘，下次进游戏由周期 tick 自动补生成（"女仆在你睡觉时整理好了
-     * 昨天的记忆"）。
+     * 落盘，下次进游戏由周期 tick 自动补生成（"女仆在你睡觉时整理好了 昨天的记忆"）。
      */
     public static void sessionWrapUp(EntityMaid maid, ServerLevel level) {
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
@@ -484,14 +475,11 @@ public final class AiMemoryArchiver {
 
     /**
      * 短期→长期提升（v1.5.379 重写）。
-     *
      * promaid 段落是扁平线性列表（无图边、单一存储），Sphantosis 的
      * "图连通分量整簇转移"没有对应物，也不再做内容相似度伪聚簇——
      * 与线性架构匹配的单遍规则：
      *   短期层（short_context）段落，年龄 ≥ shortTermDays 游戏日
-     *   且重要度 ≥ 衰减保留线（decaySalience，即"本可躲过遗忘"的记忆）
-     *   → 打 long_term 标记，豁免 prune 衰减遗忘（长期沉淀）。
-     * O(n) 单遍，只在睡眠收尾时执行。
+     *   且重要度 ≥ 衰减保留线（decaySalience，即"本可躲过遗忘"的记忆） → 打 long_term 标记，豁免 prune 衰减遗忘（长期沉淀）。 O(n) 单遍，只在睡眠收尾时执行。
      */
     public static int runTransfer(AiMemoryStore store, long gameTime) {
         long threshold = (long) com.maidsmart.config.MaidSmartConfig.MEMORY_SHORT_TERM_DAYS.get() * DAY_TICKS;

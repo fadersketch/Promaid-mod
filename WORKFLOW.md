@@ -278,7 +278,7 @@
 - "某轮修了什么 / 实现了什么"这类变更史（只准出现在轮次记录与两个台账里）；
 - "AI 说过的话"、开发心路。
 
-**存量**：现有可见文案里的 `实测NNN` 见 `ARCHITECTURE-SWITCHES.md` 末尾的计数与 §10 基线，**只减不增**。
+**存量**：可见文案里的开发叙事由 `tools/verify/check_dev_voice.py` 钉基线 **0、只减不增**——①英文 value、②`.comment("…")` 正文的 `实测NNN`、③中文键/配置标签；**④（R902 起）`.comment("…")` 正文里的版本戳 `v X.Y`、`旧版/旧行为/旧默认/旧值/旧的语义`、`需求：/需求补充/原话：/玩家点名/反馈：`、`字节码实证|javap 实证|反编译实证`、`TD-/BD-`** 一律为 0。计数另见 `ARCHITECTURE-SWITCHES.md` 末尾与 §10 基线。
 
 **进不进"版本更新内容"**：唯一判据是"**玩家能否感知**"。纯流程/文档/护栏改动 → 只写轮次记录
 （`rounds/RNNN-*.md`）与两个台账，不写进桌面 `Promaid文本`。
@@ -304,6 +304,28 @@
   3. 落盘：`store/release_notes_X.Y.Z.md` + 桌面成品一份；平台的 `changelog` 字段读这份专门文件
      （不要把整份历史塞进去）。
   4. 那份文件里没有的内容**不要写**。
+
+---
+
+## 6.2 提交规范（commit）
+
+> 细则全文见记忆库 `commit-conventions.md`（`~/.zcode/cli/memories/projects/…/memory/`）。此处是仓库内权威摘要。
+
+**格式**：`type(scope): 宏观简述`（Conventional Commits），可选 body。
+type ∈ `feat / fix / docs / refactor / perf / test / build / ci / chore / style / revert`；
+scope 用受影响模块（combat / config / guide / build / task / schedule / follow / mixin / client / tool …）。
+
+**一句话准则**：commit 只讲「宏观方向与决策」，不讲只有作者本人才懂的上下文。
+
+**禁止（出现即算垃圾 commit）**：
+1. 依赖特定语境才能理解的内容——内部轮次号（`实测NNN` / `R###`）、「第 N 轮」「收尾 / 补 / 留痕 / 追问」等框架词。
+2. 个人 / 临时 / 会话转交文件——探针脚本、诊断输出、会话交接文档、本地草稿（临时脚本用完即删，不 commit）。
+3. 部署 / 发布流水账——jar 字节数、`同名覆盖`、`已部署`、`match=True`、发布登记。
+4. 只改几行 / 只加十行文档就单开一个 commit（应并入对应主题提交）。
+
+**应当**：一次提交聚焦一个宏观方向；描述可被他人独立看懂；涉及行为改动时说清「做什么 + 为什么」，不堆砌过程。
+
+**不主动提交**：除开发者明确要求外，改动留在工作区，不 `commit`、不 `push`（见 §4.1 与记忆库）。
 
 ---
 

@@ -14,21 +14,15 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 实测七百四十五·点1【飞行聚晶 · 1.20.1 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 →
- * 「飞行聚晶：开/关」。
+ * 【飞行聚晶 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 → 「飞行聚晶：开/关」。
  *
- * <p>——
- * 七百一十八 那一版只有 OP 命令，普通玩家开不了。这一行就是"主人自己就能开"的入口。
- *
- * <p>【实测八百零五：位置全交给 {@link com.maidsmart.client.MaidConfigRowLayout}】原实现把按钮
- * 按屏幕绝对坐标 {@code (screenWidth-174, 36)} 摆，窗口一窄就压住 TLM 自己的开关
- * （）。现在与「AI 记忆」「创造飞行」一起，
- * 由 {@code MaidConfigRowLayout} 按面板相对坐标统一排在面板左侧外边距里——
- * 整列在面板之外，不遮任何 TLM 控件，彼此也不重叠。详见那个类的注释。
- *
- * <p>【无 refmap 注意】{@code addRenderableWidget} 是继承自 Screen 的 protected 方法——
- * 无 refmap 时 {@code @Shadow} 定位不到（会崩），照记忆开关的做法改反射调用、查 SRG 名
- * {@code m_142416_}（本树 {@code MaidConfigMemoryMixin} 的实测教训：生产环境跑的是 SRG 类）。
+ * <p>七百一十八 那一版只有 OP 命令，普通玩家开不了；这一行就是"主人自己就能开"的入口。
+ * <p>【位置全交给 {@link com.maidsmart.client.MaidConfigRowLayout}】按**面板相对坐标**排在面板左侧外边距
+ * 里竖着一列（曾按屏幕绝对坐标摆，窗口一窄就压住 TLM 自己开关、还和别的行重叠）——整列在面板之外，不遮
+ * 任何 TLM 控件、彼此不重叠。详见那个类的注释。
+ * <p>【无 refmap 注意】{@code addRenderableWidget} 是继承自 {@code Screen} 的 protected 方法——无 refmap 时
+ * {@code @Shadow} 定位不到（会崩），照记忆开关的做法改反射调用、查 SRG 名 {@code m_142416_}（生产环境跑的
+ * 是 SRG 类）。
  */
 @Mixin(MaidConfigContainerGui.class)
 public abstract class MaidConfigGoetyMixin {

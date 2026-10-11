@@ -7,17 +7,16 @@ import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 /**
- * 记忆审计与索引清单（移植自 maidsoulcore v3 {@code MemoryV3Store} 的
- * 审计元数据 + {@code MemoryV3IndexManifest} 增量重建思路）。
+ * 记忆审计与索引清单（移植自 maidsoulcore v3 {@code MemoryV3Store} 的审计元数据 +
+ * {@code MemoryV3IndexManifest} 增量重建思路）。
  *
  * <p>两件事：
  * <ul>
  *   <li><b>审计日志</b>（{@code audit_log.jsonl}）：每次纠错/删除/撤销都追加一行
- *       {@code {"time":..,"action":..,"hash":..,"detail":..}}。旧版只把段落标 deleted，
- *       为什么作废、什么时候作废一点痕迹都没有——排查"记忆怎么变了"全靠猜。</li>
- *   <li><b>索引清单</b>（{@code memory_index_manifest.json}）：记录"生成这份多级日记索引时，
- *       段落集合的指纹（所有段落 hash 的哈希）"。{@code AiMemoryArchiver} 据此判断索引是否过期，
- *       只有指纹变了才重建——避免每次跨日都全量重扫。</li>
+ *       {@code {"time":..,"action":..,"hash":..,"detail":..}}——只把段落标 deleted 无法排查"记忆怎么变了"。</li>
+ *   <li><b>索引清单</b>（{@code memory_index_manifest.json}）：记录"生成这份多级日记索引时段落集合的
+ *       指纹（所有段落 hash 的哈希）"。{@code AiMemoryArchiver} 据此判断索引是否过期，只有指纹变了才重建
+ *       ——避免每次跨日都全量重扫。</li>
  * </ul>
  *
  * <p>纯 IO 工具、无状态。两树逐字相同。

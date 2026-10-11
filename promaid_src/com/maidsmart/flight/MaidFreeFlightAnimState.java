@@ -23,17 +23,12 @@ public final class MaidFreeFlightAnimState {
     }
 
     /**
-     * 滑翔档：该不该播模型自己的 {@code elytra_fly} 动画？
-     *
-     * 只看两件事：配置打开了「滑翔时用鞘翅动画」+ 她正在滑翔（同步过的滑翔位，多人下客户端也认得出）。
-     * 默认关时这一路恒 false，游泳动作照旧由 MaidSwimGlideMixin 顶。
-     *
-     * <p>实测八百一十二【必须还看模型有没有这条动画】玩家实测现场：配置
-     * {@code glideElytraAnimation = true}，但他的模型包里**一条 {@code elytra_fly} 都没有**
-     * ——这一档被选中后 TLM 取不到动画，模型掉回**绑定姿势**（各骨骼零旋转），
-     * 叠上仍然生效的展翅与「跟随俯角前倾」，就是玩家看到的"飞行姿势明显出了问题"。
-     * 现在多问一句 {@link MaidGlideAnimSupport#hasElytraFly}：模型没做这条动画时本档恒 false，
-     * 让位给游泳动作（MaidSwimGlideMixin 那边也会照样顶游泳位，两条口径一致）。
+     * 滑翔档：该不该播模型自己的 {@code elytra_fly} 动画？只看两件事：配置打开了「滑翔时用鞘翅动画」
+     * + 她正在滑翔（同步过的滑翔位，多人下客户端也认得出）。
+     * <p>还必须看**模型有没有这条动画**：配置开、但模型包里一条 {@code elytra_fly} 都没有时，选中这档
+     * 会让 TLM 取不到动画、模型掉回**绑定姿势**（各骨骼零旋转），叠上仍然生效的展翅与俯角前倾就是
+     * "飞行姿势明显出了问题"。故多问一句 {@link MaidGlideAnimSupport#hasElytraFly}：没有则本档恒 false，
+     * 让位给游泳动作（{@code MaidSwimGlideMixin} 那边同样顶游泳位，两条口径一致）。
      */
     public static boolean shouldPlayElytraFly(IMaid maid) {
         try {

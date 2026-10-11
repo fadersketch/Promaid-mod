@@ -13,24 +13,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * v1.2.2 实测五百八十七：**女仆放下的炸弹的淡粉色标记**（纯客户端渲染）。
+ * 女仆放下的炸弹的淡粉色标记（纯客户端渲染）。
  *
- * 需求原文："女仆放置的这些物品默认会加一层很淡的粉色渲染，当然，这个效果也可以在手册内关闭。"
- *
- * 【口径】"女仆放下的东西"= 服务端用 {@code BombMarkNetworking} 发过来的标记，两种：
- * - 方块标记（黑曜石 / 重生锚 / 床）：按坐标画一个很淡的粉色半透明盒；
- * - 实体标记（末地水晶 / 扔出去的 TNT）：**按实体实时位置画**，所以 TNT 飞出去时那层粉框
- *   跟着它走，落地爆炸时一起消失。
- * 颜色刻意压得很淡（alpha 0.16 / 0.20，棱线稍亮），不开光影的玩家也能一眼认出"这是女仆刚
- * 放的"，又不会盖住方块本身的材质。开关：配置面板「战斗与自保 → 空袭数值 → 空袭轰炸」。
- *
- * 【渲染管线】与 {@code BlueprintAreaPreview} / {@code IndexStonePreviewClient} 同款：
- * 在 {@link RenderLevelStageEvent} 的 {@code AFTER_TRANSLUCENT_BLOCKS} 阶段，
- * 用原版 {@code DebugRenderer.renderFilledBox} 画填充盒（每盒独立 BufferSource + 立即
- * flush），棱线走 LINES 管线——三处代码风格一致，长期使用零崩溃。
- *
- * 【生命周期】标记自带 ttl（tick，服务端给的），客户端每 tick 减一并到期清理；
- * 退出世界一律清空（{@link #clear()}），避免"上个世界的粉框"飘到新世界。
+ * 【口径】"女仆放下的东西" = 服务端用 {@code BombMarkNetworking} 发来的标记，两种：① 方块标记
+ * （黑曜石/重生锚/床）按坐标画一个很淡的粉色半透明盒；② 实体标记（末地水晶/扔出去的 TNT）**按实体
+ * 实时位置画**，所以 TNT 飞出去时粉框跟着它走、落地爆炸时一起消失。颜色刻意压淡（alpha 0.16/0.20，
+ * 棱线稍亮），既一眼认出"女仆刚放的"又不盖住方块材质。开关在配置面板「战斗与自保 → 空袭数值 → 空袭轰炸」。
+ * 【渲染管线】与 {@code BlueprintAreaPreview} / {@code IndexStonePreviewClient} 同款：在
+ * {@link RenderLevelStageEvent} 的 {@code AFTER_TRANSLUCENT_BLOCKS} 阶段用原版
+ * {@code DebugRenderer.renderFilledBox} 画填充盒（每盒独立 BufferSource + 立即 flush），棱线走 LINES。
+ * 【生命周期】标记自带 ttl（tick，服务端给的），客户端每 tick 减一并到期清理；退出世界一律清空
+ * （{@link #clear()}），避免"上个世界的粉框"飘到新世界。
  */
 @net.neoforged.api.distmarker.OnlyIn(net.neoforged.api.distmarker.Dist.CLIENT)
 public final class BombMarkClient {

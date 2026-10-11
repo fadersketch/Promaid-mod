@@ -21,25 +21,17 @@ import net.minecraftforge.registries.ForgeRegistries;
 import java.util.List;
 
 /**
- * 超越维度（BeyondDimensions）兼容的**诊断探针**——只读，先回答"通不通"，再谈"存取"。
- *
+ * 超越维度兼容的**诊断探针**——只读，先回答"通不通"，再谈"存取"。
  * <pre>
- *   /maid_smart bd_probe [女仆]                —— 反射是否正常、她主人有没有网络、主网络里都有什么
- *   /maid_smart bd_query &lt;物品id&gt; [女仆]      —— 主人的网络里这个物品有多少（O(1)，模拟取一次）
+ *   /maid_smart bd_probe [女仆]            —— 反射是否正常、她主人有没有网络、主网络里都有什么
+ *   /maid_smart bd_query &lt;物品id&gt; [女仆]  —— 主人网络里这个物品有多少（O(1)，模拟取一次）
  * </pre>
  *
- * <p>为什么先做只读：维度的网络是**按玩家**的（入口全是 {@code Player}，方块侧才有 capability），
- * 所以女仆能用的是**她主人的**网络；"她主人到底有没有网络、网络里有什么格式的 key"这件事
- * 得先在实机里看一眼，才能决定存取那一层的形状。
- *
- * <p>【1.20.1 差异】命令树走 SRG（{@code m_82127_}=literal、{@code m_82129_}=argument、
- * {@code m_6761_}=hasPermission、{@code m_288197_}=sendSuccess、{@code m_81352_}=sendFailure、
- * {@code m_91460_}=entities、{@code m_91461_}=getEntities）；{@code bd_query} 的物品参数与
- * neo 同口径用原版 {@code ResourceLocationArgument}（{@code m_106984_}=id、
- * {@code m_107011_}=getId）——**绝不能自造未注册的 ArgumentType**：原版登录时会把整棵命令树
- * 序列化下发，自定义类型没登记 serializer 会抛 {@code Unrecognized argument type}，玩家直接
- * "进不了世界"（实测：{@code Couldn't place player in world}）。
- * 四条 {@code ensureHooked()} 挂在这里（与 neo 同一落点，最小化改动）。
+ * 为什么先做只读：维度的网络是**按玩家**的（入口全是 {@code Player}），所以女仆能用的是**她主人的**
+ * 网络；"她主人有没有网络、里面是什么格式的 key"得先实机看一眼，才能决定存取那一层的形状。
+ * 【自造 ArgumentType 的坑】**绝不能**自造未注册的 ArgumentType：原版登录时会把整棵命令树序列化下发，
+ * 自定义类型没登记 serializer 会抛 {@code Unrecognized argument type}，玩家直接"进不了世界"
+ * （实测 {@code Couldn't place player in world}）。故物品参数用原版 {@code ResourceLocationArgument}。
  */
 public final class MaidBdProbeCommand {
 

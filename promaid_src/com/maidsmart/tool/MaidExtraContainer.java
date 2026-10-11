@@ -10,60 +10,19 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * v1.2.4 实测六百三十六【精妙背包适配：自己的背包满了 → 再问问她身上的"额外容器"】。
- *
  * ── 需求原文（issue #20）──
  * 反馈人 MingDeee：「农场模式会连锁收割农作物。然后掉落物放到女仆背包里。而车万女仆本体支持
  * 当女仆背包满了之后会自动放进精妙背包里。但是这里如果一次性收割的掉落物直接超出女仆背包的
  * 容量，是不会把超出来的放进精妙背包，而是以掉落物的形式掉在地上。」用户拍板：「我不打算把
  * 压缩盒这个物品删掉。但是对于精妙背包的相关适配确实是要做的。帮我做一下。简单来说就是发现
  * 自己背包满了之后，再检索一下有没有精妙背包。有的话就装进去。」
- *
  * ── 走 TLM 现成的"额外容器"API，而不是自己去反射精妙背包 ──
  * javap 实证（1.20.1 的 {@code original_tlm.jar} 与 1.21.1 的 neoforge 包**签名一致**）：
  * TLM 本体早就有一整套额外容器体系，把**饰品栏里**的精妙背包 / 旅行者背包当成"背包的延伸"：
  * <pre>
  *   MaidContainerCache.getContainers(maid)  →  List&lt;ContainerRef&gt;
  *       第 0 项永远是 MaidInventoryRef（她自己的背包，所以本类一律从下标 1 开始）
- *       之后是按槽位优先级排好的 CuriosSlotRef（精妙背包是 SBackpackSlotRef，坐 "back" 槽）
- *   ContainerRef.insert(maid, stack, simulate)  →  塞进去，返回**没塞下的那一份**
- *   ContainerRef.containing(maid, stack)        →  那个容器里有没有同类物品
- * </pre>
- * TLM 自己的拾取（{@code ExtraContainerPickupHandler}）就是这么写的：**先放"已经装着同类
- * 物品"的容器，再放任何容器**——本类照抄这个顺序（不然会出现"明明背包里有半组、却新开一格"
- * 的分裂观感）。
- *
- * 【为什么不自己找精妙背包】精妙背包对外给的是它自己的能力
- * （{@code CapabilityBackpackWrapper}），**不是** Forge 的 {@code ITEM_HANDLER}——自己找就得
- * 硬编码它的类名、版本与内部方法名。TLM 已经把这层做完了，而且顺带覆盖了旅行者背包、以及
- * 将来任何注册进它那套体系的容器；我们只调它的公开 API，越少自己摸越不容易碎。
- *
- * ── 什么时候真的会生效（先说清楚，免得当成"没生效"）──
- * TLM 的额外容器完全建立在**饰品槽**上，所以需要：Curios 在场 + TLM 的"女仆饰品"功能开启
- * （{@code MaidConfig.ENABLE_MAID_CURIOS}）+ 精妙背包或旅行者背包**装在女仆的饰品栏里**
- * （精妙背包坐的是 curios 的 {@code back} 槽，{@code SLOT_PRIORITY} 里优先级最高）。
- * 一件都不满足时 {@code getContainers} 只返回"她自己"那一项 → 本类原样返回余量，
- * 行为与旧版**一字不差**（拿在手上/放在别处的背包不算——那两处 TLM 也不认）。
- *
- * ── 与"绝不吞物品"的关系 ──
- * 本类只在**调用方已经确认"她自己的背包塞不下"之后**才被调用，返回值仍是"还塞不下的那一份"，
- * 调用方照旧落地（{@code spawnAtLocation} / {@code popResource}）。所以最坏情况依然是
- * "掉在地上"，不会因为多了一层容器而多吞掉一件东西。
- *
- * 总开关 {@code misc.backpackOverflow}（默认开）：关掉 = 只用自己的背包（旧行为）。
- *
- * ── v1.2.4 实测六百三十九【反方向：取物】──
- * 上面说的是"装进去"，同一套 API 还能反过来用。玩家要求：「兼容方面，所有判定的位点
- * 再加上一个看看精妙背包里面有没有东西就行了。先判背包，再判精妙背包。」于是本类再加
- * 两个方法，给**我们自己的**那些检索/取物位点用（搭方块、工具、种子、烧制/酿造用料、
- * 烟花羽扇三叉戟、火把、蓝图材料……）：
- * <pre>
- *   contains(maid, filter)        只读探针："额外容器里有没有"（取出 1 个立刻放回，净零）
- *   pull(maid, filter, maxCount)  取物：请 TLM 把匹配物搬进她自己的背包（先判背包，再判精妙背包）
- * </pre>
- * 取物不再额外加开关：TLM 本体对它自己的任务（弓弩弹药、呼吸药水、自愈、喂主人、工作餐、
- * 换装备）本来就是无条件的，我们跟着它的口径走——装了精妙背包却没打算让女仆用里面的东西，
- * 那是"别把她打扮成这样"就能解决的事，不是我们该拦的。
+ *       之后是按槽位优先级排好的 CuriosSlotRef（精妙背包是 SBackpackSlotRef，坐 "back" 槽） ContainerRef.insert(maid, stack, simulate)  →  塞进去，返回**没塞下的那一份** ContainerRef.containing(maid, stack)        →  那个容器里有没有同类物品 </pre> TLM 自己的拾取（{@code ExtraContainerPickupHandler}）就是这么写的：**先放"已经装着同类 物品"的容器，再放任何容器**——本类照抄这个顺序（不然会出现"明明背包里有半组、却新开一格" 的分裂观感）。 【为什么不自己找精妙背包】精妙背包对外给的是它自己的能力 （{@code CapabilityBackpackWrapper}），**不是** Forge 的 {@code ITEM_HANDLER}——自己找就得 硬编码它的类名、版本与内部方法名。TLM 已经把这层做完了，而且顺带覆盖了旅行者背包、以及 将来任何注册进它那套体系的容器；我们只调它的公开 API，越少自己摸越不容易碎。 ── 什么时候真的会生效（先说清楚，免得当成"没生效"）── TLM 的额外容器完全建立在**饰品槽**上，所以需要：Curios 在场 + TLM 的"女仆饰品"功能开启 （{@code MaidConfig.ENABLE_MAID_CURIOS}）+ 精妙背包或旅行者背包**装在女仆的饰品栏里** （精妙背包坐的是 curios 的 {@code back} 槽，{@code SLOT_PRIORITY} 里优先级最高）。 一件都不满足时 {@code getContainers} 只返回"她自己"那一项 → 本类原样返回余量， 行为与旧版**一字不差**（拿在手上/放在别处的背包不算——那两处 TLM 也不认）。 ── 与"绝不吞物品"的关系 ── 本类只在**调用方已经确认"她自己的背包塞不下"之后**才被调用，返回值仍是"还塞不下的那一份"， 调用方照旧落地（{@code spawnAtLocation} / {@code popResource}）。所以最坏情况依然是 "掉在地上"，不会因为多了一层容器而多吞掉一件东西。 总开关 {@code misc.backpackOverflow}（默认开）：关掉 = 只用自己的背包（旧行为）。 ── v1.2.4 实测六百三十九【反方向：取物】── 上面说的是"装进去"，同一套 API 还能反过来用。玩家要求：「兼容方面，所有判定的位点 再加上一个看看精妙背包里面有没有东西就行了。先判背包，再判精妙背包。」于是本类再加 两个方法，给**我们自己的**那些检索/取物位点用（搭方块、工具、种子、烧制/酿造用料、 烟花羽扇三叉戟、火把、蓝图材料……）： <pre> contains(maid, filter)        只读探针："额外容器里有没有"（取出 1 个立刻放回，净零） pull(maid, filter, maxCount)  取物：请 TLM 把匹配物搬进她自己的背包（先判背包，再判精妙背包） </pre> 取物不再额外加开关：TLM 本体对它自己的任务（弓弩弹药、呼吸药水、自愈、喂主人、工作餐、 换装备）本来就是无条件的，我们跟着它的口径走——装了精妙背包却没打算让女仆用里面的东西， 那是"别把她打扮成这样"就能解决的事，不是我们该拦的。
  */
 public final class MaidExtraContainer {
 
@@ -92,14 +51,10 @@ public final class MaidExtraContainer {
     /**
      * 实测七百七十二【只读容量判据】：额外容器能不能收下 {@code stack} 的**至少一部分**——
      * 全程 {@code insert(...,true)} 模拟，**一个物品都不动**。
-     *
      * <p>与 {@link #overflow} 的区别至关重要：{@code overflow} 是**真搬**（源码
      * {@code MaidExtraContainer.java:283,300} 走 {@code insert(...,false)}），只适合
      * "确实要把东西塞进容器"的调用方。<b>只探测、由我们自己接手后续搬运</b>的调用方
-     * 必须用本方法——否则"容器已经先收下、调用方又扣一次"就是复制
-     * （超越维度溢出入库 {@code MaidBdOverflow} 原先正是踩了这个坑）。
-     *
-     * @return true = 至少有一个额外容器能收下 1 件以上
+     * 必须用本方法——否则"容器已经先收下、调用方又扣一次"就是复制 （超越维度溢出入库 {@code MaidBdOverflow} 原先正是踩了这个坑）。 @return true = 至少有一个额外容器能收下 1 件以上
      */
     public static boolean canAccept(EntityMaid maid, ItemStack stack) {
         if (maid == null || stack == null || stack.m_41619_()) {
@@ -131,21 +86,12 @@ public final class MaidExtraContainer {
     /* ==================== v1.2.4 实测六百三十九【取物的那半边】 ==================== */
 
     /**
-     * v1.2.4 实测六百三十九【先判背包，再判精妙背包：**看**】——额外容器
      * （精妙背包 / 旅行者背包……）里有没有匹配 {@code filter} 的物品。**只读探针**。
-     *
      * ── 为什么不能直接读 ──
      * TLM 的 {@code ContainerRef} 只给了三个动作：{@code containing(maid, stack)}
      * （要求给一件**具体物品**做同类比较）、{@code insert}、{@code extract}——
      * 没有"按谓词看一眼"这个口子。所以本方法用**取出 1 个 + 立刻放回**实现"看一眼"：
-     * 净零改动（放回的是同一个容器、同一件物品）。
-     *
-     * ── 万一放不回去 ──
-     * 兜底链三级，**绝不吞物品**：原容器放回 → 塞进她自己背包 → 落地成掉落物
-     * （真的走到第三级会打一条日志）。正常路径永远在第一级就回去了。
-     *
-     * 【谁用它】判定类的位点（"她身上到底有没有这个东西"）：气泡、就绪判定、
-     * 能不能起飞/能不能干活这类只取布尔的闸门。真要**动手拿**的地方用 {@link #pull}。
+     * 净零改动（放回的是同一个容器、同一件物品）。 ── 万一放不回去 ── 兜底链三级，**绝不吞物品**：原容器放回 → 塞进她自己背包 → 落地成掉落物 （真的走到第三级会打一条日志）。正常路径永远在第一级就回去了。 【谁用它】判定类的位点（"她身上到底有没有这个东西"）：气泡、就绪判定、 能不能起飞/能不能干活这类只取布尔的闸门。真要**动手拿**的地方用 {@link #pull}。
      */
     public static boolean contains(EntityMaid maid, Predicate<ItemStack> filter) {
         if (maid == null || filter == null) {
@@ -184,22 +130,12 @@ public final class MaidExtraContainer {
     }
 
     /**
-     * v1.2.4 实测六百三十九【先判背包，再判精妙背包：**取**】——她自己的背包里没有时，
      * 请 TLM 的额外容器系统把匹配物**搬进她的背包**。
-     *
      * ── 走的是 TLM 自己那条路 ──
      * {@code ItemsUtil.findStackSlot(她自己的背包, filter, maxCount)}：先扫她背包
      * （找到就返回，**一点副作用都没有**）；没找到且处理器是 TLM 的
      * {@code MaidInvWrapper}（{@code getAvailableInv}/{@code getAvailableBackpackInv}
-     * 返回的正是它）→ 发 {@code MaidRequestItemEvent} → TLM 的
-     * {@code ExtraContainerRequestHandler} 从精妙背包/旅行者背包里抽出物品放进她的背包，
-     * 然后再扫一遍。**TLM 自己的任务（弓弩弹药/呼吸药水/自愈/喂主人/工作餐/换装备）
-     * 用的就是这一条**——所以口径与本体完全一致，包括"她的背包满了时，把她最后一格
-     * 非空物品挪进额外容器腾地方"这个动作（那是 TLM 的既定行为，不是我们加的）。
-     *
-     * @param filter   要什么
-     * @param maxCount 一次最多搬几件（{@code -1} = 整组；与 TLM 自己传的口径一致）
-     * @return true = 现在她自己的背包里有了（调用方按原来的循环再扫一遍即可拿到）
+     * 返回的正是它）→ 发 {@code MaidRequestItemEvent} → TLM 的 {@code ExtraContainerRequestHandler} 从精妙背包/旅行者背包里抽出物品放进她的背包， 然后再扫一遍。**TLM 自己的任务（弓弩弹药/呼吸药水/自愈/喂主人/工作餐/换装备） 用的就是这一条**——所以口径与本体完全一致，包括"她的背包满了时，把她最后一格 非空物品挪进额外容器腾地方"这个动作（那是 TLM 的既定行为，不是我们加的）。 @param filter   要什么 @param maxCount 一次最多搬几件（{@code -1} = 整组；与 TLM 自己传的口径一致） @return true = 现在她自己的背包里有了（调用方按原来的循环再扫一遍即可拿到）
      */
     public static boolean pull(EntityMaid maid, Predicate<ItemStack> filter, int maxCount) {
         if (maid == null || filter == null) {
@@ -258,8 +194,6 @@ public final class MaidExtraContainer {
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     /**
-     * v1.2.4 实测六百四十：**取物方向也留一行证据**。
-     *
      * 【为什么值得记】"女仆到底认不认精妙背包 / 旅行者背包里的东西"这件事，旧版只有"装进去"
      * 那一侧有日志（{@link #overflow}），取物这一侧是静默的——玩家只能靠"她有没有拿出来用"
      * 反推，而"没拿出来"既可能是"没认出来"、也可能是"她这会儿压根不需要"。现在真的从额外容器
@@ -354,17 +288,11 @@ public final class MaidExtraContainer {
 
     /**
      * 取出"她身上的额外容器"（**不含她自己那个背包**）；没有则返回 null。
-     *
      * 【每个坑都在这里挡掉】
      * <ol>
      *   <li>用 {@code try/catch(Throwable)} 包住：没装 Curios / TLM 关掉了饰品功能时，
      *       {@code getContainers} 会走"只返回她自己"那条早退分支——但真出了
-     *       {@code NoClassDefFoundError}（Error 不是 Exception！）也不能让它掀掉调用方
-     *       （挖矿/伐木/搭路的收方块链路）。</li>
-     *   <li>{@code size() <= 1} → 说明只有"她自己"那一项 → 返回 null（调用方立刻返回原样）。</li>
-     *   <li>复制成新列表再切片：{@code getContainers} 返回的是 TLM 自己的缓存实例
-     *       （{@code WeakHashMap} 里那一份），我们**不能**就地改它（改坏了影响 TLM 自己的拾取）。</li>
-     * </ol>
+     *       {@code NoClassDefFoundError}（Error 不是 Exception！）也不能让它掀掉调用方 （挖矿/伐木/搭路的收方块链路）。</li> <li>{@code size() <= 1} → 说明只有"她自己"那一项 → 返回 null（调用方立刻返回原样）。</li> <li>复制成新列表再切片：{@code getContainers} 返回的是 TLM 自己的缓存实例 （{@code WeakHashMap} 里那一份），我们**不能**就地改它（改坏了影响 TLM 自己的拾取）。</li> </ol>
      */
     private static List<ContainerRef> extraContainers(EntityMaid maid) {
         if (maid == null) {

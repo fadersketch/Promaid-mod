@@ -3,12 +3,7 @@ package com.maidsmart.task;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 
 /**
- * 【实测八百一十六：非战斗模式下女仆移速硬上限——不许比玩家快】
- *
  * <p>【
- *
- *
- *
  * <p>【先交代「寻找任务目标」到底走了哪条速度链路——javap 逐层实证】
  * <ol>
  *   <li>Brain 写 {@code WALK_TARGET}（或各任务直接调 {@code PathNavigation.moveTo}）→ 原版
@@ -20,42 +15,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  *       {@code Mob.setSpeed}；</li>
  *   <li>{@code Mob.setSpeed} 只有两行：{@code LivingEntity.setSpeed(value)}（写 speed 字段）
  *       + {@code setZza(value)}（写前向输入 zza）。而 {@code LivingEntity.travel} 用的正是
- *       zza 与那个 speed 字段去算这一 tick 的位移。</li>
- * </ol>
- * 于是结论很硬：<b>女仆靠腿走的一切速度，最后都必然经过 {@code Mob.setSpeed} 这一个口子</b>
- * ——导航走路、直连 moveTo、闲逛 WALK_TARGET、农活、跟随、挖矿赶路，一条都绕不开。
- * （唯二不经过它的是"直接 setDeltaMovement 施加速度矢量"那几处：搭路推一步、自保逃跑、
- * 飞行/扫帚——那些不是"走路"，本项一律不碰。）
- *
- * <p>【为什么"默认就是玩家奔跑速度"】本模组专用服务器上量过一张表（女仆
- * MOVEMENT_SPEED = 0.7，也就是她的裸值）：把 speedModifier 记作倍率，实测巡航格/秒是
- * <pre>
- *   0.3 → 1.9 ｜ 0.4 → 3.3（默认散步）｜ 0.5 → 4.9 ｜ 0.6 → 6.0 ｜ 0.7 → 8.2 ｜ 1.0 → 14
- *   （玩家走路 4.32、奔跑 5.61 格/秒；同一档换地形/机器约 ±20% 波动）
- * </pre>
- * 也就是说 <b>TLM 给女仆的默认倍率（跟随/攻击走位多为 1.0，本模组挖矿赶路是 0.6×1.5=0.9）
- * 实测都在 8~14 格/秒，本来就比玩家奔跑还快</b>——看到的
- * 就是这个数。按这张表插值，<b>倍率 0.56 左右 ≈ 5.6 格/秒 ≈ 玩家奔跑</b>，这就是默认上限
- * 的来源。
- *
- * <p>【所以这一项做什么】非战斗时，把送进 {@code Mob.setSpeed} 的那个数<b>硬钳到不超过
- * {@code misc.nonCombatMaxSpeed}</b>（默认 0.56，单位与「散步速度倍率」/「挖矿移速」同一套；
- * 只往下钳、绝不往上抬）。这是<b>绝对上限</b>——哪怕饰品把她的 MOVEMENT_SPEED 抬高一倍，
- * 钳的是"最终送进去的那个数"，所以她照样不会比玩家快。
- *
- * <p>【什么时候不钳（让位判据，缺一不可）】
- * <ul>
- *   <li><b>战斗</b>：攻击类任务（含第三方 IAttackTask）/ 参战中 / 单兵战术接管——
- *       「非战斗模式下」，战斗要走位躲技能，不能压；</li>
- *   <li><b>自保逃跑</b>（PRESERVE 标记）：低血/逃跑/逃离险境，压速等于送死；</li>
- *   <li><b>飞行 / 扫帚</b>（滑翔位 / 扫帚腾空）：她此刻不靠腿走，压了只会干扰飞行姿态；</li>
- *   <li><b>坐着 / 乘客 / 睡觉</b>：本来就不动或由坐具驱动；</li>
- *   <li><b>无主女仆</b>：与跟随收紧/移动抑制 同一条规矩——整合包对野生女仆的规则一律不动。</li>
- * </ul>
- *
- * <p>【开关】{@code misc.nonCombatSpeedCap}（默认开）。关掉 = 完全不碰 {@code setSpeed}，
- * 与旧版逐字节一致（本模组自己的挖矿赶路 1.5×、砍树、宰杀追击等原样恢复）。
- * 数值用 {@code misc.nonCombatMaxSpeed} 调：填大（如 1.0）= 放宽回接近原版；填小 = 更老实。
+ *       zza 与那个 speed 字段去算这一 tick 的位移。</li> </ol> 于是结论很硬：<b>女仆靠腿走的一切速度，最后都必然经过 {@code Mob.setSpeed} 这一个口子</b> ——导航走路、直连 moveTo、闲逛 WALK_TARGET、农活、跟随、挖矿赶路，一条都绕不开。 （唯二不经过它的是"直接 setDeltaMovement 施加速度矢量"那几处：搭路推一步、自保逃跑、 飞行/扫帚——那些不是"走路"，本项一律不碰。） <p>【为什么"默认就是玩家奔跑速度"】本模组专用服务器上量过一张表（女仆 MOVEMENT_SPEED = 0.7，也就是她的裸值）：把 speedModifier 记作倍率，实测巡航格/秒是 <pre> 0.3 → 1.9 ｜ 0.4 → 3.3（默认散步）｜ 0.5 → 4.9 ｜ 0.6 → 6.0 ｜ 0.7 → 8.2 ｜ 1.0 → 14 （玩家走路 4.32、奔跑 5.61 格/秒；同一档换地形/机器约 ±20% 波动） </pre> 也就是说 <b>TLM 给女仆的默认倍率（跟随/攻击走位多为 1.0，本模组挖矿赶路是 0.6×1.5=0.9） 就是这个数。按这张表插值，<b>倍率 0.56 左右 ≈ 5.6 格/秒 ≈ 玩家奔跑</b>，这就是默认上限 的来源。 <p>【所以这一项做什么】非战斗时，把送进 {@code Mob.setSpeed} 的那个数<b>硬钳到不超过 {@code misc.nonCombatMaxSpeed}</b>（默认 0.56，单位与「散步速度倍率」/「挖矿移速」同一套； 只往下钳、绝不往上抬）。这是<b>绝对上限</b>——哪怕饰品把她的 MOVEMENT_SPEED 抬高一倍， 钳的是"最终送进去的那个数"，所以她照样不会比玩家快。 <p>【什么时候不钳（让位判据，缺一不可）】 <ul> <li><b>战斗</b>：攻击类任务（含第三方 IAttackTask）/ 参战中 / 单兵战术接管—— 「非战斗模式下」，战斗要走位躲技能，不能压；</li> <li><b>自保逃跑</b>（PRESERVE 标记）：低血/逃跑/逃离险境，压速等于送死；</li> <li><b>飞行 / 扫帚</b>（滑翔位 / 扫帚腾空）：她此刻不靠腿走，压了只会干扰飞行姿态；</li> <li><b>坐着 / 乘客 / 睡觉</b>：本来就不动或由坐具驱动；</li> <li><b>无主女仆</b>：与跟随收紧/移动抑制 同一条规矩——整合包对野生女仆的规则一律不动。</li> </ul> <p>【开关】{@code misc.nonCombatSpeedCap}（默认开）。关掉 = 完全不碰 {@code setSpeed}， 与旧版逐字节一致（本模组自己的挖矿赶路 1.5×、砍树、宰杀追击等原样恢复）。 数值用 {@code misc.nonCombatMaxSpeed} 调：填大（如 1.0）= 放宽回接近原版；填小 = 更老实。
  */
 public final class MaidNonCombatSpeedCap {
 

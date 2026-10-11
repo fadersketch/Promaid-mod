@@ -11,27 +11,17 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 实测七百〇二【仿创造飞行 · 1.20.1 精简版 · per-maid 开关】——全局总闸 + 每只女仆可单独关掉。
+ * 仿创造飞行 · per-maid 开关——全局总闸 + 每只女仆可单独关掉。
  *
- * 【语义（需求方拍板）】全局配置 {@code freeFlight} = **总闸**（默认关）；per-maid 开关
- * **默认跟随全局**（无标记 = 跟随），玩家可以在女仆配置界面里把某一只单独关掉。
- * 于是 {@code effective() = 总闸开 且 这只没被显式关掉}。
- *
+ * 【语义】全局配置 {@code freeFlight} = **总闸**（默认关）；per-maid 开关**默认跟随全局**（无标记 =
+ * 跟随），玩家可在女仆配置界面把某一只单独关掉。故 {@code effective() = 总闸开 且 这只没被显式关掉}。
  * 【为什么"磁盘备份 + 客户端缓存"两套】（照搬 AiMemoryManager 的既有教训）
- * <ul>
- *   <li>**磁盘备份**：per-maid 标记存在 {@code persistentData} 里，而它只随实体 NBT 保存——
- *       女仆被魂符收走/实体重建/跨维度时可以丢；丢了就会回落成"跟随全局"，于是
- *       "我明明关了她"变成"她又飞了"。所以 setServer 同时写一份磁盘备份，
- *       读取时 persistentData 没有就回落它。</li>
- *   <li>**客户端缓存**：{@code persistentData} 只在服务端读写、不同步客户端，界面重开时
- *       客户端会读到过期值（关了的开关又显示回"开"）。服务端每次改动后 S2C 广播
- *       {@code FreeFlightStatePacket}，客户端写进缓存。</li>
- *   <li>**绝不用 TLM 的 TaskData 存**：同类开关早年用过，TLM 的 {@code TaskDataRegister.writeSyncData}
- *       会把编码结果强转 CompoundTag → 一点开关就 ClassCastException 崩服（AiMemoryManager 实测）。</li>
- * </ul>
- *
- * 【1.20.1 差异】持久数据在 Forge 上是 {@code maid.getPersistentData()}（
- * {@code IEntityExtension} 的默认方法，readable 名，无需强转——与 1.21.1 的写法在调用面上一致）。
+ * ① 磁盘备份：标记存在 {@code persistentData} 里，只随实体 NBT 保存——女仆被魂符收走/实体重建/跨维度
+ * 时可丢，丢了会回落成"跟随全局"（"我明明关了她"→"她又飞了"），故 setServer 同时写一份磁盘备份。
+ * ② 客户端缓存：{@code persistentData} 只在服务端读写、不同步客户端，界面重开读到过期值；服务端每次
+ * 改动 S2C 广播 {@code FreeFlightStatePacket}，客户端写缓存。
+ * ③ **绝不用 TLM 的 TaskData 存**：TLM 的 {@code TaskDataRegister.writeSyncData} 会把编码结果强转
+ * CompoundTag → 一点开关就 ClassCastException 崩服。
  */
 public final class MaidFreeFlightFlags {
 

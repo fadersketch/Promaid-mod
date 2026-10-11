@@ -3,8 +3,6 @@ package com.maidsmart.schedule;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 
 /**
- * 【实测八百一十五·罗盘优先】「这个圈是谁画的」——玩家亲手画的圈不许被本模组的自动锚定顶掉。
- *
  * <p>【为什么需要单独记一件事】TLM 的 {@code SchedulePos} 只存"三个锚点 + configured + 维度"，
  * 不记来源。而锚点有三个写入方：
  * <ol>
@@ -16,16 +14,8 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  *       ——玩家/模型明确说"这块归你管"。</li>
  * </ol>
  * 三者写的是同一份存储（谁后写谁生效）。
- *
- *
  * <p>【口径】玩家画过的圈在本模组侧打上 {@link #PLAYER_TAG}；我们自己的自动锚定打
- * {@link #AUTO_TAG}。**只要 PLAYER 在，{@link #mayAutoAnchor} 就恒为 false**——排班/建造
- * 的一切"自动拿当前位置当锚点"都被拦下，玩家画的圈一直有效，直到玩家自己再画一次（罗盘/中键
- * 会重新打 PLAYER）或在 TLM GUI 里改、或把罗盘切到清除模式清掉（{@link #clearPlayerCircle}）。
- *
- * <p>【不干预】中键标记与罗盘之间仍然是「谁后写谁生效」（）——
- * 本类只回答"这圈是不是玩家画的"，不参与两者排序。开关 {@code misc.compassPriority}；
- * 关掉 = 本类判定恒放行（回到旧行为）。
+ * {@link #AUTO_TAG}。**只要 PLAYER 在，{@link #mayAutoAnchor} 就恒为 false**——排班/建造 的一切"自动拿当前位置当锚点"都被拦下，玩家画的圈一直有效，直到玩家自己再画一次（罗盘/中键 会重新打 PLAYER）或在 TLM GUI 里改、或把罗盘切到清除模式清掉（{@link #clearPlayerCircle}）。 <p>【不干预】中键标记与罗盘之间仍然是「谁后写谁生效」（）—— 本类只回答"这圈是不是玩家画的"，不参与两者排序。开关 {@code misc.compassPriority}； 关掉 = 本类判定恒放行（回到旧行为）。
  */
 public final class PlayerCircle {
     /** 玩家亲手画过圈（罗盘 / 中键 / 明确的"这块归你管"） */

@@ -5,9 +5,7 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 女仆配置界面（TLM {@code MaidConfigContainerGui}）里我们注入的开关行该摆哪儿、长什么样。
- *
  * <p>【实测八百零五 根因】
- *
  * **屏幕绝对坐标** {@code (screenWidth - 174, 写死的 y)} 摆放，两个维度都错：
  * <ul>
  *   <li><b>横向</b>：面板是**居中**的（{@code leftPos = (screenW - 256) / 2}），
@@ -16,21 +14,9 @@ import net.minecraft.network.chat.Component;
  *   <li><b>纵向</b>：y 写死 8 / 26 / 36，而按钮高 13 ⇒ 创造飞行 26~39 与飞行聚晶 36~49
  *       **互相重叠 3px**。</li>
  * </ul>
- *
  * <p>【为什么是「面板左侧外边距」这一列】TLM 面板 256×256；面板内部几乎全被占满
  * （{@code topPos+9} 翻页按钮、{@code topPos+14} 皮肤/资料/声音图标、
- * {@code topPos+28} 装饰货架、{@code topPos+52~155} 8 行真开关、{@code topPos+113} 状态图标、
- * {@code topPos+149} 女仆模型、{@code topPos+159/187/206/230} 任务/排班/守家/下载按钮、
- * {@code topPos+174} 起玩家背包——以上均按字节码核对），塞不下一行。
- * 所以改放到**面板之外**：TLM 那个 164 宽的 {@code MaidConfigButton} 在窄边距里放不下
- * （这正是老实现改用「屏幕绝对坐标」的原因，也正是它翻车的根源），
- * 于是这里用**窄按钮**（80×13，与原生开关同高），在面板左侧外边距竖排一列——
- * 整列在面板之外 ⇒ 一个 TLM 控件都不遮；行距 15 ⇒ 三行彼此也不重叠。
- *
- * <p>【无 refmap】{@code leftPos}/{@code topPos} 是 {@code AbstractContainerScreen} 的
- * **继承 protected 字段**，无 refmap 时 {@code @Shadow} 定位不到（本仓库混入的老教训），
- * 照 {@code MaidConfigMemoryMixin} 的做法用反射沿继承链找字段：dev / 1.21.1 是
- * {@code leftPos/topPos}，生产环境 1.20.1 是 SRG {@code f_97735_/f_97736_}，两种名字都试。
+ * {@code topPos+28} 装饰货架、{@code topPos+52~155} 8 行真开关、{@code topPos+113} 状态图标、 {@code topPos+149} 女仆模型、{@code topPos+159/187/206/230} 任务/排班/守家/下载按钮、 {@code topPos+174} 起玩家背包——以上均按字节码核对），塞不下一行。 所以改放到**面板之外**：TLM 那个 164 宽的 {@code MaidConfigButton} 在窄边距里放不下 （这正是老实现改用「屏幕绝对坐标」的原因，也正是它翻车的根源）， 于是这里用**窄按钮**（80×13，与原生开关同高），在面板左侧外边距竖排一列—— 整列在面板之外 ⇒ 一个 TLM 控件都不遮；行距 15 ⇒ 三行彼此也不重叠。 <p>【无 refmap】{@code leftPos}/{@code topPos} 是 {@code AbstractContainerScreen} 的 **继承 protected 字段**，无 refmap 时 {@code @Shadow} 定位不到（本仓库混入的老教训）， 照 {@code MaidConfigMemoryMixin} 的做法用反射沿继承链找字段：dev / 1.21.1 是 {@code leftPos/topPos}，生产环境 1.20.1 是 SRG {@code f_97735_/f_97736_}，两种名字都试。
  */
 public final class MaidConfigRowLayout {
 
@@ -57,14 +43,11 @@ public final class MaidConfigRowLayout {
 
     /**
      * 给第 {@code slot} 个开关（0=AI 记忆 / 1=创造飞行 / 2=飞行聚晶）建一个窄按钮。
-     *
      * @param gui     女仆配置界面（{@code this}）
      * @param screenW 屏幕逻辑宽
      * @param screenH 屏幕逻辑高
      * @param slot    第几个
-     * @param label   显示名
-     * @param value   当前值文本（{@code "开"} / {@code "关"} / {@code "开(跟随全局)"} …）
-     * @param onPress 点击回调
+     * @param label   显示名 @param value   当前值文本（{@code "开"} / {@code "关"} / {@code "开(跟随全局)"} …） @param onPress 点击回调
      */
     public static Button toggle(Object gui, int screenW, int screenH, int slot, String label,
                                 String value, Runnable onPress) {

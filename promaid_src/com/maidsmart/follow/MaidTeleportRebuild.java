@@ -18,25 +18,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * 【实测七百九十九·issue #36 根因重定位】远距离传送后「女仆在服务端活着、客户端却没有她」的
  * 真正机制，**不是**追踪关系（{@code seenBy}）掉了，而是**客户端插值被冻住**。
  * （本文件是 forge / 1.20.1 树；neo 版见同名文件，官方名与 SRG 各写各的。）
- *
  * ── 报告
  * 「经过远距离传送（同维度内）后，文本里说女仆传送到身边了，但看不见……怪物会被攻击、
  * 也会有搭路方块在身边放置，唯一的问题是看不见女仆，无法对其进行右键点击操作。」（MingDeee）
- *
  * ── 机制（照抄上游开源项目 2415564388/maidsync 的现场实测，MIT） ──
  * <ol>
  *   <li>大跳变（传送）会让服务端在 {@code ServerEntity.m_8533_()}（= sendChanges）里发
  *       {@code ClientboundTeleportEntityPacket}；客户端收到后走
  *       {@code Entity.lerpTo(目标, 3 步)} **逐 tick 插值**，第一步的落点<b>恰好是起终点的 1/3</b>。</li>
  *   <li>若那个 1/3 落点在客户端**没加载的区块**里，实体就脱离 tick 列表——{@code Entity.tick()}
- *       永不执行，插值**永久冻结在 1/3**。</li>
- *   <li>此时她所在 section 未编译 → 渲染循环直接跳过她 → **模型与碰撞箱一起消失**。</li>
- *   <li>而服务端**不会自愈**：{@code positionCodec}（SRG {@code f_214995_}）基线已对齐到真实位置、
- *       {@code delta ≈ 0}，于是判定"客户端知道她在哪"、再也不发位置包。</li>
- * </ol>
- * 这正好解释了 #36 的全部现象：她能打怪、能搭路（服务端一切正常），只是客户端画不出她。
- *
- * <p>两条修法与全部常量说明见 neo 版同名类的注释（两棵树一字不差，只有 SRG 名字不同）。
+ *       永不执行，插值**永久冻结在 1/3**。</li> <li>此时她所在 section 未编译 → 渲染循环直接跳过她 → **模型与碰撞箱一起消失**。</li> <li>而服务端**不会自愈**：{@code positionCodec}（SRG {@code f_214995_}）基线已对齐到真实位置、 {@code delta ≈ 0}，于是判定"客户端知道她在哪"、再也不发位置包。</li> </ol> 这正好解释了 #36 的全部现象：她能打怪、能搭路（服务端一切正常），只是客户端画不出她。 <p>两条修法与全部常量说明见 neo 版同名类的注释（两棵树一字不差，只有 SRG 名字不同）。
  */
 public final class MaidTeleportRebuild {
 
@@ -119,7 +110,6 @@ public final class MaidTeleportRebuild {
     /**
      * 延迟补包的执行口（由 {@code ChunkMapRemotePumpMixin} 在 {@code ChunkMap.m_140421_} 尾巴上每 tick
      * 调一次——那个注入点本来就在扫 {@code f_140150_}，这里顺手把到期的补包做掉，空队列零成本）。
-     *
      * <p>收件人必须**正在追踪她**（{@code f_140475_} 里有他）。补包走的是裸包序列，
      * 服务端不会因此登记追踪关系：给一个没在追踪她的客户端补包，只会在他的客户端上凭空造出一个
      * 服务端再也不管的幽灵实体。判定直接借 {@code f_140150_} 里的 {@link RemoteTrackBridge}

@@ -5,16 +5,12 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * v1.3.8【巡逻航迹】两种载体上的读写：**物品**（{@code CUSTOM_DATA}）与**女仆**（{@code persistentData}）。
- *
  * <p>── 为什么只有一处编解码 ──
  * 两边的 NBT 结构一字不差（都走 {@link PatrolRoute#save/load}），所以本类只负责"把 CompoundTag
  * 从哪个容器里取出来 / 放回去"。口径只留一处，免得物品与女仆的存档格式悄悄分家。
- *
  * <p>── 绑定 = 快照 ──
  * 右键女仆时把物品那一份**深拷**进她的 {@code persistentData}（见 {@link #bind}）。之后两者
  * 各走各的：你把航图锁进箱子、或转手给别人，她照样按绑定时那一份巡逻；想改就再右键一次覆盖。
- *
  * <p>── 两树差异（本批只做 1.21.1）──
  * 这里用 1.21.1 的数据组件口径（{@code DataComponents.CUSTOM_DATA} + {@code CustomData.of/copyTag}），
  * 与 {@code CompressionBoxData} 完全同款。1.20.1 树若日后要镜像，只需按 {@code CompressionBoxData}
@@ -91,7 +87,6 @@ public final class PatrolChartData {
 
     /**
      * 读女仆身上绑的那一份（没绑 → null，调用方据此判定"她没在巡逻"）。
-     *
      * <p>【实测七百九十八：轨道被删 = 这一份作废】绑定是**深拷**（见类注释），所以玩家在航图里
      * 删掉一条轨道时，她身上这份副本不会自己消失——她会照旧沿那条"已经不存在的轨道"一圈圈飞
      * （

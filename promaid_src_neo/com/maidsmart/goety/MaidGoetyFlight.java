@@ -17,8 +17,6 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 实测 G-1/G-2/G-3【外部持续推进：把 Goety 的飞行聚晶当第三种飞行】。
- *
  * <h2>它在三种飞行里的位置</h2>
  * <ul>
  *   <li><b>鞘翅</b>＝战斗机（高速、要配机动武器，空袭体系围着它设计）；</li>
@@ -26,35 +24,12 @@ import java.util.UUID;
  *   <li><b>本档＝喷气式</b>：推力**由外部法术给**（飞行聚晶每 tick 把速度覆盖成视线方向 ×
  *       0.5~1.0 格/tick），我们**不改威力**，只管三件事：**瞄准 → 续放 → 到地方收手**。</li>
  * </ul>
- *
  * <h2>三种任务（G-3 加的第三档就是"接敌机动"）</h2>
  * <pre>
  *   ARRIVE  ／goety_fly      —— 飞坐标：巡航 → 下降 → 落地收手（一次性，必然终止）
  *   FOLLOW  ／goety_follow   —— 跟实体：远了直追、近了绕圈伴飞
  *   COMBAT  ／goety_combat   —— 打盘旋：**每 tick 取上游算好的盘旋点**（见下），绕着打
- * </pre>
- *
- * <h2>为什么战斗档能直接复用上游的"接敌机动"</h2>
- * 上游把接敌机动抽成了可插的两层：{@code CombatOrbit}（圆：半径/旋向/相位随机）+
- * {@code CombatManeuver}（五种打法：环绕/蛇形/高悠悠/脱离再进/8 字）。消费它们的是**飞行后端**——
- * 现在只有鞘翅空战与扫帚两个。而 {@code MaidBroomDrive.combatPoint(maid, target)} 是**公开静态**、
- * 一次调用就把半径/旋向/相位/高度基准/最近距离/回家夹取全折好 ⇒ 我们**只调它、不改它**，
- * 于是 Goety 推进等于零改动地成了**第三个后端**，五种机动照跑。
- *
- * <h2>实测教训（都写在注释里，别再踩）</h2>
- * <ol>
- *   <li><b>G-1 恒定速度是真的</b>：每 tick 放一发，速度恒为 0.500 格/tick、高度零漂移、
- *       {@code NoGravity} 始终 false；停手立刻 (0,-0.078,0.455)（重力 + 0.91 阻力）
- *       ⇒ 必须每 tick 续放，且**落地前那一下要提前收手**。</li>
- *   <li><b>G-1 落体伤害不用管</b>：{@code FlyingSpell.SpellResult} 里有 {@code fallDistance = 0}，
- *       施法期间坠落距离永远归零 ⇒ 可以"硬着陆"（不像仿创造飞行那样必须写软着陆）。</li>
- *   <li><b>G-2 方向必须我们说了算</b>：飞行聚晶取的是 {@code caster.getLookAngle()}，而
- *       **有主人的女仆**会被 TLM 的跟随/闲逛持续下行走目标 ⇒ 原版 {@code MoveControl} 每 tick
- *       把她的 yaw 掰向那个目标 ⇒ 她绕着主人画圈（实机撞到过）。所以：①新增
- *       {@code MaidGoetyMoveSuppressMixin} 在推进期间从源头掐掉走路目标；②放完法术后**再按我们
- *       算出来的瞄准方向重写一遍速度**（大小仍取自聚晶）。</li>
- *   <li><b>G-2 推力器会卡在坑里</b>：贴地/撞墙时水平推力全被碰撞吃掉，判据命中就短暂抬头拔高。</li>
- * </ol>
+ * </pre> <h2>为什么战斗档能直接复用上游的"接敌机动"</h2> 上游把接敌机动抽成了可插的两层：{@code CombatOrbit}（圆：半径/旋向/相位随机）+ {@code CombatManeuver}（五种打法：环绕/蛇形/高悠悠/脱离再进/8 字）。消费它们的是**飞行后端**—— 现在只有鞘翅空战与扫帚两个。而 {@code MaidBroomDrive.combatPoint(maid, target)} 是**公开静态**、 一次调用就把半径/旋向/相位/高度基准/最近距离/回家夹取全折好 ⇒ 我们**只调它、不改它**， 于是 Goety 推进等于零改动地成了**第三个后端**，五种机动照跑。 <h2>实测教训（都写在注释里，别再踩）</h2> <ol> <li><b>G-1 恒定速度是真的</b>：每 tick 放一发，速度恒为 0.500 格/tick、高度零漂移、 {@code NoGravity} 始终 false；停手立刻 (0,-0.078,0.455)（重力 + 0.91 阻力） ⇒ 必须每 tick 续放，且**落地前那一下要提前收手**。</li> <li><b>G-1 落体伤害不用管</b>：{@code FlyingSpell.SpellResult} 里有 {@code fallDistance = 0}， 施法期间坠落距离永远归零 ⇒ 可以"硬着陆"（不像仿创造飞行那样必须写软着陆）。</li> <li><b>G-2 方向必须我们说了算</b>：飞行聚晶取的是 {@code caster.getLookAngle()}，而 **有主人的女仆**会被 TLM 的跟随/闲逛持续下行走目标 ⇒ 原版 {@code MoveControl} 每 tick 把她的 yaw 掰向那个目标 ⇒ 她绕着主人画圈（实机撞到过）。所以：①新增 {@code MaidGoetyMoveSuppressMixin} 在推进期间从源头掐掉走路目标；②放完法术后**再按我们 算出来的瞄准方向重写一遍速度**（大小仍取自聚晶）。</li> <li><b>G-2 推力器会卡在坑里</b>：贴地/撞墙时水平推力全被碰撞吃掉，判据命中就短暂抬头拔高。</li> </ol>
  */
 public final class MaidGoetyFlight {
 
@@ -153,12 +128,10 @@ public final class MaidGoetyFlight {
     /**
      * 【有没有正在推进的任务】——{@code MaidGoetyMoveSuppressMixin} 每 tick 问它来决定
      * 要不要取消 {@code MoveToTargetSink}。
-     *
      * <p>【为什么这里要带"过期即失效"的兜底】mixin 取消的是**移动 sink**：只要 {@code isActive}
      * 为真，她的走路就被从源头掐掉。而任务的回收原本只在 {@code tick} 里做——万一
      * {@code tick} 因任何原因没跑到（女仆卸载后重载、事件被别的模组吞掉、极端情况下抛异常），
-     * 一条陈旧条目就会让她的移动**永久被取消**（原 PR 的隐患）。所以这里顺手做过期判定：
-     * 超过该档的时长上限即视为不属于"正在推进"，并清掉——mixin 立刻恢复她原本的移动。
+     * 一条陈旧条目就会让她的移动**永久被取消**（原 PR 的隐患）。所以这里顺手做过期判定： 超过该档的时长上限即视为不属于"正在推进"，并清掉——mixin 立刻恢复她原本的移动。
      */
     public static boolean isActive(EntityMaid maid) {
         if (maid == null) {

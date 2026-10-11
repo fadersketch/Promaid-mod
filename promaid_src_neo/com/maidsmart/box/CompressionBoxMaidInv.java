@@ -11,25 +11,18 @@ import java.util.List;
 
 /**
  * 「盒子里的东西也是女仆背包的一部分」（v1.2.2 实测六百一十六）。
- *
  * 做法：把 {@code maid.getMaidInv()} 的返回值换成一个**子类**（本类），它在她的
  * 36 格之后**追加**背包里每个压缩盒的 5 格。换的方法在
  * {@code MaidCompressionBoxMixin}（往 TLM 的 {@code getMaidInv} 头部注入）。
  * 之所以挑这一个方法下手：javap 实证全 TLM 只有 4 个类引用它，而**本模组自己
  * 找东西/吃东西/数东西的代码几乎全部走它**——一处注入，几十处调用点全部自动
  * 看得见盒子里的东西，不用去改 40 个文件。
- *
  * ── 两条硬规矩（都是原版把数量写成一字节/有范围逼出来的，见 CompressionBoxData） ──
  * <ul>
  *   <li><b>取：视野封顶 64</b>。{@link #getStackInSlot} 对盒子格返回的是
  *       {@code min(真实数量, 64)} 的**副本**，{@link #extractItem} 也最多给 64。
  *       于是「把这一格整个拿走」的代码最多只拿到 64——不会把 114514 个塞进她的
- *       手/背包格（那一步会在她存档时被截断，等于蒸发）；</li>
- *   <li><b>存：并到真上限</b>。{@link #insertItem} 认的是**真实**余量，能把东西
- *       并进一格已有的 114514 个里，这才是「一格堆满」的用处。</li>
- * </ul>
- * 还有个副产物：她捡到的东西（{@code insertItemStacked} 那条路）也会优先并进
- * 盒子——「背包的延伸」就该是双向的。
+ *       手/背包格（那一步会在她存档时被截断，等于蒸发）；</li> <li><b>存：并到真上限</b>。{@link #insertItem} 认的是**真实**余量，能把东西 并进一格已有的 114514 个里，这才是「一格堆满」的用处。</li> </ul> 还有个副产物：她捡到的东西（{@code insertItemStacked} 那条路）也会优先并进 盒子——「背包的延伸」就该是双向的。
  */
 public final class CompressionBoxMaidInv extends ItemStackHandler {
 
@@ -95,15 +88,11 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
 
     /**
      * 只含「盒子那几格」的一段视图（v1.2.2 实测六百一十八）。
-     *
      * 【为什么需要它】TLM 有几条路走的是 {@code getAvailableInv} /
      * {@code getAvailableBackpackInv}（它们读的是 {@code maidInv} **字段**，不是
      * {@code getMaidInv()}，六百一十六那批只注入了后者）——**女仆自己吃食物**
      * （{@code MaidHealSelfTask} 就是拿 {@code getAvailableBackpackInv()} 逐格找吃的）
-     * 正好是其中一条。于是「盒子里放食物她不吃、放弹药/TNT 她认」（弹药是走
-     * {@code getMaidInv()} 的我们自己的代码）——这就是用户报的那条。
-     * 修法在 {@code MaidCompressionBoxMixin}：把那两个方法的返回值**再套一层**，
-     * 把这一段接在后面；这里只负责把这 5×N 格切出来。
+     * 正好是其中一条。于是「盒子里放食物她不吃、放弹药/TNT 她认」（弹药是走 {@code getMaidInv()} 的我们自己的代码）——这就是用户报的那条。 修法在 {@code MaidCompressionBoxMixin}：把那两个方法的返回值**再套一层**， 把这一段接在后面；这里只负责把这 5×N 格切出来。
      */
     public net.neoforged.neoforge.items.IItemHandlerModifiable boxRange() {
         int base = maidSlots();
@@ -150,11 +139,9 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         // 【六百一十八修】上限不能一律按 64 算——见 CompressionBoxData.viewCap：
         // 不可堆叠的物品（附魔书/工具/甲）上限是 1，给原版一个「2 个的附魔书」这种
         // 非法堆，TLM 那边「插进背包」的调用点大多不看返回值，多出来的那个就没了。
-        //
         // 【必须 min(真实数量, 上限)】viewCap 是**上限**不是数量——第一版写成
         // `copyWithCount(viewCap(s))`，于是"盒子里 5 个石头"会变成"她看见 64 个"
-        // （凭空多出来，实测六百一十八自检的石头对照当场打红）。原版口径本来就是
-        // 「不超过 min(64, 物品上限)」，真实数量更小时以真实数量为准。
+        // （凭空多出来，实测六百一十八自检的石头对照当场打红）。原版口径本来就是 「不超过 min(64, 物品上限)」，真实数量更小时以真实数量为准。
         return s.copyWithCount(Math.min(s.getCount(), CompressionBoxData.viewCap(s)));
     }
 

@@ -20,41 +20,17 @@ import java.util.UUID;
 /**
  * 空闲散步的速度自检（v1.2.2 实测六百二十）——{@code /maid_smart stroll check [女仆]}
  * 与 {@code /maid_smart stroll go [女仆]} 干活的地方。
- *
  * ── 用户报的那条 ──
  * 「女仆空闲散步移动速度调不了，0.1 倍速都跟快步跑一样」。
- *
  * ── 为什么会这样（javap + 实测，不是猜的）──
  * 散步的 {@code walkTarget.setSpeedModifier} 从来就没写错，它是**乘在女仆的基础移动
- * 速度属性上**的：{@code MaidMoveControl.m_8126_}（原版 {@code MoveControl} 的 MOVE_TO
+ * 速度属性上**的：{@code MaidMoveControl.tick}（原版 {@code MoveControl} 的 MOVE_TO
  * 分支）做的是 {@code setSpeed(speedModifier × getAttributeValue(MOVEMENT_SPEED))}。
  * 而 TLM 的女仆实体**没有**动过这个属性（{@code EntityMaid.createAttributes} javap
  * 实证：只有跟随距离 64、若干 TLM 自己的属性，以及 Forge 的 ENTITY_REACH 2.0；
  * 移动速度是 {@code LivingEntity.createLivingAttributes} 带进来的原版默认值 **0.7**；
  * 全 TLM 引用 MOVEMENT_SPEED 的只有 5 个类，除了 MaidMoveControl 就是扫帚/妖精，
- * 没有一处给女仆加修正）。玩家是 0.1、僵尸 0.23、村民 0.5。
- *
- * 但**实际格/秒不是线性的**（六百二十 量出来的）：0.15 → 0.5、0.3 → 1.9、0.4 → 3.4、
- * 0.5 → 4.9、0.6 → 6.1、0.7 → 8.3、1.0 → 14（格/秒；玩家走路 4.32、跑步 5.61）。
- * 慢到一定程度她会"一步一顿"（寻路每格重新判定），所以 0.2 及以下实测都是 0.1（几乎不走）。
- * 结论有两条，也正是这条反馈的两半：
- * <ol>
- *   <li><b>老的默认 0.7 实测 ≈8 格/秒——比玩家跑步（5.6）还快</b>，用户看到的"快步跑"
- *       就是这个数。六百二十 把默认降到 \u00a70.4（≈3.3 格/秒，玩家走路的 3/4）；</li>
- *   <li><b>老的下限 0.3 把"想调慢"的人卡住了</b>（0.3 就是能调到的最慢值），
- *       现在放到 0.05——但注意 0.2 以下实测几乎不走，真正好用的慢档是 0.3~0.4。</li>
- * </ol>
- *
- * ── 这里量的是什么 ──
- * 一句话：**同一件事，量出来的格/秒是不是随倍率变**。{@link #go} 用当前配置倍率
- * 给她写一个 24 格远的直线目标（走得到的点，见
- * {@link MaidStrollBehavior#pickLongRun}），记下起点与时刻；{@link #run} 下一次被叫到时
- * 把「走了多少格 / 花了多少 tick」算成格每秒（起步 1 秒后再取一个采样点，用它算**巡航
- * 速度**——起步加速段不该算进去），并等她到点后**冻结**这一份读数（到点后站住会把均值
- * 拉低，所以到点那一刻就定格）。
- *
- * 这条正是「调不了」这个说法的反证：如果倍率真的没接上，不同倍率量出来的速度会一样；
- * 量出来随倍率变，就说明这个旋钮是通的——剩下的只是「写成多少才合你的口味」。
+ * 没有一处给女仆加修正）。玩家是 0.1、僵尸 0.23、村民 0.5。 但**实际格/秒不是线性的**（六百二十 量出来的）：0.15 → 0.5、0.3 → 1.9、0.4 → 3.4、 0.5 → 4.9、0.6 → 6.1、0.7 → 8.3、1.0 → 14（格/秒；玩家走路 4.32、跑步 5.61）。 慢到一定程度她会"一步一顿"（寻路每格重新判定），所以 0.2 及以下实测都是 0.1（几乎不走）。 结论有两条，也正是这条反馈的两半： <ol> <li><b>老的默认 0.7 实测 ≈8 格/秒——比玩家跑步（5.6）还快</b>，用户看到的"快步跑" 就是这个数。六百二十 把默认降到 \u00a70.4（≈3.3 格/秒，玩家走路的 3/4）；</li> <li><b>老的下限 0.3 把"想调慢"的人卡住了</b>（0.3 就是能调到的最慢值）， 现在放到 0.05——但注意 0.2 以下实测几乎不走，真正好用的慢档是 0.3~0.4。</li> </ol> ── 这里量的是什么 ── 一句话：**同一件事，量出来的格/秒是不是随倍率变**。{@link #go} 用当前配置倍率 给她写一个 24 格远的直线目标（走得到的点，见 {@link MaidStrollBehavior#pickLongRun}），记下起点与时刻；{@link #run} 下一次被叫到时 把「走了多少格 / 花了多少 tick」算成格每秒（起步 1 秒后再取一个采样点，用它算**巡航 速度**——起步加速段不该算进去），并等她到点后**冻结**这一份读数（到点后站住会把均值 拉低，所以到点那一刻就定格）。 这条正是「调不了」这个说法的反证：如果倍率真的没接上，不同倍率量出来的速度会一样； 量出来随倍率变，就说明这个旋钮是通的——剩下的只是「写成多少才合你的口味」。
  */
 public final class MaidStrollCheck {
 
@@ -190,24 +166,24 @@ public final class MaidStrollCheck {
             }
             double mult = MaidSmartConfig.MISC_STROLL_SPEED.get();
             Run r = new Run();
-            r.startX = maid.m_20185_();
-            r.startY = maid.m_20186_();
-            r.startZ = maid.m_20189_();
-            r.startTick = level.m_46467_();
+            r.startX = maid.getX();
+            r.startY = maid.getY();
+            r.startZ = maid.getZ();
+            r.startTick = level.getGameTime();
             r.multiplier = mult;
             r.attr = attribute(maid);
             r.target = target;
-            RUNS.put(maid.m_20148_(), r);
+            RUNS.put(maid.getUUID(), r);
             com.maidsmart.tool.StateTables.cap("MaidStrollCheck.RUNS", RUNS);
 
             net.minecraft.world.entity.ai.behavior.BlockPosTracker tracker =
                     new net.minecraft.world.entity.ai.behavior.BlockPosTracker(target);
-            maid.m_6274_().m_21879_(MemoryModuleType.f_26371_, tracker);
-            maid.m_6274_().m_21879_(MemoryModuleType.f_26370_,
+            maid.getBrain().setMemory(MemoryModuleType.LOOK_TARGET, tracker);
+            maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
                     new WalkTarget(tracker, (float) mult, 1));
 
-            double dist = Math.sqrt(Math.pow(maid.m_20185_() - (target.m_123341_() + 0.5), 2)
-                    + Math.pow(maid.m_20189_() - (target.m_123343_() + 0.5), 2));
+            double dist = Math.sqrt(Math.pow(maid.getX() - (target.getX() + 0.5), 2)
+                    + Math.pow(maid.getZ() - (target.getZ() + 0.5), 2));
             out.add(line("\u00a7e\u5f00\u59cb\u6d4b\u91cf\u00a7r\uff1a\u500d\u7387 " + mult
                     + "\uff08\u751f\u6548 " + fmt(r.attr * mult) + "\uff09\uff0c\u76ee\u6807\u70b9 "
                     + pos(target) + "\uff08\u8ddd\u79bb " + fmt(dist) + " \u683c\uff09"
@@ -223,14 +199,11 @@ public final class MaidStrollCheck {
 
     /**
      * {@code /maid_smart stroll speed <0.05~2.5>}——当场改散步速度倍率并保存。
-     *
      * 【为什么给玩家这个入口】用户那句「调不了」有一半是**试起来太麻烦**：改一次配置
      * 要么翻文件、要么开面板，还得回去盯着她走。这里让他站在她面前连着试几档，
      * 配合 {@code stroll go}/{@code check} 直接看格每秒。
-     *
      * 越界**在这里就夹住**（不指望配置框架替我们兜底）：夹完再 {@code set} + {@code save}，
-     * 文件里落的就是当场生效的那个数——玩家写 0.005 时看到的答复是「实际生效为 0.050」，
-     * 不会出现"界面上写着 0.005、重启之后变成 0.05"这种两套数。
+     * 文件里落的就是当场生效的那个数——玩家写 0.005 时看到的答复是「实际生效为 0.050」， 不会出现"界面上写着 0.005、重启之后变成 0.05"这种两套数。
      */
     public static List<Component> setSpeed(double value) {
         List<Component> out = new ArrayList<>();
@@ -257,33 +230,29 @@ public final class MaidStrollCheck {
 
     /**
      * 上一次 {@link #go} 的读数（没有 go 过就报一句 SKIP）。
-     *
      * 【两个数，看哪个】起步那几十 tick 她在加速/起步转向，把这段算进均值会让慢档显得更慢
      * （这正是"倍率之比"第一次量出来偏大的原因）。所以这里给两个：
      * <ul>
      *   <li><b>全程均值</b>：从 go 到现在（或到点那一刻，先到先算）的距离 ÷ 时间；</li>
-     *   <li><b>巡航速度</b>：起步 {@link #CRUISE_AFTER} tick 之后取一个采样点，
-     *       从那个点到「现在/到点」再算一次——**比速度就该看这个**。</li>
-     * </ul>
-     * 到点那一刻**冻结**：她走到目标点之后会站住，继续算只会把这个数越拉越低。
+     *   <li><b>巡航速度</b>：起步 {@link #CRUISE_AFTER} tick 之后取一个采样点， 从那个点到「现在/到点」再算一次——**比速度就该看这个**。</li> </ul> 到点那一刻**冻结**：她走到目标点之后会站住，继续算只会把这个数越拉越低。
      */
     private static List<Component> measureReadout(ServerLevel level, EntityMaid maid) {
         List<Component> out = new ArrayList<>();
         if (maid == null) {
             return out;
         }
-        Run r = RUNS.get(maid.m_20148_());
+        Run r = RUNS.get(maid.getUUID());
         if (r == null) {
             out.add(skip("\u8fd8\u6ca1\u6d4b\u8fc7\uff1a\u5148 /maid_smart stroll go <\u5973\u4ec6>\uff0c"
                     + "\u7b49 2~3 \u79d2\u518d\u8dd1\u672c\u547d\u4ee4"));
             return out;
         }
-        long now = level.m_46467_();
-        double cx = maid.m_20185_();
-        double cz = maid.m_20189_();
+        long now = level.getGameTime();
+        double cx = maid.getX();
+        double cz = maid.getZ();
         if (!r.arrived) {
-            double toTarget = Math.sqrt(Math.pow(cx - (r.target.m_123341_() + 0.5), 2)
-                    + Math.pow(cz - (r.target.m_123343_() + 0.5), 2));
+            double toTarget = Math.sqrt(Math.pow(cx - (r.target.getX() + 0.5), 2)
+                    + Math.pow(cz - (r.target.getZ() + 0.5), 2));
             if (toTarget <= ARRIVE) {
                 r.arrived = true;
                 r.endTick = now;
@@ -303,8 +272,8 @@ public final class MaidStrollCheck {
         long ticks = until - r.startTick;
         double dist = Math.sqrt(Math.pow(ex - r.startX, 2) + Math.pow(ez - r.startZ, 2));
         double perSec = ticks > 0 ? dist / (ticks / 20.0) : 0.0;
-        Vec3 v = maid.m_20184_();
-        double inst = Math.sqrt(v.f_82479_ * v.f_82479_ + v.f_82481_ * v.f_82481_) * 20.0;
+        Vec3 v = maid.getDeltaMovement();
+        double inst = Math.sqrt(v.x * v.x + v.z * v.z) * 20.0;
         long cruiseTicks = until - r.midTick;
         double cruise = 0.0;
         if (r.midTick > 0 && cruiseTicks >= CRUISE_MIN) {
@@ -346,7 +315,7 @@ public final class MaidStrollCheck {
     /** 她的基础移动速度属性（拿不到 → -1） */
     private static double attribute(EntityMaid maid) {
         try {
-            return maid.m_21133_(Attributes.f_22279_);
+            return maid.getAttributeValue(Attributes.MOVEMENT_SPEED);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidStrollCheck", ignored);
             return -1.0;
         }
@@ -369,13 +338,13 @@ public final class MaidStrollCheck {
     /** 当前 WALK_TARGET 那一条（我们写的倍率就摆在这里） */
     private static String targetLine(EntityMaid maid) {
         try {
-            Optional<WalkTarget> wt = maid.m_6274_().m_21952_(MemoryModuleType.f_26370_);
+            Optional<WalkTarget> wt = maid.getBrain().getMemory(MemoryModuleType.WALK_TARGET);
             if (wt.isEmpty()) {
                 return "\u5f53\u524d\u79fb\u52a8\u76ee\u6807\uff1a\u65e0\uff08\u6ca1\u4eba\u5728\u8d70\uff09";
             }
             WalkTarget w = wt.get();
-            return "\u5f53\u524d\u79fb\u52a8\u76ee\u6807\uff1a" + pos(w.m_26420_().m_6675_())
-                    + "\u3001\u901f\u5ea6\u4fee\u6b63=\u00a7f" + w.m_26421_()
+            return "\u5f53\u524d\u79fb\u52a8\u76ee\u6807\uff1a" + pos(w.getTarget().currentBlockPosition())
+                    + "\u3001\u901f\u5ea6\u4fee\u6b63=\u00a7f" + w.getSpeedModifier()
                     + "\u00a7r\uff08= \u5199\u8fdb walkTarget \u7684\u90a3\u4e2a\u500d\u7387\uff09";
         } catch (Throwable t) {
              com.maidsmart.diag.Diag.swallow("MaidStrollCheck", t); return "\u5f53\u524d\u79fb\u52a8\u76ee\u6807\uff1a\u8bfb\u4e0d\u5230\uff08" + t + "\uff09";
@@ -383,7 +352,7 @@ public final class MaidStrollCheck {
     }
 
     private static String pos(BlockPos p) {
-        return "(" + p.m_123341_() + ", " + p.m_123342_() + ", " + p.m_123343_() + ")";
+        return "(" + p.getX() + ", " + p.getY() + ", " + p.getZ() + ")";
     }
 
     private static String onOff(boolean b) {
@@ -396,18 +365,18 @@ public final class MaidStrollCheck {
     }
 
     private static Component line(String s) {
-        return Component.m_237113_(s);
+        return Component.literal(s);
     }
 
     private static Component pass(String s) {
-        return Component.m_237113_("\u00a7a[PASS] \u00a7r" + s);
+        return Component.literal("\u00a7a[PASS] \u00a7r" + s);
     }
 
     private static Component fail(String s) {
-        return Component.m_237113_("\u00a7c[FAIL] \u00a7r" + s);
+        return Component.literal("\u00a7c[FAIL] \u00a7r" + s);
     }
 
     private static Component skip(String s) {
-        return Component.m_237113_("\u00a77[SKIP] \u00a7r" + s);
+        return Component.literal("\u00a77[SKIP] \u00a7r" + s);
     }
 }

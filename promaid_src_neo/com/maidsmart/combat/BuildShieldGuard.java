@@ -38,20 +38,12 @@ public final class BuildShieldGuard {
     private static final String BUILD_TASK_UID = "maid_smart:build";
 
     /**
-     * 是否处于建造任务（与 tickBuildSit / BlueprintBuildExecutor 同口径）。
-     *
-     * <p>【实测六百九十八 建造女仆被打死】护盾原先只认**当前**任务是不是建造——于是
-     * 本模组自己的「主动参战」把她切成 {@code touhou_little_maid:attack} 的那一瞬间，
-     * 护盾当场失效（{@code tickShield} 走 else 支把抗性 V 摘掉、受击取消也不再拦），
-     * 她成了一个穿着建筑工衣服的普通战斗女仆。
-     *
-     * latest.log）：04:38:24.856 「战斗 参战：maid_smart:build -> touhou_little_maid:attack」
-     * → 04:38:26.762 「森近霖之助被下界合金巨兽杀死了」（2 秒）；更早一次 04:35:25.021
-     * 参战 → 04:35:25.056 被 genericKill 打中（当晚靠魂符收走才没死）。
-     *
-     * <p>修法：护盾跟着**「她是建造女仆」这件事**走，不跟着"这一拍的任务字段"走——
-     * 处于本模组主动参战会话中（{@code COMBAT_ACTIVE_TAG}）且战前任务（{@code PREV_TASK_TAG}）
-     * 就是建造 → 照样算建造中。战斗结束还原后标记被清，自动回到常规判定。
+     * 是否处于建造任务（与 tickBuildSit / BlueprintBuildExecutor 同口径）。护盾必须跟着**「她是建造
+     * 女仆」这件事**走，不跟着"这一拍的任务字段"走：只认当前任务是不是建造的话，本模组「主动参战」把她
+     * 切成 {@code touhou_little_maid:attack} 的那一瞬护盾就失效（抗性 V 被摘、受击取消不再拦），她成了
+     * 穿建筑工衣服的普通战斗女仆（实测：参战 2 秒后被打死）。判定：处于本模组主动参战会话
+     * （{@code COMBAT_ACTIVE_TAG}）且战前任务（{@code PREV_TASK_TAG}）就是建造 → 照样算建造中；战斗
+     * 结束还原后标记被清，自动回到常规判定。
      */
     public static boolean isBuilding(EntityMaid maid) {
         if (maid == null || !maid.isAlive()) {

@@ -7,9 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * 【实测八百一十六：非战斗模式下女仆移速硬上限】——挂在 {@code Mob.setSpeed}（SRG
  * {@code m_7910_(F)V}）这一个口子上。
- *
  * <p>【为什么是这里】javap 实证：TLM 的 {@code MaidMoveControl.m_8126_} 在 MOVE_TO / STRAFE
  * 分支里算出 {@code speedModifier × MOVEMENT_SPEED} 后调的正是 {@code Mob.setSpeed}，而
  * {@code Mob.setSpeed} 只有两行——写 {@code LivingEntity} 的 speed 字段 + 写 zza；紧接着
@@ -18,18 +16,10 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * （直接 {@code setDeltaMovement} 施加速度矢量的那几处——搭路推一步、自保逃跑、飞行/扫帚——
  * 不走这个口子，本项也没打算管：那些不是"走路"，由 {@link com.maidsmart.task.MaidNonCombatSpeedCap}
  * 的让位判据另行排除。）
- *
  * <p>用 {@code @ModifyVariable(at = HEAD)} 改<b>入参本身</b>：改的是"送进去的那个数"，
  * 于是后续写字段 / 写 zza / travel 全部自动一致，不会出现"字段压了、zza 没压"的半吊子状态。
- *
  * <p>【目标类为什么不写 EntityMaid】{@code setSpeed} 是原版 {@code Mob} 声明的方法，
- * EntityMaid 及其祖先链（TamableAnimal/Animal/AgeableMob/PathfinderMob）<b>都没有覆写</b>
- * （javap 逐个查过），运行时真正执行的就是 {@code Mob.setSpeed}——挂 {@code Mob} 才能拦住
- * 全部调用，挂 EntityMaid 会注入失败（方法不在该类里）。
- *
- * <p>【本树是 forge / 1.20.1】方法名写 SRG {@code m_7910_}（手工编译无 refmap）；
- * neo 树同名类写官方名 {@code setSpeed}。逻辑一字不差，全在
- * {@link com.maidsmart.task.MaidNonCombatSpeedCap#clamp} 里。
+ * EntityMaid 及其祖先链（TamableAnimal/Animal/AgeableMob/PathfinderMob）<b>都没有覆写</b> （javap 逐个查过），运行时真正执行的就是 {@code Mob.setSpeed}——挂 {@code Mob} 才能拦住 全部调用，挂 EntityMaid 会注入失败（方法不在该类里）。 <p>【本树是 forge / 1.20.1】方法名写 SRG {@code m_7910_}（手工编译无 refmap）； neo 树同名类写官方名 {@code setSpeed}。逻辑一字不差，全在 {@link com.maidsmart.task.MaidNonCombatSpeedCap#clamp} 里。
  */
 @Mixin(Mob.class)
 public abstract class MaidWalkSpeedCapMixin {

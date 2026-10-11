@@ -8,17 +8,17 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * 实测五百五十三③：**建造区块内的容器取料**（服务端工具）。
+ * 建造区块内的容器取料（纯服务端工具）。
  *
- * 需求："这个 mod 里面可以检索周围箱子以及潜影箱的方块拿过来建造"——范围按用户要求
- * 限定为**建造区块内**（外扩 {@code build.chestSearchMargin}，默认 4 格）。
- *
- * - 容器识别：`BlockEntity instanceof Container` —— 箱子/陷阱箱/桶/潜影箱/模组容器
- *   全覆盖；末影箱（EnderChestBlockEntity）不是 Container，天然不会被翻；
- * - 扫描方式：按区块枚举**真实存在的方块实体**（不是逐格 getBlockEntity）；
- * - 物品匹配：走 {@link BlueprintLib#itemForBlock(String)}（红石线→红石、耕地→泥土、
- *   水→水桶这些映射都在里面），不能用 `Block.asItem()`；
- * - 取出时塞不下的还回**原槽**（与 {@link BlueprintLib#transferFromPlayer} 同口径）。
+ * 范围限定为**建造区块内**（外扩 {@code build.chestSearchMargin}，默认 4 格），区块外更远的箱子不去拿，
+ * 避免女仆为材料满世界跑。
+ * · 容器识别：{@code BlockEntity instanceof Container}——箱子/陷阱箱/桶/潜影箱/各类模组容器全覆盖；
+ *   末影箱天然不含 Container，不会被翻。
+ * · 扫描方式：按区块 {@code LevelChunk.getBlockEntities()} 枚举**真实存在**的方块实体（不是逐格
+ *   getBlockEntity）——100×100 工地也就 49 个区块，代价可忽略，大蓝图也不会卡。
+ * · 物品匹配走 {@link BlueprintLib#itemForBlock(String)}（红石线→红石、耕地→泥土、水→水桶等映射都在
+ *   里面），**不能**用 {@code Block.asItem()}（会取错东西）。
+ * · 取出时的剩余还回**原槽**（与 {@link BlueprintLib#transferFromPlayer} 同一口径）。
  */
 public final class BuildContainerSource {
     private BuildContainerSource() {

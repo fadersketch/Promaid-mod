@@ -6,12 +6,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 
 /**
- * 【实测八百一十四：干活时把移速压回「0 好感档」】
- *
  * <p>【
- *
- *
- *
  * <p>【先纠正一个前提——查证结论】TLM 1.5.3 **并没有**「好感度 → 移动速度」这条加成。
  * 把官方 jar / 整合包里的 {@code [国创]} 分支 jar / 服务器 jar 逐类扫过：能同时认出
  * 「和女仆有关」且「碰 MOVEMENT_SPEED」的类只有一个 {@code EntityFairy}（妖精，写的是妖精
@@ -19,43 +14,11 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
  * 调 {@code m_22100_}（setBaseValue），好感度档位表里（LEVEL_0..3）**没有任何 SPEED 项**；
  * TLM 自己的游戏内手册也写着 「Higher favorability will increase the maid's health and attack」
  * （只提血和攻击）。
- *
  * <p>【那「高好感就乱窜」是怎么来的】真实链路是**间接**的：
  * <ol>
  *   <li>好感度档位决定**饰品栏格数**（{@code BaubleContainer}：0~1 级 10 格 / 2 级 20 格 /
  *       3 级 30 格）——好感度高的女仆能同时挂更多带移速/加速的饰品；</li>
- *   <li>本模组 {@code misc.strollSpeed}（空闲散步倍率）默认乘在女仆 **0.7** 的基础移速上，
- *       服务器配置若还停在旧的 0.7 就是约 8 格/秒（比玩家跑步 5.61 还快），观感就是「刹不住」；
- *   <li>本模组还刻意去掉了原版走路的刹车窗口（MoveToTargetSink 时长延长 / NativeTaskSmooth
- *       把任务行为时长拉到 Integer.MAX_VALUE / 跟随收紧每 tick 重断言）——速度看着「不停」。</li>
- * </ol>
- *
- * <p>【所以这一项做什么】玩家要的语义是「干活时按 0 好感档的移速走」。既然 TLM 本身没有这条
- * 加成，本项就**照玩家的口径把它显式实现出来**：干活（非战斗、非空闲/跟随）时，把女仆的
- * MOVEMENT_SPEED 有效值**钳到她的基础值**（= 0.7，原版 LivingEntity 默认，
- * TLM 不写它、等于 0 好感/无饰品的裸值），战斗任务与空闲/跟随/骑乘一律不碰。
- *
- * <p>【怎么钳——不写 base，只挂一个自纠正的加法修改器】照搬本模组 {@code MaidRideKit.applyRiddenSpeed}
- * 的做法：每 tick 取一次 {@code m_22115_}（getBaseValue，她自己属性表里的裸值）+ 我们那个 id 的
- * 现有修改器金额，算出「去掉我们这一笔之后她会是多少」= {@code current - ourAmount}，再令
- * 我们的金额 = {@code base - that}，于是**有效值恒等于 base**。好处：
- * <ul>
- *   <li>不写 {@code m_22100_}（setBaseValue，不污染她的存档属性，transient 修改器不落 NBT）；</li>
- *   <li>同一 id 覆盖 = 幂等，别的来源（饰品/药水）增减我们自动补偿，不需要枚举它们；</li>
- *   <li>战斗/空闲切回来时把我们的金额摘掉，她的真实移速立刻恢复原样，不留残影。</li>
- * </ul>
- *
- * <p>【判定口径】「干活」用 {@link MaidWorkTags#isNonCombatWork}（非攻击任务且非 idle/follow）
- * ——与「干活不被打断」系列同一个闸门，挖矿/伐木/建造/烹饪/酿造/农活/刷怪笼插火把全部命中，
- * 战斗类（含第三方 IAttackTask）、idle、follow 全部放行。另外坐着/当乘客/骑乘时不干预
- * （她本来就不靠自己的腿走，这时压速只会干扰坐具/坐骑逻辑）。
- *
- * <p>【开关】{@code misc.workSpeedLevel0}，默认开。关掉 = 完全不挂修改器，与旧版逐字节一致。
- *
- * <p>【1.20.1 与 1.21.1 的差异】只有 id 与 SRG 名：1.20.1 的 {@code AttributeModifier} 用
- * {@code (UUID, name, amount, op)} 构造，{@code getModifier/removeModifier} 收 UUID；
- * 1.21.1 改成了 {@code ResourceLocation}，故这里用同一名称派生的 UUID（与
- * {@code MaidRideKit.SERVANT_SPEED_NAME} 同款手法），行为完全一致。
+ *   <li>本模组 {@code misc.strollSpeed}（空闲散步倍率）默认乘在女仆 **0.7** 的基础移速上， 服务器配置若还停在旧的 0.7 就是约 8 格/秒（比玩家跑步 5.61 还快），观感就是「刹不住」； <li>本模组还刻意去掉了原版走路的刹车窗口（MoveToTargetSink 时长延长 / NativeTaskSmooth 把任务行为时长拉到 Integer.MAX_VALUE / 跟随收紧每 tick 重断言）——速度看着「不停」。</li> </ol> <p>【所以这一项做什么】玩家要的语义是「干活时按 0 好感档的移速走」。既然 TLM 本身没有这条 加成，本项就**照玩家的口径把它显式实现出来**：干活（非战斗、非空闲/跟随）时，把女仆的 MOVEMENT_SPEED 有效值**钳到她的基础值**（= 0.7，原版 LivingEntity 默认， TLM 不写它、等于 0 好感/无饰品的裸值），战斗任务与空闲/跟随/骑乘一律不碰。 <p>【怎么钳——不写 base，只挂一个自纠正的加法修改器】照搬本模组 {@code MaidRideKit.applyRiddenSpeed} 的做法：每 tick 取一次 {@code m_22115_}（getBaseValue，她自己属性表里的裸值）+ 我们那个 id 的 现有修改器金额，算出「去掉我们这一笔之后她会是多少」= {@code current - ourAmount}，再令 我们的金额 = {@code base - that}，于是**有效值恒等于 base**。好处： <ul> <li>不写 {@code m_22100_}（setBaseValue，不污染她的存档属性，transient 修改器不落 NBT）；</li> <li>同一 id 覆盖 = 幂等，别的来源（饰品/药水）增减我们自动补偿，不需要枚举它们；</li> <li>战斗/空闲切回来时把我们的金额摘掉，她的真实移速立刻恢复原样，不留残影。</li> </ul> <p>【判定口径】「干活」用 {@link MaidWorkTags#isNonCombatWork}（非攻击任务且非 idle/follow） ——与「干活不被打断」系列同一个闸门，挖矿/伐木/建造/烹饪/酿造/农活/刷怪笼插火把全部命中， 战斗类（含第三方 IAttackTask）、idle、follow 全部放行。另外坐着/当乘客/骑乘时不干预 （她本来就不靠自己的腿走，这时压速只会干扰坐具/坐骑逻辑）。 <p>【开关】{@code misc.workSpeedLevel0}，默认开。关掉 = 完全不挂修改器，与旧版逐字节一致。 <p>【1.20.1 与 1.21.1 的差异】只有 id 与 SRG 名：1.20.1 的 {@code AttributeModifier} 用 {@code (UUID, name, amount, op)} 构造，{@code getModifier/removeModifier} 收 UUID； 1.21.1 改成了 {@code ResourceLocation}，故这里用同一名称派生的 UUID（与 {@code MaidRideKit.SERVANT_SPEED_NAME} 同款手法），行为完全一致。
  */
 public final class MaidWorkSpeedLimiter {
 

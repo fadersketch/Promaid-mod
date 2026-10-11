@@ -25,49 +25,18 @@ import java.util.Map;
 
 /**
  * 搭路行为（v1.1.0，core 优先级 245——低于自保 250、高于落地水 240）。
- *
  * 女仆朝主人逐格搭方块靠近（借鉴 Zombie Invade 100 Days 的 MobBuildUpGoal：
  * 真实背包方块 + 物理位移，不像僵尸 setPos 瞬移）。默认开启（bridge.enabled）。
- *
  * 【v1.3.9.5 启动门槛调高】
- *
- *
  * 没改，只动配置门槛，旧配置文件里越界的值由配置系统按新下限修正）：
  * minDy 3→5（下限 4）、minRadius 3→4（下限 4）、startHDist 6→8（下限 8）。
  * 效果：平地蹦一下 / 上下 1~4 格的小台、箱子、矮墙都不再触发搭路；水平要拉开 8 格才铺平桥。
- *
  * 触发条件（全部满足，见 canUse）：
  * - 开关开启；主人存在、活着、同维度；女仆非 home 模式、非自保状态
  * - 任务未被实质占用（挖矿/伐木锁定目标、烹饪/酿造站桩中、建造未暂停不追人；
  *   详见 isTaskOccupied）
  * - 启动/收尾区错开（实测一百四十三）：与 canContinue 的 2.5 格"reached"收尾不相交——
- *   启动须离开收尾区（> max(bridge.minRadius, 2.5)），消除 2~2.5 格 start/stop 抖动
- * - 主触发（v1.1.0 实测一百七十九 + 一百八十七启动要求，判定口径）：水平有距离
- *   （≥ max(minRadius, 2.5)【且】平桥分支额外要求水平距离 ≥ bridge.startHDist，
- *   默认 8 格——实测一百八十七/一百九十九，v1.3.9.5 从 6 提高） + 朝主人方向【脚前方方块为空】（前方 1~2 格
- *   站立格/头顶/脚下全空 = 缺口悬空）→ 朝主人搭方块并踩上去；不看主人高低
- *   （主人在下方也铺桥过去——旧版 dy<0 一律不搭）、距离无上限（方块耗尽自然停）
- * - 垂直搭高分支（保留）：前方无缺口且主人高于女仆 bridge.minDy（默认 5，v1.3.9.5 从 3 提高）时照旧启动；
- *   该分支保留距离上限——女仆【自己半空】时放开（实测一百四十三），地面/非空中且
- *   主人高于女仆时取 max(maxDist, airMaxDist)（默认 7；airMaxDist 默认 128）
- * - 周围 bridge.threatDist 格内无敌对生物；背包有可放置方块（MaidBuildBlockFilter）
- * - 威胁扫描 + 背包过滤每 10 tick 节流一次（廉价判定每 tick 进行）
- *
- * 执行（每 tick，tick 方法）：
- * - 空中平桥 tryAirBridgeStep：dy < minDy 且水平 >1.2 格时，朝主人方向三向试探
- *   （正前/±45°），前方脚下悬空则在【前方脚下】垫块走过去——不依赖导航；
- * - 斜上台阶 tryDiagStep：dy >= 1 且水平 >1.2 格时，朝主人方向前方脚下垫台阶，
- *   塔朝主人斜着长；
- * - 垂直柱 placeStep：dy >= 1 时原地垫脚下把自己顶高（放置格 + 头顶 2 格净空）；
- * - 三条腿共用 bridge.stepCooldown（默认 5 tick/块）；垫块/落足格命中危险表
- *   （岩浆/火等）一律跳过（实测一百二十七）；
- * - 置 bridging 标记（禁 TLM 瞬移回主人——MaidTeleportPreserveMixin）；垫的方块
- *   登记 PlacedBlockTracker 自清理（默认 bridge.placedLifetime 秒；reclaimToMaid
- *   开则进最近女仆背包，有女仆站上面延后回收）。
- *
- * 中止（见 canContinue / doStop）：贴到主人 ≤2.5 格（跟随接管）/ 威胁出现 /
- * 自保触发 / 任务重新占用 / 主人换维度或走远（≥ 上限+2 缓冲）/ 方块耗尽 /
- * 20 秒垫不出方块（头顶被挡）。
+ *   启动须离开收尾区（> max(bridge.minRadius, 2.5)），消除 2~2.5 格 start/stop 抖动 - 主触发（v1.1.0 实测一百七十九 + 一百八十七启动要求，判定口径）：水平有距离 （≥ max(minRadius, 2.5)【且】平桥分支额外要求水平距离 ≥ bridge.startHDist， 默认 8 格——实测一百八十七/一百九十九，v1.3.9.5 从 6 提高） + 朝主人方向【脚前方方块为空】（前方 1~2 格 站立格/头顶/脚下全空 = 缺口悬空）→ 朝主人搭方块并踩上去；不看主人高低 （主人在下方也铺桥过去——旧版 dy<0 一律不搭）、距离无上限（方块耗尽自然停） - 垂直搭高分支（保留）：前方无缺口且主人高于女仆 bridge.minDy（默认 5，v1.3.9.5 从 3 提高）时照旧启动； 该分支保留距离上限——女仆【自己半空】时放开（实测一百四十三），地面/非空中且 主人高于女仆时取 max(maxDist, airMaxDist)（默认 7；airMaxDist 默认 128） - 周围 bridge.threatDist 格内无敌对生物；背包有可放置方块（MaidBuildBlockFilter） - 威胁扫描 + 背包过滤每 10 tick 节流一次（廉价判定每 tick 进行） 执行（每 tick，tick 方法）： - 空中平桥 tryAirBridgeStep：dy < minDy 且水平 >1.2 格时，朝主人方向三向试探 （正前/±45°），前方脚下悬空则在【前方脚下】垫块走过去——不依赖导航； - 斜上台阶 tryDiagStep：dy >= 1 且水平 >1.2 格时，朝主人方向前方脚下垫台阶， 塔朝主人斜着长； - 垂直柱 placeStep：dy >= 1 时原地垫脚下把自己顶高（放置格 + 头顶 2 格净空）； - 三条腿共用 bridge.stepCooldown（默认 5 tick/块）；垫块/落足格命中危险表 （岩浆/火等）一律跳过（实测一百二十七）； - 置 bridging 标记（禁 TLM 瞬移回主人——MaidTeleportPreserveMixin）；垫的方块 登记 PlacedBlockTracker 自清理（默认 bridge.placedLifetime 秒；reclaimToMaid 开则进最近女仆背包，有女仆站上面延后回收）。 中止（见 canContinue / doStop）：贴到主人 ≤2.5 格（跟随接管）/ 威胁出现 / 自保触发 / 任务重新占用 / 主人换维度或走远（≥ 上限+2 缓冲）/ 方块耗尽 / 20 秒垫不出方块（头顶被挡）。
  */
 public class BridgeUpBehavior extends Behavior<EntityMaid> {
     /** bridging 标记（persistentData——MaidTeleportPreserveMixin 拦传送用） */
@@ -216,13 +185,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.2.2 实测五百九十七【坐着不搭路】：反馈"女仆坐下的时候还是会触发搭路"。
-     *
      * 坐下的两种形态都要拦：① {@code m_20159_()}——骑乘/坐在 TLM 的椅子上（passenger 形态，
      * 与工程其它链路同一口径，见 {@code MaidPlaceGuard} 第 99 行、{@code HomePatrolHandler} 第 72 行）；
      * ② {@code isMaidInSittingPose()}——TLM 自己的"坐下"姿态。
-     *
-     * 旧版 canUse / canStillUse 里一条坐姿判定都没有：她坐在椅子上、或玩家让她坐下时，
      * 只要"水平离开主人 >2.5 格 + 朝主人方向脚前方是空的"就照旧启动——人挪不动（passenger
      * 由载具驱动），于是表现为"坐着也在搭路"（日志里 bridge-up start/stop 空转）。
      * canUse 拦启动、canStillUse（{@link #m_6737_}）拦"搭到一半被坐下"。
@@ -265,17 +230,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 旧版 canUse 要求 dy >= minDy（主人必须高2格）才启动搭路行为——
         // 主人与女仆高度相同但水平距离远时搭路行为完全不触发。修复：
         // 增加水平距离远（>3格）且主人与女仆至少差1格高度时也允许启动。
-        // v1.1.0 实测一百二十一（反馈："两人一起向上搭高，离了很远女仆也不会
         // 自己搭过来接近主人"）：一百零六的水平放宽当时只写在注释里、代码没落地
         // ——门槛仍是纯 dy >= minDy。两人各自向上搭时 dy 长期只有 0~1（主人未达
         // 门槛高差），水平距离却越拉越大 → 搭路行为永远不启动，tick 里为
-        // dy<minDy 准备的平桥分支（tryAirBridgeStep）形同虚设。落地放宽：
-        // 水平距离 >3 格且主人【不低于】女仆（dy >= 0）即允许启动——铺平桥朝
-        // 主人横向逼近（空中时 24 格内有效）；高度门槛只在近距离垂直搭高场景
-        // 严格生效。
-        // v1.1.0 实测十六（审查 P2-8）：廉价检查先行 + 10 tick 节流——
-        // 开关/home/自保/任务占用/距离/高度这些廉价判定不受节流（每 tick 都判），
-        // 只有威胁扫描（Monster AABB）和背包过滤（VoxelShape）这两个重的受节流。
+        // dy<minDy 准备的平桥分支（tryAirBridgeStep）形同虚设。落地放宽： 水平距离 >3 格且主人【不低于】女仆（dy >= 0）即允许启动——铺平桥朝 主人横向逼近（空中时 24 格内有效）；高度门槛只在近距离垂直搭高场景 严格生效。 开关/home/自保/任务占用/距离/高度这些廉价判定不受节流（每 tick 都判）， 只有威胁扫描（Monster AABB）和背包过滤（VoxelShape）这两个重的受节流。
         if (!MaidSmartConfig.BRIDGE_ENABLED.get()) {
             return false;
         }
@@ -326,17 +284,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         double hz = owner.m_20189_() - maid.m_20189_();
         double hDist = Math.sqrt(hx * hx + hz * hz);
         double dist3 = Math.sqrt(hx * hx + hy * hy + hz * hz); // 3D 球面欧氏距离
-        // v1.1.0 实测一百三十（反馈："应该是竖直和水平半径都要判定，总体是类似以
         // 女仆为圆心的一个球形"）：启动门槛统一改为【最小球面半径】（3D 欧氏距离）——
         // 主人在女仆周围球面【内部】不启桥（纯跟随走路）；球面【外部】再分两种：
         // ① 高差达标（dy >= minDy）→ 垂直搭高（旧语义再现）；② 竖直差不多但水平
         // 已拉开 + 前方脚下悬空（低头没路可走）→ 平铺搭桥（实心地面平地不启桥，
         // 根治 dy=0 平地上一秒一轮 start/stop/reached 的空转抖动）。
-        // v1.1.0 实测一百四十三【启动/收尾区错开，修 2~2.5 格抖动】：旧版启动区
         //（dist3 > minRadius=2）与 canContinue 收尾（dSq<=6.25=2.5 格"reached"）重叠在
-        // 2~2.5 格 band——行为每秒 start→reached→stop（日志实证 bridge-up start/stop
-        // reason=reached 刷屏），tick 根本没机会铺桥，主人 5 格也不搭。现在启动须离开
-        // 收尾区（>max(minRadius, 2.5)），与收尾区不相交 → 无抖动，主人 5 格照常启动。
+        // 2~2.5 格 band——行为每秒 start→reached→stop（日志实证 bridge-up start/stop reason=reached 刷屏），tick 根本没机会铺桥，主人 5 格也不搭。现在启动须离开 收尾区（>max(minRadius, 2.5)），与收尾区不相交 → 无抖动，主人 5 格照常启动。
         double minStart = Math.max(MaidSmartConfig.BRIDGE_MIN_RADIUS.get(), 2.5);
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
                 <= minStart * minStart) {
@@ -346,7 +300,6 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 有距离，而且脚前方方块为空。那么便会尝试向主人方向的搭方块并踩上去"）：
         // 主触发 = 水平有距离（上面 minStart 已保证离开收尾区）+ 朝主人方向【脚前方
         // 方块为空】——前方 1~2 格站立格/头顶/脚下全空 = 缺口悬空（hasGapAhead，
-        // 旧版该方法是无调用死代码）。命中即搭：不再看主人高低（主人在下方也横向
         // 铺桥过去——旧版 dy<0 一律不搭，正是"解除了威胁也不会搭"的门槛之一）、
         // 不再设距离上限（方块耗尽自然停）。垂直搭高触发保留：前方无缺口且主人
         // 高于女仆 min(minDy,4) 时照旧启动（原地垫柱/斜上台阶）；距离上限只约束
@@ -569,12 +522,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 走过去再铺下一块（导航在半空永远返回失败 → 旧版只剩垂直叠柱/傻站）。
         // 与 tryDiagStep 的区别：那格只垫"下方一格"做台阶上楼；这里女仆已在
         // 主人高度附近（dy 已不足 minDy），铺的是平桥——空中横向逼近的主力。
-        // v1.1.0 实测一百九十九【平桥腿距离门槛】（反馈："水平距离小于 5 的时候不会
         // 触发水平搭建方块"）：一百八十七的 startHDist 只加在 canUse 启动门上——
-        // 行为启动后 tick 的平桥腿没有距离门槛，启程后一路铺到 2.5 格，"小于 5 不触发"
-        // 形同虚设。与启动门同口径：水平距离 < startHDist 时平桥腿不铺
-        // （走路逼近/竖直垫高不受影响）。v1.1.0：平桥腿只管 dy>=0（同高/主人在上），
-        // dy<=-1 交给上面的下行台阶腿。
+        // 行为启动后 tick 的平桥腿没有距离门槛，启程后一路铺到 2.5 格，"小于 5 不触发" 形同虚设。与启动门同口径：水平距离 < startHDist 时平桥腿不铺 （走路逼近/竖直垫高不受影响）。v1.1.0：平桥腿只管 dy>=0（同高/主人在上）， dy<=-1 交给上面的下行台阶腿。
         if (hDist > 1.2 && dy >= 0 && dy < MaidSmartConfig.BRIDGE_MIN_DY.get()
                 && hDist >= MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
             if (this.tryAirBridgeStep(level, maid, hx, hz, hDist)) {
@@ -586,11 +535,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 的同时朝主人方向【前方一格脚下】也垫一块（斜上台阶，照伐木 slopeStep），
         // 垫完走上去——水平和垂直一起逼近，塔变成斜坡。
         // 前方格净空不足时退回纯垂直（等站位变化），不会把自己憋死。
-        // v1.1.0 实测二百【行为起来以后也挡】（玩家选句："只挡启动、行为起来后 5 格
         // 内照样铺"→"行为起来以后也挡"）：一百九十九只给平桥腿（dy<minDy）加了
         // 距离门槛，斜上台阶腿（tryDiagStep，dy≥1）在 5 格内照样朝主人方向垫方块——
-        // 实测看到的就是它。与启动门/平桥腿同口径：水平距离 < startHDist 时
-        // 斜上台阶腿也不垫（垫脚下的垂直垫高 placeStep 保留——不朝水平方向垫块）。
+        // 实测看到的就是它。与启动门/平桥腿同口径：水平距离 < startHDist 时 斜上台阶腿也不垫（垫脚下的垂直垫高 placeStep 保留——不朝水平方向垫块）。
         boolean diag = hDist > 1.2 && dy >= 1
                 && hDist >= MaidSmartConfig.BRIDGE_START_H_DIST.get()
                 && this.tryDiagStep(level, maid, hx, hz, hDist);
@@ -754,10 +701,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 终审二：朝主人方向前方一格的脚下垫台阶（斜上逼近）。
      * 冷却与垂直垫块共用（stepCooldown）；垫成功返回 true（本 tick 不再导航——
      * 导航目标会把女仆往回拉，刚垫的台阶踩不上去）。
-     * v1.1.0 实测六十六（反馈："搭方块的方向应该要更向着主人一些"）：旧版只在
      * 前方脚下【悬空】时才垫（fill 为空气）——地形实心时直接放弃退回原地直上，
      * 塔不朝主人长。改为两种都垫：悬空垫 fill（跨坑/铺桥台阶）；实心垫 ahead
      * 本格（在地形上再垫一级台阶踩上来）——垂直垫高从此始终朝主人方向斜着长。
@@ -974,17 +919,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测八十四：搭完方块立刻移动到方块上——物理跳跃 + 导航双通道。
      * v1.1.0 实测一百零二（反馈："搭路状态下往上跳看着不自然，能不能维持老版本
      * 的样子"）：水平搭路（d>0）去掉垂直跳速，只给水平速度走向目标格——老版本
-     * 用导航走过去不跳，但半空寻路失败=人不动；现在改用施速度但不跳，水平分量
-     * 驱动走向目标格，视觉上是"走过去"而非"跳过去"。垂直垫块（d≈0）保持原地
-     * 起跳——垫脚必须有垂直速度才能站上新方块。
+     * 用导航走过去不跳，但半空寻路失败=人不动；现在改用施速度但不跳，水平分量 驱动走向目标格，视觉上是"走过去"而非"跳过去"。垂直垫块（d≈0）保持原地 起跳——垫脚必须有垂直速度才能站上新方块。
      */
     /**
-     * v1.1.0 实测一百八十：垫块后登记"走上去"目标并给首次推力——后续 tick 由
-     * m_6725_ 开头的 walkOn 段持续推送直到踏入目标格（踏入即停 / 12 tick 超时）。
-     * 替代旧版一次性 stepOnto 脉冲（摩擦力半格就停，跨沟导航又寻路失败）。
+     * m_6725_ 开头的 walkOn 段持续推送直到踏入目标格（踏入即停 / 12 tick 超时）。 替代旧版一次性 stepOnto 脉冲（摩擦力半格就停，跨沟导航又寻路失败）。
      */
     private void beginWalkOn(EntityMaid maid, double tx, double ty, double tz) {
         this.walkOnTicks = 12;
@@ -1163,27 +1103,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测十五：女仆的任务是否正被【实质工作】占用（搭路追主人的门禁）。
-     *
      * 判定口径："必须保证自己没有任务进程在占用——比如正准备挖矿时主人
      * 在别处打高，不应该追上去；可以处于任务状态，但该状态必须是空闲的。"
-     *
-     * v1.1.0 实测四百零九【被动技能化·实质接战制】：占用 = 【真有活干】，
      * 不是【挂着任务名】——
      * - 战斗任务：仅在脑内有存活 ATTACK_TARGET（正在接战）时占用；弓兵/近战
      *   站岗无敌人 = 战斗模式的空闲，照常搭路（反馈的"另一种空闲"）；
-     * - 宰杀：仅在追杀在途（WALK_TARGET 存在）时占用；无牲畜闲逛 = 空闲；
-     * - 挖矿：MINING 集合（找到矿才登记、框内无矿即摘除——空闲时已退出标记）
-     * - 伐木：WOODING 集合（同上口径，找到树才登记）
-     * - 建造：任务在身且未暂停（有蓝图待建 = 占用；暂停 = 玩家叫停视为空闲）
-     * - 站桩工作（烹饪/酿造）：任务级占用（无论走路去站还是已贴站——防搭路
-     *   劫持离岗，实测一百七十四）
-     *
-     * 不拦的情况：idle/跟随/喂食/farm 等 TLM 原生任务（搭路本来就为跟随服务，
-     * 这些任务上搭路是正常画面）；战斗/宰杀任务但【无目标空闲】（本条新增放行）。
-     * v1.1.0 实测一百六十七口径升级：原"战斗任务即拦截"收窄为"正在接战才拦截"
-     * ——战斗中（有目标）依然绝不搭路，无目标不再误杀。
-     * 判定全部 try/catch 兜底 false——任何一个信号表异常都不该让搭路失效。
+     * - 宰杀：仅在追杀在途（WALK_TARGET 存在）时占用；无牲畜闲逛 = 空闲； - 挖矿：MINING 集合（找到矿才登记、框内无矿即摘除——空闲时已退出标记） - 伐木：WOODING 集合（同上口径，找到树才登记） - 建造：任务在身且未暂停（有蓝图待建 = 占用；暂停 = 玩家叫停视为空闲） - 站桩工作（烹饪/酿造）：任务级占用（无论走路去站还是已贴站——防搭路 劫持离岗，实测一百七十四） 不拦的情况：idle/跟随/喂食/farm 等 TLM 原生任务（搭路本来就为跟随服务， 这些任务上搭路是正常画面）；战斗/宰杀任务但【无目标空闲】（本条新增放行）。 v1.1.0 实测一百六十七口径升级：原"战斗任务即拦截"收窄为"正在接战才拦截" ——战斗中（有目标）依然绝不搭路，无目标不再误杀。 判定全部 try/catch 兜底 false——任何一个信号表异常都不该让搭路失效。
      */
     public static boolean isTaskOccupied(EntityMaid maid) {
         // v1.1.0 实测四百零九【被动技能化·实质接战制】（反馈："搭高可以改成
@@ -1193,17 +1118,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 改为【实质接战制】：战斗任务只在脑内有存活 ATTACK_TARGET 时才算占用
         //（无目标 = 战斗模式的空闲，照常搭路）；宰杀任务同理（行为内 target
         // 锁定才有占用意义——以 WALK_TARGET 存在近似"正在追杀"）。
-        // 旧版接口判定的"无条件占用"删除——正在接战的覆盖由下方 ATTACK_TARGET
-        // 检查独立完成（战斗中 WALK_TARGET/接战目标必有其一，拉扯风险不变）。
-        // v1.1.0 实测一百七十四【烹饪/酿造被搭路劫持根治】（反馈："放置多个熔炉，
-        // 女仆并不能同时工作"）：烹饪/酿造任务 = 实质占用——站桩工作任务的 WORK_STILL
-        // 标记只在【贴方块站定后】才置位，走路去炉子/酿造台途中是 false（要放行走），
-        // 旧版此处漏判 → 搭路行为（core 245，无视任务类型）趁隙启动，把女仆往主人
-        // 方向拉：烹饪行为又把她往炉子拉，两行为无限拉扯（日志实证 14:36:34 cook
-        // start 绑定 x=11 后，大正女仆酒狐连续 60 秒 bridge-up start/stop
-        // reason=reached 抖动、炉子一口没喂，另一只已贴炉的 K螺诺亚 WORK_STILL=true
-        // 反而没被劫持正常烧）。烹饪/酿造是站桩工作，任务本身即占用：无论走去路上
-        // 还是贴方块站定，都不追人。
+        // 检查独立完成（战斗中 WALK_TARGET/接战目标必有其一，拉扯风险不变）。 女仆并不能同时工作"）：烹饪/酿造任务 = 实质占用——站桩工作任务的 WORK_STILL 标记只在【贴方块站定后】才置位，走路去炉子/酿造台途中是 false（要放行走）， 方向拉：烹饪行为又把她往炉子拉，两行为无限拉扯（日志实证 14:36:34 cook start 绑定 x=11 后，大正女仆酒狐连续 60 秒 bridge-up start/stop reason=reached 抖动、炉子一口没喂，另一只已贴炉的 K螺诺亚 WORK_STILL=true 反而没被劫持正常烧）。烹饪/酿造是站桩工作，任务本身即占用：无论走去路上 还是贴方块站定，都不追人。
         try {
             var task = maid.getTask();
             if (task != null && task.getUid() != null) {

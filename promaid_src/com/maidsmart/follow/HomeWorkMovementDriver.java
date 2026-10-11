@@ -8,11 +8,9 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
- * v1.1.0 实测三百三十三（反馈："Home模式下女仆又不会动了。也是的，我们直接全盘
  * 推翻。直接为农场和宰杀home模式专门重新写一套可以运动的逻辑"）：
  * Home 工作移动独立驱动——为【home 模式 + 宰杀任务】的女仆提供独立运动，
  * 不依赖 TLM 大脑活动/行为站桩标记。
- *
  * <p>v1.2.4 实测六百四十六（issue #22 第一条："Home 模式下农场工作选项，女仆会快速
  * 地到处乱转，检测耕地作物是否成熟时，不是去看而是走遍每一块耕地"）：
  * <b>农场已从本驱动摘掉，本驱动只管宰杀</b>。本驱动给的是"没有移动目标就直连
@@ -22,28 +20,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  *       搜到就自己 setWalkTarget 走过去；而 {@code MaidArriveAtBlockTask} 一到站就把
  *       WALK_TARGET/TARGET_POS 两份记忆清掉——"到站 → 清空 → 再搜"之间天然有空档。</li>
  *   <li>一次搜不到活（地里没有可收/可种的）时，TLM 会静默等
- *       {@code maxCheckRate(120) + rand(120)} = <b>6~12 秒</b>才再搜一次。旧版本驱动在这
- *       6~12 秒里每 5 tick 就 {@code PathNavigation.moveTo} 换一个随机目的地——直接覆盖
- *       掉 TLM 正在走的路径，表现就是"在农田上快速地到处乱转"（随机点铺满农田，
- *       看着就像"走遍每一块耕地去检查"）。</li>
- *   <li>跟随模式没有本驱动（本驱动只服务 home 模式）——所以这个问题只在 home 模式出现，
- *       与用户观察一致。</li>
- *   <li>三百三十三 当时需要这份驱动，是因为那会儿我们把"需要锄的泥土"塞进了 TLM 的
- *       移动扫描（FarmMoveTillMixin）。实测二百九十八 已按用户要求把农场运作
- *       <b>完全回原版</b>——原版自己会走去收成熟作物，不再需要一个"随机巡逻"替她找活。</li>
- * </ul>
- *
- * <p>现在农场这条链路的口径与用户对"正常"的定义一致（六百四十六
- *
- *
- * {@code MaidStrollBehavior}（空闲散步，自带"已有移动目标就不打扰"的门禁，不会抢
- * TLM 的路径），忙时走的是原版农场任务自己。宰杀保持原样（TLM 那边没有"自己找活"的
- * 能力，无牲畜可杀时会永久站桩，必须由本驱动兜着）。</p>
- *
- * <p>驱动逻辑（每 5 tick = 0.25 秒一轮）：全图扫描（Entity.class 全量 + instanceof，
- * 有限 AABB——类查询漏扫与 ±∞ 溢出均已绕开）；条件 = home 模式 +
- * 宰杀任务；有 WALK_TARGET（工作目标）→ 交给 MoveToTargetSink 正常寻路，不干扰；
- * 无 WALK_TARGET → home 锚点附近随机点直连导航（巡逻式移动，保证"会动"）。</p>
+ *       {@code maxCheckRate(120) + rand(120)} = <b>6~12 秒</b>才再搜一次。旧版本驱动在这 6~12 秒里每 5 tick 就 {@code PathNavigation.moveTo} 换一个随机目的地——直接覆盖 掉 TLM 正在走的路径，表现就是"在农田上快速地到处乱转"（随机点铺满农田， 看着就像"走遍每一块耕地去检查"）。</li> <li>跟随模式没有本驱动（本驱动只服务 home 模式）——所以这个问题只在 home 模式出现， 与用户观察一致。</li> <li>三百三十三 当时需要这份驱动，是因为那会儿我们把"需要锄的泥土"塞进了 TLM 的 移动扫描（FarmMoveTillMixin）。实测二百九十八 已按用户要求把农场运作 <b>完全回原版</b>——原版自己会走去收成熟作物，不再需要一个"随机巡逻"替她找活。</li> </ul> <p>现在农场这条链路的口径与用户对"正常"的定义一致（六百四十六 {@code MaidStrollBehavior}（空闲散步，自带"已有移动目标就不打扰"的门禁，不会抢 TLM 的路径），忙时走的是原版农场任务自己。宰杀保持原样（TLM 那边没有"自己找活"的 能力，无牲畜可杀时会永久站桩，必须由本驱动兜着）。</p> <p>驱动逻辑（每 5 tick = 0.25 秒一轮）：全图扫描（Entity.class 全量 + instanceof， 有限 AABB——类查询漏扫与 ±∞ 溢出均已绕开）；条件 = home 模式 + 宰杀任务；有 WALK_TARGET（工作目标）→ 交给 MoveToTargetSink 正常寻路，不干扰； 无 WALK_TARGET → home 锚点附近随机点直连导航（巡逻式移动，保证"会动"）。</p>
  */
 public final class HomeWorkMovementDriver {
     private static boolean registered = false;

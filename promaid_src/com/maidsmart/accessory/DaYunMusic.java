@@ -9,68 +9,39 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * v1.5.394 实测八百零五：「大运」BGM 的**服务端**部分——只负责"通知"，不播声音。
- *
  * <p>【为什么服务端不自己播】照搬 hatmod（{@code com.hatmod.HatMusic}）的结论：
  * 原版 {@code level.playSound(...)} 走的是声音包，客户端拿到的只是"某个位置在响某个音效"、
  * **不带"这条音乐属于哪个实体"**——两个佩戴者同曲时，停其中一个会把另一条一起掐掉，
  * 也做不到"按听者计算谁该听见"。
- *
  * <p>所以这里只做一件事：把「谁的 BGM 开始了 / 停了」发给听得见的人
  * （她自己 + {@link #HEAR_RADIUS} 格内的玩家），客户端据此为每个佩戴者建一条**自己的**
  * 声音实例（{@code DaYunMusicPlayer}）。
- *
  * <p>【调用方是"每 tick 问一次"】{@link DaYunBauble#onTick} / {@link DaYunPlayerHook#tick}
  * 每刻都会无条件调 {@link #play}/{@link #stop}（不飞就调 stop）。为了不把网络刷爆，
  * 本类自己记 {@link #ACTIVE} 做**边沿触发**：只有"没在放 → 开始放"和"在放 → 停"才真的
  * 发包，状态没变时一个包都不发。
- *
  * <p>【v1.5.396 实测八百零九：边沿触发加"宽限期"】
- *
- * 收翅猛击那一段 {@code MaidFlightCombatBehavior} 会主动清掉滑翔位（不收翅吃不到猛击判定），
- * 打完再起飞时才置回去。旧版把这个"闪一下"直接当成"停了"，客户端于是拆掉旧声音、建一条
- * **从头放**的新实例——听感就是每打一下重头开始。现在停止要走 {@link #STOP_GRACE_TICKS}
- * 的宽限期：期间任何一次 {@link #play} 都把它撤回，音乐从起播到曲终只有一条实例。
- *
- * <p>【为什么记实体引用而不是只记 id】实体 id 会被回收（女仆死亡/卸载后新实体顶上同一个 id）。
- * 只比 id 的话，新实体恰好被分配了旧 id 又选了同一首时，会因为"和记录里的一样"而被跳过、
- * 一声都听不见。所以 {@link Entry} 同时持有实体引用：引用不同 = 换了人，一律重发。
- *
- * <p>【范围与音量】{@link #HEAR_RADIUS} = 200 格（实测八百一十），音量 1.0：可听范围 =
- * {@code max(volume,1) × 衰减距离}，即由 {@code sounds.json} 的
- * {@code attenuation_distance = 200} 决定（音量只管响度，见 {@link #MUSIC_VOLUME}）。
+ * 收翅猛击那一段 {@code MaidFlightCombatBehavior} 会主动清掉滑翔位（不收翅吃不到猛击判定）， 打完再起飞时才置回去。旧版把这个"闪一下"直接当成"停了"，客户端于是拆掉旧声音、建一条 **从头放**的新实例——听感就是每打一下重头开始。现在停止要走 {@link #STOP_GRACE_TICKS} 的宽限期：期间任何一次 {@link #play} 都把它撤回，音乐从起播到曲终只有一条实例。 <p>【为什么记实体引用而不是只记 id】实体 id 会被回收（女仆死亡/卸载后新实体顶上同一个 id）。 只比 id 的话，新实体恰好被分配了旧 id 又选了同一首时，会因为"和记录里的一样"而被跳过、 一声都听不见。所以 {@link Entry} 同时持有实体引用：引用不同 = 换了人，一律重发。 <p>【范围与音量】{@link #HEAR_RADIUS} = 200 格（实测八百一十），音量 1.0：可听范围 = {@code max(volume,1) × 衰减距离}，即由 {@code sounds.json} 的 {@code attenuation_distance = 200} 决定（音量只管响度，见 {@link #MUSIC_VOLUME}）。
  */
 public final class DaYunMusic {
 
     /**
      * 听得见音乐的范围（同时也是"通知谁"的范围）。
-     *
      * <p>【v1.5.395 实测八百零八：锁敌半径必须被覆盖到】
-     *
-     *
      * <p>旧值写死 48 格，而空袭锁敌是 {@link com.maidsmart.combat.FlightTargeting#RANGE} = 50 格
      * （以自身为圆心的 3D 球）。空袭时她在敌我之间上下翻飞，高度差本身就吃掉一大截 3D 距离：
      * 她在敌上方 40 格盘旋时，离地面上的主人经常四十几格——一过临界点，客户端就把音量压到 0
-     * （见 {@code DaYunMusicPlayer#newestInRange}），主人听到的是"打着打着音乐没了"。
-     *
-     * <p>【v1.5.397 实测八百一十：要 200 格，而且不再靠音量凑】
-     *
-     * {@code HEAR_RADIUS} 格内，谁就收到这条声音；再远由 {@code sounds.json} 的
-     * {@code attenuation_distance = 200} 平滑衰减到 0。锁敌那 50 格（以及更宽的赶路场景）
-     * 全被包在里面，不会再出现"打着打着就没了"。
+     * （见 {@code DaYunMusicPlayer#newestInRange}），主人听到的是"打着打着音乐没了"。 <p>【v1.5.397 实测八百一十：要 200 格，而且不再靠音量凑】 {@code HEAR_RADIUS} 格内，谁就收到这条声音；再远由 {@code sounds.json} 的 {@code attenuation_distance = 200} 平滑衰减到 0。锁敌那 50 格（以及更宽的赶路场景） 全被包在里面，不会再出现"打着打着就没了"。
      */
     public static final double HEAR_RADIUS = 200.0D;
 
     /**
      * 播放音量（与衰减距离配套，见类注释）。
-     *
      * <p>【为什么是 1.0，而不是照旧 HEAR_RADIUS / 16】客户端实际响度算的是
      * {@code clamp(音量 × 设置里的音乐滑块, 0..1)}，**音量超过 1 不会更响**，只会把
      * 衰减半径撑大（OpenAL 那条线性衰减的"最大距离"取 {@code max(音量,1) × 衰减距离}）。
      * 旧写法 {@code 200 / 16 = 12.5} 会把衰减距离撑到 2500 格——等于"永远最大声"，
-     * 顺带把玩家的音乐滑块也废掉（任何小于 1 的滑块值乘完仍大于 1 → 恒为满音量）。
-     * 改回 1.0：响度老老实实跟着滑块走，听觉范围**只**由 {@code sounds.json} 里的
-     * {@code attenuation_distance} 决定，两个概念各归各位。
+     * 顺带把玩家的音乐滑块也废掉（任何小于 1 的滑块值乘完仍大于 1 → 恒为满音量）。 改回 1.0：响度老老实实跟着滑块走，听觉范围**只**由 {@code sounds.json} 里的 {@code attenuation_distance} 决定，两个概念各归各位。
      */
     public static final float MUSIC_VOLUME = 1.0F;
 
@@ -79,19 +50,11 @@ public final class DaYunMusic {
 
     /**
      * 【v1.5.396 实测八百零九】"滑翔位闪了一下"不算停：宽限期（刻）。
-     *
      * <p>
-     *
      * <p>旧行为把"这一 tick 没在滑翔"当成立刻停止，于是客户端收到"停 → 播"，
      * 拆掉旧声音实例、新建一条从头放——听感就是"每打一下就重头开始"。
      * 现在 {@link #stop} 只**记下"打算停"的时刻**，宽限期内若又收到 {@link #play}，
-     * 就当作什么都没发生（客户端那条声音一直没断，自然接着播）。
-     *
-     * <p>【为什么是 60 刻】要盖过"攻击动作把滑翔位按下去"的整段窗口，而不是某一拍：
-     * 收翅猛击最长 {@code airRaid.smashMaxTicks} = 20 刻，接着"等待再起飞"里放一次烟花
-     * 最多还要等 {@code airRaid.fireworkCooldown} = 30 刻，再加起跳离地那几拍——30+20+3 ≈ 53 刻。
-     * 60 留了点余量，又远小于一首曲子（分钟级），所以她真要落地/摘饰品停下时，
-     * 音乐仍会在 3 秒内真的停掉，不会"拖着不关"。
+     * 就当作什么都没发生（客户端那条声音一直没断，自然接着播）。 <p>【为什么是 60 刻】要盖过"攻击动作把滑翔位按下去"的整段窗口，而不是某一拍： 收翅猛击最长 {@code airRaid.smashMaxTicks} = 20 刻，接着"等待再起飞"里放一次烟花 最多还要等 {@code airRaid.fireworkCooldown} = 30 刻，再加起跳离地那几拍——30+20+3 ≈ 53 刻。 60 留了点余量，又远小于一首曲子（分钟级），所以她真要落地/摘饰品停下时， 音乐仍会在 3 秒内真的停掉，不会"拖着不关"。
      */
     public static final int STOP_GRACE_TICKS = 60;
 

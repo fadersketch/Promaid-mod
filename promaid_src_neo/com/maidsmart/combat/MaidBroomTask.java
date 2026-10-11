@@ -13,26 +13,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v1.3.0「扫帚模式」——新模式，图标就是 TLM 那把扫帚。
+ * 「扫帚模式」——一个**远程作战模式**：骑 TLM 的扫帚实体飞起来打（本类实现 {@link IRangedAttackTask}，
+ * 因此武器匹配/换装/战斗判定的原版链路照常工作）。
  *
- * ── 定位 ──
- * 一个**远程作战模式**：骑 TLM 的扫帚实体飞起来打（{@link MaidBroomTask} 实现
- * {@link IRangedAttackTask}，因此武器匹配/换装/战斗判定的原版链路照常工作）。
- * **不响应自主切换**——与两种空袭同款（{@code AutoCombatPools} 按 UID 显式排除）：
- * 只有玩家在女仆界面手动把任务改成它、或通过指令/LLM 切进来，她才会骑扫帚。
- * 这一条是玩家（未作答的选择题）的推荐项，也是行为最可预测的一档。
- *
- * ── 为什么开火走 {@code IRangedAttackTask} ──
- * {@code EntityMaid.performRangedAttack} 的字节码是：
- * <pre>
- *   IMaidTask t = this.getTask();
- *   if (!(t instanceof IRangedAttackTask r)) return;      // ← 不是就【静默 no-op】
- *   ... r.performRangedAttack(this, target, distance);
- * </pre>
- * 也就是说实现这个接口 = 拿到"她用手上的远程武器开火"这条通道，而武器的分支处理
- * （弓/弩/御币弹幕/弩射烟花/三叉戟）**整段在 {@link MaidFlightRangedTask#fireRangedWeapon}
- * 里现成**——扫帚模式委托同一个方法即可，不抄第二份。这正是
- * "手上武器的运作直接照搬远程空袭模式"。
+ * 【不响应自主切换】与两种空袭同款（{@code AutoCombatPools} 按 UID 显式排除）：只有玩家在界面手动改、
+ * 或指令/LLM 切进来，她才会骑扫帚——行为最可预测的一档。
+ * 【为什么开火走 {@code IRangedAttackTask}】{@code EntityMaid.performRangedAttack} 的字节码是取当前
+ * 任务、不是 {@code IRangedAttackTask} 就【静默 no-op】，否则转调它的 {@code performRangedAttack}。
+ * 实现这个接口 = 拿到"她用手上的远程武器开火"这条通道，而武器的分支处理（弓/弩/御币弹幕/弩射烟花/
+ * 三叉戟）**整段在 {@link MaidFlightRangedTask#fireRangedWeapon} 里现成**——扫帚模式委托同一个方法
+ * 即可，不抄第二份（"手上武器的运作直接照搬远程空袭模式"）。
  */
 public class MaidBroomTask implements IRangedAttackTask {
 

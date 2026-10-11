@@ -19,21 +19,16 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * smart_design —— AI 画蓝图（v1.5.94，子 Agent 设计器）。
+ * smart_design —— AI 画蓝图（子 Agent 设计器）。玩家输入"帮我设计一栋中式庭院"，主 LLM 调用本工具 →
+ * 返回一个带【建筑设计师专属提示词】的子 Agent callback（TLM 原生子 Agent 分发）→ 子 LLM 以"建筑师"
+ * 角色用专门的 JSON 蓝图格式设计 → 回复 JSON → 本工具解析校验 → saveJsonBlueprint 落盘（自动注册进
+ * 手册）→ 走【正常建造流程】（{@code BlueprintBuildExecutor.execute}，非强制，材料不足 partial）→
+ * 建造结果（能建/缺料/障碍）由子 LLM 在最终回复里向玩家转述。
  *
- * 玩家正常对话说"帮我设计一栋中式庭院"，主 LLM 调用本工具 → 工具返回一个
- * 带【建筑设计师专属提示词】的子 Agent callback（TLM 原生子 Agent 分发：
- * LLMCallback 的 subagents 构造器 + 官方 "dispatched to a dedicated sub-agent"）→
- * 子 LLM 以"建筑师"角色用专门的 JSON 蓝图格式设计 → 回复 JSON → 本工具
- * 解析校验 → saveJsonBlueprint 落盘（自动注册进Promaid 手册）→ 走【正常建造流程】
- * （BlueprintBuildExecutor.execute，非强制，材料不足 partial）→ 建造结果
- * （能建/缺料/障碍）由子 LLM 在最终回复里向玩家转述。
- *
- * 与 smart_build 的区别：smart_build 是"主 LLM 自己生成 JSON"（受主对话上下文
- * 干扰、质量不稳）；smart_design 是"主 LLM 把设计任务外包给子 Agent"——子 LLM
- * 只干一件事（设计），提示词更聚焦，蓝图质量更高；且子 Agent 的回复不污染主对话。
- *
- * 尺寸上限：配置面板 build.designMaxBlocks（AI 设计蓝图上限，默认 500）。
+ * 与 smart_build 的区别：smart_build 是"主 LLM 自己生成 JSON"（受主对话上下文干扰、质量不稳）；
+ * smart_design 把设计外包给子 Agent——子 LLM 只干一件事（设计），提示词更聚焦、蓝图质量更高，且子
+ * Agent 的回复不污染主对话。
+ * 尺寸上限：配置面板 {@code build.designMaxBlocks}（AI 设计蓝图上限，默认 500）。
  */
 public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
     public static final String TOOL_ID = "smart_design";

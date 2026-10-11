@@ -10,39 +10,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * v1.3.4 实测六百五十九「真正的远程开界面」：把 TLM 女仆容器里**那一条距离判据**放行。
- * （本树 = 1.21.1 NeoForge，方法名写官方名；1.20.1 那边同一个方法叫 SRG {@code m_6875_}。）
+ * 「真正的远程开界面」：把 TLM 女仆容器里**那条距离判据**放行（排班表点「女仆配置」不再"开一下闪退"）。
  *
- * ── 症状与根因 ──
- * 玩家在排班表里点「女仆配置」，人站在十几格外时：界面"开一下、立刻闪退"。
- * 根因是 TLM 的 {@code AbstractMaidContainer.stillValid}——它**每 tick** 被服务端问一遍
- * "这个界面还能不能留着"，字节码逐条读下来是：
- * <pre>
- *   maid != null → maid.isOwnedBy(player) → maid.isAlive() &amp;&amp; !maid.isSleeping()
- *                → player.canInteractWithEntity(maid, 4.0)   // 1.20.1 是 canReach(maid, 3.0)
- * </pre>
- * 最后那一条只有 **4 格**，于是人一站远，服务端下一 tick 就 {@code closeContainer()}，
- * 客户端看到的就是一闪而过。
- *
- * ── 这个 mixin 做的事情只有一条：把"距离"这一条放行 ──
- * 在 {@code stillValid} 的**每个 return 出口**上看一眼：TLM 说 false 时，如果这次界面是
- * **我们自己替玩家开的**（{@link com.maidsmart.schedule.RemoteMaidGui} 里登记过），
- * 并且**除距离以外的判据全部成立**（活着 / 没睡着 / 仍然属于这个玩家），就把结果翻成 true。
- * 除此之外一个字都不改：
- * <ul>
- *   <li><b>不用 @Redirect 去改那条调用</b>——那是"按被调方的方法名"定位，而 TLM 这一版
- *       在 1.20.1 那边调的偏偏是**官方名** {@code Player.canReach}（同一只 jar 里其它类调的
- *       却是 SRG 的 {@code m_19950_}，两种写法混着——mixin 的 refmap 一改就错位，
- *       错位的结果是**启动即崩**）。{@code @At("RETURN")} 只认"方法出口"这个位置，
- *       与被调方是谁、叫什么名字完全无关，所以换版本、改名字都不会挂在这儿。</li>
- *   <li><b>不碰"玩家自己右键开的界面"</b>：没登记过的（玩家右键）照旧吃 4 格限制——
- *       本模组的铁律是"只改该改的那一处"，原版手感一点不动。</li>
- *   <li><b>死 / 睡 / 换主人 照样关</b>：这几条是 {@code stillValid} 里距离**之前**的条件，
- *       这里自己再问一遍（返回值 false 时分不清是哪一条否掉的），三条都过才翻成 true。</li>
- * </ul>
- *
- * ── 为什么不干脆 return true ──
- * 那样"她死了界面还开着"、"她睡着了界面还开着"就全放过去了。这里的口径是：**只放行距离**。
+ * 【根因】TLM {@code AbstractMaidContainer.stillValid}（本树官方名）**每 tick** 被服务端问一遍"界面还能不能
+ * 留着"，末条是 {@code player.canInteractWithEntity(maid, 4.0)}——只有 **4 格**，人一站远下一 tick 就
+ * {@code closeContainer()}，客户端看到的就是一闪而过。
+ * 【做法】在 {@code stillValid} 的**每个 return 出口**看一眼：TLM 说 false 时，若这次界面是**我们替玩家开
+ * 的**（{@link com.maidsmart.schedule.RemoteMaidGui} 登记过）且**除距离外判据全成立**（活着/没睡着/仍属该玩
+ * 家），翻成 true。**不用 @Redirect 改那条调用**——那是按被调方方法名定位，而 TLM 这一版在 1.20.1 那边调的偏
+ * 偏是**官方名** {@code Player.canReach}（同 jar 别处却调 SRG {@code m_19950_}，混用一改 refmap 就错位、错位
+ * 即崩）；{@code @At("RETURN")} 只认"方法出口"，与被调方叫什么无关。
+ * 【不做什么】玩家自己右键开的界面照旧吃 4 格限制；**死 / 睡 / 换主人照样关**（这三条在距离之前，这里自己再问
+ * 一遍，三条都过才翻 true）。
+ * 【映射】本树写官方名（{@code stillValid}/{@code removed}/{@code isAlive}/{@code isSleeping}/{@code isOwnedBy}）。
  */
 @Mixin(AbstractMaidContainer.class)
 public abstract class MaidContainerRemoteOpenMixin {

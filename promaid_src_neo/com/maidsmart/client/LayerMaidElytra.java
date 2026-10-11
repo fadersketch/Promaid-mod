@@ -17,20 +17,15 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * v1.2.0（1.21.1）：飞行作战——女仆背后的鞘翅渲染层（**Bedrock 模型**走这条）。
- *
  * 【为什么需要自己写】TLM 本体零鞘翅支持（jar 内 0 个 elytra 引用），胸甲穿了鞘翅
  * 不会自动显示翅膀。
- *
  * 【变换照抄原版 ElytraLayer（字节码实证）】原版对任意 LivingEntityRenderer 的模型
  * 只做 `pushPose + translate(0,0,0.125) + setupAnim + renderToBuffer`——翅膀位置由
  * ElytraModel 自身的坐标决定，不依赖模型骨架。所以【不要】去锚定 body 骨骼
  * （BedrockPart.translateAndRotate 在 Y 翻转空间里会把翅膀移到身体下方，反而看不见）。
- *
  * 【显示条件 = 模式已激活】任务为飞行作战 且 胸甲槽真穿着可用鞘翅（equip 会穿上）。
  * 与玩家穿戴鞘翅一致：穿上即显示；滑翔时 ElytraModel.setupAnim 读 isFallFlying()
  * 自动展开，落地自然收拢。刻意不依赖滑翔标志位（起降/被击落会反复开关，导致闪烁）。
- *
  * 注：Gecko 模型的女仆走 GeckoEntityMaidRenderer，不经过本层——见 LayerMaidElytraGecko。
  */
 public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
@@ -44,13 +39,10 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
     /** 实测四百九十一：尺寸 = 与玩家等大（1.0 倍；四百八十曾是 0.85 倍，用户要求改回） */
     private static final float SIZE_FACTOR = 1.0f;
     /**
-     * 实测四百九十一：整体上移 0.7 格（用户要求；四百八十曾是 1.0 格）。
-     *
      * 为什么是 0.7：winefox 的 `ElytraLocator` 枢轴在模型 y=30.9644px，而肩线
      * （`LeftArm` 枢轴 29.1、手臂方块顶 30.436px）换算成格后落在同一高度——**挂点
      * 本身就在肩线上**。所以"鞘翅顶端对准肩膀"由本上移量单独决定，把四百八十的
      * 1.0 格减掉用户目视偏高的 0.3 格即得。
-     *
      * 本层 Y 朝下，故施加时为 -Y。
      */
     private static final float LIFT_BLOCKS = 0.7f;

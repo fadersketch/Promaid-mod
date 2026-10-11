@@ -94,7 +94,6 @@ public class ProMaidExtension implements ILittleMaid {
         NeoForge.EVENT_BUS.register(new WorkStatusReporter());
         NeoForge.EVENT_BUS.register(new MasterDeathTeleportHandler());
         // v1.5.257：玩家水行为日志（latest.log 搜 "player water"——挖/放水定位钓鱼问题）
-        NeoForge.EVENT_BUS.register(new com.maidsmart.fishing.PlayerWaterLog());
         // v1.1.0 实测一百一十三：Home 模式守卫巡逻（呆立根治——非干活 home 女仆
         // 每 4 秒在 home 锚点附近随机走位，不再原地呆站）
         com.maidsmart.follow.HomePatrolHandler.register();
@@ -287,12 +286,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             // 实测六百九十【玩家崩溃报告·肇因就在下面这一层 for】：这里必须走"先攒快照
             // 再遍历"——老版直接 for (Entity en : lvl.getAllEntities())，而 getAllEntities()
             // 是原版实体表的活视图（Int2ObjectLinkedOpenHashMap + Guava
-            // unmodifiableIterable，javap 实证）。循环体里的 followIfCrossDimension 会对
-            // 女仆做跨维度 teleportTo = 从本维度 byId 里删实体，同一个迭代器接着读
-            // link[槽位] 就越界：玩家那局报的就是 Index 877 / length 513
-            // →「Exception in server tick loop」整合服务端崩回桌面。详见 EntitySnapshot。
-            // 实测八百三十九：快照来源从"整张实体表"换成 MaidRoster（只攒女仆、按 20 tick 复用）
-            // ——同样安全，且零女仆时不再白拷全表（见 MaidRoster 类注释的采样报告）。
+            // unmodifiableIterable，javap 实证）。循环体里的 followIfCrossDimension 会对 女仆做跨维度 teleportTo = 从本维度 byId 里删实体，同一个迭代器接着读 link[槽位] 就越界：玩家那局报的就是 Index 877 / length 513 →「Exception in server tick loop」整合服务端崩回桌面。详见 EntitySnapshot。 ——同样安全，且零女仆时不再白拷全表（见 MaidRoster 类注释的采样报告）。
             if (com.maidsmart.config.MaidSmartConfig.MISC_DIMENSION_FOLLOW.get()) {
                 for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid fm
                         : com.maidsmart.tool.MaidRoster.all(server)) {
@@ -357,9 +351,6 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     }
 
     /**
-     * v1.5.13 生存优化：玩家首次进入世界时赠送手册与排班表。
-     *
-     * v1.2.0【改用原版进度系统，修"重复给予"】：旧版在这里用 persistentData 里的
      * 手搓标记判断"已发过"，但实机日志显示同一存档 10:55 登录发一次、10:59 又登录
      * 又发一次（背包里确实多出书）——手搓 NBT 标记拦不住跨会话重发。现改为参照
      * TLM《记忆中的幻想乡》的做法：用一个 minecraft:impossible 进度的完成状态当
@@ -413,21 +404,12 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     }
 
     /**
-     * v1.1.0 实测一百四十四：女仆重新入世界（魂符收放/区块重载/跨维度传送）→ 排班
      * 重放。根因：魂符收进再放出，persistentData（含"本段已应用"去抖键）随魂符保存，
      * 同段内放出后去抖命中 → 调度器跳过 = "魂符收放后排班没切换"。入世界即清去抖键
-     * 并立即按当前时段应用一次（模式/任务/在家锚点全部重放——SchedulePos 锚点随
-     * 实体 NBT 保存，不会在放出位置错误重锚）。未开排班/总开关关闭零成本。
+     * 并立即按当前时段应用一次（模式/任务/在家锚点全部重放——SchedulePos 锚点随 实体 NBT 保存，不会在放出位置错误重锚）。未开排班/总开关关闭零成本。
      */
     /**
-     * v1.2.0 实测五百五十六【离场诊断】：女仆离开世界时记一行（含移除原因）。
-     *
-     * 【为什么要记】法术模组的 `MaidSpellEventHandler.onEntityLeaveLevel` 会在"该释放
-     * 区块加载"那类移除原因下，**发通知让客户端删掉她的实体**；而它自己的"客户端实体
-     * 恢复"只对带锚核的女仆生效。没带锚核的女仆被删掉后若又被加回同一个 level，原版
-     * 追踪表未必再发一次生成包 → 表现就是"服务端还活着、客户端永远没有她"（重启游戏
-     * 才会回来）。这一行日志是排查该现象的第一现场：出现"客户端看不见她"时，先看这里
-     * 有没有同一时刻的离场记录与移除原因。
+     * 【为什么要记】法术模组的 `MaidSpellEventHandler.onEntityLeaveLevel` 会在"该释放 区块加载"那类移除原因下，**发通知让客户端删掉她的实体**；而它自己的"客户端实体 恢复"只对带锚核的女仆生效。没带锚核的女仆被删掉后若又被加回同一个 level，原版 追踪表未必再发一次生成包 → 表现就是"服务端还活着、客户端永远没有她"（重启游戏 才会回来）。这一行日志是排查该现象的第一现场：出现"客户端看不见她"时，先看这里 有没有同一时刻的离场记录与移除原因。
      */
     @net.neoforged.bus.api.SubscribeEvent
     public void onMaidLeaveLevel(net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent event) {
@@ -881,22 +863,12 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     }
 
     /**
-     * v1.2.2 实测六百一十八【压缩盒界面：鼠标上那一叠的两道兜底】。
-     *
      * 界面改成箱子式取放之后，玩家可能「把一叠东西挂在鼠标上」就出事：死掉、
      * 被传送、客户端崩了、直接退游戏。这一叠的真身在服务端（见
      * {@code CompressionBoxService.CARRIES}，客户端自己记账等于送物品），所以必须有
      * 不依赖客户端配合的归还点：
      * <ul>
-     *   <li><b>每 tick 对一次账</b>：那只手里已经不是压缩盒（换手/被拿走/丢出去/死了
-     *       背包被清）→ 把手上的东西放回背包，装不下掉在脚边；</li>
-     *   <li><b>掉线</b>：同上（掉线那一刻背包还在，能塞回去）。</li>
-     * </ul>
-     * 两处都只做一件事：{@code returnCarry}。**任何路径都不许把它弄丢**——
-     * 界面那条路（ESC / 关界面发的 CARRY_DROP）只是快一步，这两道才是保底。
-     *
-     * 【1.21 那边的写法不同】NeoForge 的 tick 事件是 {@code PlayerTickEvent.Post}
-     * （1.20.1 那棵是 {@code TickEvent.PlayerTickEvent} + Phase.END，同一个时机）。
+     *   <li><b>每 tick 对一次账</b>：那只手里已经不是压缩盒（换手/被拿走/丢出去/死了 背包被清）→ 把手上的东西放回背包，装不下掉在脚边；</li> <li><b>掉线</b>：同上（掉线那一刻背包还在，能塞回去）。</li> </ul> 两处都只做一件事：{@code returnCarry}。**任何路径都不许把它弄丢**—— 界面那条路（ESC / 关界面发的 CARRY_DROP）只是快一步，这两道才是保底。 【1.21 那边的写法不同】NeoForge 的 tick 事件是 {@code PlayerTickEvent.Post} （1.20.1 那棵是 {@code TickEvent.PlayerTickEvent} + Phase.END，同一个时机）。
      */
     @net.neoforged.bus.api.SubscribeEvent
     public void onPlayerTickBoxCarry(net.neoforged.neoforge.event.tick.PlayerTickEvent.Post event) {

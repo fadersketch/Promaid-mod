@@ -17,8 +17,6 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * v1.3.8【巡逻航图】网络层（1.21.1）；v1.3.9 起是"书 + 标记态 + 界面"这一整套的收口。
- *
  * <p>包一览（**数据读写全在服务端**，客户端 Screen 只管显示与收集操作）：
  * <ul>
  *   <li>{@link OpenPatrolPacket}（S2C）：打开/刷新界面——带上整本书 + 服务端算好的几何校验。</li>
@@ -31,14 +29,7 @@ import java.util.function.Supplier;
  *       位置取**，不信客户端发来的坐标——这样"打点=你站的地方"这条规格不可能被伪造）。</li>
  *   <li>{@link ConnectPatrolPacket}（C2S）：把首尾接成闭环（真查一遍净空，失败就报原因）。</li>
  *   <li>{@link RequestPatrolPacket}（C2S）：界面开着时定时拉一版（只回几何，不重跑净空）。</li>
- * </ul>
- *
- * <p>【安全】【服务端铁律】带 {@code Screen} 的代码一律在客户端专类（{@code PatrolChartScreen}），
- * 这里的 handle 里只做 {@code ctx.enqueueWork} + 数据读写；开屏由一个纯客户端 lambda 完成。
- *
- * <p>只对**自己的**物品生效（校验玩家手上那一格就是巡逻航图）。标记坐标由**服务端**取玩家
- * 自己的位置（空中/地面都行），客户端从不发坐标；打点与改书都**不**跑净空校验，
- * 「连接」也只卡几何——挡路方块降级为提示（v1.3.9.2，见 {@link PatrolValidation}）。
+ * </ul> <p>【安全】【服务端铁律】带 {@code Screen} 的代码一律在客户端专类（{@code PatrolChartScreen}）， 这里的 handle 里只做 {@code ctx.enqueueWork} + 数据读写；开屏由一个纯客户端 lambda 完成。 <p>只对**自己的**物品生效（校验玩家手上那一格就是巡逻航图）。标记坐标由**服务端**取玩家 自己的位置（空中/地面都行），客户端从不发坐标；打点与改书都**不**跑净空校验， 「连接」也只卡几何——挡路方块降级为提示（v1.3.9.2，见 {@link PatrolValidation}）。
  */
 public final class PatrolNetworking {
 
@@ -1040,7 +1031,6 @@ public final class PatrolNetworking {
 
     /**
      * 服务端诊断：把"我这次要发出去的那本书到底是从哪件物品、读到什么"记下来。
-     *
      * <p>【为什么需要】玩家实测遇到"服务端推过来的书是空的（routes=0），而客户端手上的航图里
      * 明明有 7 条"——两边读的是同一套代码，所以必须把服务端**看到的那件物品**原样记下来
      * （是不是手里那一格、CUSTOM_DATA 里有哪些键、有没有书根标签），才判得出是谁的问题。

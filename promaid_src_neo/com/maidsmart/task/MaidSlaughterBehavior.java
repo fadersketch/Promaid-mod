@@ -164,19 +164,12 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测三百三十二（反馈："应该直接重写一套检索和判定逻辑"）：宰杀检索
      * 判定重写——旧版过滤链有致命 bug：`a.m_6336_() == MobType.f_21640_` 排除
      * "亡灵马"，但 javap 实证 LivingEntity.m_6336_()（getMobType）默认实现恒返回
      * MobType.f_21640_（UNDEAD）——原版牲畜（牛/羊/猪/鸡/兔/山羊等）都不覆写
      * 该方法 → 全部命中排除 → alive=0 → 永远无目标 → 站桩不动（统计诊断实证：
      * total=45 animal=17 alive=0 kept=0）。重写后的判定链：
-     * ① Entity.class 全量扫描（类查询漏扫真因已绕开，日志实证可靠）
-     * ② instanceof Animal（牲畜基类）
-     * ③ 存活（isAlive && !isRemoved）
-     * ④ 排除驯服宠物（TamableAnimal：狼/猫/鹦鹉——Animal 子类但非牲畜）
-     * ⑤ 排除亡灵马（AbstractHorse 且 getMobType==UNDEAD——骷髅马/僵尸马；
-     *    普通马 getMobType 返回 UNDEFINED 不排除，马/驴/骡算牲畜）
-     * ⑥ 按 EntityType 分组计数，超阈值组随机选一只
+     * ① Entity.class 全量扫描（类查询漏扫真因已绕开，日志实证可靠） ② instanceof Animal（牲畜基类） ③ 存活（isAlive && !isRemoved） ④ 排除驯服宠物（TamableAnimal：狼/猫/鹦鹉——Animal 子类但非牲畜） ⑤ 排除亡灵马（AbstractHorse 且 getMobType==UNDEAD——骷髅马/僵尸马； 普通马 getMobType 返回 UNDEFINED 不排除，马/驴/骡算牲畜） ⑥ 按 EntityType 分组计数，超阈值组随机选一只
      */
     private Animal scanAndPick(ServerLevel level, EntityMaid maid) {
         int radius = com.maidsmart.config.MaidSmartConfig.MISC_SLAUGHTER_RADIUS.get();

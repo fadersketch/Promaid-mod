@@ -9,19 +9,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * v1.6.0 实测八百一十三：Promaid 详细介绍（手册）里**画物品图标**用的注册表查询。
+ * Promaid 详细介绍（手册）里**画物品图标**用的注册表查询。手册一直是纯文字渲染器
+ * （{@code GuideScreen} 只画字符串），这里先补上"把一个物品 id 变成能画的 {@link ItemStack}"这一层，
+ * 再接上行内小图标与整块合成表。
  *
- * <p>——本模组的手册
- * 一直是**纯文字**渲染器（{@code GuideScreen} 只画字符串），所以这里先补上"把一个
- * 物品 id 变成能画的 {@link ItemStack}"这一层，再在 {@code GuideScreen} 里接上
- * 行内小图标（{@code [[i:物品id|说明文字]]}）与整块的合成表（{@code [[#...]]}）。
- *
- * <p>【为什么用物品而不是 png 图片】本模组没有 GUI 贴图资源，也不方便让使用者自己塞图；
- * 而**物品图标是原版现成的**——任何模组物品都能按 id 画出来（原版 {@code getRenderItem}
- * 会调物品自己的 model/json），所以「配图」= 画物品图标，零资源文件。
- *
- * <p>认不出 id 时返回 {@link ItemStack#EMPTY}（不抛异常），调用方跳过绘制即可——
- * 手册绝不能因为写错一个 id 就崩界面。结果带缓存（每帧都要画）。
+ * 【为什么用物品而不是 png】本模组没有 GUI 贴图资源、也不便让使用者自己塞图；而**物品图标是原版现成
+ * 的**（任何模组物品都能按 id 画出来），所以"配图"= 画物品图标，零资源文件。
+ * 【注册表与解析】物品注册表走 {@code ForgeRegistries.ITEMS} / NeoForge 对应入口（本树一律避开
+ * {@code BuiltInRegistries.ITEM}）；1.20.1 没有 {@code ResourceLocation.tryParse}，按
+ * {@code MaidBdCompat.tryParseRl} 的做法手拆命名空间。
+ * 【健壮】认不出 id 时返回 {@link ItemStack#EMPTY}（不抛异常），调用方跳过绘制；结果带缓存。
  */
 public final class GuideIcons {
 

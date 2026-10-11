@@ -15,19 +15,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 
 /**
- * v1.2.2 实测五百七十八：smart_air_raid —— 「起飞打它 / 别飞了」。
- *
  * ── 为什么单独立一个工具（而不是并进 smart_switch_task）──
  * 空袭是本模组最重的一套功能（三件套判定 + 地面支点 + 爬升 + 盘旋 + 收翅猛击 + 位移法术当
  * 引擎），模型只知道"把任务切成 flight_combat"是不够的：它还需要知道**她到底能不能飞**
  * （缺件会静默退回地面战斗）、**这次飞要打谁**、以及**怎么收工**。把这些包成一个动作，
  * 模型说人话就能用："起飞打那只僵尸" / "别飞了，回来打"。
- *
  * ── 起飞前的"能不能飞"口径（复用她自己那套，不另起一套判定）──
  * {@code MaidFlightKit.missingParts(maid)} 直接给出缺什么（鞘翅 / 武器 / 「可以飞行的道具」
  * = 烟花·孔雀羽扇·位移类法术任一）；缺件时**照切任务但如实回报**——她会在缺件时退回地面
  * 战斗（这是既有设计），而玩家看到回报才知道该给她配什么。
- *
  * ── 停止（action=stop）──
  * 清掉空袭本轮的运行状态（{@code MaidFlightCombatBehavior.forget}，它同时清空袭专用索敌
  * 的锁定）+ 清 ATTACK_TARGET/setTarget + 切回 TLM「攻击」任务（落地继续近战）。

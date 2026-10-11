@@ -16,7 +16,6 @@ import java.util.List;
 
 /**
  * 女仆药剂手册配置界面（v1.1.0 实测二百七十七）——手持手册右键女仆打开。
- *
  * 布局（v1.1.0 实测二百七十九重排——实测二百七十八的说明文字压按钮、定向模式
  * 强化行照常显示造成"反人类认知"，重排为：模式行 → 说明行（独立一行）→
  * 形态行（两种模式同一位置）→ 批量=强化行 / 定向=搜索框+网格）：
@@ -28,13 +27,7 @@ import java.util.List;
  * - 定向区：搜索框 + 16×N 药水网格 + 翻页；点击图标选中/取消（单选），悬停
  *   显示本地化名 + 配方链预览
  * - 底部：说明 + 保存并返回（发 C2S 保存包）
- *
- * v1.1.0 实测二百七十九核心修复：选中/点击判定此前用 ITEMS.getKey(stack.getItem())
- * ——所有药水瓶物品注册名都是 minecraft:potion，点一个等于全选、保存的目标也错。
- * 改为按药水注册名（如 minecraft:healing）判定；悬停名改用药水本地化名
- * （stack hoverName，走客户端语言文件）而非注册名。
- *
- * 布局坐标统一口径：所有 y 坐标在 m_7856_ 里算好存字段，渲染与点击共用同一份。
+ * ——所有药水瓶物品注册名都是 minecraft:potion，点一个等于全选、保存的目标也错。 改为按药水注册名（如 minecraft:healing）判定；悬停名改用药水本地化名 （stack hoverName，走客户端语言文件）而非注册名。 布局坐标统一口径：所有 y 坐标在 m_7856_ 里算好存字段，渲染与点击共用同一份。
  */
 public class BrewManualScreen extends Screen {
     private static final int LABEL_COLOR = 0xFFAAAAAA;
@@ -477,12 +470,10 @@ public class BrewManualScreen extends Screen {
     }
 
     /** v1.1.0 实测二百八十四：效果行文本（"跳跃提升 I (3:00)"）——
-     *  v1.1.0 实测二百八十三把 duration/amplifier 的 SRG 搞反了（截图实证：
      *  显示"跳跃提升 3601"= duration(3600) 被当成等级喂进罗马数字函数）。
      *  字节码字段序号实证：f_19503_（第 1 个 int 字段）= duration → m_19557_，
      *  f_19504_（第 2 个）= amplifier → m_19564_（vanilla 字段顺序 effect/
      *  duration/amplifier/ambient/visible/showIcon）。等级始终显示（I 也显示）
-     *  v1.1.0 实测二百九十三：按形态折算时长——原版规则：喷溅 = 饮用 ×3/4、
      *  滞留 = 饮用 ×1/4（Potion 注册表存的是饮用型满时长，实际生效按形态
      *  折算）。旧版直接显示满时长，喷溅/滞留型药水的效果描述与实际不符
      *  （反馈："滞留和喷溅型药水直接套用饮用型的时间描述"）。 */

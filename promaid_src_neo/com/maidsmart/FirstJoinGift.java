@@ -6,20 +6,14 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * v1.2.0：首次进入游戏的一次性赠礼——改用【原版进度系统】当作"已领取"记录。
+ * 首次进入游戏的一次性赠礼——用【原版进度系统】当"已领取"记录（不手搓 NBT 标记：那种
+ * 标记拦不住跨会话重发，日志里同一存档反复发书）。
  *
- * 背景（实机日志实证）：旧版在玩家的 persistentData 里手写一个
- * maid_smart_blueprints_given 标记，每次登录查它。日志显示同一个存档里，
- * 10:55 登录发一次、10:59 又登录又发一次——手搓 NBT 标记拦不住跨会话重发。
- *
- * 参照物：TLM 自己的《记忆中的幻想乡》手册就是用原版进度系统发一次的
- * （data/touhou_little_maid/advancement/grant_book_on_first_join.json + 奖励掉落表）。
- * "只发一次"由【原版进度数据】保证——服务端强制持久化、随玩家存档走；发奖励只在
- * "从未完成 → 完成"的那一刻触发（PlayerAdvancements.award 字节码：!wasDone &&
- * isDone 才 AdvancementRewards.grant），重复 award 已完成的进度是空操作。
- *
- * 1.21.1 与 1.20.1 的差异：数据包目录是单数（advancement / loot_table）、
- * 类型是 AdvancementHolder（不是 Advancement）、进度对象由 Codec 序列化。
+ * 做法：数据包里放一个用 {@code minecraft:impossible} 触发器的进度（永不自动触发，只由本类
+ * 显式授予）+ 指向两本书的奖励掉落表。玩家登录时调 award()：没领过 → 记录进度 + 原版自动
+ * 发书；领过 → 空操作。"只发一次"由原版进度数据保证（服务端强制持久化、随玩家存档走；
+ * 发奖励只在"从未完成 → 完成"那一刻触发，重复 award 已完成进度是空操作）。
+ * 【老存档迁移】旧版已拿过书的人（persistentData 标记=1）静默把进度置为已完成但**不发奖励**。
  */
 public final class FirstJoinGift {
 

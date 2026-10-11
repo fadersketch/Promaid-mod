@@ -12,9 +12,7 @@ import net.minecraft.world.item.alchemy.Potion;
 import java.util.List;
 
 /**
- * 实测八百一十七【支援物品两张表：通用 / 亡灵 + 四类分类】——把"女仆给谁投什么"从代码里
  * 写死的池子，变成玩家可勾选、可分类的名单，交互与「投喂食物勾选」同款。
- *
  * <h2>
  * 「现在有了控制女仆喂食喂水的配置表。但是没有控制支援的配置表。我想整 2 个：通用支援表，
  *  亡灵支援表，表的范围为所有会给予效果的可食用物品。表的格式就仿照喂食物的表，可以让
@@ -22,29 +20,11 @@ import java.util.List;
  * <p>随后补充：「对于支援类物品本身也需要有多类分类。哪些是对策性治疗（产生了对应 debuff
  *  才能给）、哪些是增益类药水（战局一开始就能用，给自己和主人或者其他人）、哪些是生命回复类
  *  （血量低于哪个数值才能使用）。」
- *
  * <h2>四类分类（{@link Cat}）</h2>
  * <ul>
  *   <li><b>对策 {@code COUNTER}</b>：只在"对应的处境/负面效果出现"时才用——抗火（着火时）、
  *       水肺（溺水时）、牛奶/蜂蜜（身上有负面效果时）；</li>
- *   <li><b>增益 {@code BUFF}</b>：战局一开始（附近有威胁）就能用，可以给自己、主人或其他
- *       友军——不等低血、不等 debuff；</li>
- *   <li><b>回复 {@code HEAL}</b>：只在<b>目标血量低于「治疗触发血量」</b>时才用
- *       （见 {@code MaidSmartConfig.AID_HEALTH_THRESHOLD}，默认 0.3 = 30%）；</li>
- *   <li><b>禁用 {@code OFF}</b>：完全不用（勾掉）。</li>
- * </ul>
- * 另有 {@code DEFAULT}：<b>没有在表里分类过</b>的物品——按它的效果自动推断（见 {@link #derive}），
- * 推断不出来的一律"哪条链都能用"（= 本功能引入前的旧行为）。所以两张表<b>留空时逐字节等于旧版</b>。
- *
- * <h2>默认推断（derive）</h2>
- * 治疗/再生 → 回复（亡灵档再生→禁用）；抗火/水肺/牛奶/蜂蜜 → 对策；力量/迅捷/跳跃提升/夜视/抗性提升/生命提升/
- * 吸收/饱和/幸运/海豚的恩惠/潮涌能量/缓降 → 增益；<b>其余（毒/凋零/饥饿/即时伤害等有害效果）→ 禁用</b>。
- * <b>亡灵语义自动翻转</b>：{@code instant_health} 对亡灵是扣血 → 禁用，{@code instant_damage}
- * 对亡灵是回血 → 回复；{@code regeneration} 亡灵免疫（原版 {@code canBeAffected} 拒收）→ 禁用。
- *
- * <h2>记账键（entry key）</h2>
- * 药水 = {@code 物品id|药水id}（裸物品 id = 该形态所有药水）；其它 = {@code 物品id} 可选
- * {@code #剩余次数}。配置里存 {@code 键=分类}。
+ *   <li><b>增益 {@code BUFF}</b>：战局一开始（附近有威胁）就能用，可以给自己、主人或其他 友军——不等低血、不等 debuff；</li> <li><b>回复 {@code HEAL}</b>：只在<b>目标血量低于「治疗触发血量」</b>时才用 （见 {@code MaidSmartConfig.AID_HEALTH_THRESHOLD}，默认 0.3 = 30%）；</li> <li><b>禁用 {@code OFF}</b>：完全不用（勾掉）。</li> </ul> 另有 {@code DEFAULT}：<b>没有在表里分类过</b>的物品——按它的效果自动推断（见 {@link #derive}）， 推断不出来的一律"哪条链都能用"（= 本功能引入前的旧行为）。所以两张表<b>留空时逐字节等于旧版</b>。 <h2>默认推断（derive）</h2> 治疗/再生 → 回复（亡灵档再生→禁用）；抗火/水肺/牛奶/蜂蜜 → 对策；力量/迅捷/跳跃提升/夜视/抗性提升/生命提升/ 吸收/饱和/幸运/海豚的恩惠/潮涌能量/缓降 → 增益；<b>其余（毒/凋零/饥饿/即时伤害等有害效果）→ 禁用</b>。 <b>亡灵语义自动翻转</b>：{@code instant_health} 对亡灵是扣血 → 禁用，{@code instant_damage} 对亡灵是回血 → 回复；{@code regeneration} 亡灵免疫（原版 {@code canBeAffected} 拒收）→ 禁用。 <h2>记账键（entry key）</h2> 药水 = {@code 物品id|药水id}（裸物品 id = 该形态所有药水）；其它 = {@code 物品id} 可选 {@code #剩余次数}。配置里存 {@code 键=分类}。
  */
 public final class MaidSupportPolicy {
 
@@ -397,17 +377,12 @@ public final class MaidSupportPolicy {
     }
 
     /**
-     * 实测八百一十七（续）：<b>女仆自用</b>门禁——女仆自己喝药水/吃食物时也走支援分类表。
-     *
      * <p>两点实证：<br>
      * ① 女仆自己<b>不是亡灵</b>——javap：{@code LivingEntity.getMobType()}
      *    默认返回非亡灵，只有 Zombie 这类覆写为亡灵；
      *    {@code EntityMaid} 两个都不覆写 → {@code isInvertedHealAndHarm()=false}。
      *    所以她自用一律走<b>通用表</b>，与「亡灵支援表」无关。<br>
-     * ② 与「支援女仆」<b>同一份白名单</b>：。
-     *
-     * <p>开关 {@code combat.aidSelfUse}（默认开）：关掉 = 恒 {@code true}，
-     * 自用退回旧行为（不看两张表，仍按效果自动挑 + 治疗食物名单）。
+     * ② 与「支援女仆」<b>同一份白名单</b>：。 <p>开关 {@code combat.aidSelfUse}（默认开）：关掉 = 恒 {@code true}， 自用退回旧行为（不看两张表，仍按效果自动挑 + 治疗食物名单）。
      */
     public static boolean allowSelf(ItemStack s, Ctx ctx) {
         try {

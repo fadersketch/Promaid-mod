@@ -21,11 +21,9 @@ import java.util.Optional;
 /**
  * 床铺互通·方向一（v1.1.0 实测四百一十八，反馈："让女仆床和玩家床的代码互通。
  * 女仆和玩家可以互相使用对方的床"）。
- *
  * TLM 原版睡觉只认自己的女仆床：MaidBedTask（REST 活动里唯一的睡觉行为）用 POI
  * 只查 InitPoi.MAID_BED，start 里还硬判 state.is(InitBlocks.MAID_BED.get())——
  * 原版 16 色床既不进这个 POI 类型，也不满足这个 is()，所以原版床对女仆完全不可用。
- *
  * 本行为挂在 REST 活动（通过 ProMaidExtension 的 getRestBehaviors 注册），
  * 优先级 6（TLM 自带 MaidBedTask=5 之后、随机散步=20 之前）：
  * - 用原版 PoiTypes.HOME 找最近的原版床（原版把 16 色床的 HEAD 都注册进 HOME）；
@@ -33,9 +31,7 @@ import java.util.Optional;
  *   POI 里塞非床方块），有 home 限制（restrictTo）时还要求床在活动范围内；
  * - 够远就用 WalkTarget 走过去，到位后调 maid.startSleeping(head) + setPos，
  *   与 TLM 自己的 MaidBedTask.start 同款（占床/回血/好感度都走 TLM 既有逻辑）。
- *
- * 不改 TLM 源码（全部走 addon 扩展点）。开关 MISC_BED_INTEROP 关掉后本行为不启动。
- * 1.21.1 NeoForge 版（Mojmap 名）。
+ * 不改 TLM 源码（全部走 addon 扩展点）。开关 MISC_BED_INTEROP 关掉后本行为不启动。 1.21.1 NeoForge 版（Mojmap 名）。
  */
 public class MaidBedInteropBehavior extends Behavior<EntityMaid> {
     /** 到位距离（格）：与 TLM MaidBedTask 的 closeEnoughDist=2 保持一致 */

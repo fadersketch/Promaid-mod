@@ -17,7 +17,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 指标石（Index Stone）——临时蓝图服务端状态机（1.21.1 NeoForge 版）。
- *
  * 玩法契约（与需求逐条对应）：
  * 1. 玩家手持指标石 → 客户端把视线指向的方块渲染成绿色（跟随指针移动）；
  *    右键 → 锁定（渲染变红、不再移动）；**再右键同一个锁定方块** → 取消锁定
@@ -29,10 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *    被客户端渲染成橙色幽灵方块，女仆立刻进入一次性临时建造，从自己所在格逐步
  *    向锁定格填充。
  * 4. 材料无限制：优先从女仆背包取，不够从主人背包取；选材复用搭路规则
- *    （数量最多者优先、必须有碰撞、排除下落方块/TNT/危险方块）。
- * 5. 建造表现与建造任务完全一致（站桩 + 瞬移到工地旁 + 挥臂 + 放置音效）。
- * 6. 一个玩家同时只能有一个"锁定方块 + 绑定女仆"（完成前不能开下一个）；
- *    完成/取消 → 清空状态、女仆还原原任务/作息、发系统消息。
+ *    （数量最多者优先、必须有碰撞、排除下落方块/TNT/危险方块）。 5. 建造表现与建造任务完全一致（站桩 + 瞬移到工地旁 + 挥臂 + 放置音效）。 6. 一个玩家同时只能有一个"锁定方块 + 绑定女仆"（完成前不能开下一个）； 完成/取消 → 清空状态、女仆还原原任务/作息、发系统消息。
  */
 public final class IndexStoneService {
 
@@ -569,35 +565,10 @@ public final class IndexStoneService {
     /**
      * v1.2.0【收回后"建造不停 / 放出来卡住"根因修复】：女仆被收进魂符 → 结束本次
      * 临时搭建，并且**必须连魂符里那份 NBT 快照一起清洗**。
-     *
      * 【为什么清活体数据不够】TLM 的 `AbstractStoreMaidItem.storeMaidData` 是
      * 【先给女仆拍 NBT 快照、再 post ToItem 事件】（CFR 反编译实证，1.21.1 与
      * 1.20.1 同一顺序）：
-     * ```
-     *   CompoundTag tag = new CompoundTag();
-     *   maid.saveWithoutId(tag);            // ← 快照此刻已写好
-     *   post(new ToItem(maid, stack, tag)); // ← 我们在这里
-     * ```
-     * 也就是说本方法执行时，魂符里已经躺着一份"任务 = maid_smart:index_build、
-     * persistentData 里建造标记 = true"的快照。只清活体 persistentData 改不到它。
-     *
-     * 放出来时 TLM `maid.load(快照)` 会：
-     * ① 读 `MaidTask` → `setTask(index_build)`：隐藏的临时建造任务当场复活，
-     *    而此刻会话早已结算 → 她又在"没有会话"的状态下进入临时建造；
-     * ② 读回 `NeoForgeData` 里的 `maid_smart_index_build_active=true` → 行为 canUse
-     *    通过 → 只能靠 selfHealStale 自愈，而自愈路径会在**行为 tick 内部**调
-     *    `setTask` → TLM `refreshBrain` 重建整个 Brain = 行为被换掉（未定义行为，
-     *    项目在 `IndexStoneBuildBehavior.finish` 的注释里已明确记录该风险）→
-     *    女仆僵在原地（反馈的"再放出来建模被卡掉"）。
-     *
-     * 修法：把快照里的 `MaidTask` 写回【原任务】、把建造标记整段删掉——放出来就是
-     * 一只干净的原任务女仆，行为不会被复活。
-     *
-     * @param snapshot TLM 即将存进物品的那份女仆 NBT（`event.getData()`，**同一对象引用**，
-     *                 改它才有效；不是副本）
-     * @param soulSlab 本次 ToItem 是否为"女仆 → 魂符"（相机/胶卷等存女仆物品也共用
-     *                 该事件：那种情况只清洗快照、不结束会话——玩家只是拍个照，不该
-     *                 把正在进行的搭建判死刑）
+     * ``` CompoundTag tag = new CompoundTag(); maid.saveWithoutId(tag);            // ← 快照此刻已写好 post(new ToItem(maid, stack, tag)); // ← 我们在这里 ``` 也就是说本方法执行时，魂符里已经躺着一份"任务 = maid_smart:index_build、 persistentData 里建造标记 = true"的快照。只清活体 persistentData 改不到它。 放出来时 TLM `maid.load(快照)` 会： ① 读 `MaidTask` → `setTask(index_build)`：隐藏的临时建造任务当场复活， 而此刻会话早已结算 → 她又在"没有会话"的状态下进入临时建造； ② 读回 `NeoForgeData` 里的 `maid_smart_index_build_active=true` → 行为 canUse 通过 → 只能靠 selfHealStale 自愈，而自愈路径会在**行为 tick 内部**调 `setTask` → TLM `refreshBrain` 重建整个 Brain = 行为被换掉（未定义行为， 项目在 `IndexStoneBuildBehavior.finish` 的注释里已明确记录该风险）→ 女仆僵在原地（反馈的"再放出来建模被卡掉"）。 修法：把快照里的 `MaidTask` 写回【原任务】、把建造标记整段删掉——放出来就是 一只干净的原任务女仆，行为不会被复活。 @param snapshot TLM 即将存进物品的那份女仆 NBT（`event.getData()`，**同一对象引用**， 改它才有效；不是副本） @param soulSlab 本次 ToItem 是否为"女仆 → 魂符"（相机/胶卷等存女仆物品也共用 该事件：那种情况只清洗快照、不结束会话——玩家只是拍个照，不该 把正在进行的搭建判死刑）
      */
     public static void onMaidRecalled(EntityMaid maid, net.minecraft.nbt.CompoundTag snapshot,
                                       boolean soulSlab) {

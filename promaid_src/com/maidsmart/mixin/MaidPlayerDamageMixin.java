@@ -13,21 +13,17 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * v1.5.207：玩家对女仆伤害策略（面板 combat.playerDamageMode）——
- * TLM 原版 `EntityMaid.m_6469_`（hurt）：玩家（且是该女仆主人）攻击时
- * `amount = Mth.m_14036_(amount / 5.0f, 0.0f, 2.0f)`——伤害 ÷5 封顶 2 点：
- * 原版剑 7 点 ÷5 ≈ 1.4 再被护甲减伤 ≈ 0（"看起来打不到"）；高伤武器（如
- * 更好的战斗模组剑 8~12 点）÷5 后仍能打满 2 点 + 击退反馈（"能打到"）。
+ * 玩家对女仆伤害策略（面板 {@code combat.playerDamageMode}）——TLM 原版 {@code EntityMaid.hurt}：
+ * 玩家（且是该女仆主人）攻击时 {@code amount = clamp(amount / 5.0f, 0.0f, 2.0f)}——伤害 ÷5 封顶 2 点：
+ * 原版剑 7 点 ÷5 ≈ 1.4 再被护甲减伤 ≈ 0（"看起来打不到"）；高伤武器（如更好的战斗模组剑 8~12 点）÷5 后仍
+ * 能打满 2 点 + 击退反馈（"能打到"）。
  *
- * 模式（playerDamageMode）：
- * 0 = 跟随 TLM 原版（÷5 封顶 2）；
- * 1 = 玩家伤害完全免疫（任何玩家，含陌生人/弓弩投掷物——HEAD 直接 return false）；
- * 2 = 玩家伤害无限制（解除 ÷5 压制，像打普通生物一样）；
- * 3 = 玩家伤害有上限（单次伤害 = 女仆最大生命 × playerDamageMaidCap，默认 10%）；
- * 4 = 仅受到一点伤害（v1.5.217：单次伤害上限 1 点——被打有反馈但不疼）。
+ * 模式：0 = 跟随 TLM 原版（÷5 封顶 2）；1 = 玩家伤害完全免疫（任何玩家，含陌生人/弓弩投掷物——HEAD 直接
+ * return false）；2 = 无限制（解除 ÷5 压制）；3 = 有上限（单次伤害 = 女仆最大生命 ×
+ * {@code playerDamageMaidCap}，默认 10%）；4 = 仅受到一点伤害（单次上限 1 点——被打有反馈但不疼）。
  *
- * 实现：HEAD 注入处理"完全免疫"；@Redirect 拦截 TLM 的 Mth.m_14036_ 压制调用
- * （m_6469_ 内唯一一处）——mode 2/3/4 时把已 ÷5 的值还原再封顶。
+ * 实现：HEAD 注入处理"完全免疫"；{@code @Redirect} 拦截 TLM 的 {@code clamp} 压制调用（{@code hurt} 内唯一
+ * 一处）——mode 2/3/4 时把已 ÷5 的值还原再封顶。
  */
 @Mixin(EntityMaid.class)
 public abstract class MaidPlayerDamageMixin {

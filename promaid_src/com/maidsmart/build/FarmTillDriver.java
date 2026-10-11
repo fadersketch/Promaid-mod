@@ -14,38 +14,19 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
- * v1.1.0 实测二百九十七：锄地独立驱动（反馈："女仆耕地的积极性真的很差，
  * 基本上就是只是放下去一下，会锄一下地，但是之后就再也不锄地了"）。
- *
  * 根因：锄地只挂在 MaidFarmPlantTask.start 的 TAIL——而 start 只在 TARGET_POS
  * 存在时触发（MaidFarmMoveTask.searchForDestination 设置，只认可收割/可种植/
  * 可锄目标）。锄完一块泥土变成耕地后，周围没有成熟作物/空耕地时扫描空转 →
  * TARGET_POS 不设置 → start 不触发 → 锄地再也不跑。
- *
- * v1.1.0 实测二百九十八（反馈："耕地改为一个顺带逻辑。先将整个农场模式运作的
  * 逻辑改回原版。但是如果在自己 5×5 范围内发现到曾经是耕地的地块，然后执行目前
  * 的换工具逻辑，并播放一下动画，并将地块变为耕地"）：锄地降级为【顺带逻辑】——
  * 农场模式运作完全回原版（FarmMoveTillMixin 注入作废，锄地目标不再占用移动
  * 扫描），本驱动每 1 秒扫描女仆周围 5×5（水平）的可锄泥土并顺带锄掉。
  * 冷却表复用 FarmSweepCache.TILL_CD。
- *
- * v1.1.0 实测三百零二（反馈："对曾经已经是耕地的地块打上一个标记……在 5×5
  * 范围内检索到以后发现不是耕地就动用锄头将其锄成耕地"）：锄地判定改为【标记制】——
  * 只锄"有标记（曾经是耕地）且当前不是耕地"的地块（FarmSweepCache.isTillable），
- * 不再用"3×3 内有耕地"启发式（连锁扩散 → 超平坦地形 5×5 全变耕地）。标记由
- * 锄地事件自动打（玩家/女仆锄地时，FarmSweepCache.onToolModification），
- * SavedData 持久化（FarmlandMarkStore）。
- *
- * v1.1.0 实测三百零三（反馈："有些结构会自然生成耕地，那那些耕地也要打上标记"）：
- * 区块加载扫描兜底——结构生成（村庄农田等）的耕地是直接放置方块，不触发锄地
- * 事件，ChunkEvent.Load 时遍历区块内耕地方块打标记（FarmSweepCache.onChunkLoad）。
- *
- * v1.1.0 实测三百零四（反馈："现在是怎么搞女仆都不会进行耕地"）：标记自愈——
- * 扫描范围内【当前是耕地】的地块直接打标（耕地是"曾经是耕地"的活证据）。旧版
- * 只靠锄地事件/区块加载打标：女仆锄地需要标记、标记又只能靠锄地产生（死锁），
- * 区块加载扫描又只在区块加载瞬间跑一次（玩家站农田旁时早已加载）→ 女仆永远
- * 锄不了地。自愈后：农田的标记实时补上 → 踩坏的地块有标记可锄；从未耕过的泥土
- * 依然无标记 → 不连锁扩散。
+ * 不再用"3×3 内有耕地"启发式（连锁扩散 → 超平坦地形 5×5 全变耕地）。标记由 锄地事件自动打（玩家/女仆锄地时，FarmSweepCache.onToolModification）， SavedData 持久化（FarmlandMarkStore）。 区块加载扫描兜底——结构生成（村庄农田等）的耕地是直接放置方块，不触发锄地 事件，ChunkEvent.Load 时遍历区块内耕地方块打标记（FarmSweepCache.onChunkLoad）。 扫描范围内【当前是耕地】的地块直接打标（耕地是"曾经是耕地"的活证据）。旧版 只靠锄地事件/区块加载打标：女仆锄地需要标记、标记又只能靠锄地产生（死锁）， 区块加载扫描又只在区块加载瞬间跑一次（玩家站农田旁时早已加载）→ 女仆永远 锄不了地。自愈后：农田的标记实时补上 → 踩坏的地块有标记可锄；从未耕过的泥土 依然无标记 → 不连锁扩散。
  */
 public final class FarmTillDriver {
     private static boolean registered = false;
@@ -136,20 +117,12 @@ public final class FarmTillDriver {
     }
 
     /**
-     * v1.1.0 实测三百五十五（反馈："将同样的逻辑引入到农场给农作物施肥里面，
      * 配置界面也是如此"）：农场作物骨粉催熟——与树苗催熟同款逻辑：
      * ① 找骨粉 主手 → 副手 → 背包（equipBoneMeal 复用，施肥时主手换持骨粉，
      *    停止 1 秒后由 MaidPlanting.tryRestoreHand 还原）；
      * ② 每 0.5 秒（随本驱动节拍）对身边（半径 16 格、垂直 ±4）最近的一株
      *    未成熟作物施肥，带粒子特效；
-     * ③ 成熟过滤用 isValidBonemealTarget（m_7370_）——CropBlock 字节码实证：
-     *    该方法 = age < maxAge（未成熟 true / 成熟 false），isBonemealSuccess
-     *    对 CropBlock 恒 true（实测三百五十六修正：旧版误用 m_214167_ 当成熟
-     *    过滤——它恒 true，把全部作物都跳过了 = 骨粉在手上一株都不催）；
-     * ④ 树苗/草方块/蘑菇/藤蔓等非农作物排除（isNonCropGrower）。
-     *
-     * @return true = 本轮施了肥（主手已换持骨粉）——调用方跳过锄地，
-     *         避免锄头自动装备把骨粉从主手抢走
+     * ③ 成熟过滤用 isValidBonemealTarget（m_7370_）——CropBlock 字节码实证： 该方法 = age < maxAge（未成熟 true / 成熟 false），isBonemealSuccess 对 CropBlock 恒 true（实测三百五十六修正：旧版误用 m_214167_ 当成熟 过滤——它恒 true，把全部作物都跳过了 = 骨粉在手上一株都不催）； ④ 树苗/草方块/蘑菇/藤蔓等非农作物排除（isNonCropGrower）。 @return true = 本轮施了肥（主手已换持骨粉）——调用方跳过锄地， 避免锄头自动装备把骨粉从主手抢走
      */
     private boolean bonemealNearby(ServerLevel world, EntityMaid maid) {
         try {
@@ -213,7 +186,6 @@ public final class FarmTillDriver {
     }
 
     /**
-     * 实测三百五十六：非农作物的骨粉目标排除表——原版实现 BonemealableBlock
      * 但不是"农作物"的方块（骨粉有效但不该由农场女仆催）：
      * 树苗（伐木那边管）/ 草方块与草丛蕨（催出草花）/ 藤蔓 / 发光地衣 / 蘑菇与
      * 菌类（催巨型蘑菇）/ 菌岩（扩散菌落）/ 海带海草 / 竹子 / 紫颂 / 垂滴叶 /
@@ -248,20 +220,12 @@ public final class FarmTillDriver {
     }
 
     /**
-     * v1.1.0 实测三百三十四（反馈："女仆对于耕地的积极性太低了。先检查一下对于
      * 更替的整个路径和判定，看看有没有办法提高积极性"）：锄地索敌重写——
-     * 旧版只扫女仆【脚下 5×5】且 1 秒一轮：home 模式下女仆在锚点附近，农田稍远
      * 就永远锄不到，只能等随机巡逻撞上（积极性低的根因）。重写：
-     * ① 扫描半径 5×5 → 16 格（与酿造/熔炉/宰杀同口径，misc.brewRadius 同值）
-     * ② 冷却 1 秒 → 0.5 秒（与扫描节流一致）
-     * ③ 近身（≤3 格）直接锄；远的目标【直连导航走过去】（m_26519_，不走
-     *    MoveToTargetSink——站桩标记/移动抑制拦不住，自保逃跑验证过的通道）
-     * ④ 标记自愈保留（范围内当前是耕地的地块实时打标）
+     * ① 扫描半径 5×5 → 16 格（与酿造/熔炉/宰杀同口径，misc.brewRadius 同值） ② 冷却 1 秒 → 0.5 秒（与扫描节流一致） ③ 近身（≤3 格）直接锄；远的目标【直连导航走过去】（m_26519_，不走 MoveToTargetSink——站桩标记/移动抑制拦不住，自保逃跑验证过的通道） ④ 标记自愈保留（范围内当前是耕地的地块实时打标）
      */
     /**
-     * v1.1.0 实测三百六十：返回本轮锄地是否"有活"（找到可锄目标/正在锄/正在
-     * 走过去）——true = 耕地工作中，调用方跳过施肥（耕地优先独占主手）；
-     * false = 无活（无锄头/范围内无可锄地块），施肥才轮得上。
+     * 走过去）——true = 耕地工作中，调用方跳过施肥（耕地优先独占主手）； false = 无活（无锄头/范围内无可锄地块），施肥才轮得上。
      */
     private boolean tillNearby(ServerLevel world, EntityMaid maid) {
         try {

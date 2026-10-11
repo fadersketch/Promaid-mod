@@ -8,24 +8,14 @@ import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 
 /**
- * v1.1.0 实测六十二：女仆着火不传主人。
- *
- * 场景：女仆踩进火/岩浆烧起来后又贴着主人（跟随贴身），主人身上也跟着烧起来。
- * 原版没有"实体接触传火"的事件可拦，防护做两层：
- *
- * 1.【攻击路径】燃烧的女仆对主人造成任何伤害（LivingIncomingDamageEvent，最上游可取消）
- *   → 直接取消——"以燃烧女仆为来源"的攻击是唯一能把火以女仆为媒介挂到主人
- *   身上的显式路径（燃烧实体近战附带点燃类机制，原版箭矢同款思路）。
- *
- * 2.【接触路径】每 10 tick 扫一遍燃烧的自己的女仆——主人身上有火、但主人自己
- *   并没有站在火/岩浆里（脚下与身体格无火焰方块、无非空流体）→ 判定火来自
- *   贴身的燃烧女仆，直接给主人灭火（clearFire = clearFire，javap 核实内部
- *   调 setRemainingFireTicks(0)）。
- *   主人自己站在火/岩浆里（或浸在水中）则不干预——那是玩家自己的火，
- *   贸然灭火就成了作弊外挂。
- *
- * 火状态 SRG（javap 反编译核实）：getRemainingFireTicks = getRemainingFireTicks，
- * clearFire = clearFire，setRemainingFireTicks = setRemainingFireTicks。
+ * 女仆着火不传主人。场景：女仆踩进火/岩浆烧起来后贴着主人（跟随贴身），主人也跟着烧起来。原版
+ * 没有"实体接触传火"事件可拦，防护做两层：
+ * ① 【攻击路径】燃烧的女仆对主人造成任何伤害（最上游可取消的攻击事件）→ 直接取消——"以燃烧女仆为
+ * 来源"的攻击是唯一能把火以女仆为媒介挂到主人身上的显式路径。
+ * ② 【接触路径】每 10 tick 扫一遍燃烧的自己的女仆——主人身上有火、但主人自己并没站在火/岩浆里
+ * （脚下与身体格无火焰方块、无非空流体）→ 判定火来自贴身的燃烧女仆，直接给主人灭火。主人自己站在
+ * 火/岩浆里（或浸在水中）则不干预——那是玩家自己的火，贸然灭火就成了作弊外挂。
+ * 火状态读取用原版方法（getRemainingFireTicks / clearFire / setRemainingFireTicks）。
  * 总开关：maidFireGuard（默认开，手册配置面板「贴身辅助」小节可关）。
  */
 public class MaidFireGuard {

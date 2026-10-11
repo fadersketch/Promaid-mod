@@ -11,8 +11,6 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 实测 G-4【自动触发：她自己决定要不要用 Goety 飞】。
- *
  * <h2>这一层管什么、不管什么</h2>
  * <ul>
  *   <li><b>管</b>：**跟主人跨地形**——主人拉开到 {@value #TAKEOFF_DIST} 格以上，她就起飞追过去，
@@ -23,21 +21,9 @@ import java.util.UUID;
  *   <li><b>让位</b>：只要她已经在用别的飞行方式（空袭飞行任务 / 正在滑翔 / 仿创造飞行接管中 /
  *       上游的飞行跟随在带她飞 / 骑在别的实体上），我们一律退出，绝不抢。</li>
  * </ul>
- *
  * <h2>为什么默认关</h2>
  * 这是"她会自己飞起来"的行为——按本工程一贯口径（仿创造飞行的总开关也是默认关），
- * 默认关、由玩家用女仆配置界面那一行开关或 {@code /maid_smart goety_auto on} 开，
- * 开完存在 her persistentData 里（随魂符/存档走）。
- *
- * <h2>门槛（玩家问过：飞行聚晶是前期还是后期物品）</h2>
- * <b>后期</b>：飞行聚晶是仪式产物，材料是**鞘翅 ×1 + 龙息 ×2 + 潜影壳 ×2 + 幻翼膜 ×1**
- * —— 与鞘翅同级，而且**会把那张鞘翅吃掉**。它换来的东西是"**不需要烟花、不吃耐久**的持续飞行"，
- * 所以它是鞘翅的**平级替代**，不是"前期飞行手段"。真正前期/中期的是**发射聚晶**：唯一的门槛是
- * 幻翼膜。那是 {@link MaidGoetyFlight#boost} 那一档（一次性冲量，约 12 格/次）。
- *
- * <p>【1.20.1 差异】{@code persistentData} 在 Forge 上是 {@code maid.getPersistentData()}
- * （公开方法，无需强转——与 1.21.1 的 IEntityExtension 强转在调用面上等价）；
- * 事件总线是 {@code MinecraftForge.EVENT_BUS}（挂载点由 {@code ProMaidExtension} 显式注册）。
+ * 默认关、由玩家用女仆配置界面那一行开关或 {@code /maid_smart goety_auto on} 开， 开完存在 her persistentData 里（随魂符/存档走）。 <h2>门槛（玩家问过：飞行聚晶是前期还是后期物品）</h2> <b>后期</b>：飞行聚晶是仪式产物，材料是**鞘翅 ×1 + 龙息 ×2 + 潜影壳 ×2 + 幻翼膜 ×1** —— 与鞘翅同级，而且**会把那张鞘翅吃掉**。它换来的东西是"**不需要烟花、不吃耐久**的持续飞行"， 所以它是鞘翅的**平级替代**，不是"前期飞行手段"。真正前期/中期的是**发射聚晶**：唯一的门槛是 幻翼膜。那是 {@link MaidGoetyFlight#boost} 那一档（一次性冲量，约 12 格/次）。 <p>【1.20.1 差异】{@code persistentData} 在 Forge 上是 {@code maid.getPersistentData()} （公开方法，无需强转——与 1.21.1 的 IEntityExtension 强转在调用面上等价）； 事件总线是 {@code MinecraftForge.EVENT_BUS}（挂载点由 {@code ProMaidExtension} 显式注册）。
  */
 public final class MaidGoetyAuto {
 

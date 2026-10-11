@@ -15,22 +15,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import java.util.List;
 
 /**
- * v1.5.205：对话语言根治——TLM 每次对话（tryToChat）都把
- * chatLanguage = clientInfo.language()（= 客户端游戏语言，玩家客户端是日语），
- * 旧修复只改了 promaid 自己的 3 个主动对话调用点（ChatInfoUtil.fromMaid）——
- * 玩家在 TLM 聊天 GUI 发起对话（客户端语言 = 日语）后 chatLanguage 被覆盖，
- * 之后的对话全变日语（"前几句中文（promaid 主动对话强制 zh）→ 玩家聊几句 →
- * 全日文"）。
+ * 对话语言根治——TLM 每次对话（{@code tryToChat}）都会把 {@code chatLanguage = clientInfo.language()}
+ * （= 客户端游戏语言）覆盖上去，所以玩家在 TLM 聊天 GUI 发起一次对话后，之后的对话全变客户端语言
+ * （"前几句中文 → 玩家聊几句 → 全日文"）。
  *
- * 这里在 tryToChat 入口直接替换 ChatClientInfo.language（@ModifyVariable
- * argsOnly，方法体内两处读取都吃到新值：chatLanguage 字段 + 提示词语言）——
- * 覆盖所有调用方（玩家 GUI / promaid 主动对话 / TLM 其他对话）。
- * 配置 dialogue.outputLanguage 非空时强制；留空 = 强制中文（v1.5.228）。
+ * 这里在 {@code tryToChat} 入口用 {@code @ModifyVariable}(argsOnly) 直接替换
+ * {@code ChatClientInfo.language}——方法体内两处读取（chatLanguage 字段 + 提示词语言）都吃到新值，覆盖
+ * 所有调用方（玩家 GUI / promaid 主动对话 / TLM 其他对话）。配置 {@code dialogue.outputLanguage} 非空时
+ * 强制；留空 = 强制中文。
  *
- * v1.5.231b：输出语言【二次检测】（配置 dialogue.langCheck，默认开）——
- * LLMCallback.onSuccess 收到 LLM 回复时检测文字是否为设定语言：目标中文时
- * 假名/英文占比过高 = 语言不符 → 丢弃该回复显示提示（日志保留原文前 80 字符
- * 供排查）。提示词强制（v1.5.228）+ 输出检测（这里）双保险。
+ * 输出语言**二次检测**（配置 {@code dialogue.langCheck}，默认开）：{@code LLMCallback.onSuccess} 收到回复
+ * 时检测文字是否为设定语言（目标中文时假名/英文占比过高 = 不符）→ 丢弃该回复并提示（日志保留原文前 80
+ * 字符供排查）。提示词强制 + 输出检测双保险。
  */
 @Mixin(MaidAIChatManager.class)
 public abstract class MaidChatLanguageMixin {

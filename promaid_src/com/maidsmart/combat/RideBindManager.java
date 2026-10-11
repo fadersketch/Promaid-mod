@@ -24,42 +24,19 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * v1.3.0(beta)【骑乘指挥棒·原版生物骑乘】——把"已上鞍的坐骑"与"女仆"绑在一起，让她骑着它跟主人走。
- *
  * <p>需求原文："先做原版生物乘坐坐骑吧。直接套僵尸的骑乘代码，速度上是坐骑的最大速度与女仆的
  * 最大速度之间取最大值。乘上坐骑的女仆作为骑乘状态，我们也不做额外的豁免，同时加一个shift加
  * 右击可以把女仆从坐骑上弄下来（跟坐在扫帚上一样）。关键就在于骑乘状态下，女仆的移动AI该怎么搞，
  * 我觉得大概就是套我们这边已有的移动链路。引入一个新物品，骑乘指挥棒，可以将可骑乘坐骑与女仆
  * 绑定起来，被绑定以后会出现光标。（类似于前段时间的武装拴绳）不管是先绑女仆还是先绑可骑乘坐骑
  * 都没问题。绑定之后，女仆就会坐到那个坐骑上。"
- *
  * ── 【绑定：两向都行，靠"谁被选中"】──
  * 玩家手持骑乘指挥棒：
  * <ul>
  *   <li>右击一只**已上鞍**的坐骑 → 它成为"待配对"（金色描边 = ）；</li>
  *   <li>右击自己的女仆 → 她也成为"待配对"；</li>
  *   <li>两边都有了 → 当场 {@code maid.startRiding(mount, true)}（**套僵尸骑鸡那一记**）+ 写链路表。</li>
- * </ul>
- * 所以"先绑女仆还是先绑坐骑"都对——选中任一边，再选另一边即配对。选中状态是**服务端按玩家存的**
- * 瞬时状态（{@link #PENDING}），不是物品 NBT：同一根棍子反复用、走多远都不丢。
- *
- * ── 【下坐骑：潜行 + 右击】──
- * 潜行时右击（女仆或坐骑均可）→ 解除链路 + {@code maid.stopRiding()}，她落到坐骑旁边。
- * 口径与"潜行+中键工位标记"同款（潜行 = 明确的"我要改设置"手势），也与
- * "跟坐在扫帚上一样"一致。
- *
- * ── 【移动 AI：套我们已有的移动链路】──
- * 每 tick 读**她本来要去的地方**（脑里的 WALK_TARGET，跟随/走位/任务全部写在这里），把那个点
- * 转达给**坐骑自己的 PathNavigation**（{@link MaidRideKit#feedNavigation}）——这就是
- * "套我们这边已有的移动链路"：目的地的计算完全复用现有系统，我们只把"她走"换成"坐骑走"。
- * 找不到她的走位目标时退回"跟主人走"（离主人超过 {@code ride.followDist} 就喂主人的位置）。
- * 坐骑自己的寻路负责上下坡/绕障/跳跃/原版动画；它自己的随机闲逛由
- * {@link com.maidsmart.mixin.RandomStrollGoalRiddenMixin} 按"被我们驾驶就别闲逛"掐掉。
- *
- * ── 【安全网】──
- * 她/坐骑/主人任一没了、跨维度、她自己下鞍（原版潜跳/被别的模组拽下去）→ 下一拍自动解除并清标记；
- * 服务端重启后由 {@link #tick} 的恢复扫描按 persistentData 重建（骑乘关系本身由原版存档恢复）。
- * 女仆的战斗/自保/落地水等链路**一律不改**（）。
+ * </ul> 所以"先绑女仆还是先绑坐骑"都对——选中任一边，再选另一边即配对。选中状态是**服务端按玩家存的** 瞬时状态（{@link #PENDING}），不是物品 NBT：同一根棍子反复用、走多远都不丢。 ── 【下坐骑：潜行 + 右击】── 潜行时右击（女仆或坐骑均可）→ 解除链路 + {@code maid.stopRiding()}，她落到坐骑旁边。 口径与"潜行+中键工位标记"同款（潜行 = 明确的"我要改设置"手势），也与 "跟坐在扫帚上一样"一致。 ── 【移动 AI：套我们已有的移动链路】── 每 tick 读**她本来要去的地方**（脑里的 WALK_TARGET，跟随/走位/任务全部写在这里），把那个点 转达给**坐骑自己的 PathNavigation**（{@link MaidRideKit#feedNavigation}）——这就是 "套我们这边已有的移动链路"：目的地的计算完全复用现有系统，我们只把"她走"换成"坐骑走"。 找不到她的走位目标时退回"跟主人走"（离主人超过 {@code ride.followDist} 就喂主人的位置）。 坐骑自己的寻路负责上下坡/绕障/跳跃/原版动画；它自己的随机闲逛由 {@link com.maidsmart.mixin.RandomStrollGoalRiddenMixin} 按"被我们驾驶就别闲逛"掐掉。 ── 【安全网】── 她/坐骑/主人任一没了、跨维度、她自己下鞍（原版潜跳/被别的模组拽下去）→ 下一拍自动解除并清标记； 服务端重启后由 {@link #tick} 的恢复扫描按 persistentData 重建（骑乘关系本身由原版存档恢复）。 女仆的战斗/自保/落地水等链路**一律不改**（）。
  */
 @Mod.EventBusSubscriber(modid = "promaid")
 public final class RideBindManager {
@@ -74,10 +51,7 @@ public final class RideBindManager {
     public static final String TAG_PENDING_MARK = "maid_smart_ride_pending";
 
     /**
-     * 【实测七百五十六·点1】驱动节奏：每 2 tick → **每 tick**。
-     *
      * <p>
-     *
      * 20 Hz），而坐骑只能 10 Hz 收到新目标——每次起步、每次转向都要等 100ms，观感正是"反应慢
      * 半拍、速度上不去"。房子活（{@link #restore} 那种全实体扫描）改由 {@link #HOUSEKEEP_DIV}
      * 单独节流，所以每 tick 多跑的只是"喂目标"这点轻活（目标块没变时
@@ -101,13 +75,10 @@ public final class RideBindManager {
     /** 待配对：玩家 UUID → 选中的实体（女仆或坐骑）。只活服务端、只在这位玩家手里有效 */
     private static final Map<UUID, java.lang.ref.WeakReference<Entity>> PENDING = new HashMap<>();
     /**
-     * 【实测七百二十九·点2】"待选光标"的**开始时刻**（{@code playerUUID → 毫秒}）。
-     *
      * <p>为什么必须有它：{@link #markPending} 给目标打的是**原版发光标记**（写进 NBT，跨存档还在），
      * 而旧版 {@link #PENDING} 只有"再点一个/实体没了/玩家下线"三条清理路径——**没有超时**。
      * 于是"用棍子点了一下龙、然后走开"这种最常见的操作，会让那条龙**永久发光**，而且
      * 重启存档也还在（
-     *
      */
     private static final Map<UUID, Long> PENDING_AT = new HashMap<>();
     private static final Map<UUID, Long> DENY_LOG = new HashMap<>();
@@ -184,7 +155,6 @@ public final class RideBindManager {
     /**
      * 手持骑乘指挥棒右击实体（女仆 / 坐骑）——骨架同 {@code GunnerTetherManager.onInteract}：
      * EntityInteract 比 TLM 的 mobInteract 先到，cancel 掉就不会误开女仆 GUI。
-     *
      * <p>【实测七百二十·点2】目标先过一道 {@link MaidMountCompat#resolveMount}：冰火传说的龙是
      * **多部件实体**，准星常常打中的是它的**翅膀/尾巴/头**那些部位实体，而部位会把右击**转发给
      * 本体**（{@code EntityMultipartPart.m_6096_} → {@code getParent().m_6096_}，反编译实证）。
@@ -208,12 +178,6 @@ public final class RideBindManager {
         }
         Player player = event.getEntity();
         // 【实测七百七十三·点1】骑乘状态下，指挥棒的右击效果**一律取消**。
-        //
-        //
-        //
-        //
-        //
-        //
         // 所以这里不查目标、不问能不能绑：**只要他正骑着任何东西、手里拿的又是指挥棒，
         // 这一下就整个吃掉**（两侧都吃——客户端那一份不吃还会走本地预测）。绑定/解绑/换座
         // 都需要人站在地上瞄目标，骑乘中的右击没有任何正当用途，反倒会碰到载具自己的
@@ -285,10 +249,8 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百二十三】客户端那一份的右击闸：把"手里拿着指挥棒 + 面对一个我们认得出的目标"
      * 的这一下**取消掉**，于是本地预测不会再进 {@code VehicleEntity.interact}（SWB 的
      * {@code player.startRiding} / {@code setDriverAngle} / 把女仆 {@code stopRiding} 都在里面）。
-     *
      * <p>为什么客户端也要拦：绑定/解除本身只由服务端那份事件做（客户端做会双绑），
      * 但**客户端本地预测**是独立跑的——不拦它，玩家屏幕上就会出现"转了一下头 / 位置跳了一下"
      * （）。这里只 cancel，不调 {@code handle}。
@@ -327,10 +289,7 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百三十七·双人座】空手右击的入口：对着"自己女仆开的卓越前线载具"右击 → 主人上副驾。
-     *
      * <p>
-     *
      * 而它见"第一乘客不是玩家"就把女仆 {@code stopRiding} 踢下来、自己坐驾驶位（反编译实证）。
      * 这里把这一档接过来：认得出来（自己女仆开的车 + 有空副驾）就两侧都 cancel，服务端再把主人
      * 放进副驾；认不出就**一个字节都不动**（原版行为照旧）。
@@ -379,38 +338,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百六十五·点2】"主人直接接管"：主人空手右击一只**自己女仆正骑着的无鞍可骑仆从**时，
      * 把女仆干净请下来，再把这一下右击**放行**给 Goety 自己的 {@code mobInteract}（它会
      * {@code doPlayerRide(player)} 把主人骑上去）。
-     *
      * <h2>
      * 「主人也不太能移动他们」；追问后定档 = **主人直接接管**（主人骑上去就按 Goety 原版由主人操控，
      * 女仆不占驾驶位）。
-     *
-     * <h2>根因（反编译 goety-3.1.5.1 实证）</h2>
-     * {@code RedstoneMonstrosity.getControllingPassenger()} 对**非玩家**乘客直接返回那只 Mob
-     * （即我们的女仆），而 {@code travel()} 只在 {@code rider instanceof Player} 时才应用输入速度
-     * ——所以女仆当乘客时，Goety 侧**压根没有给她任何转向能力**；它自己的技能 goal 又每拍抢导航
-     * （点1 已治）。玩家要"自己开"这条路，唯一正门就是 Goety 的 {@code mobInteract → doPlayerRide}
-     * ——而它只在**没有别的乘客**时才会把主人放上去（{@code getFirstPassenger() != null} 那一支会
-     * 直接把现有乘客踢下来）。所以我们必须**先**把女仆请下来，否则女仆会被 Goety 用
-     * {@code stopRiding} 粗暴踢掉、我们这边的链路/标记/坐姿全成脏状态。
-     *
-     * <h2>判据（尽量窄，避免误伤原版兽与载具）</h2>
-     * <ol>
-     *   <li>这一下是**空手**右击（拿指挥棒走的是原来的选中/解绑，不进本档）；</li>
-     *   <li>目标是一只 **{@link MaidRideKit#isNoSaddleRideable} 的无鞍可骑仆从**（只治这一类：
-     *       原版马/骆驼/载具/龙一个字节不动）；</li>
-     *   <li>它身上驮着**这位玩家自己的、我们用棍子绑的**女仆（{@link MaidRideKit#isRideRider}）；</li>
-     *   <li>玩家是它的**真正主人**（诡厄 {@code IOwned.getTrueOwner()}，反射；拿不到就不接管
-     *       ——因为 Goety 自己也不会让非主人骑上去）。</li>
-     * </ol>
-     * 四条全过：请下女仆 + **不 cancel**（让这一下继续走到 Goety 的 {@code mobInteract}）。
-     *
-     * <p>【为什么"不 cancel"就能让主人骑上去】Goety 的骑乘入口在 {@code Mob.mobInteract} 里
-     * （反编译实证），而 {@code PlayerInteractEvent.EntityInteract} 在它**之前**发——我们不吞这一下，
-     * 原版链路就会照常调用它。女仆已在上一行被我们请下来，于是它那条
-     * {@code getFirstPassenger() != null} 的踢人分支不会触发，主人直接进 {@code doPlayerRide}。
+     * <h2>根因（反编译 goety-3.1.5.1 实证）</h2> {@code RedstoneMonstrosity.getControllingPassenger()} 对**非玩家**乘客直接返回那只 Mob （即我们的女仆），而 {@code travel()} 只在 {@code rider instanceof Player} 时才应用输入速度 ——所以女仆当乘客时，Goety 侧**压根没有给她任何转向能力**；它自己的技能 goal 又每拍抢导航 （点1 已治）。玩家要"自己开"这条路，唯一正门就是 Goety 的 {@code mobInteract → doPlayerRide} ——而它只在**没有别的乘客**时才会把主人放上去（{@code getFirstPassenger() != null} 那一支会 直接把现有乘客踢下来）。所以我们必须**先**把女仆请下来，否则女仆会被 Goety 用 {@code stopRiding} 粗暴踢掉、我们这边的链路/标记/坐姿全成脏状态。 <h2>判据（尽量窄，避免误伤原版兽与载具）</h2> <ol> <li>这一下是**空手**右击（拿指挥棒走的是原来的选中/解绑，不进本档）；</li> <li>目标是一只 **{@link MaidRideKit#isNoSaddleRideable} 的无鞍可骑仆从**（只治这一类： 原版马/骆驼/载具/龙一个字节不动）；</li> <li>它身上驮着**这位玩家自己的、我们用棍子绑的**女仆（{@link MaidRideKit#isRideRider}）；</li> <li>玩家是它的**真正主人**（诡厄 {@code IOwned.getTrueOwner()}，反射；拿不到就不接管 ——因为 Goety 自己也不会让非主人骑上去）。</li> </ol> 四条全过：请下女仆 + **不 cancel**（让这一下继续走到 Goety 的 {@code mobInteract}）。 <p>【为什么"不 cancel"就能让主人骑上去】Goety 的骑乘入口在 {@code Mob.mobInteract} 里 （反编译实证），而 {@code PlayerInteractEvent.EntityInteract} 在它**之前**发——我们不吞这一下， 原版链路就会照常调用它。女仆已在上一行被我们请下来，于是它那条 {@code getFirstPassenger() != null} 的踢人分支不会触发，主人直接进 {@code doPlayerRide}。
      */
     private static boolean tryOwnerTakeover(Player player, PlayerInteractEvent.EntityInteract event) {
         try {
@@ -450,15 +383,12 @@ public final class RideBindManager {
 
     /**
      * 【实测七百二十四】"右击载具不再转玩家视角"的兜底口径。
-     *
      * <p>根因（反编译实证）：SWB {@code VehicleVecUtils.setDriverAngle(vehicle, player)} 是**全 jar
      * 唯一**改玩家 yRot/xRot/yHeadRot 的地方，而它在 {@code VehicleEntity.interact} 里
      * {@code player.m_7998_} **之前**就被调用（:3172 / :3184）。我们虽然后面把 startRiding 拦了，
      * 但"转视角"这一下已经发生——。
-     *
      * <p>所以右击之后**短时间内每客户端 tick 复述一次快照**（只覆盖那几拍，过期自动失效），
      * 把 SWB 本地预测写进去的朝向抹平。玩家自己主动转视角不受影响。
-     *
      * <p><b>客户端类型隔离</b>：本类两侧都会加载（NeoForge 专用服务器也加载），所以这里**不碰
      * {@code net.minecraft.client.*}**——每客户端 tick 的复述放在客户端专属类
      * {@code com.maidsmart.client.RideBatonViewClamp}（只在客户端注册，见 {@code ProMaidExtension}）。
@@ -579,32 +509,12 @@ public final class RideBindManager {
     }
 
     /**
-     * v1.3.0(beta) 实测七百二十一【点2 补闸：独占档改在"登乘那一道"上落实】。
-     *
      * <h2>
      * 「右击问题还是没有解决，拿着骑乘棒右击卓越前线的载具会直接坐上去，而不是绑定。」
-     *
      * <h2>720 那两道闸为什么拦不住它（字节码实证）</h2>
      * 720 拦的是 {@code PlayerInteractEvent.EntityInteract( Specific )}——它们由
      * {@code Player.m_36157_}（= {@code interactOn}，服务端）与
-     * {@code MultiPlayerGameMode.m_105230_/m_105226_}（客户端本地）里各发一次，**只覆盖"原版那条
-     * 右击链路"**。而"坐上载具"这件事在更下面一层：**任何** {@code startRiding} 都会走
-     * {@code Entity.m_7998_} → {@code ForgeEventFactory.canMountEntity} /
-     * {@code EventHooks.canMountEntity} → 发 {@code EntityMountEvent}（javap 实证：
-     * {@code Entity.m_7998_} 偏移 49 就是这次调用）。卓越前线的载具/轮椅走的是它自己那条
-     * 客户端本地链路（{@code WheelChairEntity.attractEntity} 每 tick 把附近的**非玩家**
-     * 生物 {@code startRiding} 上来、玩家那条走 {@code VehicleEntity.interact} →
-     * {@code player.startRiding}），**客户端本地那一下**根本不过我们那两个事件。
-     *
-     * <h2>所以补这一道（唯一收口）</h2>
-     * 独占档开着时：**手里拿着骑乘指挥棒的玩家，不通过任何方式登乘**——{@code EntityMountEvent}
-     * 是**所有**登乘路径（原版右击 / 模组自己的本地链路 / 别的模组调 {@code startRiding}）
-     * 的共同必经点，而且客户端与服务端**各发一次**（{@code canMountEntity} 在两侧的
-     * {@code m_7998_} 里都调），所以两边都拦得住。
-     *
-     * <p><b>只拦"玩家本人"</b>：女仆自己登乘（{@link #bind} 里的
-     * {@code maid.m_7998_(mount, true)}）与武装拴绳那条链路（它压根不用 {@code startRiding}）
-     * 一个字节都不受影响。关掉 {@code ride.batonExclusive} = 与今天一字不差。
+     * {@code MultiPlayerGameMode.m_105230_/m_105226_}（客户端本地）里各发一次，**只覆盖"原版那条 右击链路"**。而"坐上载具"这件事在更下面一层：**任何** {@code startRiding} 都会走 {@code Entity.m_7998_} → {@code ForgeEventFactory.canMountEntity} / {@code EventHooks.canMountEntity} → 发 {@code EntityMountEvent}（javap 实证： {@code Entity.m_7998_} 偏移 49 就是这次调用）。卓越前线的载具/轮椅走的是它自己那条 客户端本地链路（{@code WheelChairEntity.attractEntity} 每 tick 把附近的**非玩家** 生物 {@code startRiding} 上来、玩家那条走 {@code VehicleEntity.interact} → {@code player.startRiding}），**客户端本地那一下**根本不过我们那两个事件。 <h2>所以补这一道（唯一收口）</h2> 独占档开着时：**手里拿着骑乘指挥棒的玩家，不通过任何方式登乘**——{@code EntityMountEvent} 是**所有**登乘路径（原版右击 / 模组自己的本地链路 / 别的模组调 {@code startRiding}） 的共同必经点，而且客户端与服务端**各发一次**（{@code canMountEntity} 在两侧的 {@code m_7998_} 里都调），所以两边都拦得住。 <p><b>只拦"玩家本人"</b>：女仆自己登乘（{@link #bind} 里的 {@code maid.m_7998_(mount, true)}）与武装拴绳那条链路（它压根不用 {@code startRiding}） 一个字节都不受影响。关掉 {@code ride.batonExclusive} = 与今天一字不差。
      */
     @SubscribeEvent
     public static void onMount(EntityMountEvent event) {
@@ -646,21 +556,12 @@ public final class RideBindManager {
     /* ==================== 实测七百四十二·点1：换座期间的"重新登乘放行条" ==================== */
 
     /**
-     * 【实测七百四十二·点1】"左击换座"这一步要重上车，但玩家**手里正拿着指挥棒**——
      * 而我们自己那两道登乘闸（{@link #denyMountForBatonHolder} 拦 {@code startRiding} 本体 +
      * {@link #onMount} 拦 {@code EntityMountEvent}）就是**专门拦"拿指挥棒的人"**的。
      * 于是 741 那一版的 {@code player.m_7998_(mount, true)} 恒返回 false，
      * 每次都落在"换座失败：坐不回去了"。这正是
      * 「从副驾驶换到主驾驶座这个操作一直没能实现。老是提示失败」的根因。
-     *
-     * <h2>放行条的口径（尽量窄）</h2>
-     * 只在"这一次换座"这一个动作期间有效，且**必须同时匹配玩家与载具**：
-     * <ul>
-     *   <li>{@link #grantRemount} 紧贴 {@code startRiding} 之前开，
-     *       {@link #revokeRemount} 用 {@code finally} 在同一拍关掉；</li>
-     *   <li>键是**玩家 UUID → 载具 UUID**，换成别的车、或别的玩家长棍子都无效；</li>
-     *   <li>只在服务端这张表里生效（客户端那份由 {@link #armClientRemount} 单独喂）。</li>
-     * </ul>
+     * <h2>放行条的口径（尽量窄）</h2> 只在"这一次换座"这一个动作期间有效，且**必须同时匹配玩家与载具**： <ul> <li>{@link #grantRemount} 紧贴 {@code startRiding} 之前开， {@link #revokeRemount} 用 {@code finally} 在同一拍关掉；</li> <li>键是**玩家 UUID → 载具 UUID**，换成别的车、或别的玩家长棍子都无效；</li> <li>只在服务端这张表里生效（客户端那份由 {@link #armClientRemount} 单独喂）。</li> </ul>
      */
     private static final Map<UUID, UUID> REMOUNT_PERMIT = new HashMap<>();
 
@@ -749,17 +650,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百四十一·点1】左击换座的服务端那一半。
-     *
-     *
      * <p>规则（服务端权威，客户端只发"我要换"）：
      * <ol>
      *   <li>手里得拿着骑乘指挥棒（左击这一下由客户端闸放进来的；服务端再核一遍，防伪造包）；</li>
      *   <li>目标载具得是**卓越前线载具**（{@link MaidMountCompat.Kind#VEHICLE}）——原版马/猪那种
      *       只有一个座位，没有"主副驾"可言；</li>
-     *   <li>她（我们绑的那位女仆）得**还在这辆车上**，且是棍子绑的（{@link MaidRideKit#isRideRider}）。</li>
-     * </ol>
-     * 换座走 SWB 自己的 {@code changeSeat(Entity,int)}——见 {@link MaidMountCompat#swapOwnerSeat}。
+     *   <li>她（我们绑的那位女仆）得**还在这辆车上**，且是棍子绑的（{@link MaidRideKit#isRideRider}）。</li> </ol> 换座走 SWB 自己的 {@code changeSeat(Entity,int)}——见 {@link MaidMountCompat#swapOwnerSeat}。
      */
     public static void handleSwapSeatRequest(ServerPlayer player, int vehicleId) {
         try {
@@ -797,29 +693,11 @@ public final class RideBindManager {
 
     /**
      * 【实测七百二十二】独占档的**唯一收口**：{@code Entity.m_7998_}（{@code startRiding}）的最前面。
-     *
      * <h2>
      * 「右击问题还是没有解决，拿着骑乘棒右击卓越前线的载具会直接坐上去，而不是绑定。」
-     *
      * <h2>为什么上面那道 {@code EntityMountEvent} 也不够（实机日志实证）</h2>
      * 2026-09-29 16:07 那次测试的日志里，这两行**同时**打出：
-     * <pre>
-     *   16:07:10.572  [骑乘指挥棒] 绑定：… 坐骑=卓越前线载具(WHEELCHAIR)
-     *   16:07:10.573  [骑乘指挥棒] Khragg 手里拿着指挥棒 → 不登乘（独占右击：这一下只归棍子）
-     * </pre>
-     * 绑定成功、闸也拦下了，玩家眼前却仍然是"自己坐上去了"：{@code EntityMountEvent} 是在
-     * {@code startRiding} **内部**发的，取消它 = "先同意上车、再撤销"。而卓越前线的载具是
-     * **客户端本地**上车的（{@code VehicleEntity.interact} → {@code player.startRiding}，
-     * 以及它自己那条"非玩家驾驶位一律清掉"的分支）——客户端那一份预测不看服务端的事件结果，
-     * 所以"坐上去"这一下照样在你屏幕上发生。
-     *
-     * <h2>所以再往下一层：拦 {@code startRiding} 本身</h2>
-     * {@code m_7998_} 是**所有**登乘路径唯一的收口，且在 HEAD 返回 false 时**什么状态都还没改**
-     * ——没有"上车再撤销"，也就没有可见的坐上去。由 {@code EntityBatonMountGateMixin} 调用。
-     * 判据保持最窄：**玩家本人 + 手里拿着指挥棒 + 独占档开着**；女仆自己坐上去、
-     * 武装拴绳（玩家拿的不是指挥棒）一律放行。关掉 {@code ride.batonExclusive} = 一字不差。
-     *
-     * @return true = 这一下不许上车
+     * <pre> 16:07:10.572  [骑乘指挥棒] 绑定：… 坐骑=卓越前线载具(WHEELCHAIR) 16:07:10.573  [骑乘指挥棒] Khragg 手里拿着指挥棒 → 不登乘（独占右击：这一下只归棍子） </pre> 绑定成功、闸也拦下了，玩家眼前却仍然是"自己坐上去了"：{@code EntityMountEvent} 是在 {@code startRiding} **内部**发的，取消它 = "先同意上车、再撤销"。而卓越前线的载具是 **客户端本地**上车的（{@code VehicleEntity.interact} → {@code player.startRiding}， 以及它自己那条"非玩家驾驶位一律清掉"的分支）——客户端那一份预测不看服务端的事件结果， 所以"坐上去"这一下照样在你屏幕上发生。 <h2>所以再往下一层：拦 {@code startRiding} 本身</h2> {@code m_7998_} 是**所有**登乘路径唯一的收口，且在 HEAD 返回 false 时**什么状态都还没改** ——没有"上车再撤销"，也就没有可见的坐上去。由 {@code EntityBatonMountGateMixin} 调用。 判据保持最窄：**玩家本人 + 手里拿着指挥棒 + 独占档开着**；女仆自己坐上去、 武装拴绳（玩家拿的不是指挥棒）一律放行。关掉 {@code ride.batonExclusive} = 一字不差。 @return true = 这一下不许上车
      */
     public static boolean denyMountForBatonHolder(Player player, Entity vehicle) {
         try {
@@ -864,7 +742,6 @@ public final class RideBindManager {
     /**
      * 【实测七百三十七·双人座】这位玩家现在能不能"作为副驾"登上这辆车——**唯一**的放行口径，
      * 供两道登乘闸（{@code denyMountForBatonHolder} 与 {@code onMount}）共用。
-     *
      * <p>判据取最窄的三条：① 这是卓越前线的载具（其余坐骑一字不动）；② 车上驮着**这位玩家
      * 自己的、我们用指挥棒绑的**女仆（{@link MaidRideKit#riderOf} + 归属 + {@link MaidRideKit#isRideRider}）；
      * ③ 还有**除她之外的**空座。三条都满足 = 玩家是来坐副驾的，不是来抢驾驶位的——女仆稳在
@@ -936,14 +813,9 @@ public final class RideBindManager {
                     return;
                 }
                 // 她已经骑着**我们用棍子绑的**坐骑 → 再选她 = 直接下坐骑（比潜行更顺手的第二入口）
-                // v1.3.0(beta) 实测七百一十八·点4：判据从 isRidingMount 收紧到 isRideRider——
                 // 她若只是原版/别的模组让她坐上去的（不是我们绑的），指挥棒不该把她拽下来。
-                //
-                // 【实测七百二十七·点2】判据再放宽到 {@link #isOurRider}：**悬空鞍位（冰火传说的龙）
                 // 那条她不是乘客**，{@code MaidRideKit.isRideRider} 要求 {@code getVehicle() != null}
                 // → 对龙恒为 false，于是"右击她"落到了下面那句「先用骑乘棒右击坐骑」，她根本下不来。
-                //
-                //
                 if (isOurRider(m)) {
                     releaseMaid(m, false, "再选一次");
                     return;
@@ -1040,18 +912,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百二十七·点2】她是不是"我们骑乘指挥棒绑上去的那位"——**两条路都要认**：
      * <ul>
      *   <li><b>乘客档</b>（原版兽 / 卓越前线载具）：{@link MaidRideKit#isRideRider}（它要求
      *       她确实是乘客，见那个方法的说明）；</li>
      *   <li><b>悬空鞍位档</b>（冰火传说的龙）：她**不是乘客**，判据只能看链路表里那条
      *       {@code chair} 标记（{@link #isDragonChairRider}）。</li>
-     * </ul>
-     *
-     * <p>【为什么必须补第二条】
-     *
-     *
-     * 都只问 {@code isRideRider}（对龙恒 false），所以她一旦上了龙就下不来。
+     * </ul> <p>【为什么必须补第二条】 都只问 {@code isRideRider}（对龙恒 false），所以她一旦上了龙就下不来。
      */
     private static boolean isOurRider(EntityMaid maid) {
         try {
@@ -1122,17 +988,13 @@ public final class RideBindManager {
             boolean ok = false;
             try {
                 // 【实测七百四十一·点4】她已经在这辆车上了？——
-                //
-                //
                 // 根因（javap 反编译原版 {@code Entity.startRiding(Entity,boolean)} 实证）：
                 // 它**第一句**就是 {@code if (this.vehicle == vehicle) return false;}——她已经在这辆车上
                 // 时恒返回 false。于是这里走"没能坐上去……再试一次？"分支、**不写链路表**；
                 // 而她不写链路 = 我们的驱动不生效（"卡在车上不动"），并且 {@code isOurRider} 认不出她，
                 // 连"右击让她下来"都做不到。她**自己坐上去**（SWB 的 VehicleEntity.interact 允许
                 // Mob 上车；或原版别的路径）是很常见的场景。
-                //
-                // 修法：她已在这辆车上 → **直接采纳现状**当作绑定成功（不重坐），继续走下面那套
-                // "坐姿 + 挪到驾驶位 + 写表 + 打标记"。若她坐在**别的**车上，则先把她请下来。
+                // 修法：她已在这辆车上 → **直接采纳现状**当作绑定成功（不重坐），继续走下面那套 "坐姿 + 挪到驾驶位 + 写表 + 打标记"。若她坐在**别的**车上，则先把她请下来。
                 if (maid.m_20202_() == mount) {
                     ok = true; // 已在车上 → 采纳
                     com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "她本来就在这辆车上 → 直接采纳绑定："
@@ -1399,25 +1261,12 @@ public final class RideBindManager {
     }
 
     /**
-     * v1.3.0(beta) 实测七百二十六·点1【"特殊载具"= 卓越前线的载具 + 冰火传说的龙】。
-     *
      * <h2>
      * 「对于卓越前线以及龙这两个特殊的载具……不会触发大部分传送，只有玩家手动使用排班表
      *  进行的传送，可以将她们传送过来。不会连着载具一起传送。只会把人传送过来。并且一旦进行
      *  传送了，那么就会立刻进行一次清除标记和解绑。也就是说，相比于原版的坐骑女仆并不会去
      *  主动产生传送。所有的传送方面的行为必须由玩家来。」
-     *
-     * <p>所以这一档的语义与**普通原版坐骑**（马/猪/骆驼，{@link MaidRideKit#isRideRider}）**故意不同**：
-     * <ul>
-     *   <li><b>普通坐骑</b>：保留旧口径——自动/手动传送都"连人带坐骑一起搬"（玩家 716 点名要的）。</li>
-     *   <li><b>特殊载具（本档）</b>：**一切自动传送一律不生效**（跨维跟随 / 同维远距拉回 /
-     *       危险撤离 / 主人死亡归位 / TLM 原生 teleportToOwner 全部让位）；**只有玩家手动**的
-     *       排班表传送（「传送到我身边」/「一键集合」）能把人传过来，且**只传人不传载具**，
-     *       传送的同时**解除绑定、清掉光标标记**。</li>
-     * </ul>
-     *
-     * <p>判据同时认"链路表里的 chair（龙）"与"她骑的是卓越前线载具（{@code kindOf == VEHICLE}）"，
-     * 并对"服务端重启后链路表还没重建"的那一拍兜底（按 {@code TAG_RIDE_MOUNT} 痕迹 + 当前载具类型认）。
+     * <p>所以这一档的语义与**普通原版坐骑**（马/猪/骆驼，{@link MaidRideKit#isRideRider}）**故意不同**： <ul> <li><b>普通坐骑</b>：保留旧口径——自动/手动传送都"连人带坐骑一起搬"（玩家 716 点名要的）。</li> <li><b>特殊载具（本档）</b>：**一切自动传送一律不生效**（跨维跟随 / 同维远距拉回 / 危险撤离 / 主人死亡归位 / TLM 原生 teleportToOwner 全部让位）；**只有玩家手动**的 排班表传送（「传送到我身边」/「一键集合」）能把人传过来，且**只传人不传载具**， 传送的同时**解除绑定、清掉光标标记**。</li> </ul> <p>判据同时认"链路表里的 chair（龙）"与"她骑的是卓越前线载具（{@code kindOf == VEHICLE}）"， 并对"服务端重启后链路表还没重建"的那一拍兜底（按 {@code TAG_RIDE_MOUNT} 痕迹 + 当前载具类型认）。
      */
     public static boolean isSpecialMountRider(EntityMaid maid) {
         try {
@@ -1442,11 +1291,8 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百二十六·点1】玩家**手动**排班表传送特殊载具上的女仆时调用：先干净解除绑定
      * （还原坐姿 / 重力 / 龙的行动档 + 撤掉金色标记 + 清 persistentData 痕迹），再让她被单独
      * 传送过去（载具留在原地）。
-     *
-     *
      * <p>走的实现与 {@link #releaseMaidImpl} 同一支（{@code natural = true}：不播"我自己走"的
      * 气泡——她是被玩家召回的，不是自己下鞍）。她若还是乘客（载具那条），解除里会
      * {@code stopRiding()}；龙那条会还原重力与 {@code command}。
@@ -1456,27 +1302,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百四十一·点4】她是不是"自己坐上了模组载具"——**不是**我们用指挥棒绑的，
      * 但她确实是卓越前线载具的乘客（{@code kindOf == VEHICLE}）。
-     *
      * <h2>
      * 「有的时候，女仆会自己坐到某个载具上，这个时候就会导致骑乘棒没有办法绑定女仆，
      *  女仆就会一直卡在车上不动。……我想的是在排班表里面的召她过来最好可以规避掉骑乘模式。
      *  直接把女仆自己召唤过来。」
-     *
-     * <h2>为什么这一档会"卡住"（两条链路都不认她）</h2>
-     * <ul>
-     *   <li>{@link #isSpecialMountRider} 要求 {@code link != null || isBatonBound}——她**没绑过**，
-     *       所以 false；</li>
-     *   <li>{@link MaidRideKit#isRideRider} 同样要求 {@code isBatonBound}——也是 false。</li>
-     * </ul>
-     * 于是排班表召唤落到 {@code summonOne} 最后那句 {@code maid.isPassenger()} 上 → 返回 3
-     * （"状态豁免，保持原位"），玩家点了「传送到我身边」她却纹丝不动。这正是"一直卡在车上"。
-     *
-     * <h2>本档的口径</h2>
-     * 与"特殊载具"（726）**故意不同**：那一档是她被棍子绑上去的（解绑要还原坐姿/标记），
-     * 这一档她只是**恰好坐在上面**——所以召唤时**只需要让她下来 + 传人**，
-     * 不去碰任何我们自己的标记（根本没有）。
+     * <h2>为什么这一档会"卡住"（两条链路都不认她）</h2> <ul> <li>{@link #isSpecialMountRider} 要求 {@code link != null || isBatonBound}——她**没绑过**， 所以 false；</li> <li>{@link MaidRideKit#isRideRider} 同样要求 {@code isBatonBound}——也是 false。</li> </ul> 于是排班表召唤落到 {@code summonOne} 最后那句 {@code maid.isPassenger()} 上 → 返回 3 （"状态豁免，保持原位"），玩家点了「传送到我身边」她却纹丝不动。这正是"一直卡在车上"。 <h2>本档的口径</h2> 与"特殊载具"（726）**故意不同**：那一档是她被棍子绑上去的（解绑要还原坐姿/标记）， 这一档她只是**恰好坐在上面**——所以召唤时**只需要让她下来 + 传人**， 不去碰任何我们自己的标记（根本没有）。
      */
     public static boolean isSelfBoardedModMount(EntityMaid maid) {
         try {
@@ -1544,8 +1375,6 @@ public final class RideBindManager {
     /* ==================== 每 2 tick：驱动 + 校验 + 恢复 ==================== */
 
     /**
-     * 【实测七百二十四】悬空鞍位（龙）的**每 tick** 摆位。
-     *
      * <p>为什么单开这一路：723 的摆位只挂在 {@link #tick} 里（每 2 tick 一次），她跟不上龙——
      * 龙每拍在动，她两拍才被纠正一次，玩家看到的就是"坐的位置时不时错一下"。而且她是**普通实体**，
      * 大脑/寻路每拍都可能把她往外挪。所以这里照抄 {@code GunnerTetherManager.onMaidTick} 的做法
@@ -1579,34 +1408,12 @@ public final class RideBindManager {
     }
 
     /**
-     * v1.3.0(beta) 实测七百二十六·点2【龙每拍摆位补在**龙自己 tick 之后**——治"她换位置的速度
      * 赶不上龙飞行的速度"】。
-     *
      * <h2>
      * 「目前女仆跟龙之间还是有一点点小小的错位，就是女仆换位置的速度赶不上龙飞行的速度。」
-     *
      * <h2>根因（服务端 tick 顺序，javap 实证）</h2>
      * {@code ServerLevel.tickNonPassenger(e)} 的顺序是
-     * {@code setOldPosAndRot → fireEntityTickPre → e.m_8119_() → fireEntityTickPost → 摆乘客}，
-     * 而**同一 tick 内龙与女仆谁先 tick 由实体 ID 决定**。{@link #onMaidTick} 挂在
-     * {@code MaidTickEvent}（在她**自己的** {@code tick()} 里），所以：
-     * <ul>
-     *   <li>龙**先** tick：她 tick 时拿到的是龙的新位置 → 摆位正确；</li>
-     *   <li>她**先** tick：她按龙的**旧**位置摆好，随后这一 tick 龙才飞到新位置 →
-     *       她整整落后龙一帧（每拍 0.5~1 格，飞起来就是"明显的错位"）。</li>
-     * </ul>
-     * 也就是说 {@link #onMaidTick} 是"在**她**的 tick 里摆"，而真正稳的做法是"在**龙的**
-     * tick 里摆"——不管谁先谁后，{@code TickEvent.EntityTickEvent} 对**两者**都发，谁后 tick 谁的
-     * Post 就是这一帧的最后一次摆位，天然收敛到"她的位置 = 龙这一帧的最终鞍位"。
-     *
-     * <h2>为什么用 Post 而不是 Pre</h2>
-     * Post 在 {@code e.m_8119_()} **返回之后**发（javap 实证），龙的 {@code setPos} 已经落地——这正是
-     * 我们要的那一帧的最终位置。Pre 会拿到上一帧的位置，等于没修。
-     *
-     * <h2>成本</h2>
-     * {@code TickEvent.EntityTickEvent} 对**每个实体每 tick** 都发，所以这里两道最便宜的守卫排在最前：
-     * ① 她（{@code EntityMaid}）或 ② 龙（{@link MaidMountCompat#isDragon}）——其余实体一次
-     * 方法调用就返回；真正的摆位只在"确实是悬空鞍位链路里的那两只之一"时才做。
+     * {@code setOldPosAndRot → fireEntityTickPre → e.m_8119_() → fireEntityTickPost → 摆乘客}， 而**同一 tick 内龙与女仆谁先 tick 由实体 ID 决定**。{@link #onMaidTick} 挂在 {@code MaidTickEvent}（在她**自己的** {@code tick()} 里），所以： <ul> <li>龙**先** tick：她 tick 时拿到的是龙的新位置 → 摆位正确；</li> <li>她**先** tick：她按龙的**旧**位置摆好，随后这一 tick 龙才飞到新位置 → 她整整落后龙一帧（每拍 0.5~1 格，飞起来就是"明显的错位"）。</li> </ul> 也就是说 {@link #onMaidTick} 是"在**她**的 tick 里摆"，而真正稳的做法是"在**龙的** tick 里摆"——不管谁先谁后，{@code TickEvent.EntityTickEvent} 对**两者**都发，谁后 tick 谁的 Post 就是这一帧的最后一次摆位，天然收敛到"她的位置 = 龙这一帧的最终鞍位"。 <h2>为什么用 Post 而不是 Pre</h2> Post 在 {@code e.m_8119_()} **返回之后**发（javap 实证），龙的 {@code setPos} 已经落地——这正是 我们要的那一帧的最终位置。Pre 会拿到上一帧的位置，等于没修。 <h2>成本</h2> {@code TickEvent.EntityTickEvent} 对**每个实体每 tick** 都发，所以这里两道最便宜的守卫排在最前： ① 她（{@code EntityMaid}）或 ② 龙（{@link MaidMountCompat#isDragon}）——其余实体一次 方法调用就返回；真正的摆位只在"确实是悬空鞍位链路里的那两只之一"时才做。
      */
     public static void onEntityTickPost(Entity e) {
         try {
@@ -1657,16 +1464,11 @@ public final class RideBindManager {
 
     /**
      * 客户端那一半的摆位（{@link #onEntityTickPost} 在 {@code isClientSide()} 时转进来）。
-     *
      * <p>【为什么必须有这一支】服务端的每拍摆位跑在服务端；客户端**没有** {@link #LINKS}
      * （那是服务端状态），所以旧版客户端的她 = "不是乘客 + 没人摆位" = 完全由原版位置包与
      * 客户端自身插值决定。而原版位置包**限流**（{@code ServerEntity} 每 2 tick 一次），她又
      * 每拍被服务端拽回鞍位——这种"每拍小位移 + 限流"的组合，客户端插值最容易出偏差；
-     * 龙**是**每帧插值渲染的原版实体 → 两条插值曲线不同步 → 玩家看到的"一飞就错乱"。
-     *
-     * <p>现在客户端按服务端同步的配对（{@link #SYNCED_CHAIRS}），用**同一个**
-     * {@link MaidMountCompat#seatOnDragon} 从"龙的当前渲染位置"重算鞍位——客户端不再依赖
-     * 位置包，两者同帧。龙 / 她 tick 完各摆一次（谁后 tick 谁说了算，与服务端同口径）。
+     * 龙**是**每帧插值渲染的原版实体 → 两条插值曲线不同步 → 玩家看到的"一飞就错乱"。 <p>现在客户端按服务端同步的配对（{@link #SYNCED_CHAIRS}），用**同一个** {@link MaidMountCompat#seatOnDragon} 从"龙的当前渲染位置"重算鞍位——客户端不再依赖 位置包，两者同帧。龙 / 她 tick 完各摆一次（谁后 tick 谁说了算，与服务端同口径）。
      */
     private static void onClientEntityTickPost(Entity e) {
         try {
@@ -1911,26 +1713,11 @@ public final class RideBindManager {
 
     /**
      * 驱动：把"她本来要去的地方"转达给坐骑自己的寻路。
-     *
      * <p>目的地来源（按优先级，【实测七百一十六·点2】重排）：
-     * <ol>
-     *   <li><b>她自己的导航目标</b>（{@link MaidRideKit#ownNavigationTarget}）——这是"1:1 还原
-     *       女仆原有走路逻辑"的那一档：我们的单兵战术（core 230）与 TLM 跟随（core 3）都照常
-     *       在她自己的 {@code PathNavigation} 上写目的地，只是位移被她"是乘客"这一条吃掉。
-     *       把这个点原样转达给坐骑，坐骑就按她原本的近战/远程走位跑（马这种只会跑的坐骑
-     *       由此完全复现）。</li>
-     *   <li>退而读脑里的 {@code WALK_TARGET}（任务/跟随行为写的走位记忆——她自己的导航
-     *       没被写时用它兜底）；</li>
-     *   <li>再退就用主人当前的位置（离主人超过 followDist 才喂）。</li>
-     * </ol>
-     * 目标够近就 {@code stop()}——让坐骑原地站住，别顶着自己人打转。
+     * <ol> <li><b>她自己的导航目标</b>（{@link MaidRideKit#ownNavigationTarget}）——这是"1:1 还原 女仆原有走路逻辑"的那一档：我们的单兵战术（core 230）与 TLM 跟随（core 3）都照常 在她自己的 {@code PathNavigation} 上写目的地，只是位移被她"是乘客"这一条吃掉。 把这个点原样转达给坐骑，坐骑就按她原本的近战/远程走位跑（马这种只会跑的坐骑 由此完全复现）。</li> <li>退而读脑里的 {@code WALK_TARGET}（任务/跟随行为写的走位记忆——她自己的导航 没被写时用它兜底）；</li> <li>再退就用主人当前的位置（离主人超过 followDist 才喂）。</li> </ol> 目标够近就 {@code stop()}——让坐骑原地站住，别顶着自己人打转。
      */
     /**
-     * 【实测七百七十三·点2】"驾驶已交给玩家"的载具集合（按 UUID 记）。
-     *
-     * <p>只用来打**一次**交接日志 + 只跑一次 {@link MaidMountCompat#stop}（清掉我们残留的
-     * 输入位）；玩家离开驾驶位后从表里摘掉，我们再接手。表的大小天然有界（同时被玩家开着的
-     * 已绑定载具数量）。
+     * <p>只用来打**一次**交接日志 + 只跑一次 {@link MaidMountCompat#stop}（清掉我们残留的 输入位）；玩家离开驾驶位后从表里摘掉，我们再接手。表的大小天然有界（同时被玩家开着的 已绑定载具数量）。
      */
     private static final java.util.Set<UUID> PLAYER_DRIVING = new java.util.HashSet<>();
     /** v1.3.2 实测八百六十三：绑定飞行载具后的「启动截止时刻」（gameTime tick；到时清）。 */
@@ -1940,18 +1727,12 @@ public final class RideBindManager {
         try {
             // 【实测七百七十三·点2】第一道闸（放最前，连守家档都不许越过它）：**驾驶位上坐着
             // 玩家 ⇒ 方向盘归玩家，我们一个字都不许写**。
-            //
-            //
-            //
             // （数学上主人确实坐进了 0 号座），坏在**我们还在开**：卓越前线的引擎只认座位 0
             // （{@code getFirstPassenger()}，反编译实证），而本类每拍都在往 {@code processInput}
             // 写位掩码、往机头写 yaw、甚至硬刹；守家档还会 stopNavigation 去清输入——玩家那一侧
             // 的按键输入与我们的写入**每拍对撞**，结果就是"坐在主驾却没反应"。
-            //
             // 交接的那一拍先 {@link MaidMountCompat#stop} 一次，把我们上一拍留下的输入位/油门
-            // 清干净（不然玩家会看到车自己还在往前走）；此后一劳永逸地不再写。
-            // 武器（tickAttack）与装弹不受影响——那两件事不碰驾驶输入。
-            // 玩家换回副驾（或她换回驾驶位）→ 这一档自动失效，我们接着开。
+            // 清干净（不然玩家会看到车自己还在往前走）；此后一劳永逸地不再写。 武器（tickAttack）与装弹不受影响——那两件事不碰驾驶输入。 玩家换回副驾（或她换回驾驶位）→ 这一档自动失效，我们接着开。
             if (MaidMountCompat.playerHoldsDriverSeat(mount)) {
                 MaidMountCompat.markTick(maid.m_9236_().m_46467_());
                 MaidMountCompat.tickAttack(mount, maid);
@@ -1984,32 +1765,13 @@ public final class RideBindManager {
             // 判"上一拍还在降吗"，只有真的不再降了才清。
             MaidMountCompat.endAircraftLanding(mount);
             // 【实测七百五十六·点3：守家（home 模式）→ 坐骑立刻停】
-            //
             // 口径与 TLM 自己的跟随完全同源——{@code MaidFollowOwnerTask.maidStateConditions} 就是
             // {@code !maid.isHomeModeEnable() && maid.canBrainMoving()}：守家的女仆**不跟随**。
             // 她自己在地上时"不跟随"= 站着不动；她骑在坐骑上时，"站着不动"当然就该是**坐骑停住**，
             // 而不是我们的骑乘链路还把她（和车）往主人/敌人那边带。
-            //
-            // 【实测七百六十一·飞行载具：守家 = 就地悬停，不再追人】
             // 756 为了不让直升机"守家时掉下来"把飞行载具整个排除在这条闸之外——代价是**飞行载具
             // 在守家时仍然追着主人/敌人飞**（玩家要的是"她坐的坐骑立刻停止"）。其实这一档早就有
-            // 现成的"停"：把目标点设成它**此刻的位置**（水平+竖直都保持）就是定高悬停——正是
-            // 七百二十九/七百三十八 玩家坐副驾那一档用的同一套驱动（{@link MaidAirCombat#holdHere}）。
-            // 所以飞行载具改成走 holdHere：不再产生任何往主人/敌人去的驱动。
-            // 冰火传说龙走悬空鞍位（{@code link.chair}），在 tick() 里就 continue 了，天然不经过这里。
-            //
-            // 【实测七百七十·模组仆从坐骑：单独一个区间】玩家定档
-            //
-            //
-            // 区间。不影响其他区间以及原版生物或者通用的骑乘逻辑。」
-            //
-            // 于是这一类（诡厄无鞍可骑仆从）在本档里**我们什么都不做，只赋速度**：不喂走位、
-            // 不写目标、不替它出招、不拦它的寻路——它自己的 targetSelector（SummonTargetGoal /
-            // ServantHurtByTargetGoal）自主锁敌，goalSelector 里的巡逻/接近/全部技能自己跑。
-            // 它自己的 goal 之所以能跑，靠的是 MobRiddenControlFlagsMixin 每 5 拍（在
-            // updateControlFlags 之后）把控制位开回来；home 模式那一档不接管 = 控制位保持关闭 =
-            // 它自己的 goal 全停 = 坐骑停住（玩家要求保留的通用例外）。这些判据全在
-            // {@link MaidRideKit#reopenRiddenCombatGoals} 里，本处不重复。
+            // 现成的"停"：把目标点设成它**此刻的位置**（水平+竖直都保持）就是定高悬停——正是 七百二十九/七百三十八 玩家坐副驾那一档用的同一套驱动（{@link MaidAirCombat#holdHere}）。 所以飞行载具改成走 holdHere：不再产生任何往主人/敌人去的驱动。 冰火传说龙走悬空鞍位（{@code link.chair}），在 tick() 里就 continue 了，天然不经过这里。 区间。不影响其他区间以及原版生物或者通用的骑乘逻辑。」 于是这一类（诡厄无鞍可骑仆从）在本档里**我们什么都不做，只赋速度**：不喂走位、 不写目标、不替它出招、不拦它的寻路——它自己的 targetSelector（SummonTargetGoal / ServantHurtByTargetGoal）自主锁敌，goalSelector 里的巡逻/接近/全部技能自己跑。 它自己的 goal 之所以能跑，靠的是 MobRiddenControlFlagsMixin 每 5 拍（在 updateControlFlags 之后）把控制位开回来；home 模式那一档不接管 = 控制位保持关闭 = 它自己的 goal 全停 = 坐骑停住（玩家要求保留的通用例外）。这些判据全在 {@link MaidRideKit#reopenRiddenCombatGoals} 里，本处不重复。
             if (MaidRideKit.servantAutoEnabled() && MaidRideKit.isNoSaddleRideable(mount)) {
                 MaidRideKit.applyRiddenSpeed(mount, maid);
                 return;
@@ -2069,12 +1831,9 @@ public final class RideBindManager {
             //   ① **有敌人** → 升到**敌人上方 fightAlt 格**（默认 15）、绕着敌人盘旋射击；
             //      高度进的是目标点 Y（由总距升降），不是俯仰 —— 所以敌人比她在下很多也不会
             //      把机头压向地面（726 栽的那个坑）。
-            //
             //   ② **没有敌人** → **低空跟随**：主人离得够远就把目标点放在主人正上方、
             //      高度锁在**离地 airAlt 格**（默认 3，）；
-            //      主人就在旁边则原地悬停。
-            // 两条都把结果交给 driveFlight——它是唯一能写总距/悬停开关的地方。飞艇/地面车不在
-            // 这一档里。
+            //      主人就在旁边则原地悬停。 两条都把结果交给 driveFlight——它是唯一能写总距/悬停开关的地方。飞艇/地面车不在 这一档里。
             if (MaidAirCombat.enabled() && MaidMountCompat.isFlyingVehicle(mount)) {
                 // 【实测七百三十】锁敌改用**本模组自己的索敌器**（与扫帚/空袭同一套：
                 // 发现 50 格 / 维持 128 格、无视排班盒子）——
@@ -2085,11 +1844,8 @@ public final class RideBindManager {
                     foe = liveTargetOf(maid); // 索敌器这一拍没结果 → 退回 brain（只认"活敌人"，见 LiveThreat）
                 }
                 // 【实测七百三十·点2】"发现攻击范围内没有主人"→ 放弃当前敌人、转去追主人。
-                //
                 // 参照半径直接复用索敌器的**发现半径**（{@link FlightTargeting#RANGE} = 50）：
                 // 主人离得比"她还愿意接敌的距离"还远，就说明这一场不在主人身边打——收手回去。
-                //
-                // 【实测七百七十九·点2】固定翼用**它自己的航程**当这道闸（{@link
                 // MaidMountCompat#AIRCRAFT_ENGAGE_LEASH} = 200 格）：它一次通场 + 掉头就要飞出
                 // 100~200 格，按 50 判等于每一趟都在半路把敌人丢掉——玩家看到的"飞机不支援战斗"
                 // 有一半是这条闸造成的。直升机/扫帚/飞艇照旧 50 格。
@@ -2128,19 +1884,8 @@ public final class RideBindManager {
                         // 立刻判"到了"→ 不给油，可它**没有制动**，于是带着残余速度一路平飞漂出战场；
                         // 下一拍锁敌器的圆心是**主人**、又只在主人水平 50 格内找，飞机早已飞出那个圈
                         // →「女仆的飞行就会立刻丢失掉目标」就是这么来的。
-                        //
-                        //
-                        //
-                        //
                         // 所以这一档改走**同一条降落链路**（实测七百八十三那套 home 安全降落，
-                        // 红线"口径只有一处"）：选一块够平的地 → 怠速 → 受控下沉 → 轻接地 → 停住。
-                        // 返回 false（拿不到驱动口 / 找不到平地）→ 落回下面的 holdHere 悬停，一个字节不变。
-                        //
-                        // 为什么"降落"能救回锁敌：落点是在**她当前位置周围 48 格**里选平地，且下降段
-                        // 每拍水平阻尼 0.94（约 2 秒降到亚音速以下）——她**留在主人附近**，于是下一拍
-                        // 锁敌器（圆心=主人、水平 50 格）照样能发现敌人。敌人一出现，上面 `foe != null`
-                        // 那一支立刻接管：爬升 → 敌正上方轰炸航线（= 玩家要的"绕着敌人转圈并攻击"）。
-                        // 若敌人在**接地后**才出现，下一拍 driveFlight 的接敌档会照常把她从地面拔起来。
+                        // 红线"口径只有一处"）：选一块够平的地 → 怠速 → 受控下沉 → 轻接地 → 停住。 返回 false（拿不到驱动口 / 找不到平地）→ 落回下面的 holdHere 悬停，一个字节不变。 为什么"降落"能救回锁敌：落点是在**她当前位置周围 48 格**里选平地，且下降段 每拍水平阻尼 0.94（约 2 秒降到亚音速以下）——她**留在主人附近**，于是下一拍 锁敌器（圆心=主人、水平 50 格）照样能发现敌人。敌人一出现，上面 `foe != null` 那一支立刻接管：爬升 → 敌正上方轰炸航线（= 玩家要的"绕着敌人转圈并攻击"）。 若敌人在**接地后**才出现，下一拍 driveFlight 的接敌档会照常把她从地面拔起来。
                         if (fixedWing && MaidMountCompat.aircraftHomeLanding(mount, maid, "机上有人且周围无敌人")) {
                             return;
                         }
@@ -2214,55 +1959,24 @@ public final class RideBindManager {
             }
             // 【实测七百五十五】陆地坐骑（原版马/驴/骡/骆驼，以及任何**别的模组**的可骑乘
             // Mob）**不再由我们写第二套移动逻辑**——直接换成**她自己的移动逻辑**。
-            //
-            //
-            //
-            //
-            //
             // 【为什么"她自己的移动逻辑"能用】她**是乘客**，但她自己的大脑与寻路**照常每拍跑**
             // （反编译实证：{@code EntityMaid.serverAiStep} 不因乘客身份停 brain；乘客的
             // {@code GroundPathNavigation.canUpdatePath()} 反而因为 {@code isPassenger()} 返回 true
             // 而**照样建路**；{@code LivingEntity.aiStep} 也无条件走 {@code travel()}）。所以她的
             // 战斗走位（单兵战术 core 230 直连导航）本来就一直在产出位移——只是位移被
-            // rideTick 的 positionRider 抹掉、只剩"意图"。我们这里做的就是**把她的位移意图
-            // 原样转给坐骑**，而不是自己去算目标点。
-            //
-            // 【为什么 749~754 那几层要在这里让开】那几层（模式分流 / 按坐标猜"这条是不是跟随" /
-            // 停车带 / 转向主人）全是为了"替她决定去哪"而写的——正是
-            //
-            // 不经过它们：**她往哪走，坐骑就往哪走**，跟随与作战走的是同一条通道，天然同步。
-            //
-            // 【跟随时"她往哪走"从哪来】TLM 自己的跟随（{@code MaidFollowOwnerTask}）对**乘客**
-            // 是关的（{@code EntityMaid.canBrainMoving()} 里那条 {@code !isPassenger()}，反编译
-            // 实证），平时没人往她的导航写目标。所以这一档在**没有攻击目标**时，按**与 TLM 跟随
-            // 相同的语义**把"主人"写进**她自己的导航**（不是写进坐骑）——之后就跟战斗走位一样，
-            // 由她的导航 → 她的 MoveControl → 她的位移 → 坐骑，全程只有她这一条逻辑。
-            //
-            // 卓越前线载具（{@code Kind.VEHICLE}）与冰火传说龙（{@code Kind.DRAGON}）在
-            // {@code kindOf} 里不是 {@code null}，一个字节都不进这一档，走上面的原路。
+            // rideTick 的 positionRider 抹掉、只剩"意图"。我们这里做的就是**把她的位移意图 原样转给坐骑**，而不是自己去算目标点。 【为什么 749~754 那几层要在这里让开】那几层（模式分流 / 按坐标猜"这条是不是跟随" / 停车带 / 转向主人）全是为了"替她决定去哪"而写的——正是 不经过它们：**她往哪走，坐骑就往哪走**，跟随与作战走的是同一条通道，天然同步。 【跟随时"她往哪走"从哪来】TLM 自己的跟随（{@code MaidFollowOwnerTask}）对**乘客** 是关的（{@code EntityMaid.canBrainMoving()} 里那条 {@code !isPassenger()}，反编译 实证），平时没人往她的导航写目标。所以这一档在**没有攻击目标**时，按**与 TLM 跟随 相同的语义**把"主人"写进**她自己的导航**（不是写进坐骑）——之后就跟战斗走位一样， 由她的导航 → 她的 MoveControl → 她的位移 → 坐骑，全程只有她这一条逻辑。 卓越前线载具（{@code Kind.VEHICLE}）与冰火传说龙（{@code Kind.DRAGON}）在 {@code kindOf} 里不是 {@code null}，一个字节都不进这一档，走上面的原路。
             if (MaidMountCompat.kindOf(mount) == null) {
                 driveLandMount(maid, mount, owner);
                 return;
             }
             // 【实测七百四十九·点1：默认档 = 跟着主人走，够近就停】
-            //
-            //
-            //
-            //
-            //
             // 根因：716 立的规矩是「① 她自己的导航目标最优先」，而**她自己的导航目标在"没有模式
             // 在指挥"时并不为空**——TLM 的跟随（MaidFollowOwnerTask）与她大脑里的 WALK_TARGET
             // 一直在写，于是坐骑永远在追一个"她自己的走位点"，而不是"主人"。她成了乘客、位移被
             // rideTick 吃掉，那些走位点又每拍变，坐骑就表现为**乱窜**。
-            //
             // 新口径（就是玩家这句话的字面）：
             //   · **她在某个"模式"里**（任务不是 idle：挖矿/伐木/建造/战斗…）→ 那个模式有自己的
-            //     运动逻辑，照旧把它转达给坐骑（下面 ①② 两条，716 的"1:1 还原走位"只在这一档生效）。
-            //   · **没有模式**（idle / 纯跟随）→ 不读她的走位点，直接**朝主人去、够近就停**，
-            //     停下时把马头转向主人（玩家要的"马头朝着主人…靠近了就停止"）。
-            //
-            // 【接敌也算"模式"】她此刻**有攻击目标**时同样走模式档——"骑马远程"的走位（绕圈/拉开）
-            // 本来就在她自己的导航上（724 点5 的口径），归到"跟随主人"会把接敌走位整条抹掉。
+            //     运动逻辑，照旧把它转达给坐骑（下面 ①② 两条，716 的"1:1 还原走位"只在这一档生效）。 · **没有模式**（idle / 纯跟随）→ 不读她的走位点，直接**朝主人去、够近就停**， 停下时把马头转向主人（玩家要的"马头朝着主人…靠近了就停止"）。 【接敌也算"模式"】她此刻**有攻击目标**时同样走模式档——"骑马远程"的走位（绕圈/拉开） 本来就在她自己的导航上（724 点5 的口径），归到"跟随主人"会把接敌走位整条抹掉。
             boolean fighting = targetOf(maid) != null;
             boolean modeMove = MaidRideKit.hasModeMovement(maid) || fighting;
             // 【实测七百二十四·点5 保留·实测七百四十九 前移】骑载具时更主动接敌：她此刻没目标就补一次
@@ -2277,32 +1991,13 @@ public final class RideBindManager {
             // ① 模式下的走位意图（1:1 还原）——只在"确实有模式在指挥"时才认
             Vec3 target = modeMove ? MaidRideKit.ownNavigationTarget(maid) : null;
             // 【实测七百五十三·点3】① 也要过**同一道**"这是跟随、不是任务走位"的筛子。
-            //
-            //
             // ——战斗时 fighting=true，① 拿到的是接敌走位（照常工作）；**平时**她多半处在一个
             // 非空闲任务里（战斗任务的待机段 / 农田 / 挖矿），modeMove 于是为真，而 751 只在
             // **②**（brain 的 WALK_TARGET）上做了"指着主人那条不算任务"的剔除，**① 没做**。
             // 她**是乘客**、位移被 rideTick 吃掉，TLM 的跟随与 MoveToTargetSink 仍然每拍在她自己的
             // PathNavigation 上留着一条**永远走不完**的路（乘客走不动 → isDone() 恒 false →
             // getTargetPos() 恒非空），于是 ① 永远返回一个"其实是在跟主人/早已过时"的点，
-            // 座骑就朝着它蹭过去、然后站住——**永远走不到下面 ④ 的"跟着主人"那一档**。
-            // 判据与 ② 那条完全同源（同一句玩家要求、同一个"跟随 ≠ 任务"的口径），只是 ① 拿到的
-            // 是**坐标**不是 tracker，所以按"是不是就落在主人身上"来认（见 navTargetIsOwner）。
-            //
-            // 【实测七百五十四·点2：这道筛子**只能用在平时**，接敌时一律原样转达】
-            //
-            //
-            //
-            // 根因：753 给 ① 加这道"落在主人身上就当跟随"的筛子时**没有排除接敌**，而它是按
-            // **坐标距离**猜的——她接敌时的迂回点（单兵战术 core 230 每拍写的绕圈/蛇形/拉扯点，
-            // 见 {@code MaidCombatTacticsBehavior}）**本来就落在敌人旁边**；你就在她身边打怪时，
-            // 敌人离你也就两三格，于是"走位点在主人 1.5 格内"这条判据把**正常的接敌走位**整条
-            // 误判成"跟随"，`target` 被清空 → 落到 ④ 朝你走过来然后站住——观感正是
-            // 「骑上马之后不会用迂回走位」，而 716 那版（无条件转达 ①）是会的。
-            //
-            // 修法就是"别在打架的时候猜"：`fighting` 为真（她有活的攻击目标）时**不看距离、
-            // 原样转达 ①**，与 716 同口径；这道按坐标猜的筛子只在**非接敌**时才生效——那正是
-            // 753 真正要治的场景（平时她落在某个非空闲任务里、导航上留着一条走不完的跟随路）。
+            // 座骑就朝着它蹭过去、然后站住——**永远走不到下面 ④ 的"跟着主人"那一档**。 判据与 ② 那条完全同源（同一句玩家要求、同一个"跟随 ≠ 任务"的口径），只是 ① 拿到的 是**坐标**不是 tracker，所以按"是不是就落在主人身上"来认（见 navTargetIsOwner）。 根因：753 给 ① 加这道"落在主人身上就当跟随"的筛子时**没有排除接敌**，而它是按 **坐标距离**猜的——她接敌时的迂回点（单兵战术 core 230 每拍写的绕圈/蛇形/拉扯点， 见 {@code MaidCombatTacticsBehavior}）**本来就落在敌人旁边**；你就在她身边打怪时， 敌人离你也就两三格，于是"走位点在主人 1.5 格内"这条判据把**正常的接敌走位**整条 误判成"跟随"，`target` 被清空 → 落到 ④ 朝你走过来然后站住——观感正是 「骑上马之后不会用迂回走位」，而 716 那版（无条件转达 ①）是会的。 修法就是"别在打架的时候猜"：`fighting` 为真（她有活的攻击目标）时**不看距离、 原样转达 ①**，与 716 同口径；这道按坐标猜的筛子只在**非接敌**时才生效——那正是 753 真正要治的场景（平时她落在某个非空闲任务里、导航上留着一条走不完的跟随路）。
             if (!fighting && target != null && navTargetIsOwner(owner, target)) {
                 target = null; // 平时：那不是"这个模式要去的地方"，是跟随 → 落到 ④
             }
@@ -2327,15 +2022,11 @@ public final class RideBindManager {
             // ③ 【实测七百五十二更正】模式这一拍**没有**给出走位点（站桩活贴方块 / 农田暂时
             // 没活 / 接敌走位的间隙），或者她**本来就没有模式**（空闲）→ **默认档：跟着主人走**
             // （够远才喂，够近就停 + 转向主人）。
-            //
             // 【为什么必须在这里更正】七百五十一 把"没有模式"和"有模式但这一拍没给走位点"
             // 混为一谈，让后者**原地待命**——
-            //
-            //
             // **只有"这个任务这一拍真有目标"才走模式自己的路**（上面 ①②），其余一律回到"跟着
             // 主人"这一档——不是"待命"。玩家又说这是"做模组载具兼容之前就已经修好"的行为，
-            // 而兼容前（716）这一档的本体正是"都没有 → 跟主人走"。
-            // ④ 默认档：跟着主人（够远才喂，够近就停 + 转向主人）
+            // 而兼容前（716）这一档的本体正是"都没有 → 跟主人走"。 ④ 默认档：跟着主人（够远才喂，够近就停 + 转向主人）
             if (target == null) {
                 double d = horizontalDist(mount, owner);
                 if (d > MaidRideKit.followDist()) {
@@ -2371,62 +2062,24 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百五十五】陆地坐骑：**不再自己算移动，直接转达她自己的移动逻辑**。
-     *
      * <h2>
      * 「如果女仆骑上了陆地坐骑，那么我们不需要再额外写一套移动逻辑，直接换成女仆自己的移动
      *  逻辑就行了。这样子跟随和作战等各方面就会自然同步。当然，卓越前线和冰火传说的就不要
      *  动了。那两个算特殊位置。」
-     *
      * <h2>这条链为什么成立（全部反编译实证）</h2>
-     * 她**是乘客**，但她自己的大脑与寻路**照常每拍跑**：
-     * <ul>
-     *   <li>{@code EntityMaid.serverAiStep} 不因乘客身份停 brain；</li>
-     *   <li>乘客的 {@code GroundPathNavigation.canUpdatePath()} 因为 {@code isPassenger()}
-     *       返回 true 而照样建路（{@code onGround() || canFloat() || isPassenger()}）；</li>
-     *   <li>{@code LivingEntity.aiStep} 无条件走 {@code travel()}。</li>
-     * </ul>
-     * 也就是说**她的位移意图一直在产出**，只是被 {@code Entity.rideTick} 里的
-     * {@code positionRider} 抹掉（她人被按在鞍位上）。所以"换成她自己的移动逻辑"= 把她的
-     * 位移意图**原样转给坐骑**，而不是我们另算一个目标点。
-     *
-     * <h2>跟随时她往哪走</h2>
-     * TLM 的跟随（{@code MaidFollowOwnerTask}）对**乘客**是关的（{@code canBrainMoving()}
-     * 里 {@code !isPassenger()} 那条，反编译实证），平时没人往她的导航写目标。所以这里在没有
-     * 攻击目标、她自己也没有任务走位时，直接把**主人**交给坐骑（走到 2 格内停下）——
-     * 补的正是"她原本会跟随"这一条意图，只是执行者换成了坐骑。
-     *
-     * <h2>【七百五十六】755 的"读操纵层坐标"已废弃</h2>
-     * 755 读的是她 {@code MoveControl} 里的 wanted 坐标（= 她的**下一个路径节点**）。那是
-     * 一两格外的点，每 tick 喂给坐骑就是每 tick 重新规划一小步、步步收油——玩家实测
-     * 「遇到敌人之后虽然有所动作，但相比正常情况下女仆移动的反应和速度都差了一大截」。
-     * 756 改回 716 的通道：喂的是她寻路的**终点**（远点），坐骑一次规划、全程全速；
-     * 平时她寻路上没有终点时，才补上主人。
-     *
-     * <h2>与 749~754 的关系</h2>
-     * 那几层（模式分流 / 按坐标猜"这条是不是跟随" / 停车带 / 停下转向主人）都是"替她决定去哪"
-     * 的补丁，反复打补丁反复出新问题。这一档**完全不经过它们**——她往哪走坐骑就往哪走。
-     *
-     * <p>卓越前线载具与冰火传说龙由调用方挡在门外（{@code kindOf != null}），不进本方法。
+     * 她**是乘客**，但她自己的大脑与寻路**照常每拍跑**： <ul> <li>{@code EntityMaid.serverAiStep} 不因乘客身份停 brain；</li> <li>乘客的 {@code GroundPathNavigation.canUpdatePath()} 因为 {@code isPassenger()} 返回 true 而照样建路（{@code onGround() || canFloat() || isPassenger()}）；</li> <li>{@code LivingEntity.aiStep} 无条件走 {@code travel()}。</li> </ul> 也就是说**她的位移意图一直在产出**，只是被 {@code Entity.rideTick} 里的 {@code positionRider} 抹掉（她人被按在鞍位上）。所以"换成她自己的移动逻辑"= 把她的 位移意图**原样转给坐骑**，而不是我们另算一个目标点。 <h2>跟随时她往哪走</h2> TLM 的跟随（{@code MaidFollowOwnerTask}）对**乘客**是关的（{@code canBrainMoving()} 里 {@code !isPassenger()} 那条，反编译实证），平时没人往她的导航写目标。所以这里在没有 攻击目标、她自己也没有任务走位时，直接把**主人**交给坐骑（走到 2 格内停下）—— 补的正是"她原本会跟随"这一条意图，只是执行者换成了坐骑。 <h2>【七百五十六】755 的"读操纵层坐标"已废弃</h2> 755 读的是她 {@code MoveControl} 里的 wanted 坐标（= 她的**下一个路径节点**）。那是 一两格外的点，每 tick 喂给坐骑就是每 tick 重新规划一小步、步步收油——玩家实测 「遇到敌人之后虽然有所动作，但相比正常情况下女仆移动的反应和速度都差了一大截」。 756 改回 716 的通道：喂的是她寻路的**终点**（远点），坐骑一次规划、全程全速； 平时她寻路上没有终点时，才补上主人。 <h2>与 749~754 的关系</h2> 那几层（模式分流 / 按坐标猜"这条是不是跟随" / 停车带 / 停下转向主人）都是"替她决定去哪" 的补丁，反复打补丁反复出新问题。这一档**完全不经过它们**——她往哪走坐骑就往哪走。 <p>卓越前线载具与冰火传说龙由调用方挡在门外（{@code kindOf != null}），不进本方法。
      */
     private static void driveLandMount(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
             boolean fighting = targetOf(maid) != null;
             // ── 唯一的事：把**她自己的走路意图**转给坐骑 ──
-            //
             // 【为什么是"她自己导航的终点"而不是别的】她自己的移动栈是
             // 「大脑/任务 → 往她的 {@code PathNavigation} 写 {@code moveTo(去哪)} → 每 tick 沿路径走」。
             // {@link MaidRideKit#ownNavigationTarget} 读的就是这条链上的**目的地**——她这一趟要去
             // 的地方。它非空 ⇔ 她的寻路上有一条没走完的路（{@code isDone} 为假），也就是
             // "她此刻确实在往某处走"。把这个点原样交给坐骑的寻路，坐骑走的就是她的走位；
             // 绕障/上下坡交给坐骑自己的寻路（它比她的两条腿更会挑路）。
-            //
-            // 【为什么不再读 MoveControl 的 wanted 坐标（755 的做法，已废弃）】那是**下一个路径
-            // 节点**（离她一两格）。每 tick 换一个新节点喂给坐骑 ⇒ 坐骑每 tick 重新规划一次一两格的
-            // 短程路、且每次都快到点就收油（{@code MoveControl} 到点即 {@code setZza(0)}）——
-            // 观感正是：起步起不来、速度上不去、转向慢半拍。
-            // 终点是**远点**，坐骑一次规划就能全程全速，中途只在目标块变化时才重新 A*
-            // （{@code PathNavigation.createPath} 的缓存分支）。
+            // 【为什么不再读 MoveControl 的 wanted 坐标（755 的做法，已废弃）】那是**下一个路径 节点**（离她一两格）。每 tick 换一个新节点喂给坐骑 ⇒ 坐骑每 tick 重新规划一次一两格的 短程路、且每次都快到点就收油（{@code MoveControl} 到点即 {@code setZza(0)}）—— 观感正是：起步起不来、速度上不去、转向慢半拍。 终点是**远点**，坐骑一次规划就能全程全速，中途只在目标块变化时才重新 A* （{@code PathNavigation.createPath} 的缓存分支）。
             Vec3 target = MaidRideKit.ownNavigationTarget(maid);
             // 走位意图只认"确实有模式在指挥"的那一档（749 起的口径）：她**空闲**时导航上若还挂着
             // 一条路（闲逛/上一段任务/跟随残留），那不算"她要去的地方"，不能拿来驱动坐骑。
@@ -2519,37 +2172,12 @@ public final class RideBindManager {
     }
 
     /**
-     * v1.3.0(beta) 实测七百四十九【点2：收进魂符的**那一刻**就撤掉骑乘光标】。
-     *
      * <h2>
      * 「目前去除女仆和坐骑身上的光标必须是女仆骑乘到坐骑上，然后解绑一次才能去除光标，这样子
      *  明显太麻烦了，能不能把女仆收进魂符以后就立刻解除一次光标呢？」
-     *
      * <h2>为什么"收符"这一下必须接</h2>
      * 光标的真身是**原版发光标记**（{@code setGlowingTag}）——它会**跟着 NBT 一起进魂符**
-     * （javap 实证：{@code Entity.saveWithoutId}/{@code load} 读写 {@code "Glowing"} 键）。
-     * 于是"收进符里 → 再放出来"这套最常见的操作，会让**她和那只坐骑**带着上一轮的光标回来，
-     * 而链路表在收符那一刻就断了 → 没有任何入口再去熄灯，玩家只能"重新骑上去再解绑一次"。
-     *
-     * <h2>为什么挂在 ToItem（收进去）而不是"放出来"那一头</h2>
-     * 放出来那头 729 已经有兜底（{@link #sweepStaleMarks} 每 5 秒扫一遍死标记）。但玩家要的是
-     * **收符时立刻**干净——魂符收进去的东西会被存档/交易/搬运，等 5 秒甚至等一个存档周期都不合适；
-     * 而且"符里的女仆"根本不在世界里，扫描扫不到她。所以在**收进去那一刻**就把该清的清掉。
-     *
-     * <h2>清什么、绝不动什么</h2>
-     * <ul>
-     *   <li><b>先解绑</b>（{@code releaseMaidQuiet}）：坐姿 / 重力 / 龙的行动档 / 链路表 / 留痕键
-     *       全部按正常解绑口径还原——这是。</li>
-     *   <li><b>再熄灯**双方**</b>：她和坐骑各自 {@code setGlowingTag(false)}。坐骑侧在解绑时
-     *       已经 unmark 过，这里再补一次是幂等的兜底（龙那条链路表可能已经先断了）。</li>
-     *   <li><b>只碰带我们留痕的那两个</b>：判据是 {@code TAG_RIDE_MOUNT} / {@code TAG_RIDE_MAID} /
-     *       {@code TAG_PENDING_MARK} 这三个**我们的私有键**。她自己中了光灵箭（GLOWING 效果）时
-     *       {@code setGlowingTag(false)} 内部会重新求值 {@code isCurrentlyGlowing()}，
-     *       **不会**把与光灵箭无关的那一份清掉（javap 实证）。</li>
-     * </ul>
-     *
-     * <p>【1.20.1 的事件 API】与 {@code MaidSoulSpellGuard.onSoulSpellToItem} 同款：
-     * TLM 的 {@code storeMaidData} 会发 {@code MaidAndItemTransformEvent.ToItem}（反编译实证）。
+     * （javap 实证：{@code Entity.saveWithoutId}/{@code load} 读写 {@code "Glowing"} 键）。 于是"收进符里 → 再放出来"这套最常见的操作，会让**她和那只坐骑**带着上一轮的光标回来， 而链路表在收符那一刻就断了 → 没有任何入口再去熄灯，玩家只能"重新骑上去再解绑一次"。 <h2>为什么挂在 ToItem（收进去）而不是"放出来"那一头</h2> 放出来那头 729 已经有兜底（{@link #sweepStaleMarks} 每 5 秒扫一遍死标记）。但玩家要的是 **收符时立刻**干净——魂符收进去的东西会被存档/交易/搬运，等 5 秒甚至等一个存档周期都不合适； 而且"符里的女仆"根本不在世界里，扫描扫不到她。所以在**收进去那一刻**就把该清的清掉。 <h2>清什么、绝不动什么</h2> <ul> <li><b>先解绑</b>（{@code releaseMaidQuiet}）：坐姿 / 重力 / 龙的行动档 / 链路表 / 留痕键 全部按正常解绑口径还原——这是。</li> <li><b>再熄灯**双方**</b>：她和坐骑各自 {@code setGlowingTag(false)}。坐骑侧在解绑时 已经 unmark 过，这里再补一次是幂等的兜底（龙那条链路表可能已经先断了）。</li> <li><b>只碰带我们留痕的那两个</b>：判据是 {@code TAG_RIDE_MOUNT} / {@code TAG_RIDE_MAID} / {@code TAG_PENDING_MARK} 这三个**我们的私有键**。她自己中了光灵箭（GLOWING 效果）时 {@code setGlowingTag(false)} 内部会重新求值 {@code isCurrentlyGlowing()}， **不会**把与光灵箭无关的那一份清掉（javap 实证）。</li> </ul> <p>【1.20.1 的事件 API】与 {@code MaidSoulSpellGuard.onSoulSpellToItem} 同款： TLM 的 {@code storeMaidData} 会发 {@code MaidAndItemTransformEvent.ToItem}（反编译实证）。
      */
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public static void onSoulCharmStore(
@@ -2636,18 +2264,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百四十九·点1】停在"够近"档时把**马头转向主人**——。
-     *
      * <p>为什么需要单独这一步：坐骑走的是它自己的 {@code PathNavigation} / {@code MoveControl}，
      * 「停」只是不再喂新目标点；速度归零之后它的朝向**停在最后一段位移的方向**上（侧对甚至背对主人）。
      * 这里在"已经停住"的那一拍补一次朝向设定，让它对着主人。
-     *
      * <p>【只动朝向、不动位移】{@code setYRot}/{@code setYHeadRot} 写在停住之后——不产生位移，
      * 也不进 {@code MoveControl}，所以既不会把停住的车再推出去，也不会和寻路抢方向。
-     * 【不打扰玩家自己开的车】只有"没有玩家在驾"时才转（玩家握着方向盘时他的朝向说了算）。
-     *
-     * <p>【1.20.1 的 SRG 名】{@code m_146922_ = setYRot}、{@code m_5618_ = setYHeadRot}、
-     * {@code m_6688_ = getControllingPassenger}、{@code m_146908_ = getYRot}。
+     * 【不打扰玩家自己开的车】只有"没有玩家在驾"时才转（玩家握着方向盘时他的朝向说了算）。 <p>【1.20.1 的 SRG 名】{@code m_146922_ = setYRot}、{@code m_5618_ = setYHeadRot}、 {@code m_6688_ = getControllingPassenger}、{@code m_146908_ = getYRot}。
      */
     private static void faceOwner(Entity mount, ServerPlayer owner) {
         try {
@@ -2684,17 +2306,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百四十九·点3】坐骑侧的"别叠罗汉"：与扫帚**同一个标准**
      * （{@link MaidRideKit#separateAim}，连四个间距常量都是同一份）。
-     *
      * <p>同伴 = **别的女仆正骑着的坐骑**。按玩家的口径（「不管是扫帚还是坐骑，都需要防叠罗汉」），
      * 空着的坐骑是"她正要去骑的目标"、玩家自己骑的那匹也不是她要叠的东西——与扫帚那边
      * {@code carriesMaid} 同一套取舍。
-     *
      * <p>【只在"没有模式"时生效】有模式在指挥时（挖矿/建造/战斗走位），她的目标点是那个模式
-     * 真正要去的地方，被互斥推偏等于让工作走位失真——所以那一档不推，交回模式自己。
-     *
-     * @param combat 【与扫帚同口径】这一拍算不算"接敌"：她此刻有攻击目标 → 用更大的一档间距。
+     * 真正要去的地方，被互斥推偏等于让工作走位失真——所以那一档不推，交回模式自己。 @param combat 【与扫帚同口径】这一拍算不算"接敌"：她此刻有攻击目标 → 用更大的一档间距。
      */
     private static Vec3 separateFromPeers(EntityMaid maid, Entity mount, Vec3 aim, boolean modeMove, boolean combat) {
         try {
@@ -2764,30 +2381,12 @@ public final class RideBindManager {
     private static final double VEHICLE_SEP_AWAY = 0.15;
 
     /**
-     * 【实测七百五十六·点2 / 七百五十八】载具互斥：把 5 格以内**别的女仆骑着的载具**朝远离方向弹开。
-     *
      * <h2>
      * 「多个女仆在乘坐卓越前线的坐骑的时候还是很容易挤在一块儿，这边最好加一个 5 格以内的其他
      *  载具会被弹开的效果」→ 756 实装后仍报「多个女仆乘坐多个坦克，仍然会出现严重的叠罗汉情况」。
-     *
      * <h2>【七百五十八】756 的两个失因（都已修）</h2>
      * <ol>
-     *   <li><b>通道错</b>：756 往 {@code deltaMovement} 叠速度。可卓越前线的载具**每拍都用自己的
-     *       引擎结果重写 deltaMovement**（724 的刹车就是靠写它起效，反编译实证），别的实体在它
-     *       tick 之前/之后写进去的那一点速度，要么被覆盖、要么只影响一帧位移——实测就是
-     *       "推了等于没推"。现在改成**直接挪位置**（{@code setPos}，水平方向、每拍 ≤0.28 格、
-     *       不碰 Y）：位移不会被引擎重算，是唯一保证"真的分开"的通道。</li>
-     *   <li><b>半径没跟车体走</b>：固定 5 格是按"小车"定的；坦克车体就 4 格上下，两辆 5 格间距
-     *       仍然几乎贴脸。现在间距 = {@code max(5, (两车全宽之和) ÷ 2 + 1 格缝)}
-     *       ——两辆 4 格宽的车 = 5 格；再大就跟着涨。</li>
-     * </ol>
-     * 另外把"已经在跑就不推"换成"**沿分离方向已经在往外走**才不推"（756 按速度大小一刀切，
-     * 把"并排高速同向"也一起跳过了——而并排同向正是最容易叠罗汉的情形）。
-     *
-     * <h2>为什么只推"别的车"、且只推"我们驱动的车"</h2>
-     * 对称：每辆被驱动的车每 tick 都跑这一遍、都去推**它看到的**别的车 ⇒ 两两互推 = 真的分开。
-     * 判据用 {@link MaidRideKit#isDriven}（骑乘指挥棒绑的、我们正在驱动的那些）；玩家自己开着车、
-     * 带只女仆当乘客那种**不推**（推玩家的车只会挨骂）。
+     *   <li><b>通道错</b>：756 往 {@code deltaMovement} 叠速度。可卓越前线的载具**每拍都用自己的 引擎结果重写 deltaMovement**（724 的刹车就是靠写它起效，反编译实证），别的实体在它 tick 之前/之后写进去的那一点速度，要么被覆盖、要么只影响一帧位移——实测就是 "推了等于没推"。现在改成**直接挪位置**（{@code setPos}，水平方向、每拍 ≤0.28 格、 不碰 Y）：位移不会被引擎重算，是唯一保证"真的分开"的通道。</li> <li><b>半径没跟车体走</b>：固定 5 格是按"小车"定的；坦克车体就 4 格上下，两辆 5 格间距 仍然几乎贴脸。现在间距 = {@code max(5, (两车全宽之和) ÷ 2 + 1 格缝)} ——两辆 4 格宽的车 = 5 格；再大就跟着涨。</li> </ol> 另外把"已经在跑就不推"换成"**沿分离方向已经在往外走**才不推"（756 按速度大小一刀切， 把"并排高速同向"也一起跳过了——而并排同向正是最容易叠罗汉的情形）。 <h2>为什么只推"别的车"、且只推"我们驱动的车"</h2> 对称：每辆被驱动的车每 tick 都跑这一遍、都去推**它看到的**别的车 ⇒ 两两互推 = 真的分开。 判据用 {@link MaidRideKit#isDriven}（骑乘指挥棒绑的、我们正在驱动的那些）；玩家自己开着车、 带只女仆当乘客那种**不推**（推玩家的车只会挨骂）。
      */
     private static void repelPeerVehicles(Entity mount) {
         try {
@@ -2908,15 +2507,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百五十一】这条走位记忆是不是"指着主人"——TLM 跟随（{@code MaidFollowOwnerTask}）
      * 在她离主人过远时把主人本身写成 {@code WALK_TARGET}（{@code EntityTracker}，与
      * {@code BehaviorUtils.setWalkAndLookTargetMemories(maid, owner, …)} 同源，反编译实证）。
-     *
      * <p>为什么要单独认这一条：那个目标是**跟随**写下的，不是"她这个模式要去的地方"。
      * 坐骑的模式档把它当任务走位转达出去，就变成"农田/挖矿/站桩任务中的坐骑照样朝主人走"
      * （）。
-     * 判据只认 {@code EntityTracker} 且实体 UUID == 主人——**方块型的走位点
-     * （{@code BlockPosTracker}，TLM 农田/挖矿/我们的行为都用它）一律不算**，绝不误伤真正的任务走位。
+     * 判据只认 {@code EntityTracker} 且实体 UUID == 主人——**方块型的走位点 （{@code BlockPosTracker}，TLM 农田/挖矿/我们的行为都用它）一律不算**，绝不误伤真正的任务走位。
      */
     private static boolean walkTargetIsOwner(LivingEntity owner,
                                              net.minecraft.world.entity.ai.memory.WalkTarget wt) {
@@ -2934,17 +2530,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百五十三·点3】① 那条走位点是不是"其实落在主人身上"——与
      * {@link #walkTargetIsOwner} **同一条口径**（跟随 ≠ 任务走位），只是那一头拿到的是
      * {@code WalkTarget}／{@code EntityTracker}（能直接问实体），
      * 这一头是 {@link MaidRideKit#ownNavigationTarget} 给的**坐标**，所以按"是不是就落在
      * 主人身上"来认：水平距离在 {@link #NAV_OWNER_EPS} 格以内即视为"跟随着主人"。
-     *
      * <p>为什么①也必须过这道筛子：她**是乘客**、位移被 {@code rideTick} 吃掉，TLM 的跟随
-     * （{@code MaidFollowOwnerTask}）与 {@code MoveToTargetSink} 会**每拍**在她自己的
-     * {@code PathNavigation} 上留一条走不完的路（乘客走不动 → {@code isDone()} 恒 false →
-     * {@code getTargetPos()} 恒非空）。751 只在②上剔了"指着主人那条"，① 就成了没堵上的后门：
-     * 非空闲任务里（战斗任务的待机段等）座骑永远朝那个点蹭、走不到 ④ 的"跟着主人"。
+     * （{@code MaidFollowOwnerTask}）与 {@code MoveToTargetSink} 会**每拍**在她自己的 {@code PathNavigation} 上留一条走不完的路（乘客走不动 → {@code isDone()} 恒 false → {@code getTargetPos()} 恒非空）。751 只在②上剔了"指着主人那条"，① 就成了没堵上的后门： 非空闲任务里（战斗任务的待机段等）座骑永远朝那个点蹭、走不到 ④ 的"跟着主人"。
      */
     private static boolean navTargetIsOwner(LivingEntity owner, Vec3 navTarget) {
         try {
@@ -3186,16 +2777,11 @@ public final class RideBindManager {
     /* ==================== 实测七百二十九·点2：光标（发光标记）不再泄漏 ==================== */
 
     /**
-     * 【实测七百二十九·点2】"点了坐骑却没配对"的**待选光标**超时（毫秒）——到点自动熄。
-     *
      * <p>取 {@code 30000}（30 秒）：正常玩法里"点坐骑 → 再点女仆"是紧接着的两下（实测日志里
      * 相隔 1~2 秒），30 秒足够宽容；而它挡住的是"点了一下就走开"这类残留，那种情况下光标
      * 在 30 秒后消失，跟玩家"这根棍子这一下已经不算数了"的直觉一致。
-     *
      * <p>【为什么必须加这一条】原版发光标记是**写进 NBT 的**（{@code TAG_PENDING_MARK} 也在
      * persistentData 里），跨存档、跨重启都在——没有超时就等于"点错一次、那条龙永远发光"。
-     *
-     *
      */
     private static final long PENDING_TTL_MS = 30000L;
 
@@ -3236,29 +2822,12 @@ public final class RideBindManager {
     }
 
     /**
-     * 【实测七百二十九·点2】兜底扫描：清掉"身上带着我们的标记痕迹、但已经没有归属"的光标。
-     *
      * <p>为什么必须有这一道——原版发光标记会**写进 NBT 持久化**
      * （javap 实证：{@code Entity.saveWithoutId} 把 {@code hasGlowingTag} 写进 {@code "Glowing"}
      * 键、{@code Entity.load} 再读回来调 {@code setGlowingTag}），所以它**跨存档、跨重启都在**。
      * 而我们的清理只挂在"链路表里那条 Link"上：任何一次"进程被杀 / 区块卸载 / 重启后没能重建
      * 链路"都会留下一个**永久发光、且没有任何入口能解除**的实体——
-     * 「如果一只龙被绑定了以后并且上了光标，那就再也没有办法解除他身上的光标了。这边建议在
-     * 解除女仆乘坐在坐骑上的情况以后就顺便解除龙身上的光标。」
-     *
-     * <p>这一道不依赖链路表，只看我们**自己的两个留痕标记**（都是写在实体 persistentData 里的
-     * 私有键，原版/别的模组绝不会写）：
-     * <ol>
-     *   <li>{@code TAG_PENDING_MARK}（"待选光标"，716 起就在写）：带它就说明"这是棍子点出来的光标"。
-     *       只要此刻没有玩家把它当作待配对目标 → 它就是残留，熄灯。</li>
-     *   <li>{@code TAG_RIDE_MAID}（"这只坐骑驮着谁"，729 起开始写）：带它但链路表里查无此车
-     *       → 死标记，熄灯 + 清留痕。</li>
-     * </ol>
-     *
-     * <p><b>绝不误伤</b>：判据是"带我们的私有键"，不是"在发光"——她自己中了光灵箭、别的模组
-     * 让她发光，都不会带这两个键，一次都不会被碰。
-     *
-     * <p>节流 {@code MARK_SWEEP_MS} 一次（5 秒）；只在表里/待选里有东西时才扫，空转代价为零。
+     * 「如果一只龙被绑定了以后并且上了光标，那就再也没有办法解除他身上的光标了。这边建议在 解除女仆乘坐在坐骑上的情况以后就顺便解除龙身上的光标。」 <p>这一道不依赖链路表，只看我们**自己的两个留痕标记**（都是写在实体 persistentData 里的 私有键，原版/别的模组绝不会写）： <ol> <li>{@code TAG_PENDING_MARK}（"待选光标"，716 起就在写）：带它就说明"这是棍子点出来的光标"。 只要此刻没有玩家把它当作待配对目标 → 它就是残留，熄灯。</li> <li>{@code TAG_RIDE_MAID}（"这只坐骑驮着谁"，729 起开始写）：带它但链路表里查无此车 → 死标记，熄灯 + 清留痕。</li> </ol> <p><b>绝不误伤</b>：判据是"带我们的私有键"，不是"在发光"——她自己中了光灵箭、别的模组 让她发光，都不会带这两个键，一次都不会被碰。 <p>节流 {@code MARK_SWEEP_MS} 一次（5 秒）；只在表里/待选里有东西时才扫，空转代价为零。
      */
     private static void sweepStaleMarks(MinecraftServer server) {
         try {

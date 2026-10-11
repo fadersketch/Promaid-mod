@@ -8,9 +8,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.registries.ForgeRegistries;
 
 /**
- * v1.1.0 实测二百三十四（反馈："女仆主手或副手持有光源类物品时自身放出亮度，
  * 亮度与所持光源一致——套用雪傀儡套南瓜灯产生亮度的逻辑；此亮度不影响插火把"）：
- *
  * 【诚实实现说明】1.20.1 原版【没有】实体发光机制（javap 字节码实证：SnowGolem 无
  * 任何亮度方法、Entity 无 getLightLevelDependentMagicValue、LightEngine 无实体分支——
  * "雪傀儡戴南瓜灯发光"是基岩版特性）；TLM 本体也无此工程。本特性用【隐藏的
@@ -21,15 +19,8 @@ import net.minecraftforge.registries.ForgeRegistries;
  * - 有光：在女仆脚底格放 level=亮度 的隐藏光块（不可见、无碰撞、可含水），
  *   她走动时自动搬移（旧位置若仍是光块才移除——玩家自己放的光块不会被误删）；
  * - 无光：移除她的光块；进服/退服清理路径齐全（不残留）。
- *
  * 【不影响插火把】（实测八百五十一口径）光块是**真实**放进世界的方块光（照明效果与
- * 炉子/篝火同源，玩家看得见），但**插火把的"够不够暗"判定不再直接读世界亮度**——被动插火把
- * 改走 {@link #ownLightUpperBound}（她自己的贡献只按上界排除；上界以内的读数用
- * {@link #realSourcesAround} 盘点真实光源定夺），防刷怪的去重改走 {@link #isOwnLightBlock}。
- * 于是她举着火把照样会在环境暗的地方顺手补一根，而环境自己就亮的房间（炉子/灯笼/玩家放的
- * 火把）依旧不插——兑现需求里那句「此亮度不影响插火把」。
- *
- * 总开关：misc.heldLightMaid（默认开）。
+ * 炉子/篝火同源，玩家看得见），但**插火把的"够不够暗"判定不再直接读世界亮度**——被动插火把 改走 {@link #ownLightUpperBound}（她自己的贡献只按上界排除；上界以内的读数用 {@link #realSourcesAround} 盘点真实光源定夺），防刷怪的去重改走 {@link #isOwnLightBlock}。 于是她举着火把照样会在环境暗的地方顺手补一根，而环境自己就亮的房间（炉子/灯笼/玩家放的 火把）依旧不插——兑现需求里那句「此亮度不影响插火把」。 总开关：misc.heldLightMaid（默认开）。
  */
 public final class MaidHeldLight {
 
@@ -181,8 +172,6 @@ public final class MaidHeldLight {
      *  Properties.lightEmission（m_60953_ 设置的 ToIntFunction）算进 f_60594_，
      *  m_60791_ 直接返回该字段——蜡烛 lit?3×数量:0、火把 14、萤石 15、岩浆块 3
      *  都走这里；木头等无发光方块 = 0）。
-     *  v1.1.0 实测二百六十二（反馈："女仆手上拿的是木头，但是它仍然会发光"）：
-     *  旧版误用 m_60739_（getLightBlock——光阻挡值：完整不透明方块返回 15、
      *  实心返回 0、否则 1），木头是完整方块恒返回 15 → 手持任何完整方块都
      *  被当成 15 级光源。改用 m_60791_（getLightEmission）后木头 = 0 不发光。 */
     private static int heldLightOf(EntityMaid maid, ServerLevel level) {

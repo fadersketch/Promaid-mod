@@ -12,8 +12,6 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 
 /**
- * v1.3.0「扫帚模式」的行为（两树镜像）——骑扫帚、起飞悬停、接敌爬升、盘旋、照搬远程空袭开火。
- *
  * ── 每 tick 的相位（实测六百五十六定的顺序，v1.3.3 把"找扫帚"提到最前）──
  * <pre>
  *   ① 总开关关  → 下扫帚 + 气泡（与旧版一致）
@@ -21,38 +19,12 @@ import java.util.WeakHashMap;
  *                    找不到才报缺件待命。这一档排在"跟随主人"之前——
  *                    "扫帚模式应该优先找扫帚，而不是优先跟随主人"。
  *   ② 缺件      → 下扫帚 + 气泡报缺什么（原地待命，不退化成地面近战，见下）
- *                    【实测六百九十二】"缺件"只剩**缺远程武器**（且要连续 2 秒才算）；
  *                    **弹匣打空不再下鞍**——那只是"这一拍打不响"，详见 ③ 那一段。
  *   ③ 骑上      → 从她背包取一把扫帚放出来骑上（已骑着就跳过；她坐在椅子上也能换过来，
  *                    走 force 骑乘——实测六百五十七）
  *   ③.4 玩家在开 → 让位：只开火，不写推进意图、不开爬升相位（驾驶权在玩家，见 drivenByPlayer）
  *   ③.5 起飞相位 → 原地往上抬 1 格（头顶顶住就悬停在此处）
- *   ④ 接敌      → 先爬到**敌上 8 格**（顶住就按实际高度），并把"这一场遭遇的盘旋高度"
- *                    定下来（v1.3.3：以前爬升与盘旋两套高度不接，才会"升上去又掉下来"）
- *   ⓪ 牵引绳    → 离主人超过配置距离（默认 100 格，按 3D 算）→ 连人带扫帚传送回主人身边
- *   ⑤ 平时      → 守家（工作范围）生效时沿工作范围那个圈盘旋巡逻；否则按"飞行跟随"同款的
- *                 起手/收手距离跟主人（默认开；扫帚没耐久）；都没有就原地悬停
- * </pre>
- * 两个爬升相位与"怎么飞"全部在 {@link MaidBroomDrive}（速度公式照搬 TLM 给玩家驾驶写的
- * {@code PlayerBroomControl}，一分不加）。
- *
- * ── 一件必须说清的事：她**不会**退化成地面近战 ──
- * 空袭在缺件时会退回"和普通攻击模式一致"的地面近战（那是空袭的既有设计）。扫帚模式
- * **不注册 TLM 的 {@code MaidMeleeAttack}**，所以缺件时她是"原地待命 + 气泡报告缺什么"，
- * 不会自己冲上去挥拳头。这是刻意的第一批取舍：把"未激活时怎么打"留到下一批做
- * （要么接一条地面近战回退、要么干脆让她切回普通攻击任务），免得在这一批里把
- * "骑乘 + 盘旋 + 开火"这条主链路和另一条战斗链路的交互一起搅进来。
- * 因此缺件气泡里**不会**写"先按普通战斗来"——那句话在这里会是假的。
- *
- * ── 为什么行为本身不移动她 ──
- * 她骑在扫帚上是**乘客**：TLM {@code EntityMaid.canBrainMoving()} 在 {@code isPassenger()}
- * 时为 false，她自己那套寻路/巡逻/范围约束整条失效，动她的是载具。所以这里只做三件事：
- * 决定"去哪"（{@link MaidBroomDrive}）、决定"打谁"、以及"骑上/下来"。
- * 真正每 tick 调 {@code move()} 的是 {@link com.maidsmart.mixin.EntityBroomMaidTravelMixin}。
- *
- * ── 开火 ──
- * 走 {@link MaidFlightCombatBehavior#fireRanged}——**与远程空袭同一个方法**（射程/视线/
- * 冷却/枪械换弹瞄准全部同款），不是抄一份。用户。
+ *   ④ 接敌      → 先爬到**敌上 8 格**（顶住就按实际高度），并把"这一场遭遇的盘旋高度" 定下来（v1.3.3：以前爬升与盘旋两套高度不接，才会"升上去又掉下来"） ⓪ 牵引绳    → 离主人超过配置距离（默认 100 格，按 3D 算）→ 连人带扫帚传送回主人身边 ⑤ 平时      → 守家（工作范围）生效时沿工作范围那个圈盘旋巡逻；否则按"飞行跟随"同款的 起手/收手距离跟主人（默认开；扫帚没耐久）；都没有就原地悬停 </pre> 两个爬升相位与"怎么飞"全部在 {@link MaidBroomDrive}（速度公式照搬 TLM 给玩家驾驶写的 {@code PlayerBroomControl}，一分不加）。 ── 一件必须说清的事：她**不会**退化成地面近战 ── 空袭在缺件时会退回"和普通攻击模式一致"的地面近战（那是空袭的既有设计）。扫帚模式 **不注册 TLM 的 {@code MaidMeleeAttack}**，所以缺件时她是"原地待命 + 气泡报告缺什么"， 不会自己冲上去挥拳头。这是刻意的第一批取舍：把"未激活时怎么打"留到下一批做 （要么接一条地面近战回退、要么干脆让她切回普通攻击任务），免得在这一批里把 "骑乘 + 盘旋 + 开火"这条主链路和另一条战斗链路的交互一起搅进来。 因此缺件气泡里**不会**写"先按普通战斗来"——那句话在这里会是假的。 ── 为什么行为本身不移动她 ── 她骑在扫帚上是**乘客**：TLM {@code EntityMaid.canBrainMoving()} 在 {@code isPassenger()} 时为 false，她自己那套寻路/巡逻/范围约束整条失效，动她的是载具。所以这里只做三件事： 决定"去哪"（{@link MaidBroomDrive}）、决定"打谁"、以及"骑上/下来"。 真正每 tick 调 {@code move()} 的是 {@link com.maidsmart.mixin.EntityBroomMaidTravelMixin}。 ── 开火 ── 走 {@link MaidFlightCombatBehavior#fireRanged}——**与远程空袭同一个方法**（射程/视线/ 冷却/枪械换弹瞄准全部同款），不是抄一份。用户。
  */
 public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
@@ -191,20 +163,13 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             return;
         }
         // ③ 未激活（缺远程武器 / 缺弹药）→ 下来、报缺件
-        //   【实测六百九十二：下鞍理由只剩"真的没得打"】
-        //
-        //   旧版拿 isModeActive（= 扫帚 + 武器 + **弹药**）当逐 tick 的下鞍判据，而弹药那条对
         //   TACZ 枪问的是"**这一拍**弹匣里还有没有弹"（GunCompat.canFeed → 弹匣/弹膛）——
         //   冲锋枪打空一梭子、狙击枪栓动打完那一发，都会撞上"弹=无"的一拍，于是当场下鞍。
-        //   实测日志 2026-09-27 01:38:09 逐行实证：`[远程开火] …弹=无` 紧跟着
         //   `[扫帚模式] …下扫帚（理由=缺远程武器/弹药）`；那一分钟里 7 次「骑上 → 下」循环。
         //   现在分三档：
         //     ① 真的没有远程武器 → 下来（但要连续 2 秒都缺，见 weaponlessLongEnough——
         //        手上的武器被换走一两拍不该把她摔下去）；
-        //     ② 还没骑上 + 缺弹药 → 不下鞍、照旧"没弹药不必起飞"（实测四百九十五 的口径）；
-        //     ③ 已经骑在扫帚上 + 缺弹药 → **留在扫帚上**：换弹是开火链路自己会做的事
-        //        （TLM performGunAttack 的 NO_AMMO → IGunOperator.reload 那一支，javap 实证），
-        //        我们只留一行限频日志说明"她为什么这一会儿不开火"。
+        //     ② 还没骑上 + 缺弹药 → 不下鞍、照旧"没弹药不必起飞"（实测四百九十五 的口径）； ③ 已经骑在扫帚上 + 缺弹药 → **留在扫帚上**：换弹是开火链路自己会做的事 （TLM performGunAttack 的 NO_AMMO → IGunOperator.reload 那一支，javap 实证）， 我们只留一行限频日志说明"她为什么这一会儿不开火"。
         boolean ridingNow = MaidBroomKit.isRidingBroom(maid);
         if (!MaidBroomKit.canStayMounted(maid) && !ridingNow) {
             MaidBroomDrive.dismount(maid, "缺远程武器/弹药");
@@ -258,32 +223,13 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         }
 
         // ④.5 起飞相位：原地往上抬 1 格再到别的地方去（
-        //
         // 【v1.3.3：走 steerVerticalTo（扫帚坐标），不再拿她的坐标当目标点】见 Drive 里那段因果。
-        //
-        // 【实测七百〇九：起飞判定改成与远程空袭同款】
-        //
-        //
         //  【旧版缺的是"弹药"这一条】进到这一档的判据是 ③ 的 {@code canStayMounted}
         //  （= 扫帚 + 远程武器，**刻意不含弹药**——那是 实测六百九十二 为"弹匣打空别把她摔下来"
         //  定的口径，管的是"要不要下鞍"）。于是"有武器、没弹药"的她照样会进入起飞相位、
         //  飞上去，再靠开火链路自己换弹；而远程空袭那边（{@link MaidFlightKit#isModeActive}）
         //  是**起飞前就要求三件齐 + 弹药**（实测四百九十五："没弹药就没必要起飞"）。
-        //  现在这一档改用同一个 {@code isModeActive}（扫帚 + 远程武器 + 弹药）——
-        //  这就是"跟远程空袭一样的起飞判定"。
-        //
-        //  【为什么闸在 takeoffTarget **之前**】起飞相位是 {@link MaidBroomDrive} 里的一张状态表
-        //  （{@code CLIMB}），而它的收尾判据之一是"连续几拍没长高 = 头顶被顶住"。若先消费相位、
-        //  再原地悬停，那几拍会被它当成"顶住了"从而**结束相位**，下一 tick 她就直接落进 ⑤/⑥
-        //  照飞不误——闸等于没关。所以先判、判假就**根本不碰相位**（相位原样留着，补齐弹药后
-        //  下一 tick 接着抬），她这一段停在原地悬停。
-        //
-        //  【为什么不与 实测六百九十二 打架】那条改的是**下鞍**判据（canStayMounted），
-        //  本档只决定"要不要抬这 1 格"：判据为假时她**留在扫帚上原地待命**（不下鞍、
-        //  不丢高度）；而且弹药那条走 {@code ammoOk} → {@code canFeed || canReload}
-        //  （实测六百九十四 / 六百九十五）："弹匣空着但背包里有对得上的弹药"算齐备，
-        //  所以冲锋枪/狙击枪那种"这一拍弹=无"不会把她钉在地面——真正被挡住的只有
-        //  "确实一点弹药都没有"这一种。
+        //  现在这一档改用同一个 {@code isModeActive}（扫帚 + 远程武器 + 弹药）—— 这就是"跟远程空袭一样的起飞判定"。 【为什么闸在 takeoffTarget **之前**】起飞相位是 {@link MaidBroomDrive} 里的一张状态表 （{@code CLIMB}），而它的收尾判据之一是"连续几拍没长高 = 头顶被顶住"。若先消费相位、 再原地悬停，那几拍会被它当成"顶住了"从而**结束相位**，下一 tick 她就直接落进 ⑤/⑥ 照飞不误——闸等于没关。所以先判、判假就**根本不碰相位**（相位原样留着，补齐弹药后 下一 tick 接着抬），她这一段停在原地悬停。 【为什么不与 实测六百九十二 打架】那条改的是**下鞍**判据（canStayMounted）， 本档只决定"要不要抬这 1 格"：判据为假时她**留在扫帚上原地待命**（不下鞍、 不丢高度）；而且弹药那条走 {@code ammoOk} → {@code canFeed || canReload} （实测六百九十四 / 六百九十五）："弹匣空着但背包里有对得上的弹药"算齐备， 所以冲锋枪/狙击枪那种"这一拍弹=无"不会把她钉在地面——真正被挡住的只有 "确实一点弹药都没有"这一种。
         Double riseY = MaidBroomDrive.takeoffTarget(maid);
         if (riseY != null) {
             if (!MaidBroomKit.isModeActive(maid)) {
@@ -324,24 +270,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         // ⑥ 没目标 → 平时。三档，按优先级走：
         //    ①【v1.3.6 实测六百六十一】守家（工作范围）生效 → **沿着工作范围那个圈盘旋巡逻**，
         //       直到接敌。
-        //
         //       看不出守家——这一档就是补上"守家该有的样子"。
         //    ② 否则跟随主人（配置可关）
         //    ③ 都没有 → 原地悬停待命
         MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位与本场盘旋高度一起作废
-        noteHome(maid, gameTime); // v1.3.0(beta) 实测六百六十四：守家诊断（低频）
-        // ⑥.0【实测六百六十九 → 六百七十二：武装拴绳只负责"绑住人"，不再给她定高度】
-        //  669 原本是"绑上以后升到离地 tetherHover() 格悬停"，671 修掉了"找不到地面就自相对"的
-        //  兜底，但"给她定一个绝对高度"这件事本身还在。实测反馈㊀："扫帚模式下反复横跳这个问题
-        //  还是没有解决，依然会不断的攀升。" 空袭那一条（MaidFlightFollowBehavior.maidsmart$tetherHold）
-        //  已经改成"只保持她自己当前高度"，扫帚这边现在**跟它同一个口径**：
-        //  目标点 = 扫帚自己现在的位置 → 她原地悬停，高度一个字不改（steerTo 到点那一支会把速度
-        //  乘 IDLE_DECAY 收干，绝不会掉下去）。"去哪"仍然由她自己的链路决定——接敌那一档（⑤）
-        //  在这些之前，一个字没动，所以"接敌不变"照旧是字面意思。
-        //  【v1.3.9.3：巡逻优先于"拴绳悬停"】
-        //
-        //  ⇒ 现在把巡逻提到前面：**绑了闭环航迹 + 开着 home 时照旧沿航迹飞**——主人吊在下面
-        //  正好"跟着巡逻转一圈"。没绑航迹才落回原来那一档原地悬停。
+        noteHome(maid, gameTime); // v1.3.0(beta) 实测六百六十四：守家诊断（低频） ⑥.0【实测六百六十九 → 六百七十二：武装拴绳只负责"绑住人"，不再给她定高度】 669 原本是"绑上以后升到离地 tetherHover() 格悬停"，671 修掉了"找不到地面就自相对"的 兜底，但"给她定一个绝对高度"这件事本身还在。实测反馈㊀："扫帚模式下反复横跳这个问题 还是没有解决，依然会不断的攀升。" 空袭那一条（MaidFlightFollowBehavior.maidsmart$tetherHold） 已经改成"只保持她自己当前高度"，扫帚这边现在**跟它同一个口径**： 目标点 = 扫帚自己现在的位置 → 她原地悬停，高度一个字不改（steerTo 到点那一支会把速度 乘 IDLE_DECAY 收干，绝不会掉下去）。"去哪"仍然由她自己的链路决定——接敌那一档（⑤） 在这些之前，一个字没动，所以"接敌不变"照旧是字面意思。 【v1.3.9.3：巡逻优先于"拴绳悬停"】 ⇒ 现在把巡逻提到前面：**绑了闭环航迹 + 开着 home 时照旧沿航迹飞**——主人吊在下面 正好"跟着巡逻转一圈"。没绑航迹才落回原来那一档原地悬停。
         net.minecraft.world.phys.Vec3 patrolAim = MaidBroomDrive.patrolPoint(maid);
         if (patrolAim != null) {
             MaidBroomDrive.steerTo(maid, patrolAim);
@@ -396,15 +329,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
     /**
      * 平时要不要飞过去跟主人——**照飞行跟随的同款机制**（
-     *
-     *
      * <p>同款机制 = 那一对**起手 / 收手距离**（{@code flightFollow.start / end}，默认 25 / 5）：
      * 主人远过起手距离才开始跟，进到收手距离内就停下悬停。起手与收手是两个不同的球，
      * 中间那段就是迟滞带——没有它她会在阈值上"动一下停一下"地抖。
      * 这里**直接读同一对配置**，不另开一套数字：口径只有一处（本模组反复强调的红线）。
-     *
-     * <p>与飞行跟随的区别只剩"谁来飞"：那边要鞘翅 + 烟花且默认关（会烧料、磨耐久），
-     * 这边是扫帚、没有耐久，所以开关是 {@code combat.broomFollow}（默认开）。
+     * <p>与飞行跟随的区别只剩"谁来飞"：那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）， 这边是扫帚、没有耐久，所以开关是 {@code combat.broomFollow}（默认开）。
      */
     private static boolean shouldFollow(EntityMaid maid, LivingEntity owner) {
         double d = maid.m_20270_(owner);
@@ -421,10 +350,6 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.3.0(beta) 实测六百六十四【扫帚模式自己的跟随距离】——
-     *
-     *
-     *
      * <p>旧版直接读 {@code [flightFollow]} 那一对（同一份数字管两件事），现在扫帚模式有自己的
      * 一对 {@code combat.broom.followStart / followEnd}（默认同为 25 / 5，面板「扫帚模式」板块可调）
      * ——口径分家是玩家点名要的"调试面板"；两条链路的物理照旧完全不同（那边烧烟花磨鞘翅，这边
@@ -450,9 +375,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
     /**
      * 「她现在的圈是怎么回事」——一行日志（状态变了马上打，否则 20 秒一条上限）。
-     *
      * <p>【为什么必须有这一条】
-     *
      * {@code getRestrictRadius()}，而圈心**按当前活动档（工作/休闲/睡眠）从 SchedulePos 的三个
      * 锚点里取**、半径按 TLM 配置取（本模组只抬高下限）——所以"圈在哪儿"取决于时刻与她身上的
      * 锚点，光看游戏里那一圈看不出是哪一档。这一行把 home 开关 / 活动档 / 圈心 / 圈心来源 / 半径 /
@@ -486,23 +409,12 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     /* ==================== 目标 / 朝向 ==================== */
 
     /**
-     * 【实测六百八十五】她的"该打谁"——**先问本模组自己的索敌器**（{@link FlightTargeting}，
      * 与两种空袭同一个），问不到才退回 TLM 那条链（{@link #currentTarget}）。
-     *
      * <p>为什么必须加这一层（用户
-     *
      * 而空袭没这个毛病。差别就是空袭有自己的索敌器、扫帚没有：TLM 那条链维持目标的判据是
      * 援护半径（WORK 16 格 / 其余 8 格）与按排班分流的传感器盒子（非 WORK 时段垂直只有 4 格），
      * boss 一掉下去就过线、作废且再也拿不回来（细节与取证见 {@link FlightTargeting} 类注释）。
-     *
-     * <p>【为什么不是"直接换掉"】先问 {@code resolve}、失败再退回原来那条链：今天能锁到的目标
-     * 一个都不会因为这次改动而丢（{@code resolve} ② 那一步本身也会接管 brain 里已有的合法目标），
-     * 而 {@code resolve} 多给的正是原来没有的两样——**128 格维持半径**（不再按 16/8 丢）与
-     * **无视排班盒子的 50 格球**（boss 掉到下方、竖直拉开也照样看得见）。
-     *
-     * <p>【代价与边界】{@code resolve} 的判据里有 {@code isWithinRestriction}：她不会为了追敌
-     * 越出守家/工作范围（与空袭同一条红线，也比 TLM 那条链更严一点——TLM 只在"重挑"时看它）。
-     * 越界的目标仍然是"打不着"，丢掉是对的。
+     * <p>【为什么不是"直接换掉"】先问 {@code resolve}、失败再退回原来那条链：今天能锁到的目标 一个都不会因为这次改动而丢（{@code resolve} ② 那一步本身也会接管 brain 里已有的合法目标）， 而 {@code resolve} 多给的正是原来没有的两样——**128 格维持半径**（不再按 16/8 丢）与 **无视排班盒子的 50 格球**（boss 掉到下方、竖直拉开也照样看得见）。 <p>【代价与边界】{@code resolve} 的判据里有 {@code isWithinRestriction}：她不会为了追敌 越出守家/工作范围（与空袭同一条红线，也比 TLM 那条链更严一点——TLM 只在"重挑"时看它）。 越界的目标仍然是"打不着"，丢掉是对的。
      */
     private static LivingEntity aimTarget(EntityMaid maid) {
         LivingEntity locked = FlightTargeting.resolve(maid);
@@ -558,17 +470,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
     /**
      * 让她**看着**目标（纯表现：子弹方向一直是按坐标算的，不看她的朝哪）。
-     *
      * 【为什么两只都设】她骑在扫帚上，而 {@code EntityBroom} 本身是 {@code LivingEntity}——
      * MC 对"载具是 LivingEntity 的乘客"有一套"身体朝向跟着载具"的逻辑，所以光设她的 yRot
      * 可能每 tick 被覆写回去。**载具的朝向**由 {@link MaidBroomDrive#faceYawTo} 设（那一份是稳的），
      * 这里再补她的偏航与俯仰：俯仰（抬头/低头看目标）只有她自己的 XRot 能表达。
-     *
-     * <p>【v1.3.3：扫帚的朝向不在本类算了】原先这里另有一个 {@code yawTo(maid, target)}
-     * 负责扫帚的偏航（从**她的**位置算）。现在扫帚的朝向统一走
-     * {@link MaidBroomDrive#faceYawTo}（从**扫帚的**位置算）——"从她的位置算朝向"会把
-     * "她动→朝向动→她再动"连成一个自引用回路，那正是"主人在旁边她就不停打转"的一半原因。
-     * 同一份口径只留一处。
+     * <p>【v1.3.3：扫帚的朝向不在本类算了】原先这里另有一个 {@code yawTo(maid, target)} 负责扫帚的偏航（从**她的**位置算）。现在扫帚的朝向统一走 {@link MaidBroomDrive#faceYawTo}（从**扫帚的**位置算）——"从她的位置算朝向"会把 "她动→朝向动→她再动"连成一个自引用回路，那正是"主人在旁边她就不停打转"的一半原因。 同一份口径只留一处。
      */
     private static void faceTarget(EntityMaid maid, LivingEntity target) {
         try {
@@ -672,8 +578,6 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 【实测六百九十二】"弹匣空了但还骑着"——限频一行，**不下鞍**。
-     *
      * <p>这一档必须留痕：玩家看到的是"她骑在扫帚上不开火"，而日志里一个字都没有的话，
      * 只能靠猜（与 {@code notePlayerDriving} 同一个理由）。换弹是开火链路自己会做的事
      * （TLM {@code performGunAttack} 的 {@code NO_AMMO → reload} 那一支），所以正常情况下
@@ -698,20 +602,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
     /**
      * 两套都齐了就报一句「我已经准备好了」（带语音），**只说一次**；条件一解除就拔闩、下次再说。
-     *
      * <p>
-     *
-     *
-     *
      * <p>【调用点为什么只有一处】本方法只在"扫帚那一半已经成立"的那条路上被调（
      * {@link #m_6725_} 里 {@code clearNotReady} 之后）——她**正骑着扫帚** + 远程武器 + 弹药，
      * 这三件正是玩家列出的扫帚条件，判据直接复用 {@link MaidBroomKit#isModeActive}（口径只有一处）。
-     * 这里只需要再问空袭那一半：{@link MaidFlightKit#airAssaultReady}（**任务无关**口径，
-     * 理由见那个方法的注释——扫帚模式的任务不是飞行任务，用 {@code isModeActive} 会误判成缺武器）。
-     *
-     * <p>【闩的两种拔法】① 上面 {@code notifyNotReady}（缺件 / 没骑上 / 总开关关掉）；
-     * ② 本方法里"条件连续断掉 2 秒"（她还在扫帚模式，但空袭那一半没了：鞘翅飞坏、烟花烧完…）。
-     * ③ 退出扫帚任务走 {@link #m_6732_}。三处都只在**真的说过**时才写日志，不会刷屏。
+     * 这里只需要再问空袭那一半：{@link MaidFlightKit#airAssaultReady}（**任务无关**口径， 理由见那个方法的注释——扫帚模式的任务不是飞行任务，用 {@code isModeActive} 会误判成缺武器）。 <p>【闩的两种拔法】① 上面 {@code notifyNotReady}（缺件 / 没骑上 / 总开关关掉）； ② 本方法里"条件连续断掉 2 秒"（她还在扫帚模式，但空袭那一半没了：鞘翅飞坏、烟花烧完…）。 ③ 退出扫帚任务走 {@link #m_6732_}。三处都只在**真的说过**时才写日志，不会刷屏。
      */
     private static void announceDualReady(EntityMaid maid, long gameTime) {
         try {

@@ -47,7 +47,6 @@ public class GuideScreen extends Screen {
 
     /**
      * 当前章节的**渲染元素**列表（换行后）。
-     *
      * <p>元素只有两种：{@link String}（一行正文，高 {@link #LINE_H}）与
      * {@link Recipe}（一整块合成表，高 {@link Recipe#height()}）。
      * 实测八百一十三之前这里只有 {@code List<String>}、分页按「每页几行」算；
@@ -172,13 +171,11 @@ public class GuideScreen extends Screen {
 
     /**
      * 把一个 {@code [[#…]]} token 解析成 {@link Recipe}；解析失败返回 null（跳过，绝不崩界面）。
-     *
      * <p>格式（{@code ;} 分段，顺序固定：形状在前、{@code 别名=id} 与 {@code >产物}、
      * {@code @说明}在后、其余段是网格行）：
      * <pre>
      * [[#shaped;IDI;RMR;IDI;I=minecraft:iron_block;D=minecraft:diamond_block;R=minecraft:redstone_block;M=minecraft:minecart;>maid_smart:da_yun;@铁块×4 + 钻石块×2 + 红石块×2 + 矿车×1]]
-     * [[#shapeless;minecraft:book;minecraft:paper;>maid_smart:blueprint_book;@书 + 纸]]
-     * </pre>
+     * [[#shapeless;minecraft:book;minecraft:paper;>maid_smart:blueprint_book;@书 + 纸]] </pre>
      */
     private static Recipe parseRecipe(String token) {
         try {
@@ -508,12 +505,9 @@ public class GuideScreen extends Screen {
     }
 
     /**
-     * v1.5.395 实测八百零七：整段翻译（折行之前调）。
-     *
      * <p>先按 {@code [[@目标|文字]]} 把链接**拆出来**，只翻译目标之外的普通文字，再按原样
      * 拼回去——这样 {@code @WORK:BUILD:指标石} 这种含中文小类名的定位目标不会被译坏
      * （译了它 {@code PromaidConfigScreen} 就找不到对应页了），而链接两侧的中文照译。
-     *
      * <p>实测八百一十三：{@code [[i:物品id|说明]]} 与 {@code [[#…合成表…]]} 两种 token
      * **整块原样保留**（绝不送进译表）——合成表里含中文的 {@code @说明} 段若被逐段
      * 贪心匹配，token 结构会被译坏；说明文字由 {@code drawRecipe} 单独翻译。
@@ -575,7 +569,6 @@ public class GuideScreen extends Screen {
     /**
      * 按像素宽度逐字符换行（中英文混排），换行时延续 § 颜色样式——
      * 旧式折行会在换行处丢掉颜色码，强调文字后半段变白。
-     *
      * <p>实测四百二十四：{@code [[@目标|文字]]} 当【原子 token】——按标签宽度计量、整块不拆行。
      * <p>实测八百一十三：再支持行内图标 {@code [[i:物品id|说明]]}——同样原子，
      * 按 {@link #ICON} + {@link #ICON_GAP} 计宽，不拆行。所以本方法产出的是

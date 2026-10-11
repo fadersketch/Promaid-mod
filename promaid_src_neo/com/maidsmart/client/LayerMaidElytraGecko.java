@@ -27,44 +27,19 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * v1.2.0（1.21.1）：飞行作战——鞘翅图层（**GeckoLib 模型**走这条）。
- *
  * 【为什么必须单独做一层】EntityMaidRenderer.render 在 `mainInfo.isGeckoModel()` 为真时把渲染
  * 交给 GeckoEntityMaidRenderer 并直接 return，Bedrock 的 RenderLayer 链根本不执行。
- *
  * 【用的就是玩家那套模型】`ElytraModel` + `textures/entity/elytra.png`，与原版 `ElytraLayer`
  * 同源。真正要解决的不是"换个模型"，而是**挂到哪、缩多少**——前几版就错在这两处。
- *
  * 【v1.2.0 实测四百八十：修「除 winefox 外都渲染不出鞘翅」】
- * 实测全部 28 个 Gecko 女仆模型的骨骼（模型 JSON 扫描）：
  * ```
  *   Elytra            17/28   ← 全部是 winefox 家族
  *   ElytraLocator     17/28   ← 同上
  *   UpperBody         26/28
  *   Root              28/28
  * ```
- * 旧版只找 `ElytraLocator` / `Elytra`，于是**没有这两根骨骼的 7 个模型**
  * （foxmaid / hailuo_new_year / sta / winefox_hanfu / winefox_mini / zhiban_hanfu /
- * zhiban_new_year）全部掉进"硬编码兜底"，而那个兜底是从**原版** ElytraLayer 抄来的
- * `scale(-1,-1,1) + translate(0,-1.501,0)`——那是**原版模型空间**的补偿；Gecko 图层栈
- * 根本不在原版模型空间（Gecko 渲染器自己 pushPose，单位=格、Y 朝上、原点在脚下），
- * 于是兜底把翅膀顶到脚下/身体里 → 看不见。这就是"只有 winefox 能显示"的根。
- *
- * 【现在的锚点策略：永不掉进兜底】按优先级找骨骼，找不到专用挂点就锚到**一定有**的
- * 躯干/根骨骼，再补一段**从真实模型统计出来的平均偏移**（n=17 样本，单位：格）：
- * ```
- *   ElytraLocator / Elytra  → 偏移 (0, 0, 0)          （17/28）
- *   UpperBody               → 偏移 (0, +0.4310, +0.2011)  （26/28）
- *   Root                    → 偏移 (0, +1.8596, +0.2022)  （28/28，兜底必中）
- * ```
- * 偏移在**骨骼空间**（Y 朝上）里施加，所以是 +Y。
- *
- * 【v1.2.0 实测四百九十一：尺寸与位置（用户要求）】
- * ① 尺寸 = 与玩家**等大**：`k = 1.0 × 0.9375 / modelScale`
- *    （0.9375 是原版 `PlayerRenderer.scale`，即"与玩家等大"的系数；四百八十的 0.85 倍已取消）；
- * ② 整体**上移 0.7 格**（四百八十曾是 1.0 格）：在翻转后的空间里 `+Y` 就是世界里向上，
- *    故 `translate(0, +0.7, 0)`（放在 `scale(k)` **之前**，所以是实打实的世界格，不会被 k 缩放）。
- *    挂点 `ElytraLocator` 换算后本就落在肩线上 → 顶端位置只由本上移量决定。
+ * zhiban_new_year）全部掉进"硬编码兜底"，而那个兜底是从**原版** ElytraLayer 抄来的 `scale(-1,-1,1) + translate(0,-1.501,0)`——那是**原版模型空间**的补偿；Gecko 图层栈 根本不在原版模型空间（Gecko 渲染器自己 pushPose，单位=格、Y 朝上、原点在脚下）， 于是兜底把翅膀顶到脚下/身体里 → 看不见。这就是"只有 winefox 能显示"的根。 【现在的锚点策略：永不掉进兜底】按优先级找骨骼，找不到专用挂点就锚到**一定有**的 躯干/根骨骼，再补一段**从真实模型统计出来的平均偏移**（n=17 样本，单位：格）： ``` ElytraLocator / Elytra  → 偏移 (0, 0, 0)          （17/28） UpperBody               → 偏移 (0, +0.4310, +0.2011)  （26/28） Root                    → 偏移 (0, +1.8596, +0.2022)  （28/28，兜底必中） ``` 偏移在**骨骼空间**（Y 朝上）里施加，所以是 +Y。 【v1.2.0 实测四百九十一：尺寸与位置（用户要求）】 ① 尺寸 = 与玩家**等大**：`k = 1.0 × 0.9375 / modelScale` （0.9375 是原版 `PlayerRenderer.scale`，即"与玩家等大"的系数；四百八十的 0.85 倍已取消）； ② 整体**上移 0.7 格**（四百八十曾是 1.0 格）：在翻转后的空间里 `+Y` 就是世界里向上， 故 `translate(0, +0.7, 0)`（放在 `scale(k)` **之前**，所以是实打实的世界格，不会被 k 缩放）。 挂点 `ElytraLocator` 换算后本就落在肩线上 → 顶端位置只由本上移量决定。
  */
 public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRenderer<Mob>> {
 
@@ -100,13 +75,10 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
     };
 
     /**
-     * 【实测六百八十四】YSM 等"非 Gecko 渲染器"用的固定挂点（格，骨骼空间 Y 朝上）。
-     *
      * <p>取的就是 {@link #ANCHORS} 里 {@code Root} 那一档的补偿量——它本来就是
      * "从根骨骼到肩线"的平均偏移（n=17 个模型统计出来的），而 YSM 那边我们**连根骨骼都查不到**
      * （没有 TLM 的骨骼表），于是直接把它当成"根在原点"来用：原点在脚下（+Y 朝上），
      * 1.86 格正好落在肩线上，与 Gecko 那一路的落点同一个高度。
-     *
      * <p>数不能拍：1.8596 = 17 个模型 {@code Elytra/ElytraLocator.pivot - Root.pivot} 的平均值
      * /16（px → 格），数据见 changelog 实测四百八十。
      */
@@ -176,26 +148,11 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
         // v1.2.0 实测五百四十八【YSM 兼容】：装了「是，史蒂夫模型」时，TLM 会把女仆交给
         // YSM 的渲染器（`EntityMaidRenderer.initYsmModelRenderer`：ysmMaidRenderer =
         // IGeoEntityRenderer<Mob>），并把既有 geo 图层逐个 `copy` 到它上面。
-        //
         // 【旧写法为什么直接黑屏进不去游戏】本层原先把 R 写死成 `GeckoEntityMaidRenderer<Mob>`，
         // 而 `GeoLayerRenderer<T, R extends IGeoEntityRenderer<T>>` 的 `copy(R)` 在泛型擦除后
         // 生成的桥接方法会 `checkcast GeckoEntityMaidRenderer`；YSM 那个渲染器只实现了
         // `IGeoEntityRenderer`（继承的是 YSM 自己的类），于是 copy 抛
-        // ClassCastException → `EntityRenderers.createEntityRenderers` 整体中断
-        // → `Minecraft.abortResourcePackRecovery`（资源重载被中止、实体渲染器没建起来）
-        // → 黑屏。现在 R 改为公共上界 `IGeoEntityRenderer<Mob>`，桥接方法不再强转。
-        //
-        // 【为什么在 YSM 下曾经直接跳过 —— 实测六百八十四 起不再跳过】
-        // 本层的挂点逻辑原先依赖 Gecko 骨骼表（`AnimatedGeoModel.bones()` 里的
-        // ElytraLocator/Elytra/UpperBody/Root），YSM 模型没有这套骨骼，硬查只会落空
-        // → 五百四十八 当时干脆整层跳过（"宁可不画，也不把翅膀堆在原点——那比不画更糟"）。
-        //
-        // 现在改成**两档**：Gecko 渲染器照旧走骨骼挂点；其它渲染器（YSM 等）走**固定身体偏移**
-        // （见 FALLBACK_* 与 anchorToBackBone）。依据是 实测六百八十三 的实证：YSM 的女仆渲染器
-        // 调图层的那一段与 TLM 的 GeoReplacedEntityRenderer **同构**——push → setupRotations →
-        // translate(0, 0.01, 0) → 画模型 → 图层循环 → pop。也就是说这一层拿到的 poseStack 与
-        // Gecko 那边是**同一套空间**（格、Y 朝上、原点在脚下），那圈激流特效就是这么画对的
-        // （玩家实测已确认），翅膀自然也能用同一套坐标落在同一个地方。
+        // ClassCastException → `EntityRenderers.createEntityRenderers` 整体中断 → `Minecraft.abortResourcePackRecovery`（资源重载被中止、实体渲染器没建起来） → 黑屏。现在 R 改为公共上界 `IGeoEntityRenderer<Mob>`，桥接方法不再强转。 【为什么在 YSM 下曾经直接跳过 —— 实测六百八十四 起不再跳过】 本层的挂点逻辑原先依赖 Gecko 骨骼表（`AnimatedGeoModel.bones()` 里的 ElytraLocator/Elytra/UpperBody/Root），YSM 模型没有这套骨骼，硬查只会落空 → 五百四十八 当时干脆整层跳过（"宁可不画，也不把翅膀堆在原点——那比不画更糟"）。 现在改成**两档**：Gecko 渲染器照旧走骨骼挂点；其它渲染器（YSM 等）走**固定身体偏移** （见 FALLBACK_* 与 anchorToBackBone）。依据是 实测六百八十三 的实证：YSM 的女仆渲染器 调图层的那一段与 TLM 的 GeoReplacedEntityRenderer **同构**——push → setupRotations → translate(0, 0.01, 0) → 画模型 → 图层循环 → pop。也就是说这一层拿到的 poseStack 与 Gecko 那边是**同一套空间**（格、Y 朝上、原点在脚下），那圈激流特效就是这么画对的 （玩家实测已确认），翅膀自然也能用同一套坐标落在同一个地方。
         boolean geckoRenderer = getRenderer() instanceof GeckoEntityMaidRenderer;
         if (!(mob instanceof EntityMaid maid)) {
             return;
@@ -302,10 +259,8 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
      * 把 poseStack 锚到"背部挂点"：按 {@link #ANCHORS} 优先级找骨骼，用
      * `prepMatrixForLocator` 沿祖先链定位（含躯干动画），再补该骨骼到 Elytra 挂点的
      * 平均偏移（骨骼空间，Y 朝上）。
-     *
      * 与 TLM `AnimatedGeoModel.getLocatorHierarchy` 内部同款（该方法 private，
      * 这里按 `geoBone().parent()` 自己回溯，得到"根 → 目标"的顺序）。
-     *
      * @return true = 找到并已应用
      */
     private boolean anchorToBackBone(PoseStack poseStack, Mob mob) {

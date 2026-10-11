@@ -21,29 +21,19 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * v1.2.0 实测五百六十五（PR #10 社区贡献，Forge 树移植）：客户端实体重同步。
  * 修"服务端还活着、客户端连实体都没有"的女仆。
- *
  * 【现象】玩家报"女仆打 BOSS 之后凭空消失"：F3+B 看不到碰撞箱（= 客户端实体列表里
  * 根本没有她），但服务端她一直活着、照常干活。也就是"服务端追踪表与客户端实体表失配"。
- *
  * 【为什么会失配（Sable 侧证据，社区取证）】Sable 2.0.5 改了原版实体追踪：
  * TrackedEntityMixin#sable$trackSubLevelEntities 给玩家算追踪位置时，先经
  * SABLE_HELPER.getContaining(level, entity.position()) 判断实体是否落在某个物理
  * sub-level 里。这条链一旦给出离谱坐标，服务端会判定"超出追踪距离"→ 给客户端发
  * 删除包，之后不再重发；而服务端实体本身毫发无损。叠加法术模组对"没带锚核"女仆
  * 离场时"只删不补"客户端实体的行为，"客户端没有她"就固化了。
- *
  * 【本命令做什么】既当诊断又当救急：
  * <ol>
  *   <li>报告每只女仆的维度/坐标、主人是否同维度；</li>
- *   <li>用反射问 Sable"她是否被判在 sub-level 里、变换后的坐标是多少"；</li>
- *   <li>对同维度的主人客户端强制重同步：删实体 → 重新生成 → 补同步数据与装备。
- *       不改任何服务端状态，纯补包。</li>
- * </ol>
- *
- * 用法：/maid_smart resync（自己名下的女仆）· /maid_smart resync all（全服）·
- * /maid_smart resync &lt;女仆UUID&gt;（跨维度点名）。权限：OP。
+ *   <li>用反射问 Sable"她是否被判在 sub-level 里、变换后的坐标是多少"；</li> <li>对同维度的主人客户端强制重同步：删实体 → 重新生成 → 补同步数据与装备。 不改任何服务端状态，纯补包。</li> </ol> 用法：/maid_smart resync（自己名下的女仆）· /maid_smart resync all（全服）· /maid_smart resync &lt;女仆UUID&gt;（跨维度点名）。权限：OP。
  */
 public final class MaidResyncCommand {
 
@@ -159,13 +149,11 @@ public final class MaidResyncCommand {
 
     /**
      * 自动补包：女仆重新入世界时登记一次延迟补包。
-     *
      * 【为什么需要】实测现场：女仆在战斗中"客户端消失、服务端照打"，重启游戏就回来。
      * 是"两个模组各做一半"的链：①法术模组在女仆离场（区块卸载/维度切换等）时对
      * 没带锚核的女仆发"让客户端删掉实体"的通知，且自己的恢复只覆盖带锚核的；
      * ②她随后被重新加回同一维度时，原版追踪表（尤其被 Sable 改过追踪位置计算后）
-     * 未必再发一次生成包 → 没有任何一方把她补回来。
-     * 入世界/离场两个窗口都登记一次，补齐"删+生成+数据+装备"四个包。
+     * 未必再发一次生成包 → 没有任何一方把她补回来。 入世界/离场两个窗口都登记一次，补齐"删+生成+数据+装备"四个包。
      */
     public static final int AUTO_RESYNC_DELAY_TICKS = 20;
 
@@ -179,21 +167,11 @@ public final class MaidResyncCommand {
 
     /**
      * 自动补包：女仆重新入世界时登记一次延迟补包。
-     *
      * 【为什么需要】实测现场：女仆在战斗中"客户端消失、服务端照打"，重启游戏就回来。
      * 是"两个模组各做一半"的链：①法术模组在女仆离场（区块卸载/维度切换等）时对
      * 没带锚核的女仆发"让客户端删掉实体"的通知，且自己的恢复只覆盖带锚核的；
      * ②她随后被重新加回同一维度时，原版追踪表（尤其被 Sable 改过追踪位置计算后）
-     * 未必再发一次生成包 → 没有任何一方把她补回来。
-     * 入世界/离场两个窗口都登记一次，补齐"删+生成+数据+装备"四个包。
-     *
-     * 【实测五百九十六：新实体必须放过】上面那条链的前提是"客户端那边已经有过她、
-     * 只是被弄丢了"——只有**同一只实体**（同一个网络 id）才会这样。收放魂符放出的是
-     * TLM 全新 spawn 的一只女仆（**新 id**），原版追踪本来就会把"生成+数据+属性+装备"
-     * 全套发过去，我们再来一次"删了重生成"纯属节外生枝：客户端那只女仆被销毁重建，
-     * 她正开着的容器、TLM 在"开始追踪"时发的饰品/模型同步（MaidTrackEvent）全被抹掉。
-     * 所以改成：id 与上一次不同（新实体）→ 不补包，只记 id；id 相同（同一只离场又回来）
-     * → 照旧补包；第一次见到（没有可比对的前一次）→ 也不补（客户端刚连上，不存在残留）。
+     * 未必再发一次生成包 → 没有任何一方把她补回来。 入世界/离场两个窗口都登记一次，补齐"删+生成+数据+装备"四个包。 【实测五百九十六：新实体必须放过】上面那条链的前提是"客户端那边已经有过她、 只是被弄丢了"——只有**同一只实体**（同一个网络 id）才会这样。收放魂符放出的是 TLM 全新 spawn 的一只女仆（**新 id**），原版追踪本来就会把"生成+数据+属性+装备" 全套发过去，我们再来一次"删了重生成"纯属节外生枝：客户端那只女仆被销毁重建， 她正开着的容器、TLM 在"开始追踪"时发的饰品/模型同步（MaidTrackEvent）全被抹掉。 所以改成：id 与上一次不同（新实体）→ 不补包，只记 id；id 相同（同一只离场又回来） → 照旧补包；第一次见到（没有可比对的前一次）→ 也不补（客户端刚连上，不存在残留）。
      */
     public static void scheduleAutoResync(EntityMaid maid) {
         if (maid == null) {
@@ -273,34 +251,12 @@ public final class MaidResyncCommand {
     // ================= v1.3.0(beta) 实测六百九十七：复活后强制补包 =================
 
     /**
-     * v1.3.0(beta) 实测六百九十七【自动复活之后，客户端实体再重建三枪】。
-     *
      * 【为什么需要 —— 日志实证】2026-09-27 那场游戏里，每一次自动复活都是同一个形状：
      * <pre>
      *   03:57:43.510  法术模组 Creating new SpellBookManager for maid 2c8b… ← 新实体入世界
      *   03:57:43.511  [promaid/重同步] 补包跳过：她是新实体（id 6→10260）     ← 实测五百九十六 放行
      *   03:57:43.513  [promaid/自动复活] 已在主人重生点复活
-     *   03:57:43.589  法术模组 Removed SpellBookManager for maid 2c8b…       ← 刚加进来那只又离场了
-     *   03:57:43.590  [promaid/离场] 圣女酒狐 离开世界（reason=null）
-     * </pre>
-     * 复活用的是**同一个 UUID、新的实体 id**（复用 UUID 是刻意的：记忆/灵魂目录按 UUID 索引），
-     * 而那条「离场」正是本项目注释里早写明的那条链的另一半——**法术模组对没带锚核的女仆
-     * 在离场时会让客户端把她的实体删掉**（这些女仆确实没有锚核：法术模组自己打了
-     * 「does not have anchor_core, allowing removal」）。实测五百九十六 又刻意规定
-     * 「新实体不补包」，于是**没有任何一方**在那个删包之后把她补回来：客户端把她删了、
-     * 服务端她还在照常开火——玩家看到的就是「建模被卡掉、变成幽灵状态」。
-     *
-     * 【改法】不再赌"谁应该补"：复活成功后我们自己定时补三枪，且**绕开 五百九十六 的分流**
-     * （那条规矩是为魂符放出的"新实体"写的，与"复活后客户端可能已被拆掉"是两回事）。
-     * 时点：+2 秒 / 再 +5 秒 / 再 +5 秒（{@link #FORCED_FIRST_DELAY} / {@link #FORCED_GAP} ×
-     * {@link #FORCED_SHOTS_TOTAL}）——复活后头十秒正是上面那条「入世界 → 离场」来回最密的窗口。
-     * 补包用既有的 {@link #resyncTo}（删 + 生成 + 全量同步数据 + 属性 + 装备 + 饰品），
-     * 客户端本来就有她时也只是一次看不见的瞬时重建（见 resyncTo 的注释）。
-     *
-     * 【她的界面开着时不补】与 实测五百九十五 同一条理由：玩家正开着她的物品栏/装备栏时
-     * 重建客户端实体，TLM 的容器槽位会抓着一只已被删掉的实体。遇到这一档就顺延到下一枪。
-     *
-     * 【开销】只有"刚复活过"的 UUID 在表里、最多十秒；平时一个空 map 判断。
+     *   03:57:43.589  法术模组 Removed SpellBookManager for maid 2c8b…       ← 刚加进来那只又离场了 03:57:43.590  [promaid/离场] 圣女酒狐 离开世界（reason=null） </pre> 复活用的是**同一个 UUID、新的实体 id**（复用 UUID 是刻意的：记忆/灵魂目录按 UUID 索引）， 而那条「离场」正是本项目注释里早写明的那条链的另一半——**法术模组对没带锚核的女仆 在离场时会让客户端把她的实体删掉**（这些女仆确实没有锚核：法术模组自己打了 「does not have anchor_core, allowing removal」）。实测五百九十六 又刻意规定 「新实体不补包」，于是**没有任何一方**在那个删包之后把她补回来：客户端把她删了、 服务端她还在照常开火——玩家看到的就是「建模被卡掉、变成幽灵状态」。 【改法】不再赌"谁应该补"：复活成功后我们自己定时补三枪，且**绕开 五百九十六 的分流** （那条规矩是为魂符放出的"新实体"写的，与"复活后客户端可能已被拆掉"是两回事）。 时点：+2 秒 / 再 +5 秒 / 再 +5 秒（{@link #FORCED_FIRST_DELAY} / {@link #FORCED_GAP} × {@link #FORCED_SHOTS_TOTAL}）——复活后头十秒正是上面那条「入世界 → 离场」来回最密的窗口。 补包用既有的 {@link #resyncTo}（删 + 生成 + 全量同步数据 + 属性 + 装备 + 饰品）， 客户端本来就有她时也只是一次看不见的瞬时重建（见 resyncTo 的注释）。 【她的界面开着时不补】与 实测五百九十五 同一条理由：玩家正开着她的物品栏/装备栏时 重建客户端实体，TLM 的容器槽位会抓着一只已被删掉的实体。遇到这一档就顺延到下一枪。 【开销】只有"刚复活过"的 UUID 在表里、最多十秒；平时一个空 map 判断。
      */
     private static final java.util.Map<UUID, Integer> PENDING_FORCED =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -395,9 +351,7 @@ public final class MaidResyncCommand {
     }
 
     /**
-     * 【实测七百九十九·issue #36】给**任意一个指定的**客户端重建一次她的实体
      * （就是既有的 {@link #resyncTo}：删 → 生成 → 全量数据 → 属性 → 装备 → 乘客 → 饰品）。
-     *
      * <p>与 {@link #resyncToOwner} 的差别只有两处：① 收件人是调用方指定的（传送重建要发给
      * **每一个正在追踪她**的玩家，不只是主人）；② 不判 {@code guiOpening}——那条判定由调用方
      * （{@code MaidTeleportRebuild}）统一处理，因为它的处理方式是"推迟到界面关掉再补"，
@@ -408,33 +362,12 @@ public final class MaidResyncCommand {
     }
 
     /**
-     * v1.3.0(beta) 实测七百一十七【issue #27：远距/跨维传送后血上限掉回 20】。
-     *
      * 只补**属性表**这一包（{@code ClientboundUpdateAttributesPacket}），不做"删+生成"。
-     *
      * <p>【为什么传送那条路需要它】客户端可见的 MAX_HEALTH 只来自这一包：原版在
      * ①开始追踪（{@code ServerEntity.sendPairingData}）与 ②属性变脏
      * （{@code ServerEntity.sendChanges} 里 dirty 非空）时才发。而我们的传送：
      * <ul>
-     *   <li><b>同维度远距</b>：走 {@code Entity.teleportTo} 的**同维度分支** = 纯
-     *       {@code moveTo}，没有删/生成、没有重新追踪，属性包自然一个都不发；落点区块
-     *       若刚被卸载过（玩家报的"传送到不加载的区块"），客户端那只实体的属性表就一直是
-     *       默认值（TLM 女仆默认 20）；</li>
-     *   <li><b>跨维度</b>：走的是"删+生成"（新网络 id），{@code scheduleAutoResync} 又刻意
-     *       对"新实体"放行（实测五百九十六），赌原版追踪会补全套——可目的地区块没载完时
-     *       新实体停在 HIDDEN、追踪起不来，属性包依然没发。</li>
-     * </ul>
-     * 报告口径正好对上：「只有远距离传送和跨界传送会出现，收放魂符似乎不会」——魂符那条
-     * 路有 {@code MaidAutoResurrect.scheduleForcedResync} 兜着（它走 {@link #resyncTo}、
-     * 里面本来就补属性表），传送这条路没人管。
-     *
-     * <p>【为什么不是直接 scheduleForcedResync】那一套是"删+生成"三枪，用在传送后会把
-     * 客户端实体整个重建——她正骑着的东西（扫帚/坐骑）、容器槽位、追踪关系都要重新对齐，
-     * 成本与风险都不对等。这里只需要把**属性表**补回去：轻、幂等、随原版追踪口径一字不差。
-     *
-     * <p>【时机】传送当 tick 就发往往还没重新追踪上（客户端可能先收到属性包、后收到实体包，
-     * 或实体包在下一 tick 才到），所以登记一张"下一 tick 补一枪"的小表，由
-     * {@code tickAutoResync} 顺带驱动。
+     *   <li><b>同维度远距</b>：走 {@code Entity.teleportTo} 的**同维度分支** = 纯 {@code moveTo}，没有删/生成、没有重新追踪，属性包自然一个都不发；落点区块 若刚被卸载过（玩家报的"传送到不加载的区块"），客户端那只实体的属性表就一直是 默认值（TLM 女仆默认 20）；</li> <li><b>跨维度</b>：走的是"删+生成"（新网络 id），{@code scheduleAutoResync} 又刻意 对"新实体"放行（实测五百九十六），赌原版追踪会补全套——可目的地区块没载完时 新实体停在 HIDDEN、追踪起不来，属性包依然没发。</li> </ul> 报告口径正好对上：「只有远距离传送和跨界传送会出现，收放魂符似乎不会」——魂符那条 路有 {@code MaidAutoResurrect.scheduleForcedResync} 兜着（它走 {@link #resyncTo}、 里面本来就补属性表），传送这条路没人管。 <p>【为什么不是直接 scheduleForcedResync】那一套是"删+生成"三枪，用在传送后会把 客户端实体整个重建——她正骑着的东西（扫帚/坐骑）、容器槽位、追踪关系都要重新对齐， 成本与风险都不对等。这里只需要把**属性表**补回去：轻、幂等、随原版追踪口径一字不差。 <p>【时机】传送当 tick 就发往往还没重新追踪上（客户端可能先收到属性包、后收到实体包， 或实体包在下一 tick 才到），所以登记一张"下一 tick 补一枪"的小表，由 {@code tickAutoResync} 顺带驱动。
      */
     private static final java.util.Map<UUID, Integer> PENDING_ATTR =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -511,13 +444,11 @@ public final class MaidResyncCommand {
 
     /**
      * 给追踪着她的玩家各补一包属性表，**并对主人直连再补一枪**。
-     *
      * <p>【实测七百六十二·issue #27 三修：广播之外再直连主人】{@code m_8445_}（broadcastAndSend）
      * 只发给"服务端追踪表 {@code seenBy} 里此刻正追踪她的玩家"。而 #27 的故障态恰恰是
      * **客户端那只实体已经在（血条显示 20）、服务端却没把主人配回它的 seenBy**——此时广播
      * 一发都到不了主人手里，就出现"补包跑了、界面没变、日志什么都没有"。{@link #resyncTo}
-     * 走的是 {@code viewer.f_8906_.m_9829_(...)}（直连，不依赖追踪表），这里补上同一条。
-     * 重复一包无害（客户端把同一张属性表重新应用一次，幂等）。完整说明见 1.21.1 树同名方法。
+     * 走的是 {@code viewer.f_8906_.m_9829_(...)}（直连，不依赖追踪表），这里补上同一条。 重复一包无害（客户端把同一张属性表重新应用一次，幂等）。完整说明见 1.21.1 树同名方法。
      */
     public static void resendAttributes(EntityMaid maid) {
         try {
@@ -554,7 +485,6 @@ public final class MaidResyncCommand {
             // AddEntity 在客户端新建的是一只"全新实体"（同步数据全是默认值），所以必须把
             // **全部非默认值**补过去——这正是原版生成实体时发的那个包
             // （ClientboundSetEntityDataPacket(id, getEntityData().getNonDefaultValues())）。
-            // 旧版误用了 m_135378_（= packDirty：只返回"自上次同步以来变化过"的值，且会清脏标记），
             // 于是重同步时通常一个值都不发 → 客户端那只新实体保持默认数据 → **模型回落成默认
             // （灵梦）**，服务端数据完全正常，所以"重进游戏就好了"。这正是反馈的
             // "1.20.1 魂符放出后模型变了"的根因（1.21.1 树本来就是 getNonDefaultValues，
@@ -571,8 +501,7 @@ public final class MaidResyncCommand {
             // （TLM 女仆 MAX_HEALTH 默认 20）。于是"删+生成"之后客户端算出来的血量上限
             // 永远是 20（TLM 自带界面画的血条 = getHealth()/getMaxHealth()，各类显示模组
             // 读的也是它）：观感就是"收放魂符后上限掉回 20"；等服务端属性再次变脏
-            // （好感度升阶时 FavorabilityManager 调 setBaseValue）才又变回 80，正是反馈里
-            // 的"80 和 20 反复横跳"。补发属性表，口径与 ServerEntity 一字不差。
+            // （好感度升阶时 FavorabilityManager 调 setBaseValue）才又变回 80，正是反馈里 的"80 和 20 反复横跳"。补发属性表，口径与 ServerEntity 一字不差。
             java.util.Collection<net.minecraft.world.entity.ai.attributes.AttributeInstance> attrs =
                     maid.m_21204_().m_22170_();
             if (!attrs.isEmpty()) {
@@ -590,21 +519,8 @@ public final class MaidResyncCommand {
             //   if (!entity.m_20197_().isEmpty()) accept(new ClientboundSetPassengersPacket(entity));
             //   if (entity.m_20152_())          accept(new ClientboundSetPassengersPacket(entity.m_20202_()));
             // </pre>
-            // 旧版本方法只发了前者（她载着谁），**漏了后者（她骑着谁）**。于是"死后在重生点复活、
             // 又骑上扫帚"的女仆在客户端是一具**没有载具的孤儿实体**：服务端她是扫帚的乘客，
-            // 而原版对乘客**不发她自己的位置包**（{@code ServerEntity#sendChanges} 的 isPassenger
-            // 那一支只用载具坐标），于是客户端把她钉在 AddEntity 那一拍的落点上不动，
-            // 扫帚（服务端驱动）照飞 ——
-            //
-            //
-            // 【为什么只有复活过的女仆会中招】本方法只在两条链路上被调：① 复活后那三枪强制补包
-            // （{@link #scheduleForcedResync}，实测六百九十七）；② 入世界自动补包。而 ② 对"新实体"
-            // 是**刻意放过**的（实测五百九十六：新 id = 原版追踪会自己发全套包），复活走的正是
-            // "同 UUID、新 id" ⇒ 那一路不发。所以只剩 ① 这一枪——它把客户端那只女仆删了又建，
-            // 而**载具那侧的 {@code lastPassengers} 早已记着"她在车上"、不会再重发**
-            // （{@code ServerEntity#sendChanges} 只在乘客表**变化**时发 SetPassengers）⇒ 这一枪之后
-            // 谁都不会再把她"挂"回扫帚上。补上这一条即闭环（与 ② 的"删+生成"顺序天然安全：
-            // AddEntity 与 SetPassengers 走同一条连接、按序处理，到客户端时两边实体都已存在）。
+            // 而原版对乘客**不发她自己的位置包**（{@code ServerEntity#sendChanges} 的 isPassenger 那一支只用载具坐标），于是客户端把她钉在 AddEntity 那一拍的落点上不动， 扫帚（服务端驱动）照飞 —— 【为什么只有复活过的女仆会中招】本方法只在两条链路上被调：① 复活后那三枪强制补包 （{@link #scheduleForcedResync}，实测六百九十七）；② 入世界自动补包。而 ② 对"新实体" 是**刻意放过**的（实测五百九十六：新 id = 原版追踪会自己发全套包），复活走的正是 "同 UUID、新 id" ⇒ 那一路不发。所以只剩 ① 这一枪——它把客户端那只女仆删了又建， 而**载具那侧的 {@code lastPassengers} 早已记着"她在车上"、不会再重发** （{@code ServerEntity#sendChanges} 只在乘客表**变化**时发 SetPassengers）⇒ 这一枪之后 谁都不会再把她"挂"回扫帚上。补上这一条即闭环（与 ② 的"删+生成"顺序天然安全： AddEntity 与 SetPassengers 走同一条连接、按序处理，到客户端时两边实体都已存在）。
             if (maid.m_20202_() != null) {
                 viewer.f_8906_.m_9829_(
                         new net.minecraft.network.protocol.game.ClientboundSetPassengersPacket(

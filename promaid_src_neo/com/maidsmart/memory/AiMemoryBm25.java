@@ -8,20 +8,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * BM25 稀疏索引（移植自 maidsoulcore v3 {@code MemoryV3SparseIndex}）。
+ * BM25 稀疏索引（移植自 maidsoulcore v3 {@code MemoryV3SparseIndex}）——替换旧版
+ * {@link AiMemorySearch} 里「n-gram 命中数 × 2 + salience × 0.5 + 长度项」的手搓打分（那套没有 IDF，
+ * 常见字与关键词同权；也没有文档长度归一，长段落天然命中多）。BM25 两个都补上，配合
+ * {@link AiMemoryTokens} 的 CJK 分词，中文召回质量提升最明显。
  *
- * <p>替换旧版 {@link AiMemorySearch} 里「n-gram 命中数 × 2 + salience × 0.5 + 长度项」的手搓打分：
- * 那套没有 IDF（常见字"的""了"与关键词同权）也没有文档长度归一（长段落天然命中多）。BM25 两个
- * 都补上，配合 {@link AiMemoryTokens} 的 CJK 分词，中文召回质量提升最明显。
- *
- * <p>公式（标准 BM25，k1=1.2、b=0.75）：
- * {@code score += idf(t) * tf*(k1+1) / (tf + k1*(1 - b + b*dl/avgdl))}；
- * 其中 {@code idf(t) = ln(1 + (N - df + 0.5)/(df + 0.5))}。额外叠加很小的 salience 加成
- * （0.15/级）做破平局——不改变 BM25 的相对次序，只在分数接近时让更重要的记忆靠前。
- *
- * <p>索引按「文档集合签名（id 序列哈希）」懒重建：{@link AiMemorySearch} 每次检索把当前段落
- * 投影成文档列表传入，签名没变就直接用缓存，避免每轮全量重算 DF。线程安全（synchronized）。
- * 两树逐字相同。
+ * 公式（标准 BM25，k1=1.2、b=0.75）：{@code score += idf(t) * tf*(k1+1) / (tf + k1*(1-b+b*dl/avgdl))}，
+ * 其中 {@code idf(t) = ln(1 + (N-df+0.5)/(df+0.5))}。额外叠加很小的 salience 加成（0.15/级）破平局
+ * ——不改变 BM25 的相对次序，只在分数接近时让更重要的记忆靠前。索引按「文档集合签名（id 序列哈希）」
+ * 懒重建：每次检索把当前段落投影成文档列表传入，签名没变就用缓存，避免每轮全量重算 DF。线程安全。
  */
 public final class AiMemoryBm25 {
 

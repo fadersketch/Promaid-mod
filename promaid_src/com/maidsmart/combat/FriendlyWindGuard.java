@@ -11,15 +11,10 @@ import net.minecraft.world.level.Explosion;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * v1.2.2 实测五百六十：**友军风免**——玩家与其他女仆不被"女仆放出来的风"震开。
- *
  * 【用户
- *
- *
  * 【为什么"免疫伤害"了还会被震开】伤害那条路我们早就堵死了：{@link FriendlyFireGuard}
  * （本模组）与万法皆通自己的 {@code MaidSpellAllyEvents} 都在
  * LivingAttack/Hurt/Damage 三层取消"女仆→友军"的伤害。但**击退不是伤害事件**：
- *
  * - 原版爆炸（`Explosion.m_46061_`，javap 实证）在实体循环里先把每个实体
  *   `m_6469_(伤害源, …)`（→ 被上面三层拦掉），随后**无条件**执行
  *   `entity.m_20256_(entity.m_20184_().m_82549_(击退向量))`（字节码偏移 886~898）——
@@ -28,33 +23,7 @@ import net.minecraft.world.phys.Vec3;
  *   （javap 实证：`new Explosion(level, m_19749_()=getOwner, …)` 后 `m_46061_(); m_46075_(Z)`），
  *   所以"女仆在高空打、火球在主人脚边炸 → 主人被顶上天"完全对得上。
  * - 铁魔法"呼啸之风"（`GustCollider.m_5790_`）与新生魔艺的击退构件同理：直接给对方
- *   `setDeltaMovement(old.add(推力))`，一次伤害事件都不发（所以三层防护对它完全无效）。
- *
- * 【做法】不去逐个模组打补丁（那是无底洞，且要把第三方类名写死），而是抓住**所有外力位移
- * 的唯一出口**：`Entity.m_20256_(Vec3)`（setDeltaMovement，1.20.1 各重载最终都汇到这里）。
- * 唯一要解决的问题是**归因**——这一下是谁推的？答案用"当前正在 tick 的实体"回答：
- *
- * - `EntityTickBlameMixin` 在 `Entity.m_8119_`（tick）的 HEAD/RETURN 维护一个"当前 tick 实体"；
- *   法术/风弹/火球推人时，调用栈**一定**在那个效果实体的 tick 里（铁魔法是在自己的
- *   `m_8119_` 里射线命中后推、火球是在自己的 tick 里爆炸、瞬发范围法术则是在**女仆本人**
- *   的 tick 里结算）；即使像 `GustCollider` 那样由法书在施法瞬间手动 `tick()` 一次，
- *   也照样落在这条链上（javap 实证 `GustSpell.onCast` 里 `m_7967_()` + `m_8119_()`）。
- * - 于是"推人者"= 那个实体本身是女仆，或它的主人是女仆（投射物/召唤物/载具：走
- *   `Projectile.getOwner` / `OwnableEntity.getOwner`）。爆炸还有一路独立归因：
- *   `Explosion.getDirectSourceEntity/getIndirectSourceEntity`（第三方模组的爆炸也照这条，
- *   不必知道是哪个模组）。
- *
- * 【判据只有三条】① 推人者是女仆方且受害者不是她本人；② 受害者是玩家或女仆，
- * 且与她是友军（**优先用万法皆通自己的盟友口径** `MaidSpellAllyResolver.areFriendly`，
- * 保证与它对伤害的判定一致；没装就走 {@link FriendlyFireGuard#isFriendly}）；
- * ③ 这一下是**明显的外力**（速度变化 ≥ {@link #MIN_IMPULSE}，正常走路/重力/挤开远小于它）。
- *
- * 【刻意不管的】女仆推自己（风弹自起跳、烟花推进、空袭的近身弹开）——受害者==推人者，
- * 第一版就排除，保证她自己的机动一字不改。
- *
- * 【只在服务端生效】客户端的速度是服务端同步下来的，本地再掺一脚只会和服务端打架；
- * 主人本地"被推一下"的问题由 {@code ExplosionWindGuardMixin} 在服务端把击退向量
- * 从发包数据里剔掉解决。
+ *   `setDeltaMovement(old.add(推力))`，一次伤害事件都不发（所以三层防护对它完全无效）。 【做法】不去逐个模组打补丁（那是无底洞，且要把第三方类名写死），而是抓住**所有外力位移 的唯一出口**：`Entity.m_20256_(Vec3)`（setDeltaMovement，1.20.1 各重载最终都汇到这里）。 唯一要解决的问题是**归因**——这一下是谁推的？答案用"当前正在 tick 的实体"回答： - `EntityTickBlameMixin` 在 `Entity.m_8119_`（tick）的 HEAD/RETURN 维护一个"当前 tick 实体"； 法术/风弹/火球推人时，调用栈**一定**在那个效果实体的 tick 里（铁魔法是在自己的 `m_8119_` 里射线命中后推、火球是在自己的 tick 里爆炸、瞬发范围法术则是在**女仆本人** 的 tick 里结算）；即使像 `GustCollider` 那样由法书在施法瞬间手动 `tick()` 一次， 也照样落在这条链上（javap 实证 `GustSpell.onCast` 里 `m_7967_()` + `m_8119_()`）。 - 于是"推人者"= 那个实体本身是女仆，或它的主人是女仆（投射物/召唤物/载具：走 `Projectile.getOwner` / `OwnableEntity.getOwner`）。爆炸还有一路独立归因： `Explosion.getDirectSourceEntity/getIndirectSourceEntity`（第三方模组的爆炸也照这条， 不必知道是哪个模组）。 【判据只有三条】① 推人者是女仆方且受害者不是她本人；② 受害者是玩家或女仆， 且与她是友军（**优先用万法皆通自己的盟友口径** `MaidSpellAllyResolver.areFriendly`， 保证与它对伤害的判定一致；没装就走 {@link FriendlyFireGuard#isFriendly}）； ③ 这一下是**明显的外力**（速度变化 ≥ {@link #MIN_IMPULSE}，正常走路/重力/挤开远小于它）。 【刻意不管的】女仆推自己（风弹自起跳、烟花推进、空袭的近身弹开）——受害者==推人者， 第一版就排除，保证她自己的机动一字不改。 【只在服务端生效】客户端的速度是服务端同步下来的，本地再掺一脚只会和服务端打架； 主人本地"被推一下"的问题由 {@code ExplosionWindGuardMixin} 在服务端把击退向量 从发包数据里剔掉解决。
  */
 @net.minecraftforge.fml.common.Mod.EventBusSubscriber(modid = "promaid")
 public final class FriendlyWindGuard {
@@ -80,7 +49,6 @@ public final class FriendlyWindGuard {
 
     /**
      * Entity.tick 的 HEAD：把"当前 tick 实体"换成她。
-     *
      * 【为什么是"粘住"而不是"HEAD 存入 / RETURN 还原"】javap 实证：投射物的命中判定
      * 在自己的 `m_8119_`（tick）里**先调 `super.m_8119_()`、回来之后**才做移动与命中
      * （铁魔法火球的爆炸、新生魔艺弹射物的效果都在这一段里）。若在 super 返回时就还原，
@@ -128,18 +96,10 @@ public final class FriendlyWindGuard {
     /**
      * 爆炸归因：直系来源（女仆本人/她的火球）→ 间系来源（原版 getIndirectSourceEntity，含 TNT 的主人）
      * → **当前 tick 实体兜底**（实测五百七十三）。
-     *
      * 【为什么必须有第三条】原版**重锤风爆附魔**（`minecraft:wind_burst`）的爆炸是
      * `attribute_to_user` 缺省 false（1.21.1 `data/minecraft/enchantment/wind_burst.json` 实证：
      * 既无 attribute_to_user 也无 damage_type）——`ExplodeEffect.apply` 于是传 `entity = null`，
-     * 爆炸的直系/间系来源**都是 null**，前两条全部落空 → 击退照推（**只震不伤**，伤害那条路
-     * 本来就没有）。反馈的"主人被女仆重锤波及"就是这一条（1.21.1）：女仆俯冲砸怪时风爆在
-     * **她身上**炸开，旁边的主人被 3.5 格半径的冲击波掀飞。1.20.1 没有重锤，但第三方模组的
-     * "无来源实体爆炸"同理，一并兜住。
-     *
-     * 兜底口径与 {@code EntitySetDeltaMovementMixin} 的总闸完全一致：**这一下爆炸是在谁的
-     * tick 里创建的，就算谁放的**（风爆由女仆的攻击结算触发，必然发生在她自己的 tick 内）。
-     * 归因不到女仆方时（爬行者/TNT 等自爆实体在它们自己的 tick 里炸）返回 null，行为不变。
+     * 爆炸的直系/间系来源**都是 null**，前两条全部落空 → 击退照推（**只震不伤**，伤害那条路 本来就没有）。反馈的"主人被女仆重锤波及"就是这一条（1.21.1）：女仆俯冲砸怪时风爆在 **她身上**炸开，旁边的主人被 3.5 格半径的冲击波掀飞。1.20.1 没有重锤，但第三方模组的 "无来源实体爆炸"同理，一并兜住。 兜底口径与 {@code EntitySetDeltaMovementMixin} 的总闸完全一致：**这一下爆炸是在谁的 tick 里创建的，就算谁放的**（风爆由女仆的攻击结算触发，必然发生在她自己的 tick 内）。 归因不到女仆方时（爬行者/TNT 等自爆实体在它们自己的 tick 里炸）返回 null，行为不变。
      */
     public static EntityMaid maidOfExplosion(Explosion ex) {
         if (ex == null) {

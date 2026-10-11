@@ -11,36 +11,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 超越维度（BeyondDimensions，modid = {@code beyonddimensions}，作者 WinterCogs）的**软兼容层**。
- * 范式与 {@link com.maidsmart.combat.GunCompat}（枪械）、{@link com.maidsmart.goety.MaidGoetyCompat}
- * 一致：**全程反射，能调就调、调不到就当没有**。
+ * 超越维度（BeyondDimensions，{@code beyonddimensions}）的**软兼容层**——全程反射，能调就调、
+ * 调不到当没有（同 {@code GunCompat} / {@code MaidGoetyCompat}）。
  *
- * <h2>API 事实（本地源码 {@code 1.21.1} 分支 + 实例里的 0.7.30 jar 双向核对）</h2>
- * <pre>
- *   DimensionsNet.hasAnyNet(Player)              : static boolean
- *   DimensionsNet.getPrimaryNetFromPlayer(Player): static @Nullable DimensionsNet
- *   DimensionsNet.getAllNetFromPlayer(Player)    : static List&lt;DimensionsNet&gt;
- *   DimensionsNet#getUnifiedStorage()            : UnifiedStorage
- *   UnifiedStorage#getStorage()                  : 可枚举的内容（KeyAmount 序列）
- *   UnifiedStorage#insert(IStackKey, long, boolean simulate)      : KeyAmount（**返回剩余量**）
- *   UnifiedStorage#extract(IStackKey, long, boolean simulate, boolean fuzzy) : KeyAmount（**返回取出的量**）
- *   UnifiedStorage#extract(TagKey, long, boolean simulate)        : KeyAmount ← **按标签取**（"任意一种木板"）
- *   KeyAmount                                    : record(IStackKey key, long amount)
- *   ItemStackKey                                 : new ItemStackKey(ItemStack) / getReadOnlyStack()
- * </pre>
- *
- * <h3>三条关键结论</h3>
- * <ol>
- *   <li><b>网络是"按玩家"的</b>：入口全是 {@code Player}。所以女仆要用的是**主人的**网络
- *       （她自己不是玩家、实体侧没有 capability；方块侧才有）。</li>
- *   <li><b>"她有多少"不需要遍历</b>：{@code extract(key, Long.MAX_VALUE, true, false)} 模拟一次，
- *       返回的 amount 就是"能取出多少" = 库存量（O(1)）。遍历 {@code getStorage()} 只在"列出内容"时才用。</li>
- *   <li><b>按物品查是 O(1)、按标签查也是 O(1)</b>；但 {@code fuzzy=true} 是线性扫描（源码注释自己写了），
- *       所以精度优先用 key、模糊匹配优先用 TagKey，尽量避免 fuzzy。</li>
- * </ol>
- *
- * <p>【包名兜底】上游 API 未发 maven、分支间类名有差异，所以这里按候选包名顺序试，
- * 命中哪个用哪个；全都解析不到就 {@link #available()} 返回 false。
+ * API 事实（两树签名一致）：{@code DimensionsNet.hasAnyNet / getPrimaryNetFromPlayer / getAllNetFromPlayer(Player)}；
+ * {@code DimensionsNet#getUnifiedStorage()}；{@code UnifiedStorage#getStorage()} 可枚举内容；
+ * {@code insert(IStackKey,long,boolean) : KeyAmount}（**返回剩余量**）；{@code extract(IStackKey,long,boolean,boolean fuzzy)} 与
+ * {@code extract(TagKey,long,boolean)} : KeyAmount；{@code KeyAmount : record(key, amount)}；
+ * {@code ItemStackKey : new ItemStackKey(ItemStack)}。
+ * 三条结论：① 网络"按玩家"——女仆要用**主人的**网络（她不是玩家、实体侧无 capability）；
+ * ② "她有多少"不必遍历：{@code extract(key, MAX_VALUE, true, false)} 模拟一次返回的 amount 即
+ * 库存量（O(1)）；③ 按物品/标签查都是 O(1)，但 {@code fuzzy=true} 是线性扫描，故精度优先 key、
+ * 模糊优先 TagKey。包名兜底：上游未发 maven、分支类名有差异，按候选包名顺序试，全失败则
+ * {@link #available()} 返回 false。
  */
 public final class MaidBdCompat {
 

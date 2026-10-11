@@ -20,7 +20,6 @@ import java.util.Map;
 
 /**
  * 指标石临时建造行为（v1.2.0）——随隐藏任务 maid_smart:index_build 注册。
- *
  * 契约逐条对应：
  * - 站桩 + 瞬移到工地旁 + 挥臂 + 放置音效 → 与建造任务表现一致（复用
  *   MaidBuildBehavior.teleportToWorkSite + PlacedBlockTracker.placeSound）；
@@ -30,7 +29,6 @@ import java.util.Map;
  * - 填充顺序：会话 cells 已按"离女仆起点近→远"排序，逐格弹出 → 自然从自己
  *   所在格向锁定格推进；
  * - 全部填完 → IndexStoneService.onMaidFinished（播报 + 还原原任务）。
- *
  * 健壮性：会话丢失（玩家退出/重登）或长时间无法推进 → 自愈释放女仆并还原任务，
  * 绝不把她永久卡在临时任务上（对齐项目 SelfPreservationBehavior 的自愈约定）。
  */
@@ -312,11 +310,7 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
      */
     /**
      * 放置一块（目标格必须空气）；悬空失败时补下方同材料再重放。
-     *
-     * v1.2.0 实测四百八十二：核查确认本方法的顺序**本来就是"搭一个扣一个"**——
-     * 目标格的材料由调用方 `resolveMaterial` 先取（内部 `takeBuildBlock` 先扣 1），
-     * 下方支撑也走 `takeOneFor`（内部先 `extractItem`）**再** setBlock。
-     * 即"补支撑送方块"的口子不在这里（原判断有误，此处更正）。
+     * 目标格的材料由调用方 `resolveMaterial` 先取（内部 `takeBuildBlock` 先扣 1）， 下方支撑也走 `takeOneFor`（内部先 `extractItem`）**再** setBlock。 即"补支撑送方块"的口子不在这里（原判断有误，此处更正）。
      */
     private static boolean place(ServerLevel level, EntityMaid maid, BlockPos target, Block block) {
         try {

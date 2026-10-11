@@ -8,10 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v1.3.9【巡逻航图 · 书架】一本航图里装**多条航迹** + 当前选中的是哪一条。
- *
  * <p>──
- *
  * 所以物品上存的不再是单条 {@link PatrolRoute}，而是这个容器：
  * <pre>
  *   MaidSmartPatrolBook: {
@@ -19,15 +16,11 @@ import java.util.List;
  *     routes: [ {id,name,closed,clearance,dimension,points:[{x,y,z}...]}, ... ]
  *   }
  * </pre>
- *
  * <p>── 旧存档怎么办（单条 → 多条）──
  * 上一版（v1.3.8）把单条航迹直接写在根标签 {@code MaidSmartPatrol} 下。{@link #loadFrom}
  * 见到旧结构就把它**包成列表里的第一条**，并顺手补一个名字与 id——玩家升级后原来录的那条
  * 还在，不会因为换了格式就丢。这条判据与 {@code BuildArchive} 的 {@code plans} 迁移同款。
- *
- * <p>── 上限 ──
- * 一本航图 {@link #MAX_ROUTES} 条。不设太高：界面一屏列表放得下、存档也不至于膨胀
- * （一条 64 点的航迹序列化后约 2~3 KB）。
+ * <p>── 上限 ── 一本航图 {@link #MAX_ROUTES} 条。不设太高：界面一屏列表放得下、存档也不至于膨胀 （一条 64 点的航迹序列化后约 2~3 KB）。
  */
 public final class PatrolBook {
 
@@ -204,10 +197,8 @@ public final class PatrolBook {
 
     /**
      * 读**书本体**——也就是 {@link #save()} 出来的那一份（直接就是 {selected, routes}）。
-     *
      * <p>【为什么必须和 {@link #load} 分开】{@code load} 吃的是物品的 {@code CUSTOM_DATA}
      * （书是它下面的一层，键名 {@link #TAG_ROOT}）；而网络包载荷与预览缓存里传的就是**书本体本身**。
-     * v1.3.9 之前客户端把书本体喂给 {@code load}，于是"找不到 TAG_ROOT → 兜底也找不到旧结构 →
      * 返回空书"：服务端明明发了 1 条轨道，界面一直收到 0 条（当时靠"每两拍从手上物品读回来"兜着，
      * 才没露馅）。v1.3.9.2 起包载荷走这一条，口径就不再错位了。
      */

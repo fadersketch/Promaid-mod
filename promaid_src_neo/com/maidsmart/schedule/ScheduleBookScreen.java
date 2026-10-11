@@ -590,9 +590,7 @@ public class ScheduleBookScreen extends Screen {
         // 【实测七百九十·点2】豁免口径与「一键集合」**不再相同**：指名道姓地要她过来时只留
         // 一个豁免——守家（home）。坐着的、骑在船/矿车/坐骑上的，一律"只拽人不拽载具"把她
         // 拽过来（
-        //
         // 一键集合仍是老口径（坐/骑/家都保持原位），两者的手感差异正在这里。
-        // v1.2.0：这一行拆成两个方向——「召她过来」是她过来，「去她身边」是我过去
         // （反向需求：想知道她在哪、想直接过去找她）。两键同宽并排，纵向不多占一行
         // （240 高最小窗口下再加一行会压住底部提示）。
         boolean canSummon = this.selUuid != null && !this.selUuid.isEmpty();
@@ -637,8 +635,6 @@ public class ScheduleBookScreen extends Screen {
         // 右边整片空着。为什么不占正文行：正文第 5 行（改名）已经排到 y=182，而 240 高
         // 最小窗口的内容下沿是 h-56=184，再插一行会压住底部提示文字（同一段注释在
         // 「去她身边」那行已经记过一次）。右侧对齐、离右下角按钮位只有快捷页占用。
-        // 实测八百二十八【站立 / 坐下 键】
-        //
         // 放在底部按钮行（h-24）"女仆配置"左侧——姿态由每秒一次的 MaidCoordPacket
         // 回包带回（maidSitting / maidRiding）；骑乘（乘客）时禁用并显示"§8骑乘中"。
         boolean canSitBtn = this.selUuid != null && !this.selUuid.isEmpty() && !this.maidRiding;
@@ -869,8 +865,6 @@ public class ScheduleBookScreen extends Screen {
     /**
      * 保存日程：班次 + 6 槽 → 段列表（相邻同任务自动合并）→ 发包。
      * 服务端只做越界防御（不再 normalize 补满 24:00——休息时间不排段）。
-     * v1.1.0 实测六十三：保存后清脏标记（之后切页可安全重拉最新数据）。
-     * 【实测六十三事故记录】本方法在实测五十一重写 UI 时被整体遗漏，导致
      * ScheduleBookScreen.java 从五十一起每次 javac 都失败、而构建管线打包的是
      * out 目录里实测五十时代的旧 class（verify 只对比 out↔jar 不对比 src）——
      * 五十一~六十三的全部界面改动一直没真正进过 jar。已补回本方法并加固
@@ -1078,13 +1072,11 @@ public void render(GuiGraphics g, int mx, int my, float pt) {
 
     /**
      * 任务 UID → 中文名（翻译键 task.<ns>.<path>；无翻译回退 path 段）。
-     * v1.1.0 实测五十三（反馈："任务显示的是英文，很影响阅读"）：旧版用
      * Component.literal（= literal 字面量组件，javap 核实 LiteralContents）去
      * "查翻译"——getString() 永远返回键本身 → 恒等比对永远成立 → 永远走英文兜底，
      * TLM/本模组语言文件里的中文（task.touhou_little_maid.farm=农场、
      * task.maid_smart.mine=挖矿…）从来没被用过。改 translatable = translatable，
-     * getString() 走客户端合并语言表解析；键缺失时 TranslatableContents 原样返回
-     * 键 → 恒等比对依旧能正确判"无翻译"。
+     * getString() 走客户端合并语言表解析；键缺失时 TranslatableContents 原样返回 键 → 恒等比对依旧能正确判"无翻译"。
      */
     private static String taskCn(String uid) {
         if (uid == null || uid.isEmpty()) {
@@ -1162,8 +1154,7 @@ public void render(GuiGraphics g, int mx, int my, float pt) {
      * 「有集成服务器 && 当前 Screen.isPauseScreen() && 没开局域网」→ 暂停整个世界；
      * 一旦暂停，集成服务器不再 tick 连接，于是本界面发出去的包（坐标轮询 / 改名 /
      * 召唤 / 保存日程）全部堆在通道里，要等关闭界面才被服务端处理——坐标行会永远
-     * 停在「位置查询中…」。与 AbstractContainerScreen / ChatScreen 同口径返回 false
-     * （那正是原版背包、聊天界面不暂停世界的原因），让世界照常跑、服务端实时响应。
+     * 停在「位置查询中…」。与 AbstractContainerScreen / ChatScreen 同口径返回 false （那正是原版背包、聊天界面不暂停世界的原因），让世界照常跑、服务端实时响应。
      */
     @Override
     public boolean isPauseScreen() {

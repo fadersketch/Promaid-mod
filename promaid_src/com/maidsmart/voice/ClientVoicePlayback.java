@@ -8,11 +8,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.sound.PlaySoundEvent;
 
 /**
- * v1.1.0 实测四百二十：内置日语语音包的客户端播放标记 + 「播放期间暂压 TLM 原生语音包」。
- *
  * 需求
- *
- *
  * 实现：
  * - 播放：客户端 {@code PromaidVoiceSoundInstance.playFromPacket} 在播放前调用
  *   {@link #beginSuppress(long)} 开启压制窗口（截止时间戳，按音频字节估算时长）。
@@ -21,7 +17,6 @@ import net.minecraftforge.client.event.sound.PlaySoundEvent;
  *   MaidSoundInstanceAtPos（定点音效），用类名字符串判定以免 1.20.1 编译不过。
  *   TTS 本体 MaidAISoundInstance 不压（那是要放的声音）。
  * - 解除：窗口到期自动失效。测试音（isTestSound）始终放行（语音包界面试听不受影响）。
- *
  * 仅客户端（专服不加载，避免触碰客户端类型）。
  */
 @OnlyIn(Dist.CLIENT)

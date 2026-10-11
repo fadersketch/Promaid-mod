@@ -27,22 +27,17 @@ import java.util.UUID;
 /**
  * 诡厄巫法（Goety）兼容的**诊断探针**——只读扫描 + 手动放一发，用来在没有 UI、没有真玩家的
  * 无头测试服里回答一个关键未知：
- *
  * <p><b>飞行聚晶靠「每 tick 覆盖 deltaMovement」，可女仆是 Mob——她的
  * MoveControl / travel 会不会把我们写进去的速度吃掉？</b>
  * Goety 玩家版不用管这个（玩家 travel 走输入速度 + hasImpulse 同步），
  * 女仆这一侧必须实测。这正是本工程在仿创造飞行上踩过的同一个坑。
- *
  * <pre>
  *   /maid_smart goety_probe                    —— 扫女仆：Goety 在不在、她身上有哪些法杖/聚晶、
  *                                                 饰品栏里有什么 goety 物品、当前位置与速度
  *   /maid_smart goety_probe cast flying 5      —— 连续 5 秒每 tick 放一发飞行聚晶（真·恒速飞行）
  *   /maid_smart goety_probe cast launch 3      —— 连续 3 秒每 20 tick 放一发发射聚晶（它的冷却）
  *   （两条都可再跟一个实体选择器）
- * </pre>
- *
- * 日志走 PromaidLog（分类「Goety探针」），每 10 tick 一行位置+速度——速度是不是「写进去就留住」，
- * 一眼看得出来。
+ * </pre> 日志走 PromaidLog（分类「Goety探针」），每 10 tick 一行位置+速度——速度是不是「写进去就留住」， 一眼看得出来。
  */
 public final class MaidGoetyProbeCommand {
 

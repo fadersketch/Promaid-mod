@@ -17,9 +17,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 实测四百一十六【女仆自动复活】——反馈："女仆死亡后 60 秒那个墓碑就会自己消失掉，
  * 然后在主人的出生点复活。也是 60 秒的 CD。"
- *
  * 机制（对齐 TLM 原版死亡→墓碑→取回链路，但免去手动拾取）：
  * 1. 女仆死亡时 TLM 会创建墓碑并 post MaidTombstoneEvent——本类监听该事件，
  *    把【女仆完整存档 NBT】（saveWithoutId，与魂符/TLM 取回同源）连同主人 UUID、
@@ -27,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * 2. 延迟到期（默认 60 秒）→ 自动让墓碑消失（discard，走 TLM 的 remove 钩子同步
  *    清理 MaidWorldData 的墓碑记录）→ 在【主人重生点】复活女仆（床/重生锚，无则
  *    主世界出生点；复用 MasterDeathTeleportHandler 的解析与安全落点）。
- *
  * 复活实现与 TLM 的"魂符释放"同构：new EntityMaid(level) → load(nbt) →
  * 设 UUID/血量 → setPos(落点) → level.addFreshEntity。背包/饰品/任务/模型等全部原样恢复。
  * 主人不在线：等待主人上线后再复活（墓碑保留），不丢女仆。
@@ -101,23 +98,12 @@ public final class MaidAutoResurrect {
                 return;
             }
             // v1.3.0(beta) 实测七百一十七【issue #32：主人/玩家经验暴涨（一次 150 级）】。
-            //
             // 【根因】TLM 的女仆是"永远掉经验"实体：{@code EntityMaid.isAlwaysExperienceDropper()}
             // 恒 true、{@code getBaseExperienceReward()} 返回 {@code getExperience()}——也就是她
             // **累积的全部女仆经验**（挖矿/打怪一路攒下来的，可以很大）。于是她一死，
             // {@code LivingEntity.dropExperience} 就把这一整笔按 2477/球拆成一堆经验球撒在她
             // 倒地的地方。而本类马上又用死亡快照（含 {@code MaidExperience}）把她**原样复活**——
-            // 她的经验一点没少，可地上那堆球还在：谁站在旁边谁就白捡一份。
-            // 玩家口径正好对上：「每次女仆死了重生之后就会出现一次经验暴涨」「像是和某个数值
-            // 成比例」（比例 = 她累积的女仆经验）。
-            //
-            // 【修法】自动复活开着时（= 我们本来就会把她的经验原样还她），让这一笔**根本不掉**：
-            // 原版现成的闸 {@code LivingEntity.skipDropExperience()}（1.21.1 官方名，javap 实证；
-            // {@code dropExperience} 的第一句就是 {@code !wasExperienceConsumed()}）。
-            // 时机安全：TLM 的 {@code EntityMaid.die} 先 post {@code MaidDeathEvent}（本处理器
-            // 在这一刻取快照），之后才调 {@code super.die → dropAllDeathLoot → dropExperience}
-            //（字节码实证），所以这里置闸一定早于掉落判定。
-            // 关掉自动复活时一个字不动（走 TLM 原版：掉球、不复活）——不改变既有语义。
+            // 她的经验一点没少，可地上那堆球还在：谁站在旁边谁就白捡一份。 玩家口径正好对上：「每次女仆死了重生之后就会出现一次经验暴涨」「像是和某个数值 成比例」（比例 = 她累积的女仆经验）。 【修法】自动复活开着时（= 我们本来就会把她的经验原样还她），让这一笔**根本不掉**： 原版现成的闸 {@code LivingEntity.skipDropExperience()}（1.21.1 官方名，javap 实证； {@code dropExperience} 的第一句就是 {@code !wasExperienceConsumed()}）。 时机安全：TLM 的 {@code EntityMaid.die} 先 post {@code MaidDeathEvent}（本处理器 在这一刻取快照），之后才调 {@code super.die → dropAllDeathLoot → dropExperience} （字节码实证），所以这里置闸一定早于掉落判定。 关掉自动复活时一个字不动（走 TLM 原版：掉球、不复活）——不改变既有语义。
             maid.skipDropExperience(); // 这一死不再把她的女仆经验撒成球
             CompoundTag nbt = new CompoundTag();
             maid.saveWithoutId(nbt); // 此时背包/饰品完整
@@ -275,25 +261,10 @@ public final class MaidAutoResurrect {
     /**
      * 删除墓碑实体（所有维度找同名 UUID）——先扫全维度已加载实体表，都没有再回退到
      * TLM 登记表定位（见 {@link #discardTombstoneViaRegistry}）。
-     *
      * <p>实测七百五十【墓碑"躲过一次清除"的根因修复】——
      * 「墓碑所在区块没有加载所以躲掉了一次清除吧」。旧版只在**已加载的实体表**里找墓碑
      * （{@code lvl.getEntity(uuid)}）。而 {@code PersistentEntitySectionManager} 反编译实证：
-     * 区块没加载时实体根本不在实体表里，{@code getEntity} 恒返回 null —— 于是「她在别的
-     * 世界死亡 → 玩家也离开/死在别处 → 墓碑那块区块没加载 → 自动复活照常触发」这一串走
-     * 下来，<b>墓碑一次都没被删掉</b>：它连同【全套背包物品 + 胶片】留在原地（玩家看到的
-     * 症状），而且本类复活时又从死亡快照恢复了**同一套背包** ⇒ 一份物品两处存在。
-     *
-     * <p>【修法】找不到墓碑时，去 TLM 自己的墓碑登记表（{@code MaidWorldData}，TLM 在
-     * {@code addTombstones} 里连【维度 + 坐标】一起记着）查它的位置，把那格区块
-     * **同步加载**出来再删——与复活侧"先把重生点区块载到 FULL 再放人"同一个口径。
-     * 删除走实体自己的 {@code discard}，TLM 的 remove 钩子会顺手清登记表，不留脏记录。
-     *
-     * @return {@link #TOMBSTONE_GONE}（删了/确证不在，可继续复活）、
-     *         {@link #TOMBSTONE_LOADING}（还删不掉——区块实体在异步载入，调用方应推迟复活）、
-     *         {@link #TOMBSTONE_NO_TARGET}（登记表里没这条，没有可重试的目标）。
-     *         【实测七百九十九】旧版是 void：把"没删掉"和"删掉了"混成一种结果，
-     *         调用方于是照常复活并摘掉登记，墓碑从此无人过问。
+     * 区块没加载时实体根本不在实体表里，{@code getEntity} 恒返回 null —— 于是「她在别的 世界死亡 → 玩家也离开/死在别处 → 墓碑那块区块没加载 → 自动复活照常触发」这一串走 下来，<b>墓碑一次都没被删掉</b>：它连同【全套背包物品 + 胶片】留在原地（玩家看到的 症状），而且本类复活时又从死亡快照恢复了**同一套背包** ⇒ 一份物品两处存在。 <p>【修法】找不到墓碑时，去 TLM 自己的墓碑登记表（{@code MaidWorldData}，TLM 在 {@code addTombstones} 里连【维度 + 坐标】一起记着）查它的位置，把那格区块 **同步加载**出来再删——与复活侧"先把重生点区块载到 FULL 再放人"同一个口径。 删除走实体自己的 {@code discard}，TLM 的 remove 钩子会顺手清登记表，不留脏记录。 @return {@link #TOMBSTONE_GONE}（删了/确证不在，可继续复活）、 {@link #TOMBSTONE_LOADING}（还删不掉——区块实体在异步载入，调用方应推迟复活）、 {@link #TOMBSTONE_NO_TARGET}（登记表里没这条，没有可重试的目标）。 调用方于是照常复活并摘掉登记，墓碑从此无人过问。
      */
     private static int removeTombstone(MinecraftServer server, Pending p) {
         if (p.tombstoneId == null) {
@@ -318,35 +289,10 @@ public final class MaidAutoResurrect {
     /**
      * 按 TLM 的墓碑登记表（{@code MaidWorldData.getTombstones(ownerId)}）找到这块墓碑的
      * 【维度 + 坐标】，同步加载那格区块后把它删掉。
-     *
      * <p>【实测七百九十九：更正 实测七百六十三·点1 的一段错误推断】旧注释断言「33 级 ticket
      * 让该格实体当场 TRACKED，所以 {@code getChunk} 之后同 tick 就能取到，顺延没有意义」——
      * 这个结论是**错的**，也是 #33 一直修不掉的根因。真实链路（字节码实证）：
-     * <ul>
-     *   <li>{@code getChunkFutureMainThread} 在 {@code load=true} 时按
-     *       {@code ChunkLevel.byStatus(FULL)} = 33 加 ticket，阻塞到**区块** FULL——这只保证
-     *       区块本体就绪；</li>
-     *   <li>实体是**另一条异步链**：区块可见性转非 HIDDEN 时
-     *       {@code PersistentEntitySectionManager.updateChunkStatus} → {@code ensureChunkQueuedForLoad}
-     *       → {@code requestChunkLoad} 向 {@code IOWorker} 要那格实体，结果进
-     *       {@code loadingInbox}（一个 {@code Queue}）；</li>
-     *   <li>{@code loadingInbox} **只在** {@code PersistentEntitySectionManager.tick()} 里的
-     *       {@code processPendingLoads()} 被抽干，而该方法由 {@code ServerLevel.tick} 调用，
-     *       <b>不在 {@code getChunk} 的调用栈上</b>；{@code areEntitiesLoaded(long)} 读的
-     *       {@code chunkLoadStatuses} 也只有 {@code processPendingLoads} 会写成 LOADED；</li>
-     *   <li>所以「这句 getChunk 之后同 tick 的 {@code getEntity}」**必然为空**，与"她还在不在"
-     *       毫无关系。旧版把这个空读成"她真的不在了"，把登记表唯一那条指针删了——墓碑从此
-     *       无人过问（反馈日志原文「墓碑登记表有记录但实体已不存在 → 已清掉这条登记」）。</li>
-     * </ul>
-     *
-     * <p>【现在的口径】区分两种"取不到"：{@code areEntitiesLoaded} 为 false = 还在异步载入，
-     * 返回 false 让调用方**推迟复活、下一拍再删**（保留登记表指针）；为 true 才敢断定
-     * 她真的不在了，这时才清脏登记。
-     *
-     * <p>仍然正确的是：唯一能让它"存在却够不到"的另一种情形是<b>维度串对不上</b>
-     * （下面那条显式日志）——那不是时序问题，重试也救不了，所以只把话说清楚。
-     *
-     * @return true = 已删掉 / 确证不存在（该格实体已载入）；false = 这拍还没载入完，可重试
+     * <ul> <li>{@code getChunkFutureMainThread} 在 {@code load=true} 时按 {@code ChunkLevel.byStatus(FULL)} = 33 加 ticket，阻塞到**区块** FULL——这只保证 区块本体就绪；</li> <li>实体是**另一条异步链**：区块可见性转非 HIDDEN 时 {@code PersistentEntitySectionManager.updateChunkStatus} → {@code ensureChunkQueuedForLoad} → {@code requestChunkLoad} 向 {@code IOWorker} 要那格实体，结果进 {@code loadingInbox}（一个 {@code Queue}）；</li> <li>{@code loadingInbox} **只在** {@code PersistentEntitySectionManager.tick()} 里的 {@code processPendingLoads()} 被抽干，而该方法由 {@code ServerLevel.tick} 调用， <b>不在 {@code getChunk} 的调用栈上</b>；{@code areEntitiesLoaded(long)} 读的 {@code chunkLoadStatuses} 也只有 {@code processPendingLoads} 会写成 LOADED；</li> <li>所以「这句 getChunk 之后同 tick 的 {@code getEntity}」**必然为空**，与"她还在不在" 毫无关系。旧版把这个空读成"她真的不在了"，把登记表唯一那条指针删了——墓碑从此 无人过问（反馈日志原文「墓碑登记表有记录但实体已不存在 → 已清掉这条登记」）。</li> </ul> <p>【现在的口径】区分两种"取不到"：{@code areEntitiesLoaded} 为 false = 还在异步载入， 返回 false 让调用方**推迟复活、下一拍再删**（保留登记表指针）；为 true 才敢断定 她真的不在了，这时才清脏登记。 <p>仍然正确的是：唯一能让它"存在却够不到"的另一种情形是<b>维度串对不上</b> （下面那条显式日志）——那不是时序问题，重试也救不了，所以只把话说清楚。 @return true = 已删掉 / 确证不存在（该格实体已载入）；false = 这拍还没载入完，可重试
      */
     private static int discardTombstoneViaRegistry(MinecraftServer server, Pending p) {
         try {
@@ -377,22 +323,12 @@ public final class MaidAutoResurrect {
                 matchedLevel = true;
                 // 同步加载它那一格区块（required 语义）——她死亡后区块早卸载了，
                 // 不加载出来 getEntity 永远找不到它。
-                //
                 // 【实测七百九十九·根因修正】旧版这段注释断言"33 级 ticket 让该格实体
                 // 当场 TRACKED，同 tick 就能取到"——**这是错的**。字节码实证：
                 // ①{@code ChunkLevel.byStatus(FULL)=33} 的 ticket 只保证**区块**到达 FULL，
                 //   并把该格标成非 HIDDEN（{@code updateChunkStatus} → {@code ensureChunkQueuedForLoad}
                 //   → 向磁盘发起实体读取，进 {@code loadingInbox} 队列）；
-                // ②而 {@code loadingInbox} 只在 {@code PersistentEntitySectionManager.tick()}
-                //   里被抽干（{@code processPendingLoads}），该方法由 {@code ServerLevel.tick}
-                //   调用——**不在** {@code getChunk} 的调用栈上；
-                // ③{@code areEntitiesLoaded(long)} 读的 {@code chunkLoadStatuses} 也只有
-                //   {@code processPendingLoads} 会写成 LOADED。
-                // 所以这句 getChunk 之后**同 tick** {@code getEntity} 必然为空——旧版却把
-                // 这个"空"当成"她真的不在了"，反手把登记表里**唯一那条指针**删掉
-                // （list.removeIf + setDirty）。指针一丢，下一轮连找都无从找起，墓碑就
-                // 永久留在原地（连同全套背包+胶片）——正是反馈 #33 的日志原文
-                // 「墓碑登记表有记录但实体已不存在 → 已清掉这条登记」。
+                // ②而 {@code loadingInbox} 只在 {@code PersistentEntitySectionManager.tick()} 里被抽干（{@code processPendingLoads}），该方法由 {@code ServerLevel.tick} 调用——**不在** {@code getChunk} 的调用栈上； ③{@code areEntitiesLoaded(long)} 读的 {@code chunkLoadStatuses} 也只有 {@code processPendingLoads} 会写成 LOADED。 所以这句 getChunk 之后**同 tick** {@code getEntity} 必然为空——旧版却把 这个"空"当成"她真的不在了"，反手把登记表里**唯一那条指针**删掉 （list.removeIf + setDirty）。指针一丢，下一轮连找都无从找起，墓碑就 永久留在原地（连同全套背包+胶片）——正是反馈 #33 的日志原文 「墓碑登记表有记录但实体已不存在 → 已清掉这条登记」。
                 lvl.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
                 net.minecraft.world.entity.Entity e = lvl.getEntity(p.tombstoneId);
                 if (e instanceof EntityTombstone ts) {
@@ -459,8 +395,6 @@ public final class MaidAutoResurrect {
             // 要等区块异步载完才"现身"；而 5 秒持票对账可能在载完之前扫不到她、把
             // ensureTicketNow 刚挂的票撤掉 → 区块放弃加载 → 她【永远】不进实体表：
             // 排班表不显示她、getEntity 找不到她、一键集合召不回（
-            //
-            //
             // respawnLanding 的落点计算从此也看得到真实地形。
             dest.getChunk(respawn.getX() >> 4, respawn.getZ() >> 4);
             // v1.2.0【复活原地摔死根因修复】：落点改用原版等效站位——床/重生锚走
@@ -473,18 +407,11 @@ public final class MaidAutoResurrect {
             // ── v1.2.0 实测五百四十六【重生点不可用 → 强制落在主人所在位置】──
             // 反馈原文："自动复活触发以后发现女仆没有合适的复活点。明面上系统消息写的是
             // 再过 60 秒之后再触发一次复活，但是实际上会被卡住无法复活。"
-            //
             // 【旧版为什么是"卡住"】这里原本退回【主世界出生点】。出生点往往是另一个
             // 坐标（甚至另一个维度）的荒郊：女仆落在那儿可能立刻又死，于是 实测四百一十六
             // 的"死亡循环断路器"把复活一再推迟（60→120→…→600 秒），玩家看到的就是
             // "说要等 60 秒，然后一直不来"。
-            //
-            // 【现在的口径】重生点不可用（床被拆 / 重生锚没电 / 维度不允许 / 从没设过
-            // /spawnpoint）→ 直接落在【主人当前所在位置】，**强制生效、不看地块**
-            // （主人在高空、岩浆边、水底也照落）。理由：主人站的地方 = 玩家自己站的
-            // 地方，是这颗星球上最不会让她"一放出来又死一次"的落点；这也是"复活到她
-            // 该在的人身边"这个功能的本意。
-            // 主人在线的判定由调用方保证（主人不在线时整条复活都会跳过、墓碑保留）。
+            // 【现在的口径】重生点不可用（床被拆 / 重生锚没电 / 维度不允许 / 从没设过 /spawnpoint）→ 直接落在【主人当前所在位置】，**强制生效、不看地块** （主人在高空、岩浆边、水底也照落）。理由：主人站的地方 = 玩家自己站的 地方，是这颗星球上最不会让她"一放出来又死一次"的落点；这也是"复活到她 该在的人身边"这个功能的本意。 主人在线的判定由调用方保证（主人不在线时整条复活都会跳过、墓碑保留）。
             dest = owner.level() instanceof ServerLevel own ? own : server.overworld();
             if (dest == null) {
                 return false;
@@ -667,9 +594,7 @@ public final class MaidAutoResurrect {
     // ================== 墓碑右键：原版交互 + 取消自动复活（实测四百三十八） ==================
 
     /**
-     * 实测四百三十八（反馈：「在女仆死亡期间右击墓碑会直接复活……使得我设的冷却毫无意义。
      * 应当改为：自动复活开始以后右击墓碑仍然跟原版一致，同时取消复活事件」）。
-     *
      * 右键墓碑【不再当场复活】——松开手，行为与 TLM 原版完全一致（归还墓碑里的物品等），
      * 只是把这块墓碑对应的【待复活登记】移除：玩家既然选择手动处理，就不再自动把她拉
      * 回来，复活冷却因此恢复意义。只有墓碑所属主人本人的主手右键才会取消（防他人误触）；

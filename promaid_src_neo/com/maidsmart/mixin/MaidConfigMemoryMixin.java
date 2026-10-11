@@ -119,16 +119,12 @@ public abstract class MaidConfigMemoryMixin {
     }
 
     /**
-     * v1.5.89：在 TLM 女仆配置界面的开关区（initAdditionWidgets，与"显示背包"等
      * 开关按钮同格式）追加"AI 记忆"开关——照搬 TLM 的 MaidConfigButton 模式
      * （label=配置名、value=开/关、点击翻转+setValue）；点击发 C2S 到服务端
      * setAndSyncData（per-maid TaskData），服务端同步回客户端。
-     *
-     * v1.5.190 修复：旧版按钮放 (w-110, 8)——MaidConfigButton 硬编码 164 宽，
      * 右缘 w+54 永远超出屏幕，可点击区（x+120..130 / x+154..164）全部在屏幕外，
      * 开关永远点不到。改为右对齐 (w-174, 8)：按钮 x=w-174..w-10 完整在屏内，
-     * 点击区 w-54..w-44 与 w-20..w-10 都在屏内；且 y=8..21 在原生开关列
-     * （y=52 起）之上，不遮挡任何 TLM 控件。
+     * 点击区 w-54..w-44 与 w-20..w-10 都在屏内；且 y=8..21 在原生开关列 （y=52 起）之上，不遮挡任何 TLM 控件。
      */
     @Inject(method = "initAdditionWidgets", at = @At("TAIL"))
     private void promaid$addAiMemoryToggle(CallbackInfo ci) {
@@ -170,17 +166,10 @@ public abstract class MaidConfigMemoryMixin {
     /**
      * 【v1.6.0 实测八百一十三：删掉「AI 长期记忆」整块面板】
      * 「把图片中长期记忆那段字删掉，它挡住 ui 了」。
-     *
      * <p>旧版在这块 {@code renderAddition} 里，于 TLM 女仆配置界面**容器内部**左上角
      * （{@code leftPos+5, topPos+20}）画一整块：「—— AI 长期记忆 —— / 记忆提取：开 /
      * 人格：xx / TLM 人设：有 / 记忆日记：N 篇 / [salience] 记忆条目…」。
-     * 那一块会压住她自己的图标行与开关列——而同样这些状态在 Promaid 手册的
-     * 「AI 记忆系统」章里写得更完整。所以整块停止绘制。
-     *
-     * <p>【保留什么】只保留**开关按钮文本的同步**：那个窄按钮由
-     * {@link com.maidsmart.client.MaidConfigRowLayout} 摆在面板**之外**的左边距竖排一列
-     * （不遮任何 TLM 控件），仍要在查询/同步包回来之后即时纠正显示——否则会出现
-     * 「显示『开』时点一下反而又开」的回弹观感（v1.5.242 的老问题）。
+     * 那一块会压住她自己的图标行与开关列——而同样这些状态在 Promaid 手册的 「AI 记忆系统」章里写得更完整。所以整块停止绘制。 <p>【保留什么】只保留**开关按钮文本的同步**：那个窄按钮由 {@link com.maidsmart.client.MaidConfigRowLayout} 摆在面板**之外**的左边距竖排一列 （不遮任何 TLM 控件），仍要在查询/同步包回来之后即时纠正显示——否则会出现 「显示『开』时点一下反而又开」的回弹观感（v1.5.242 的老问题）。
      */
     @Inject(method = "renderAddition", at = @At("HEAD"))
     private void maidsmart$renderMemories(GuiGraphics graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {

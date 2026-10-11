@@ -7,7 +7,6 @@ import net.neoforged.neoforge.items.ItemHandlerHelper;
 /**
  * v1.2.2 实测五百九十五【"还给她"的时候绝不吞】：换装、动作展示、回收这些
  * "先把东西从她身上/背包里取下来、用完再放回去"的路径，统一走这里。
- *
  * 【为什么要有这个类】这类"还回去"的旧写法几乎都是同一个形状：
  * <pre>
  *   for (每一个槽) if (槽是空的) { inv.insertItem(槽, stack, false); return; }  // ← 不看返回值
@@ -18,15 +17,7 @@ import net.neoforged.neoforge.items.ItemHandlerHelper;
  * <ol>
  *   <li>TLM 的女仆背包有禁放规则（`MaidBackpackHandler.isItemValid` → `EntityMaid.canInsertItem`）；</li>
  *   <li>模组背包（箱子 / 熔炉 / 抽屉背包等）对槽位有自己的限制，第一格空格未必要收这件；</li>
- *   <li>那一件物品一栈根本放不进这一格的剩余空间。</li>
- * </ol>
- * 不看返回值 = 把物品扔进黑洞：反馈里的"收放魂符之后在物品栏 / 装备栏之间反复拖动、
- * 装备会被卡掉"，以及此前出现过的"换下来的装备不见了"，都是这个形状。
- *
- * 【现在的口径】走 Forge / NeoForge 的标准实现 `ItemHandlerHelper.insertItemStacked`：
- * 先往同类物品上堆叠、再找空槽，返回**最后没塞进去的那一份**；只要还有剩的就
- * `spawnAtLocation` 掉在她脚下（与挖矿 / 搭路的方块回收同一口径）。于是最坏情况是
- * "东西掉在地上"，而不是"凭空消失"。
+ *   <li>那一件物品一栈根本放不进这一格的剩余空间。</li> </ol> 不看返回值 = 把物品扔进黑洞：反馈里的"收放魂符之后在物品栏 / 装备栏之间反复拖动、 装备会被卡掉"，以及此前出现过的"换下来的装备不见了"，都是这个形状。 【现在的口径】走 Forge / NeoForge 的标准实现 `ItemHandlerHelper.insertItemStacked`： 先往同类物品上堆叠、再找空槽，返回**最后没塞进去的那一份**；只要还有剩的就 `spawnAtLocation` 掉在她脚下（与挖矿 / 搭路的方块回收同一口径）。于是最坏情况是 "东西掉在地上"，而不是"凭空消失"。
  */
 public final class MaidGiveBack {
 

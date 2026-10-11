@@ -16,11 +16,8 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * v1.3.0(beta) 实测七百四十二·点3【强力后门：女仆打出去的炮弹直接追敌】。
- *
  * <h2>
  * 「这边需要再加一个强力的后门让女仆发射出来的炮弹拥有直接指向敌人的效果。」
- *
  * <h2>为什么"把炮口对准"还不够</h2>
  * 卓越前线的炮弹是**纯抛物线、无制导**的（反编译 {@code ProjectileEntity.tick}：每拍只做
  * {@code setDeltaMovement(Δ + (0,-gravity,0))}，没有任何寻的项；只有 {@code MissileProjectile}
@@ -31,39 +28,7 @@ import net.minecraft.world.phys.Vec3;
  *       只能靠转机头，而飞行档每拍还在按跟随/盘旋改机头；</li>
  *   <li>我们还有"连续若干拍对不上就直接开火"那条保底档（见
  *       {@code MaidMountCompat.AIM_FORCE_TICKS}），开火那一刻炮口本来就歪着。</li>
- * </ul>
- *
- * <h2>本类做什么</h2>
- * {@code MaidMountCompat.tickAttack} 每打一发就 {@link #note 记一笔}"她刚朝谁开火"；本类每
- * 服务端 tick 扫一遍**在飞的卓越前线炮弹**，把"owner 是她、且还没接管过"的那些挑出来，
- * 然后逐拍把它们的速度方向**朝目标掰**（限速转向，保住初速大小）。于是不论炮口当时歪多少、
- * 车与目标怎么动，炮弹都会自己拐到敌人身上。
- *
- * <h2>怎么认出"是我们的炮弹"</h2>
- * <ol>
- *   <li>{@code instanceof Projectile}（否则连"从哪里来"都问不出来）；</li>
- *   <li>类名以 {@code com.atsuishio.superbwarfare.} 开头——**用类名字符串判**，不 import 那个
- *       模组的任何类型（它与本模组是并列的可选依赖，反编译/加载期都不能硬链，本工程通篇如此）；</li>
- *   <li>{@code getOwner()} 的 UUID == 我们记下的**那只女仆**——反编译 {@code GunItem.shootBullet}
- *       实证：弹体创建后第一件事就是 {@code setOwner(parameters.shooter)}，而女仆开火那条重载
- *       把 {@code shooter} 传的就是她本人。这一层同时挡掉了玩家的炮弹与别的模组的弹。</li>
- * </ol>
- *
- * <h2>为什么在服务端 tick 里扫，而不是挂到弹体上</h2>
- * 弹体的产生是 Kt 的对象池 + {@code EntityType.create}（反编译 {@code GunItem.shootBullet$lambda$5}），
- * 我们拿不到"刚创建"那个时刻；而且给一个第三方类挂逐拍回调要动 mixin，风险大于收益。
- * 服务端每 tick 扫一次实体表（走 {@code EntitySnapshot} 快照，见该类注释）代价可忽略，
- * 且**天然只作用于在飞的**（打中/落地的那一刻它就被 {@code discard()} 了，下一拍自然掉出）。
- *
- * <h2>边界（一条都不越）</h2>
- * <ul>
- *   <li>**只掰方向、不改速度大小**——否则等于给玩家变出一门"加速炮"；</li>
- *   <li>**制导弹只锁 0.2 秒**（{@link #MISSILE_LOCK_TICKS}）——与投掷 TNT 同一条链路：开头
- *       几拍把它掰向敌人，之后撒手、交还它自己的末端制导（旧版整条跳过 = 乱飞，见该常量注释）；</li>
- *   <li>每发最多纠 {@link #MAX_TICKS_PER_SHELL} 拍（≈3 秒），之后放手——免得绕圈弹被永久接管；</li>
- *   <li>目标死了/不在同维度 → 立刻放手，炮弹恢复自由飞行；</li>
- *   <li>只记 UUID，每拍从实体表反查——断线/退出世界不留引用。</li>
- * </ul>
+ * </ul> <h2>本类做什么</h2> {@code MaidMountCompat.tickAttack} 每打一发就 {@link #note 记一笔}"她刚朝谁开火"；本类每 服务端 tick 扫一遍**在飞的卓越前线炮弹**，把"owner 是她、且还没接管过"的那些挑出来， 然后逐拍把它们的速度方向**朝目标掰**（限速转向，保住初速大小）。于是不论炮口当时歪多少、 车与目标怎么动，炮弹都会自己拐到敌人身上。 <h2>怎么认出"是我们的炮弹"</h2> <ol> <li>{@code instanceof Projectile}（否则连"从哪里来"都问不出来）；</li> <li>类名以 {@code com.atsuishio.superbwarfare.} 开头——**用类名字符串判**，不 import 那个 模组的任何类型（它与本模组是并列的可选依赖，反编译/加载期都不能硬链，本工程通篇如此）；</li> <li>{@code getOwner()} 的 UUID == 我们记下的**那只女仆**——反编译 {@code GunItem.shootBullet} 实证：弹体创建后第一件事就是 {@code setOwner(parameters.shooter)}，而女仆开火那条重载 把 {@code shooter} 传的就是她本人。这一层同时挡掉了玩家的炮弹与别的模组的弹。</li> </ol> <h2>为什么在服务端 tick 里扫，而不是挂到弹体上</h2> 弹体的产生是 Kt 的对象池 + {@code EntityType.create}（反编译 {@code GunItem.shootBullet$lambda$5}）， 我们拿不到"刚创建"那个时刻；而且给一个第三方类挂逐拍回调要动 mixin，风险大于收益。 服务端每 tick 扫一次实体表（走 {@code EntitySnapshot} 快照，见该类注释）代价可忽略， 且**天然只作用于在飞的**（打中/落地的那一刻它就被 {@code discard()} 了，下一拍自然掉出）。 <h2>边界（一条都不越）</h2> <ul> <li>**只掰方向、不改速度大小**——否则等于给玩家变出一门"加速炮"；</li> <li>**制导弹只锁 0.2 秒**（{@link #MISSILE_LOCK_TICKS}）——与投掷 TNT 同一条链路：开头 几拍把它掰向敌人，之后撒手、交还它自己的末端制导（旧版整条跳过 = 乱飞，见该常量注释）；</li> <li>每发最多纠 {@link #MAX_TICKS_PER_SHELL} 拍（≈3 秒），之后放手——免得绕圈弹被永久接管；</li> <li>目标死了/不在同维度 → 立刻放手，炮弹恢复自由飞行；</li> <li>只记 UUID，每拍从实体表反查——断线/退出世界不留引用。</li> </ul>
  */
 public final class MaidShellHoming {
 
@@ -121,21 +86,12 @@ public final class MaidShellHoming {
     private static final int MAX_TICKS_PER_SHELL = 60;
 
     /**
-     * 【实测七百五十三·点2】制导弹（类名含 {@code Missile}）的纠向窗口：**4 拍 = 0.2 秒**。
-     *
      * <h2>
      * 「1.21.1 女仆在使用飞机上导弹武器的时候，导弹会出现乱飞的情况，我觉得最好还是跟投掷 TNT
      * 一个链路，只会盯着敌人飞 0.2 秒（TNT 是 0.5 秒，但是考虑到导弹的飞行速度很快，所以照搬时
      * 削成 0.2），不会一直盯着敌人飞行。」
-     *
      * <h2>为什么"不碰制导弹"那条旧边界要改</h2>
-     * 旧版这一档**跳过**类名含 {@code Missile} 的弹体（理由：它自己带寻的，插手会打架）。但那种
-     * 寻的是**它自己的目标来源**（发射时的锁定/朝向前方），与我们"朝她此刻的敌人"并不是同一个
-     * 目标——于是导弹一离架就按自己那套锁一个别的方向，玩家看到的就是"乱飞"。
-     * 现在改成与投掷 TNT **同一条链路**：接管后**只在前 {@code MISSILE_LOCK_TICKS} 拍**
-     * （0.2 秒）把它掰向敌人，之后立刻撒手、完全交还它自己的制导——既不"一直盯着敌人飞"
-     * （那会让它对着一动不动的点直线冲、失去末端机动），也治了开头那一下乱飞。
-     * 窗口比 TNT 的 0.5 秒短，正是因为导弹初速快、这几拍已经足够把初始朝向纠到敌人身上。
+     * 寻的是**它自己的目标来源**（发射时的锁定/朝向前方），与我们"朝她此刻的敌人"并不是同一个 目标——于是导弹一离架就按自己那套锁一个别的方向，玩家看到的就是"乱飞"。 现在改成与投掷 TNT **同一条链路**：接管后**只在前 {@code MISSILE_LOCK_TICKS} 拍** （0.2 秒）把它掰向敌人，之后立刻撒手、完全交还它自己的制导——既不"一直盯着敌人飞" （那会让它对着一动不动的点直线冲、失去末端机动），也治了开头那一下乱飞。 窗口比 TNT 的 0.5 秒短，正是因为导弹初速快、这几拍已经足够把初始朝向纠到敌人身上。
      */
     private static final int MISSILE_LOCK_TICKS = 4;
 

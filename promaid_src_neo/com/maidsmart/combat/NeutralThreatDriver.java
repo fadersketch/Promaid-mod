@@ -15,10 +15,8 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 /**
- * v1.1.0 实测三百四十四（反馈："遇到发狂的狼，我打狼或是狼打我，女仆一点反应
  * 都没" + "有一部分 mod 会魔改原版被动生物，让被动生物都会变成像狼这样的中立
  * 生物，所以我觉得这方面的判定需要加强"）：
- *
  * 中立/魔改生物威胁驱动——TLM 的索敌链对这类生物是【结构性盲区】（反编译实证）：
  * - MaidHostilesSensor：ACCEPTABLE_DISTANCE_FROM_HOSTILES 白名单【只有苦力怕】
  *   一个条目——isHostile() 只查白名单，发狂的狼永远不会被写进 NEAREST_HOSTILE
@@ -28,36 +26,8 @@ import net.neoforged.neoforge.common.NeoForge;
  *   恒 false → 切了战斗任务也【选不到目标】→ 女仆站着（"一点反应都没"的直接原因）
  * - AutoCombatSwitch 实测三百一十八只补了【驯服】狼（isAngryTamedAt 要求 isTame）；
  *   野狼（未驯服）+ 模组魔改生物（不实现 NeutralMob/Tamable 接口）全部漏判
- *
  * 修复理念（玩家补充的判定加强）：威胁判定全面【行为化】——看生物当前是否
- * 锁定主人/女仆为目标（Mob.getTarget()），不看类型接口（Enemy/NeutralMob/
- * TamableAnimal 全是原版类型体系，魔改被动生物不实现任何一个是常态）。
- * 狼发狂咬人的瞬间 getTarget()==主人——这是最普适、最准确的"正在构成威胁"
- * 信号，覆盖：原版野狼/驯服狼/北极熊/蜜蜂 + 任何模组魔改的"被动生物变中立"。
- *
- * 做三件事（每 10 tick = 0.5 秒一轮，节流省性能）：
- * 1. 【索敌写目标】扫 16 格内 getTarget()==主人/本女仆 的任意 Mob（不看类型）
- *    → 写进女仆 brain 的 ATTACK_TARGET（setMemory setMemory，与 StartAttacking
- *    同款写入）——MaidMeleeAttack 的攻击执行链反编译实证 isWithinMeleeAttackRange 只是距离
- *    判定，不滤类型 → 写了目标就能打。战斗任务/参战女仆都受益：TLM 索敌
- *    传感器选不到的狼，这里直接喂给攻击行为。
- * 2. 【无战斗任务也能打】非战斗任务（农场/挖矿/跟随…）的女仆没有攻击行为
- *    （WORK 组行为由任务 createBrainTasks 注册），只写目标没人执行 → 直接
- *    调 doHurtTarget（doHurtTarget，EntityMaid 覆写含横扫/饰品事件，自保近身
- *    反击同款通道）+ 直连导航走向目标——不切任务也能自卫反击（自保 250 只管
- *    低血逃命，健康女仆被狼咬原来只能干挨）。
- * 3. 【触发参战】锁定主人/女仆的狼出现 → 触发 AutoCombatSwitch.tryEngagePublic
- *    （切战斗任务，全链路接管）——与"主人被攻击"触发互补（主人打狼时事件
- *    在狼记仇状态设置【之前】发，AutoCombatSwitch 的 isAngry 判定恒 false
- *    漏触发；这里 0.5 秒后扫到 getTarget 已就位，补上迟到的触发）。
- *
- * 与各系统的关系：
- * - 战术行为（230）读到 ATTACK_TARGET 自动接管走位/跳劈/风筝（isActive 判定
- *   只查目标存在+距离）——本驱动只负责【把目标写进去】，移动战术照常生效
- * - 排班中的女仆：跳过（tryEngageMaid 内部让位排班；写目标也不做——排班段
- *   任务可能不是攻击任务，写了目标没有攻击行为反而干扰）
- * - 自保中的女仆：索敌让位（自保优先）；自保的威胁扫描（PerceptionManager.
- *   isThreat）已含 getTarget 锁定判定，天然覆盖魔改生物
+ * 锁定主人/女仆为目标（Mob.getTarget()），不看类型接口（Enemy/NeutralMob/ TamableAnimal 全是原版类型体系，魔改被动生物不实现任何一个是常态）。 狼发狂咬人的瞬间 getTarget()==主人——这是最普适、最准确的"正在构成威胁" 信号，覆盖：原版野狼/驯服狼/北极熊/蜜蜂 + 任何模组魔改的"被动生物变中立"。 做三件事（每 10 tick = 0.5 秒一轮，节流省性能）： 1. 【索敌写目标】扫 16 格内 getTarget()==主人/本女仆 的任意 Mob（不看类型） → 写进女仆 brain 的 ATTACK_TARGET（setMemory setMemory，与 StartAttacking 同款写入）——MaidMeleeAttack 的攻击执行链反编译实证 isWithinMeleeAttackRange 只是距离 判定，不滤类型 → 写了目标就能打。战斗任务/参战女仆都受益：TLM 索敌 传感器选不到的狼，这里直接喂给攻击行为。 2. 【无战斗任务也能打】非战斗任务（农场/挖矿/跟随…）的女仆没有攻击行为 （WORK 组行为由任务 createBrainTasks 注册），只写目标没人执行 → 直接 调 doHurtTarget（doHurtTarget，EntityMaid 覆写含横扫/饰品事件，自保近身 反击同款通道）+ 直连导航走向目标——不切任务也能自卫反击（自保 250 只管 低血逃命，健康女仆被狼咬原来只能干挨）。 3. 【触发参战】锁定主人/女仆的狼出现 → 触发 AutoCombatSwitch.tryEngagePublic （切战斗任务，全链路接管）——与"主人被攻击"触发互补（主人打狼时事件 在狼记仇状态设置【之前】发，AutoCombatSwitch 的 isAngry 判定恒 false 漏触发；这里 0.5 秒后扫到 getTarget 已就位，补上迟到的触发）。 与各系统的关系： - 战术行为（230）读到 ATTACK_TARGET 自动接管走位/跳劈/风筝（isActive 判定 只查目标存在+距离）——本驱动只负责【把目标写进去】，移动战术照常生效 - 排班中的女仆：跳过（tryEngageMaid 内部让位排班；写目标也不做——排班段 任务可能不是攻击任务，写了目标没有攻击行为反而干扰） - 自保中的女仆：索敌让位（自保优先）；自保的威胁扫描（PerceptionManager. isThreat）已含 getTarget 锁定判定，天然覆盖魔改生物
  */
 public final class NeutralThreatDriver {
 
@@ -167,69 +137,26 @@ if (++this.throttle < 10) {
         com.maidsmart.combat.AutoCombatSwitch.tryEngagePublic(maid);
 
         // v1.2.0 实测五百一十六【严格门控：②③ 也归"主动参战"总开关管】。
-        //
         // 【反馈】"是默认会自动清敌对怪吗？把主动参战关了好像也会自己打怪，工作模式甚至
         // 都没变，似乎是空手攻击。创造模式下检测不出来，一旦切回生存模式，就会主动攻击
         // 敌对生物。"——用户选定**严格口径**：关了主动参战，女仆就只挨打不还手。
-        //
         // 【旧版漏在哪】①②③ 三件事里只有 ①（切战斗任务）在 AutoCombatSwitch 内部
         // 查了 COMBAT_AUTO_SWITCH；②（往 brain 写 ATTACK_TARGET）与 ③（直接
         // doHurtTarget 挥砍 + 导航追人）**一个配置项都没读**（本类此前不引用任何配置）。
-        // 于是关掉总开关后：任务不切（①被挡），但②③照跑——**任务 UID 不变、人却自己
-        // 走上去挥刀**，正是用户看到的"工作模式没变却在打怪"。又因为 `isArmed` 只查主手
-        // 有没有 ATTACK_DAMAGE 属性、而镐/斧/锹/锄这类工具**都带该属性**（DiggerItem
-        // 构造器挂了 "Tool modifier"，字节码实证），拿着锄头的女仆也算"有武器"→
-        // 挥出来的却是工具那点加成，观感就是"空手攻击"。
-        //
-        // 【创造模式为何测不出】本驱动的威胁判据是行为化的 `mob.getTarget() == 主人/女仆`，
-        // 而原版 `TargetingConditions.test` 会经 `canBeSeenAsEnemy()` 过滤目标，创造模式
-        // 玩家的 `Abilities.invulnerable` 为 true → 该判定 false → **怪物根本不会把创造
-        // 模式的玩家当成敌人**，getTarget 恒为 null → 本驱动静默。切回生存
-        // （invulnerable=false）→ 怪物立刻锁定主人 → getTarget 就位 → 当轮即出手。
-        //
-        // 【门控位置】放在 ① 之后、②③ 之前：威胁扫描与"威胁解除清理"（上面 threat==null
-        // 那两个 remove）照常运行，保持 Map 不积压；只是不再主动出手。
-        //
-        // 【顺手收回自己写过的目标】关掉开关时若她脑里还留着**我们写的** ATTACK_TARGET，
-        // TLM 的攻击行为仍会照着打——所以用 ASSIGNED_TARGETS 这个"只登记我们写过的"
-        // 表精确判断：命中才清 ATTACK_TARGET/LOOK_TARGET，不碰 TLM 自己写的目标
-        //（战斗任务的女仆由 TLM 传感器写目标，本表无记录）。
+        // 于是关掉总开关后：任务不切（①被挡），但②③照跑——**任务 UID 不变、人却自己 走上去挥刀**，正是用户看到的"工作模式没变却在打怪"。又因为 `isArmed` 只查主手 有没有 ATTACK_DAMAGE 属性、而镐/斧/锹/锄这类工具**都带该属性**（DiggerItem 构造器挂了 "Tool modifier"，字节码实证），拿着锄头的女仆也算"有武器"→ 挥出来的却是工具那点加成，观感就是"空手攻击"。 【创造模式为何测不出】本驱动的威胁判据是行为化的 `mob.getTarget() == 主人/女仆`， 而原版 `TargetingConditions.test` 会经 `canBeSeenAsEnemy()` 过滤目标，创造模式 玩家的 `Abilities.invulnerable` 为 true → 该判定 false → **怪物根本不会把创造 模式的玩家当成敌人**，getTarget 恒为 null → 本驱动静默。切回生存 （invulnerable=false）→ 怪物立刻锁定主人 → getTarget 就位 → 当轮即出手。 【门控位置】放在 ① 之后、②③ 之前：威胁扫描与"威胁解除清理"（上面 threat==null 那两个 remove）照常运行，保持 Map 不积压；只是不再主动出手。 【顺手收回自己写过的目标】关掉开关时若她脑里还留着**我们写的** ATTACK_TARGET， TLM 的攻击行为仍会照着打——所以用 ASSIGNED_TARGETS 这个"只登记我们写过的" 表精确判断：命中才清 ATTACK_TARGET/LOOK_TARGET，不碰 TLM 自己写的目标 （战斗任务的女仆由 TLM 传感器写目标，本表无记录）。
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             retractOurTarget(maid);
             return; // 关了主动参战 → ②写目标 / ③挥砍 一律不做（只挨打不还手）
         }
 
         // ── v1.3.9 实测七百九十六【"拿雪球也会主动参战"根因】：「真能打」闸 ──
-        //
         // 【反馈】"有
         //  我实际测试下来，如果女仆拿着雪球的话，那也会主动参战打怪。"
-        //
         // 【根因：①②③ 里只有 ① 过了武器闸】①（切战斗任务）经 AutoCombatPools——候选池
         //  只收 isWeapon 认可的任务，而 TLM `TaskAttack.isWeapon` = 主手装备带
         //  `ATTACK_DAMAGE` 属性（javap 实证），雪球没有 → 池空 → **不切任务**。而
         //  ②（写 ATTACK_TARGET）此前**一个武器判据都没读**。目标一旦写进 brain：
-        //    · TLM 空闲任务 `TaskIdle` 注册的 `MaidSnowballTargetTask`（优先级 7）只要
-        //      「brain 里有 ATTACK_TARGET ＋ 主/副手是雪球**或空手** ＋ 看得见目标 ＋
-        //      在活动圈内」就朝它扔雪球。**它的门槛里没有"雪地"这一条**——雪地只约束
-        //      "凭空造目标"的 `MaidStartSnowballAttacking`（优先级 6），所以任何生物
-        //      群系都成立；且它 `start()` 会主动给空手塞一颗雪球——玩家看到的"她拿着
-        //      雪球"往往就是这个行为塞的，不是玩家给的。
-        //    · 单兵战术行为（230）`isActive` 只查"有存活目标 + 非友方 + 在接战距离内"，
-        //      同样不查武器 → 拿雪球也跳劈（按主手 `ATTACK_DAMAGE × 1.5` 结算，雪球 =
-        //      基础值，观感就是"空手也在打"）。
-        //  两条支链都建立在"②喂了目标"之上——闸住 ②，从源头断开。
-        //
-        // 【口径】与既有 `COMBAT_UNARMED_SKIP`（"手上完全没有攻击性物品的女仆，就不应该
-        //  触发自主战斗、维持原任务"）以及 ① 的武器闸**完全一致**：她身上（主手或背包）
-        //  没有任何参战任务认的武器 → 不喂目标、不挥砍。她有武器（含背包里待装备的）时，
-        //  ① 早已把她切进战斗任务并装备好，②③ 照常生效——原设计意图（把 TLM 传感器选
-        //  不到的魔改怪直接喂给她）不受影响。
-        //
-        // 【顺手收回】她原本有武器（我们喂过目标）、武器被拿走改拿雪球时，脑里的旧目标
-        //  还在 → 打雪仗行为照旧。用 ASSIGNED_TARGETS（只登记我们写过的）精确判断：命中
-        //  才清 ATTACK_TARGET/LOOK_TARGET，不碰 TLM 自己写的目标。
-        // 【只在动作点判】canFight 走的是候选池（O(任务×背包)）——仅在"要写目标"或
-        //  "我们写过的目标还挂在脑里"这两个动作点调用，不在每 10 tick 的空转路径上调用。
+        //    · TLM 空闲任务 `TaskIdle` 注册的 `MaidSnowballTargetTask`（优先级 7）只要 「brain 里有 ATTACK_TARGET ＋ 主/副手是雪球**或空手** ＋ 看得见目标 ＋ 在活动圈内」就朝它扔雪球。**它的门槛里没有"雪地"这一条**——雪地只约束 "凭空造目标"的 `MaidStartSnowballAttacking`（优先级 6），所以任何生物 群系都成立；且它 `start()` 会主动给空手塞一颗雪球——玩家看到的"她拿着 雪球"往往就是这个行为塞的，不是玩家给的。 · 单兵战术行为（230）`isActive` 只查"有存活目标 + 非友方 + 在接战距离内"， 同样不查武器 → 拿雪球也跳劈（按主手 `ATTACK_DAMAGE × 1.5` 结算，雪球 = 基础值，观感就是"空手也在打"）。 两条支链都建立在"②喂了目标"之上——闸住 ②，从源头断开。 【口径】与既有 `COMBAT_UNARMED_SKIP`（"手上完全没有攻击性物品的女仆，就不应该 触发自主战斗、维持原任务"）以及 ① 的武器闸**完全一致**：她身上（主手或背包） 没有任何参战任务认的武器 → 不喂目标、不挥砍。她有武器（含背包里待装备的）时， ① 早已把她切进战斗任务并装备好，②③ 照常生效——原设计意图（把 TLM 传感器选 不到的魔改怪直接喂给她）不受影响。 【顺手收回】她原本有武器（我们喂过目标）、武器被拿走改拿雪球时，脑里的旧目标 还在 → 打雪仗行为照旧。用 ASSIGNED_TARGETS（只登记我们写过的）精确判断：命中 才清 ATTACK_TARGET/LOOK_TARGET，不碰 TLM 自己写的目标。 【只在动作点判】canFight 走的是候选池（O(任务×背包)）——仅在"要写目标"或 "我们写过的目标还挂在脑里"这两个动作点调用，不在每 10 tick 的空转路径上调用。
         if (ASSIGNED_TARGETS.containsKey(maid.getUUID()) && !canFight(maid)) {
             retractOurTarget(maid);
             return; // 武器被拿走（改拿雪球/空手）→ 收回我们写过的目标
@@ -260,23 +187,10 @@ if (++this.throttle < 10) {
         //    攻击行为"）：写目标只解决"有目标"，TLM 攻击行为（MaidMeleeAttack）是
         //    WORK 组行为，还有一串 canUse 条件（任务重建时序/活动段/NEAREST_VISIBLE
         //    可见列表/攻击距离）——任一环断了女仆就"进了攻击模式站着不动"（本次
-        //    实测现象）。兜底不区分任务：无论战斗任务还是农场/挖矿/跟随，只要威胁
         //    还在就自己打——走近 + 挥砍。
-        // v1.1.0 实测三百四十七三处修正（反馈："反击没攻击动画；空手反击太强、
         // 频率又高伤害又高；只会空手反击，原有的攻击没了"）：
         // ①【真兜底让位】TLM 近 2 秒（40 tick）内有过攻击动作（ATTACK_COOLING_DOWN
-        //    记忆在 = MaidMeleeAttack 刚写入）→ 完全让位（TLM 链路健康，别抢）。
-        //    旧版只查"本 tick 冷却记忆是否在"——TLM 打完冷却只持续十几 tick，
-        //    下一个攻击循环的间隙里兜底就插进来，观感就是"原有的攻击没了、
-        //    只剩空手连拍"。真兜底 = TLM 长时间（2 秒）没动作才接管。
-        // ②【空手不打】空手反击伤害/频率失衡（实测"空手太强"）——没有武器
-        //    的女仆只导航跟随（保持威胁在场触发参战/战术），不亲自挥刀；参战切
-        //    换会自动从背包装备武器（CombatTaskCompat.prepareSwitch），装上后
-        //    自然恢复挥砍。
-        // ③【按攻击速度属性算冷却】冷却 = 20 / 攻击速度（原版攻击间隔公式）——
-        //    旧版固定 12 tick 一刀无视属性，比拿剑的正常攻击还快。
-        // ④【补挥臂动画】doHurtTarget 直调不出摆臂动画——swing 主手让玩家
-        //    看到"挥了一下"，与 TLM 攻击观感一致。
+        //    记忆在 = MaidMeleeAttack 刚写入）→ 完全让位（TLM 链路健康，别抢）。 下一个攻击循环的间隙里兜底就插进来，观感就是"原有的攻击没了、 只剩空手连拍"。真兜底 = TLM 长时间（2 秒）没动作才接管。 ②【空手不打】空手反击伤害/频率失衡（实测"空手太强"）——没有武器 的女仆只导航跟随（保持威胁在场触发参战/战术），不亲自挥刀；参战切 换会自动从背包装备武器（CombatTaskCompat.prepareSwitch），装上后 自然恢复挥砍。 ③【按攻击速度属性算冷却】冷却 = 20 / 攻击速度（原版攻击间隔公式）—— ④【补挥臂动画】doHurtTarget 直调不出摆臂动画——swing 主手让玩家 看到"挥了一下"，与 TLM 攻击观感一致。
         double dist = maid.distanceTo(threat);
         long now = level.getGameTime();
         // ① 真兜底让位：TLM 近 40 tick 内打过（冷却记忆在）→ 这一波完全交给 TLM
@@ -314,10 +228,7 @@ if (++this.throttle < 10) {
             // 走 `Sensor.isEntityAttackable` → `TargetingConditions.test`
             // （`ignoreLineOfSight` 默认 false）→ `Sensing.hasLineOfSight`。
             // 也就是说**原版女仆隔墙本来打不到怪**；而本驱动只按"距离 + getTarget 锁定"
-            // 就出手，于是墙后的怪一直锁定主人/女仆 → 女仆每 12 tick 对着墙挥一刀。
-            // 修法：出手前补一次视线判定（复用项目现有的那条 raycast 工具，不新造轮子）。
-            // 【隔墙不罚站】这里只在"挥砍"这一步拦——下面导航照常，她仍会朝怪走过去、
-            // 绕到能看见的位置再打，追击欲望不受影响。
+            // 就出手，于是墙后的怪一直锁定主人/女仆 → 女仆每 12 tick 对着墙挥一刀。 修法：出手前补一次视线判定（复用项目现有的那条 raycast 工具，不新造轮子）。 【隔墙不罚站】这里只在"挥砍"这一步拦——下面导航照常，她仍会朝怪走过去、 绕到能看见的位置再打，追击欲望不受影响。
             if (!com.maidsmart.combat.SelfPreservationBehavior.hasSight(maid, threat)) {
                 if (!com.maidsmart.combat.MaidSpawnerTorchBehavior.isBreakingSpawner(maid)) {
                     navigateTo(maid, threat); // 看不见 → 不挥空刀，继续走近找视线
@@ -433,57 +344,12 @@ if (++this.throttle < 10) {
 
     /**
      * 找 16 格内【正在锁定主人或本女仆】的任意 Mob（行为化判定，不看类型）。
-     * v1.1.0 实测三百四十四：这是对魔改生物判定的加强核心——getTarget 是
      * Mob 基类字段（所有敌对/中立/魔改生物 AI 都写它），狼发狂咬人的瞬间
      * target==主人；模组把牛/羊改成中立攻击性生物，攻击时同样写 target。
      * 不认 Enemy/NeutralMob/Tamable 接口 = 不依赖原版类型体系。
-     *
-     * ── 实测六百一十九【看得见才算威胁】（
-     * 原文："在地面下面有空洞里面有僵尸，酒狐隔着方块就感知到了，但是因为没有可以
-     * 下去的入口，所以就会开始原地打转。或许改成有方块遮挡的怪不能被感知到会好一些？"
-     *
-     * 【根因：写进 ATTACK_TARGET 会把"看不见"这件事永久变成"看得见"】原版
-     * {@code Sensor.isEntityAttackable}（= 所有"这个实体我可见吗"的判据，javap 实证）是
-     * "**如果它就是我的 ATTACK_TARGET，就跳过视线判定**，否则才走
-     * TargetingConditions.forCombat（含 hasLineOfSight）"。本驱动此前只按
-     * "距离 + getTarget 锁定" 就写 ATTACK_TARGET——一旦写进去，它自己、TLM 的
-     * 走位（SetWalkTargetFromAttackTargetIfTargetOutOfReach）、AidTask 的
-     * {@code nearestVisibleLivingEntities.contains(target)} 全线都当那只怪
-     * 看得见：隔着墙也追、隔着墙也挥刀（实测五百零五修的是**我们自己的**挥刀那条，
-     * TLM 自己那条一直被这个绕过）。追不到的怪 → 原地打转。
-     *
-     * 【修法】威胁候选加一条视线门（复用项目现成的 raycast，不新造轮子）：
-     * 被方块挡住的怪**不当威胁**，于是根本不会被写进 ATTACK_TARGET——上面那条
-     * 绕过链从源头断开。判据本身与原版同口径（{@code Entity.hasLineOfSight} 也是
-     * COLLIDER + 不看流体，见 {@link SelfPreservationBehavior#hasSight}）。
-     * 为了可测/可读，这一条单独留成 {@link #perceivable}，扫描与自检共用同一份，
-     * 不允许各写一份。
+     * ── 实测六百一十九【看得见才算威胁】（ 原文："在地面下面有空洞里面有僵尸，酒狐隔着方块就感知到了，但是因为没有可以 下去的入口，所以就会开始原地打转。或许改成有方块遮挡的怪不能被感知到会好一些？" 【根因：写进 ATTACK_TARGET 会把"看不见"这件事永久变成"看得见"】原版 {@code Sensor.isEntityAttackable}（= 所有"这个实体我可见吗"的判据，javap 实证）是 "**如果它就是我的 ATTACK_TARGET，就跳过视线判定**，否则才走 TargetingConditions.forCombat（含 hasLineOfSight）"。本驱动此前只按 "距离 + getTarget 锁定" 就写 ATTACK_TARGET——一旦写进去，它自己、TLM 的 走位（SetWalkTargetFromAttackTargetIfTargetOutOfReach）、AidTask 的 {@code nearestVisibleLivingEntities.contains(target)} 全线都当那只怪 看得见：隔着墙也追、隔着墙也挥刀（实测五百零五修的是**我们自己的**挥刀那条， TLM 自己那条一直被这个绕过）。追不到的怪 → 原地打转。 【修法】威胁候选加一条视线门（复用项目现成的 raycast，不新造轮子）： 被方块挡住的怪**不当威胁**，于是根本不会被写进 ATTACK_TARGET——上面那条 绕过链从源头断开。判据本身与原版同口径（{@code Entity.hasLineOfSight} 也是 COLLIDER + 不看流体，见 {@link SelfPreservationBehavior#hasSight}）。 为了可测/可读，这一条单独留成 {@link #perceivable}，扫描与自检共用同一份， 不允许各写一份。
      */
-    // ───────────────────────────────────────────────────────────────────────
-    // v1.3.8 实测六百六十三【借来的两条：援护主人的仇人 + 目标跑远就撒手】
-    //
-    // 出处：别人改过的 TLM 1.5.3（拿它与官方 1.5.3 逐类 javap 对比后实证）：
-    //   · IAttackTask.findOwnerPriorityAttackTarget —— 优先打「主人最近的仇人」；
-    //   · IAttackTask.shouldAbandonTarget / isWithinAttackRange —— 目标离她和主人都
-    //     超过半径就撒手（两条判据互为反面、共用同一个半径）；
-    //   · 新配置 MaidCombatRange（默认 16，范围 8~48，"Temporary expanded assist
-    //     radius when combat is detected in Non-Home mode"）。
-    // 他们是【改 TLM 源码重编译】，我们是【外挂模组】——所以照搬的是判据与阈值，
-    // 不是类结构；落点选在本类，因为本类本来就是"往 ATTACK_TARGET 写目标"的那一处。
-    //
-    // 照搬时故意改了两点（照搬不照抄）：
-    //  ① 他们读主人的 getLastHurtByMob / getLastHurtMob **不看时间**：原版这两个字段
-    //     一旦写上就不再清空，于是"主人十分钟前打过的那只怪"永远算主人的仇人、永远
-    //     被优先。我们按本模组既有的"最近交手窗口"口径（见 {@link CombatWorkRange#inCombat}）
-    //     一并查时间戳，超出 {@link #OWNER_COMBAT_TICKS} 不算。
-    //  ② 他们那边还有一条"够不到就放弃"（MaidClearStaleAttackTarget，读
-    //     CANT_REACH_WALK_TARGET_SINCE 记忆）。**这一条没有照搬**：他们的实现是
-    //     {@code 记忆值 > 100}——记忆里存的是"走不到那一刻的 gameTime 绝对值"，拿它跟
-    //     常量 100 比，在任何跑了 5 秒以上的世界里恒真（实际效果 = 只要出现过一次
-    //     "走不到"就立刻放弃，与他们自己那个 CANT_REACH_GIVE_UP_TICKS = 100 的意图
-    //     不符）。要照搬必须先改成 {@code now - since > 100}，那是一条独立行为，
-    //     等实测反馈再定——本类 ③ 的兜底导航/挥砍与战术行为（230）已经能兜住这种情况。
-    // ───────────────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────── 出处：别人改过的 TLM 1.5.3（拿它与官方 1.5.3 逐类 javap 对比后实证）： · IAttackTask.findOwnerPriorityAttackTarget —— 优先打「主人最近的仇人」； · IAttackTask.shouldAbandonTarget / isWithinAttackRange —— 目标离她和主人都 超过半径就撒手（两条判据互为反面、共用同一个半径）； · 新配置 MaidCombatRange（默认 16，范围 8~48，"Temporary expanded assist radius when combat is detected in Non-Home mode"）。 他们是【改 TLM 源码重编译】，我们是【外挂模组】——所以照搬的是判据与阈值， 不是类结构；落点选在本类，因为本类本来就是"往 ATTACK_TARGET 写目标"的那一处。 照搬时故意改了两点（照搬不照抄）： ① 他们读主人的 getLastHurtByMob / getLastHurtMob **不看时间**：原版这两个字段 一旦写上就不再清空，于是"主人十分钟前打过的那只怪"永远算主人的仇人、永远 被优先。我们按本模组既有的"最近交手窗口"口径（见 {@link CombatWorkRange#inCombat}） 一并查时间戳，超出 {@link #OWNER_COMBAT_TICKS} 不算。 ② 他们那边还有一条"够不到就放弃"（MaidClearStaleAttackTarget，读 CANT_REACH_WALK_TARGET_SINCE 记忆）。**这一条没有照搬**：他们的实现是 {@code 记忆值 > 100}——记忆里存的是"走不到那一刻的 gameTime 绝对值"，拿它跟 常量 100 比，在任何跑了 5 秒以上的世界里恒真（实际效果 = 只要出现过一次 "走不到"就立刻放弃，与他们自己那个 CANT_REACH_GIVE_UP_TICKS = 100 的意图 不符）。要照搬必须先改成 {@code now - since > 100}，那是一条独立行为， 等实测反馈再定——本类 ③ 的兜底导航/挥砍与战术行为（230）已经能兜住这种情况。 ───────────────────────────────────────────────────────────────────────
 
     /** 援护半径（格）：主人的仇人算不算"该去帮"、"跑多远算撒手"。0 = 这两条一起关 */
     private static int assistRadius() {
@@ -532,12 +398,7 @@ if (++this.throttle < 10) {
      *   <li><b>她认它是敌人</b>：{@code BombThrow.legalThrowTarget}（"她的任务认的敌人
      *       + 非友军"，与轰炸投掷同一条口径）；</li>
      *   <li><b>看得见</b>：{@link #perceivable}——实测六百一十九 的视线门；看不见就写
-     *       目标 = 她会隔着墙原地打转，这条不能省；</li>
-     *   <li><b>在圈里</b>：{@code WorkAreaClamp.allows}（home/排班模式的"工作区域"，
-     *       非 home 恒放行）——对应他们的 {@code isWithinRestriction(目标位置)}；</li>
-     *   <li><b>距离</b>：主人离它、或她自己离它 ≤ 援护半径（他们的
-     *       {@code isWithinAttackRange} 就是"两者取近"这条口径）。</li>
-     * </ol>
+     *       目标 = 她会隔着墙原地打转，这条不能省；</li> <li><b>在圈里</b>：{@code WorkAreaClamp.allows}（home/排班模式的"工作区域"， 非 home 恒放行）——对应他们的 {@code isWithinRestriction(目标位置)}；</li> <li><b>距离</b>：主人离它、或她自己离它 ≤ 援护半径（他们的 {@code isWithinAttackRange} 就是"两者取近"这条口径）。</li> </ol>
      */
     private static Mob legalAssist(EntityMaid maid, LivingEntity owner, LivingEntity le) {
         try {
@@ -565,11 +426,8 @@ if (++this.throttle < 10) {
      * 超过援护半径 → 清目标。清的三条记忆与他们 clearAttackMemories 一致
      * （ATTACK_TARGET / CANT_REACH_WALK_TARGET_SINCE / WALK_TARGET），另加本模组自己
      * 写过的 LOOK_TARGET——目标都松手了，视线还锁着它没有意义。
-     *
      * 为什么这一条不受"主动参战"总开关管：它只做减法（松手），不做加法（不会让她去打谁）。
-     * 追一个已经跑掉的目标本身就是"追出去→被圈拽回来"的循环源头之一——她还在追、战斗
-     * 判定还在，圈就一直大着；松手之后战斗判定自然回落，她该回岗回岗。整条想关就把
-     * 援护半径设 0。
+     * 追一个已经跑掉的目标本身就是"追出去→被圈拽回来"的循环源头之一——她还在追、战斗 判定还在，圈就一直大着；松手之后战斗判定自然回落，她该回岗回岗。整条想关就把 援护半径设 0。
      */
     private static void abandonFarTarget(EntityMaid maid, LivingEntity owner) {
         int r = assistRadius();
@@ -624,15 +482,11 @@ if (++this.throttle < 10) {
 
     /**
      * 这只怪算不算"她感知得到的威胁"（实测六百一十九）。
-     *
      * 三个条件缺一不可，顺序按"便宜的先算"（前两条是一次字段读，第三条是 raycast）：
      * <ol>
      *   <li>是 Mob、活着、不是她自己、不是别的女仆（姐妹之间不打）；</li>
      *   <li>它的 {@code getTarget()} 正是主人或本女仆（行为化锁定，不看类型）；</li>
-     *   <li><b>她真的看得见它</b>——被方块挡住的怪不算威胁（本次修的就是这条）。</li>
-     * </ol>
-     * 任何一条读抛异常 → 按"不算威胁"处理（宁可少一次主动出手，也不要把一个
-     * 够不着的目标写进她脑子里）。
+     *   <li><b>她真的看得见它</b>——被方块挡住的怪不算威胁（本次修的就是这条）。</li> </ol> 任何一条读抛异常 → 按"不算威胁"处理（宁可少一次主动出手，也不要把一个 够不着的目标写进她脑子里）。
      */
     public static boolean perceivable(EntityMaid maid, LivingEntity owner, Entity candidate) {
         try {

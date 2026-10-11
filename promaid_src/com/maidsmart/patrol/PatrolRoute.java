@@ -9,18 +9,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v1.3.8【巡逻航迹】数据模型 + NBT 编解码（1.21.1 树；1.20.1 树本批不动）。
- *
  * <p>── 这是什么 ──
  * 一条航迹 = 一串**标记**（世界坐标，玩家骑扫帚飞着打点）+ 一个「已连接（闭环）」标志
  * + 净空半径 + 所属维度。玩家在编辑器里点「连接」把首尾接上，才成为可巡逻的闭环。
- *
  * <p>── 为什么必须闭环才算数（
  * 「加一个连接按钮，玩家可以直接在那里面点击连接，将首尾的两个连在一起，这样子刚好可以
  * 达成闭环。（当然了，也必须要保证没有障碍物。否则就会提示连接失败。）」
  * 所以 {@link #closed()} 为假时这条航迹**不是**一条有效巡逻路径——运行时 {@code PatrolFlight}
  * 直接放行、回落到原来那套 home 守家盘旋（一个字节不变）；编辑器与日志都会提示"还没连成闭环"。
- *
  * <p>── 存哪儿 ──
  * 两种载体共用这一份 NBT 编解码（口径只留一处，见 {@link PatrolChartData}）：
  * 物品（{@code PatrolChartItem} 的 {@code CUSTOM_DATA}）与女仆（{@code persistentData}）。
@@ -47,7 +43,6 @@ public final class PatrolRoute {
     /**
      * 【v1.3.9.3「连接时把线抬过方块」】每个标记的**抬升量**（格），与 {@link #points} 等长；
      * 空数组 = 没烘过（或烘完发现本来就没挡路的）。
-     *
      * <p>
      * ⇒ 点「连接」那一刻在服务端跑一遍 {@link PatrolAdapt#refine}，把每个标记要抬多高算出来
      * 存进这里。**玩家打的标记一个都不动**（{@link #points} 原样保留、预览里的菱形还在原地），
@@ -204,12 +199,9 @@ public final class PatrolRoute {
 
     /**
      * 存下"每个标记该往哪挪"（点「连接」时算一次，见 {@link PatrolAdapt#refine}）。
-     *
      * <p>数组按 **3 个一组**排：{@code [dx0,dy0,dz0, dx1,dy1,dz1, …]}——长度必须正好是
      * {@code 3 × 点数}，否则一律按"没烘"处理（数据坏了宁可当作没挪过，也不让索引越界）。
-     *
      * <p>
-     *
      */
     public void setLift(double[] offsets) {
         if (offsets == null || offsets.length != points.size() * 3) {

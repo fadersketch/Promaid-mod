@@ -14,11 +14,7 @@ import net.minecraft.world.level.Level;
  * 女仆列表 → 点选女仆 → 快捷设置（工作模式/任务/排班开关）或 日程设置
  * （00:00～24:00 分段编排一天干什么，按游戏内时间自动切换）。
  * UI 结构仿 Promaid 手册（BlueprintBookScreen）。
- *
- * v1.1.0 实测五十：图标 = 原版「旗帜图案」物品（flower_banner_pattern）贴图原样
  * 复用（玩家指定："原版有的一个物品替换成那个的贴图"）。
- *
- * v1.1.0 实测五十五【附魔光效改手册同款】（反馈："打了经验修补零级没有用，不显示
  * 附魔特效；逻辑应该跟 promaid 手册一样"）：重写 m_5812_（isFoil）恒 true——与
  * BlueprintBookItem 完全同源（v1.5.285 起长期稳定运行，光效可见）。
  * 【纠正实测十三的错误结论】旧注释称"isFoil 恒 true 会被 ServerPlayer.doTick

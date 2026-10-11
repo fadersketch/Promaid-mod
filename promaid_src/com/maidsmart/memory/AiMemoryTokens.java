@@ -8,12 +8,11 @@ import java.util.Set;
 /**
  * 记忆检索分词器（移植自 maidsoulcore v3 {@code MemoryV3SparseIndex.tokenize/flushHan/flushWord}）。
  *
- * <p>为什么需要它：旧版 {@link AiMemorySearch} 只用「单字 + 相邻二元」的 n-gram 硬匹配，中文还行
- * 但拉丁词（"diamond_sword"、"iron"）会被切成单字母，噪声大；BM25 需要一个稳定的词项集合。
- * 这里做 CJK 感知切分：
+ * <p>BM25 需要一个稳定的词项集合：只用「单字 + 相邻二元」的 n-gram 硬匹配时，拉丁词（"diamond_sword"、
+ * "iron"）会被切成单字母、噪声大。这里做 CJK 感知切分：
  * <ul>
- *   <li><b>汉字</b>：切成单字（{@code h:红}）+ 相邻汉字二元（{@code h:红茶}）——中文没有空格，
- *       二元能在不引第三方分词器的前提下把词义带出来；单字兜底召回短查询。</li>
+ *   <li><b>汉字</b>：切成单字（{@code h:红}）+ 相邻汉字二元（{@code h:红茶}）——中文没有空格，二元能在
+ *       不引第三方分词器的前提下把词义带出来；单字兜底召回短查询。</li>
  *   <li><b>拉丁/数字</b>：连续字母数字合成一个词（{@code w:iron}），下划线视为词内字符
  *       （{@code w:diamond_sword} 整体保留），大小写无关。</li>
  *   <li>其余字符（标点/空白）只作分隔。</li>

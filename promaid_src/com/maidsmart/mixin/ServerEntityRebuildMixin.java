@@ -16,32 +16,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 【实测七百九十九·issue #36】**核心修复**：在大跳变的传送包发出之前把它拦下来，改成让客户端
  * 重建实体。（本文件是 forge / 1.20.1 树；neo 版见同名文件，官方名与 SRG 各写各的。）
- *
  * <p>完整机制、以及为什么"当帧重建"之外还必须再排一次"延迟补包"，全写在
  * {@link MaidTeleportRebuild} 的类注释里（照搬上游开源项目 2415564388/maidsync 的现场实测，MIT）。
- *
  * <h3>为什么挂在这里</h3>
  * {@code ServerEntity.m_8533_()}（= sendChanges）是全原版<b>唯一</b>的位置包出口（唯一调用点是
  * {@code ChunkMap.m_140421_}（= tick），条件是 {@code entityMoved || inEntityTickingRange}——javap 实证）。
  * 挂在这里意味着无论女仆是被谁、用什么方法、从哪条代码路径传走的，都会经过这里 ——
  * 不需要去枚举 {@code teleportTo} / {@code moveTo} / {@code setPos} / 跨维度流程等等入口。
- *
  * <h3>两条触发路径</h3>
  * <ol>
  *   <li>{@code EntityMoveToMarkMixin} 已经标记过"这个实体被远距离挪动过"——直接重建；</li>
  *   <li>兜底：位置基线出现大跳变。这条不依赖任何调用点，是真正的完备网。</li>
- * </ol>
- *
- * <p>{@code ci.cancel()} 是关键：拦住本 tick 的后续处理，杜绝那条会引发客户端
- * {@code lerpTo} 的传送包漏出去。跳过的 {@code m_8543_}（= sendDirtyEntityData）已由
- * {@code m_8541_ → m_289200_}（= addPairing → sendPairingData）补上（它把 spawn + 元数据 + 属性一起打包发）。
- *
- * 【映射】本树 {@code m_8533_ / f_8510_ / f_8509_ / f_214995_ / m_6907_ / m_213870_ /
- * m_238031_ / m_238033_ / m_46467_ / m_20681_}；neo 树写官方名
- * （{@code sendChanges / entity / level / positionCodec / players() / trackingPosition() /
- * delta / setBase / getGameTime() / clientTrackingRange()}）——两版 jar 里逐个 javap 核对过。
+ * </ol> <p>{@code ci.cancel()} 是关键：拦住本 tick 的后续处理，杜绝那条会引发客户端 {@code lerpTo} 的传送包漏出去。跳过的 {@code m_8543_}（= sendDirtyEntityData）已由 {@code m_8541_ → m_289200_}（= addPairing → sendPairingData）补上（它把 spawn + 元数据 + 属性一起打包发）。 【映射】本树 {@code m_8533_ / f_8510_ / f_8509_ / f_214995_ / m_6907_ / m_213870_ / m_238031_ / m_238033_ / m_46467_ / m_20681_}；neo 树写官方名 （{@code sendChanges / entity / level / positionCodec / players() / trackingPosition() / delta / setBase / getGameTime() / clientTrackingRange()}）——两版 jar 里逐个 javap 核对过。
  */
 @Mixin(ServerEntity.class)
 public abstract class ServerEntityRebuildMixin {

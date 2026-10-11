@@ -17,18 +17,14 @@ import java.util.List;
 
 /**
  * AI 记忆管理器（v1.5.86）：事件源 + tick 调度 + 每日巩固。
- *
  * 事件源（取代旧 MaidMemoryManager 的 4 键 Map——旧数据不迁移，重新积累）：
  * - 喂食 → EVENT 段落（salience 7）
  * - 好感升级 → RELATION 段落（salience 9，永久）
  * - 玩家死亡 → EVENT 段落（salience 10）
- *
  * tick 调度（每 400 tick ≈ 20 秒）：
  * - 对玩家周围的女仆触发 AiMemoryExtractor.maybeExtract（后台异步提取）
  * - 游戏日切换时生成"今日回顾"（纯规则零 LLM，对齐 DailyMemoryConsolidator）
- *
  * per-maid 开关：Forge persistentData（"maid_smart_memory"，Byte；无 = 继承全局配置）。
- * v1.5.101：原实现存 TLM TaskData（maid_smart:ai_memory_toggle，Codec.BOOL 编成 ByteTag）
  * ——TLM 的 TaskData 同步（TaskDataRegister.writeSyncData）强制把编码结果强转 CompoundTag
  * → 一点开关就 ClassCastException 崩溃（08:19 实测）。改用 persistentData 彻底绕开 TLM
  * 同步机制（开关只在服务端读写，无需同步客户端——手册记忆列表/详情都由服务端 isEnabled 取值）。
@@ -434,7 +430,6 @@ public class AiMemoryManager {
     /**
      * 睡一觉自动处理（移植自 Sphantosis 的 start_role_sleep → wrap-up →
      * archiver.tick(force_day_index=True) 链路）。
-     *
      * v1.5.379：改用 SleepFinishedTimeEvent——只有全员真实睡过夜、时间被
      * 跳到清晨才触发（服务端事件）；PlayerWakeUpEvent 会在白天躺床即起、
      * 入睡失败等情况下误触发，且周期跨日兜底会让"熬夜"也归档，均已排除。

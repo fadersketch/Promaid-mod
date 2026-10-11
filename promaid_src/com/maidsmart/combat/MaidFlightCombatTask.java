@@ -16,19 +16,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * v1.2.0（1.20.1）：飞行作战任务——图标 = 鞘翅，**不响应自主切换**。
- *
  * 【激活口径（武器无关）】鞘翅 + **任意近战武器** + 烟花火箭，三件齐备才激活；
  * 缺任意一件 → 行为与普通攻击模式一致（地面近战）。1.20.1 原版没有重锤，
  * 所以武器位放宽为任意近战武器（判据复用自动装备同一口径），收翅下落命中时
  * 按原版规则结算【暴击 ×1.5】。
- *
  * 【本任务的 brain 只有"索敌 + 飞行行为"三件】
  * 刻意不注册 TLM 的 MaidMeleeAttack 与 SetWalkTargetFromAttackTarget：
  * - 攻击（滑翔接触 / 地面）由 MaidFlightCombatBehavior 独占，避免普通近战先上一记、
  *   给目标上无敌帧把暴击/伤害吃掉；
  * - 走位同样由行为自己负责（滑翔靠视线、地面靠 navigation）。
- *
  * 【不响应自主切换】靠三处保证：本任务 isWeapon 声明"近战武器即武器"，让
  * AutoCombatSwitch 认为"已在战斗且武器可用"而尊重现状；另外在 AutoCombatSwitch 的
  * buildPools（入战选任务）与 retuneCombatTactics（战中换战术）里按 UID 显式排除。
@@ -88,31 +84,12 @@ public class MaidFlightCombatTask implements IAttackTask {
     }
 
     /**
-     * v1.2.0 实测五百一十三【空袭索敌改为"以自身为圆心、半径 50 的立方盒"】。
-     *
      * 【演进】实测五百零八 先把**垂直**半径从 TLM 默认的 4 格提到 50 格（水平仍沿用
      * `searchRadius`，默认 16），修掉了"凋灵飞高就锁不上"。但实测下来**水平 16 格仍然太小**
      * （）——空袭是立体作战，敌人在斜上方 20~40 格时
      * 水平距离早就出界了。
-     *
      * 【现在】三个轴统一取 {@link #FLIGHT_SEARCH_RADIUS} = 50 格：
-     * `AABB.inflate(50, 50, 50)` 等价于"以自身碰撞箱为中心、半径 50 的立方盒"
-     * （AABB 是三轴独立膨胀，各轴都是 ±50，即一个边长 100 的立方体）。
-     * **水平/垂直一视同仁**，不再区分。
-     *
-     * 【隔墙不出手 —— 这一点由 TLM 原版机制保证，不是本方法负责】
-     * 本方法只决定"**扫多大范围**"（`MaidNearestLivingEntitySensor` 用它做 AABB 扫描，
-     * 结果写进 `NEAREST_VISIBLE_LIVING_ENTITIES`）。而"能不能打"由 TLM 原版的
-     * `IAttackTask.findFirstValidAttackTarget` 决定，它调用
-     * `NearestVisibleLivingEntities.findClosest(predicate)`——**那个类的可见性判定自带视线过滤**
-     * （构造器把 `Sensor.isEntityAttackable` 作为可见性谓词，字节码实证；
-     * 它一路走到 `TargetingConditions.test`，其 `ignoreLineOfSight` 字段默认 false
-     * → 最终查 `Sensing.hasLineOfSight`）。
-     * 所以放大扫描范围**不会**让女仆隔墙出手：墙后的怪能进候选列表，但会在可见性那一关被滤掉。
-     * 这与"和 TLM 原版一样，有隔墙阻挡不出手"的要求完全一致——我们没改这条链路的任何一环。
-     *
-     * 【活动范围限制分支照旧】有 home/工作点限制时以限制中心为基准膨胀（与 TLM 同款），
-     * 免得守家中的空袭女仆因为盒子变大而跨出活动范围。
+     * `AABB.inflate(50, 50, 50)` 等价于"以自身碰撞箱为中心、半径 50 的立方盒" （AABB 是三轴独立膨胀，各轴都是 ±50，即一个边长 100 的立方体）。 **水平/垂直一视同仁**，不再区分。 【隔墙不出手 —— 这一点由 TLM 原版机制保证，不是本方法负责】 本方法只决定"**扫多大范围**"（`MaidNearestLivingEntitySensor` 用它做 AABB 扫描， 结果写进 `NEAREST_VISIBLE_LIVING_ENTITIES`）。而"能不能打"由 TLM 原版的 `IAttackTask.findFirstValidAttackTarget` 决定，它调用 `NearestVisibleLivingEntities.findClosest(predicate)`——**那个类的可见性判定自带视线过滤** （构造器把 `Sensor.isEntityAttackable` 作为可见性谓词，字节码实证； 它一路走到 `TargetingConditions.test`，其 `ignoreLineOfSight` 字段默认 false → 最终查 `Sensing.hasLineOfSight`）。 所以放大扫描范围**不会**让女仆隔墙出手：墙后的怪能进候选列表，但会在可见性那一关被滤掉。 这与"和 TLM 原版一样，有隔墙阻挡不出手"的要求完全一致——我们没改这条链路的任何一环。 【活动范围限制分支照旧】有 home/工作点限制时以限制中心为基准膨胀（与 TLM 同款）， 免得守家中的空袭女仆因为盒子变大而跨出活动范围。
      */
     private static final double FLIGHT_SEARCH_RADIUS = 50.0;
 

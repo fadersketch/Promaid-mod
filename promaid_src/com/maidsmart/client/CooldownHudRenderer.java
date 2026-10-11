@@ -7,13 +7,8 @@ import net.minecraftforge.client.event.RenderGuiEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
- * 实测四百二十一【冷却可视化】——反馈："我希望女仆复活的CD及自己回魂符的CD在
  * 玩家屏幕上可视化。"
- *
- * 实测四百三十三【照搬 HeartPact 的分娩倒计时显示机制】：
  * 带阴影、按剩余秒升序、彩色、时间 M:SS；收到快照才显示，3 秒无快照自动清空。
- *
- * 实测四百四十四【1.20.1 恒不渲染修复】：旧版（四百三十三）在 1.20.1 侧改成
  * {@code @Mod.EventBusSubscriber} 注解 + {@code RenderGuiOverlayEvent.Post}（只认
  * HOTBAR 层）。实测证据：1.20.1 客户端 latest.log 有
  * "cooldown hud: first snapshot received"，但【没有】"first draw" —— 数据到了、
@@ -24,23 +19,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  *   少一个失败点；
  * - 换用【显式注册】（与同目录 BuildHudRenderer 同款 ensureRegistered 懒注册）：
  *   首个快照到达时 register 本类，不依赖注解扫描，注册行为确定可查。
- *
- * 显示（左上角，建造 HUD 之下）：
- * 冷却
- *   复活 · 小玉    0:42
- *   回魂符 · 小玉  0:18 / 1:00
- *
- * ── 【实测六百七十八：这一块还顺带显示武装拴绳的"绑定中"】──
- *
- *
- * {@code kind = "bound"}（见 {@code CooldownHudTracker.broadcast}），于是位置、字体、行高、
- * "三秒没数据自动清空"、"打开界面 / F3 时整体隐藏"全套行为**一行都不用新写**。
- * 区别只有两处：① 那一段的字是**蓝色**（{@code §9}）；② 它没有倒计时，永远排在**最上**一行。
- * 它**不受"冷却 HUD"开关影响**（那是两件事；见服务端 {@code soulScanWanted()}）。
- *
- * <p>【实测六百八十二：它下面再多一行操作提示】
- *
- * 只在这条"绑定中"存在时画，灰字、缩进 4 像素，仍然受"放不下就不画"的边界保护。
+ * 显示（左上角，建造 HUD 之下）： 冷却 复活 · 小玉    0:42 回魂符 · 小玉  0:18 / 1:00 ── 【实测六百七十八：这一块还顺带显示武装拴绳的"绑定中"】── {@code kind = "bound"}（见 {@code CooldownHudTracker.broadcast}），于是位置、字体、行高、 "三秒没数据自动清空"、"打开界面 / F3 时整体隐藏"全套行为**一行都不用新写**。 区别只有两处：① 那一段的字是**蓝色**（{@code §9}）；② 它没有倒计时，永远排在**最上**一行。 它**不受"冷却 HUD"开关影响**（那是两件事；见服务端 {@code soulScanWanted()}）。 <p>【实测六百八十二：它下面再多一行操作提示】 只在这条"绑定中"存在时画，灰字、缩进 4 像素，仍然受"放不下就不画"的边界保护。
  */
 public final class CooldownHudRenderer {
     /** {kind, 显示名, 剩余秒, 总秒}，插入序 = 服务端打包序（复活在前、回魂符在后） */
@@ -192,10 +171,7 @@ public final class CooldownHudRenderer {
     }
 
     /**
-     * 【实测六百八十七】「绑定中」下面那两行操作提示（灰字）。
-     *
      * <p>
-     *
      * 旧版只有一句"右击她：解除；她骑扫帚时改为主动骑乘"——没写**手里得拿着那根武装拴绳**，
      * 玩家空手右击发现没反应（或以为随便什么物品都行）。现在拆两行：第一行把"手持武装拴绳"
      * 摆在开头，第二行再写那一下右击在两种情形下各自是什么。
@@ -226,10 +202,7 @@ public final class CooldownHudRenderer {
 
     /**
      * 一行 → 彩色文案（名字截断防超宽）。
-     *
      * <p>【实测六百七十八 新增一档】{@code kind = "bound"}：武装拴绳的"绑定中"指示。
-     *
-     *
      * 同一条带阴影的文字、同样三秒没数据自动清空），只是这一段的字是**蓝色**（{@code §9}）。
      * 第二格是女仆名，第三格是相位（{@code lease}/{@code leash}={@code 牵绳}、
      * 其它=二号位悬挂），两档在文案上直接写清楚——你一眼能看出"我现在是牵着还是在下面挂着"。

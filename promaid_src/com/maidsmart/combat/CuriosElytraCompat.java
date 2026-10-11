@@ -10,39 +10,18 @@ import java.util.function.Predicate;
 
 /**
  * v1.3.0(beta) 实测六百八十【女仆饰品栏（Curios）里的鞘翅】——软兼容层，**全反射、零硬依赖**。
- *
  * <p>
- *
- *
  * <p>【为什么必须走反射】Curios 不在本模组的编译期 classpath 上（本工程一贯原则：不给玩家加任何
  * 前置、不硬链接第三方——{@link GunCompat}、{@link MaidSpellCompat}、{@link SlashBladeCompat} 同款）。
  * 而女仆的饰品栏**不是** TLM 的 {@code getMaidBauble()}（那个 {@code BaubleItemHandler} 的
  * {@code isItemValid} 只收 TLM 自己注册的饰品，鞘翅根本放不进去，字节码实证），它是 Curios 挂在
  * 女仆实体上的 {@code ICuriosItemHandler}。所以只能反射问 Curios 要。
- *
  * <p>【两版 API 形态（javap 实证，本类只用两版**同名**的那几个方法）】
  * <pre>
  *   CuriosApi.getCuriosInventory(LivingEntity)
  *        1.20.1 curios-5.x : LazyOptional&lt;ICuriosItemHandler&gt;
  *        1.21.1 curios-9.x : Optional&lt;ICuriosItemHandler&gt;
- *        → 两者都有 orElse(T)，本类统一用反射调 orElse(null) 拆壳（不认具体类型）
- *   ICuriosItemHandler.getCurios()      : Map&lt;String, ICurioStacksHandler&gt;（槽位名 → 槽组）
- *   ICurioStacksHandler.getStacks()     : IDynamicStackHandler
- *   IDynamicStackHandler.getSlots() / getStackInSlot(int) / setStackInSlot(int, ItemStack)
- * </pre>
- *
- * <p>【"等效消耗耐久"怎么落地的】本类只负责"把她饰品栏里那件鞘翅**取出来**"；取出后由
- * {@code MaidFlightKit.equip} 穿到她的**胸甲槽**——原版滑翔的闸门
- * （{@code LivingEntity.updateFallFlying}）只认胸甲槽的鞘翅，穿上去之后耐久就由原版那套
- * 「滑翔中每 20 tick 扣 1 点」照常扣，与她自己从背包里翻出一件鞘翅穿上是**同一条路**，
- * 所以"等效"是结构上成立的，不是另写一套扣耐久。
- *
- * <p>【失败一律安全】Curios 没装 / 版本不符 / 反射被拒 / 她根本没有饰品栏槽位 → 所有方法返回
- * null / "未装"，调用方按"没有饰品栏鞘翅"处理，行为与旧版一字不差。
- *
- * <p>【两树同一份】本类不碰任何加载器专有类型（不引用 Forge/NeoForge 注册表、不用 SRG 名字），
- * 也不调 {@code ItemStack.isEmpty()/copy()} 这类两树名字不同的方法，所以 SRG 树与 Mojmap 树里
- * **逐字相同**（要清空槽位时，标记用的空栈由调用方传进来）。
+ *        → 两者都有 orElse(T)，本类统一用反射调 orElse(null) 拆壳（不认具体类型） ICuriosItemHandler.getCurios()      : Map&lt;String, ICurioStacksHandler&gt;（槽位名 → 槽组） ICurioStacksHandler.getStacks()     : IDynamicStackHandler IDynamicStackHandler.getSlots() / getStackInSlot(int) / setStackInSlot(int, ItemStack) </pre> <p>【"等效消耗耐久"怎么落地的】本类只负责"把她饰品栏里那件鞘翅**取出来**"；取出后由 {@code MaidFlightKit.equip} 穿到她的**胸甲槽**——原版滑翔的闸门 （{@code LivingEntity.updateFallFlying}）只认胸甲槽的鞘翅，穿上去之后耐久就由原版那套 「滑翔中每 20 tick 扣 1 点」照常扣，与她自己从背包里翻出一件鞘翅穿上是**同一条路**， 所以"等效"是结构上成立的，不是另写一套扣耐久。 <p>【失败一律安全】Curios 没装 / 版本不符 / 反射被拒 / 她根本没有饰品栏槽位 → 所有方法返回 null / "未装"，调用方按"没有饰品栏鞘翅"处理，行为与旧版一字不差。 <p>【两树同一份】本类不碰任何加载器专有类型（不引用 Forge/NeoForge 注册表、不用 SRG 名字）， 也不调 {@code ItemStack.isEmpty()/copy()} 这类两树名字不同的方法，所以 SRG 树与 Mojmap 树里 **逐字相同**（要清空槽位时，标记用的空栈由调用方传进来）。
  */
 public final class CuriosElytraCompat {
 
@@ -248,10 +227,8 @@ public final class CuriosElytraCompat {
 
     /**
      * 饰品栏里第一件满足 {@code filter} 的物品（**只读**，不取走）；没有 → {@code null}。
-     *
      * <p>查找次序：先 {@code back} 槽（原版鞘翅在 Curios 里的常规归宿），再其余槽位——
      * 玩家的鞘翅可能挂在任意一个接受它的槽里（模组/整合包自定义槽位），不能只看 back。
-     *
      * <p>{@code filter} 必须自己对"空栈"返回 false（本模组调用方传的都是
      * {@link MaidFlightKit#isElytraLike}，它认空栈为 false）——本类**不调** {@code ItemStack.isEmpty()}
      * 就是为了保持两树同源（那两棵树里这个名字不一样）。
@@ -290,13 +267,10 @@ public final class CuriosElytraCompat {
     }
 
     /**
-     * v1.5.393 实测八百零四：**任意实体**（含玩家）的 Curios 饰品栏里有没有满足条件的物品。
-     *
      * <p>「大运」饰品要能由玩家佩戴，而玩家的饰品栏同样是 Curios 的 {@code ICuriosItemHandler}。
      * 反射链路与女仆那条完全一样（{@code CuriosApi.getCuriosInventory} 收的就是
      * {@code LivingEntity}），所以把 {@link #scan} 的入参从 {@code EntityMaid} 放宽到
      * {@code LivingEntity} 即可——女仆侧调用一字不改（她是 LivingEntity 的子类）。
-     *
      * @return true = 该实体饰品栏里有这么一件；Curios 未装 / 反射失败一律 false（安全兜底）
      */
     public static boolean hasCurio(net.minecraft.world.entity.LivingEntity entity, Predicate<ItemStack> filter) {

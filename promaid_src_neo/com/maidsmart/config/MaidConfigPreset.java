@@ -22,15 +22,9 @@ public final class MaidConfigPreset {
     private static final String PATH_PRESET_MODE = "misc.presetMode";
 
     /**
-     * 内部簿记，两边都不碰：一次性默认值迁移标记。
-     *
-     * <p>它们记的是"这条迁移跑过没"，复位成 false 会让迁移在下次启动重跑一遍——不是玩家设置。
+     * 内部簿记：现无——一次性迁移标记已移出用户配置（见 MaidSmartConfig.INTERNAL_SPEC）。
      */
-    private static final java.util.Set<String> SKIP = java.util.Set.of(
-            "build.speedMigrated", "build.scheduleRangeMigrated", "build.strollSpeedMigrated",
-            "build.defaultRepairMigrated", "broom.climbMigrated", "broom.climb12Migrated",
-            "broom.airAltMigrated", "broom.orbitRadiusMigrated", "misc.dangerCampfireMigrated",
-            "broom.patrolEnableMigrated");
+    private static final java.util.Set<String> SKIP = java.util.Set.of();
 
     /**
      * DIY 不动的项：纯附加子系统、护栏、修复，以及"关掉反而更危险 / 只是把 bug 放回来"的那些。

@@ -139,11 +139,9 @@ public class PromaidConfigScreen extends Screen {
      */
     private String lockedOreId = null;
     /**
-     * v1.5.126：当前激活的输入框（照搬原版创造搜索框交互——CreativeModeInventoryScreen
      * 的 charTyped/keyPressed 直接转发给自己持有的 searchBox 字段，不依赖 getFocused()
      * 焦点链）。1.20.1 的键盘输入链是 KeyboardHandler → screen.charTyped(char,int)
      * （GuiEventListener 接口方法，ContainerEventHandler 默认实现走 getFocused()）；
-     * 旧版重写的 isValidCharacterForName(String,char,int) 在 1.20.1 是无人调用的死代码（其字节码是
      * 一个字符合法性过滤器），导致"点进输入框但打不了字"。这里自跟踪点击的输入框，
      * 在真正被调用的 charTyped/keyPressed 里直接转发给它，与 MC 原版搜索框完全同构。
      */
@@ -656,16 +654,11 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /** 目录页：两列竖排板块按钮（手册式跳转；窄屏不溢出）。
-     *  v1.5.137：修复与"保存并返回"重叠——v1.5.133 加 WOODCUT 后左列 6 个按钮，
      *  末位 COMBAT（战斗自保）y=211 压住了底部保存按钮（h-34=206，240 默认高）。
      *  重排为 5+5 两列（COMBAT 移到右列顶部）+ 按钮压缩（26→22、间距 5→4）：
      *  末位按钮底 = 56+4*26+22 = 182，与保存按钮（h-34）间距 ≥ 24，永不相交。
-     *  v1.5.190 修复：左列末位残留 COMBAT 与右列顶部 COMBAT 重复（共 10 个按钮、
      *  只有 9 个板块——左列第 5 个是多余副本，点它等于点右列顶部同款）。
-     *  左列改 {BUILD, MINE, MEMORY, DIALOGUE}，右列 {COMBAT, MISC, PERCEPTION,
-     *  AFFECT, AITOOLS}——9 板块各出现一次；同时主页按可用高度自适应：
-     *  高度不足时压缩行距（h<216 时 22+4→18+3，h<190 再压 16+3），
-     *  永远不与"保存并返回"（h-34）相交。 */
+     *  左列改 {BUILD, MINE, MEMORY, DIALOGUE}，右列 {COMBAT, MISC, PERCEPTION, AFFECT, AITOOLS}——9 板块各出现一次；同时主页按可用高度自适应： 高度不足时压缩行距（h<216 时 22+4→18+3，h<190 再压 16+3）， 永远不与"保存并返回"（h-34）相交。 */
     /** 实测四百二十三【配置面板重组】：首页只列 7 个大类，进入大类后列小类。
      *  两级菜单共用 menuGrid（两列竖排、行距按数量/高度自适应），不与底部按钮相交。 */
     private void homeButtons(int w, int h, int cx) {
@@ -807,17 +800,10 @@ public class PromaidConfigScreen extends Screen {
         // （注释折行多则高、SectionRow 紧凑），从 CONTENT_TOP 起逐行累加、超出
         // contentBottom 停止；页面内行位置同样累加（不再 ×ROW_H 匀质假设），
         // 任何分辨率/缩放下注释与下一行控件像素级不重叠。
-        // v1.1.0 实测四十五：按【页】逐页累加——每页都从 CONTENT_TOP 重新起算，
         // 只把当前页的行 y 存进 pageRowY 给渲染侧用。旧版算的是全表绝对 y、
         // 渲染侧又只画 start..end 行，第二页第一行拿到全表坐标（比正确值大
         // 一整页），且行高分布随 pageIndex 偏移错位 → "第 2 页起排版全错"
-        // v1.1.0 实测一百七十七【分页溢出根治】：分页模型从"全局固定 perPage 均摊"
-        // 改为"逐页装填"——逐行累加真实高度，当前页装不下就开新页（pageStarts 记录
-        // 每页首行下标）。旧版的 perPage 是按【第一页】行数标定的全局常数，行高不均
-        // 的板块（被动技能页搭路段注释长、单行 74px vs 短行 44px）在第 4+ 页按第一页
-        // 的行数硬装 → 累计 y 超过 contentBottom，末行"空中搭桥距离"的输入框落到
-        // h-68 翻页按钮行内——EditBox 先于按钮注册、几何重叠处点击被输入框吃掉 =
-        // "第 4 页翻不到第 5 页"。逐页装填后每页都保证最后一行不超 contentBottom。
+        // 改为"逐页装填"——逐行累加真实高度，当前页装不下就开新页（pageStarts 记录 每页首行下标）。旧版的 perPage 是按【第一页】行数标定的全局常数，行高不均 的板块（被动技能页搭路段注释长、单行 74px vs 短行 44px）在第 4+ 页按第一页 的行数硬装 → 累计 y 超过 contentBottom，末行"空中搭桥距离"的输入框落到 h-68 翻页按钮行内——EditBox 先于按钮注册、几何重叠处点击被输入框吃掉 = "第 4 页翻不到第 5 页"。逐页装填后每页都保证最后一行不超 contentBottom。
         this.pageStarts.clear();
         this.pageStarts.add(0);
         {
@@ -882,18 +868,10 @@ public class PromaidConfigScreen extends Screen {
                 // 非数字初始值（如 "x1.5"）的输入框彻底锁死（过滤测试含 x 的完整串
                 // 恒失败 → 任何输入都被拒）；改为不限输入、由 onChange 校验（非法
                 // 红字），所有输入框都能输入
-                // v1.5.124：延迟提交（照 MC 搜索框交互）——输入时只做格式校验
                 // （非法红字、合法白字），【不写配置】；保存并返回/完成时统一写入
                 // （onClose）。旧版每按键调 ModConfigSpec.set()，输入路径上任何
                 // 异常/重载都会卡住输入（"卡住电脑并不能实际输入文本"）
-                // v1.5.128：颜色必须用 setTextColor（=setTextColor，纯字段写入）——
-                // 旧版误用 moveCursorTo（=setCursorPosition，字节码实证其方法体会
-                // onValueChange 触发 responder）→ responder 里再调 moveCursorTo →
-                // setCursorPosition→responder 无限递归 → StackOverflowError
-                // （被 KeyboardHandler 包装捕获 → "输入卡一下、永远打不进字"，
-                // 崩溃日志实证 EditBox.moveCursorTo↔lambda$sectionButtons$1 循环）
-                // v1.3.0 实测六百六十六：范围也当场判（旧版只判"是不是数字"，越界还是白字
-                // ——玩家填 4000000 看着完全正常，保存后却什么也没发生，这就是"不可调"的观感）
+                // v1.5.128：颜色必须用 setTextColor（=setTextColor，纯字段写入）—— onValueChange 触发 responder）→ responder 里再调 moveCursorTo → setCursorPosition→responder 无限递归 → StackOverflowError （被 KeyboardHandler 包装捕获 → "输入卡一下、永远打不进字"， 崩溃日志实证 EditBox.moveCursorTo↔lambda$sectionButtons$1 循环） ——玩家填 4000000 看着完全正常，保存后却什么也没发生，这就是"不可调"的观感）
                 final Double rMin = nr.min();
                 final Double rMax = nr.max();
                 box.setResponder(s -> {
@@ -1855,8 +1833,6 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /**
-     * v1.3.0(beta) 实测六百八十：搭方块禁用名单子页（搭路板块）。
-     *
      * 布局与交互照搬替代品/投喂子页（同一套 creativeInput 搜索框 + creativeItems 网格 + 翻页）：
      * 顶部一行是【默认规则开关】与【清空名单】，中间网格点一下切换该方块的禁止/允许，底部列表只列
      * 【玩家自己改过的】条目（点「移除」回到默认规则）。渲染与点击两处状态都问
@@ -1939,16 +1915,11 @@ public class PromaidConfigScreen extends Screen {
 
     /**
      * 超越维度（BeyondDimensions）规则名单子页。
-     *
      * <p>布局与交互照搬替代品/喂水子页（同一套 creativeInput 搜索框 + creativeItems 网格 + 翻页）：
      * 顶部四个模式按钮（一定搬 / 一定不搬 / 保留N个 / 至少留N个），中间点物品图标 = 在当前模式下
      * 加入/移出，下方一个 EditBox 填 N（并可直接手输 {@code tag:c:ores} 这类标签写法，网格选不到标签），
      * 底部列表列出**当前模式**的规则（每行「移除」）。
-     *
-     * <p>【为什么全程走网络】本子页改的是**服务端**的 {@code config/promaid_bd_rules.json}；面板是
-     * 纯客户端 Screen，直接写只会写到客户端自己的目录。所以每次改动都发 C2S 包
-     * （{@link com.maidsmart.bd.MaidBdNetworking}），服务端 {@code hasPermission(2)} 落盘后回推状态，
-     * 本子页只渲染客户端缓存。命令 {@code /maid_smart bd_rule *} 与本子页共用同一套落盘。
+     * <p>【为什么全程走网络】本子页改的是**服务端**的 {@code config/promaid_bd_rules.json}；面板是 纯客户端 Screen，直接写只会写到客户端自己的目录。所以每次改动都发 C2S 包 （{@link com.maidsmart.bd.MaidBdNetworking}），服务端 {@code hasPermission(2)} 落盘后回推状态， 本子页只渲染客户端缓存。命令 {@code /maid_smart bd_rule *} 与本子页共用同一套落盘。
      */
     private void bdRulesButtons(int w, int h, int cx) {
         int panelLeft = Math.max(8, cx - 280);
@@ -2804,16 +2775,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * 实测八百一十七续：网格行数按**窗口高自适应**。
-     *
      * <p>旧版固定三元式（h&lt;215 则 2 行，否则 3 行）在矮窗口把底部的
      * 「搜索/翻页 + 手填输入行 + 已分类名单」整条挤没：名单只剩 0~8px，
      * 汇总文字还会直接压在名单那一行上（玩家截图）。
-     *
      * <p>反解底部预算：网格底下还要放
      * 翻页(18) + 输入(24+18) + 名单(22) + 汇总(9) + 间距(约 37) ≈ 128px，
-     * 故要求 {@code 66 + rows*20 <= h - 128} → {@code rows <= (h-194)/20}，夹在 [1, {@link #GRID_ROWS}]。
-     * 窗口够高时仍是 3 行，行为不变。
+     * 故要求 {@code 66 + rows*20 <= h - 128} → {@code rows <= (h-194)/20}，夹在 [1, {@link #GRID_ROWS}]。 窗口够高时仍是 3 行，行为不变。
      */
     private int gridRowsFor(int h) {
         int byHeight = (h - 194) / GRID_CELL;
@@ -3539,11 +3506,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
      *  配置里面，而不是放在战斗自保里面"）——落地水/岩浆逃生放水/主人死亡传送，
      *  全是被动保命动作，与战斗自保页的主动行为（自保策略/贴身辅助/单兵战术）分离 */
     /**
-     * v1.2.2 实测五百八十一【空袭数值】：原本硬编码在 {@code MaidFlightCombatBehavior} 里的
      * 空袭数值全部改为配置项，集中到这一页（需求原文：「关于空袭等各项数值也要有一个详细的
      * 配置面板，在模组详细配置。」）。**默认值与原常量一字不差**——不改任何行为，只是把
-     * 原来只能改代码的旋钮交给玩家；飞行链路本身的取舍（为什么背离起飞、为什么收翅才吃加成）
-     * 仍写在各个数值的注释里，出处见该类同名访问器的 javadoc。
+     * 原来只能改代码的旋钮交给玩家；飞行链路本身的取舍（为什么背离起飞、为什么收翅才吃加成） 仍写在各个数值的注释里，出处见该类同名访问器的 javadoc。
      */
     private void airRaidRows() {
         // v1.5.397 实测八百五十四：空袭总开关挪到本页第一条。需求：「开启 DIY 之后会直接导致空袭
@@ -3971,22 +3936,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * v1.3.7 实测六百六十七【武装拴绳】——粉丝点单的"直升机二号位"。
-     *
      * <p>【实测六百七十五：从「扫帚模式」页里独立出来】
-     *
-     *
      * {@link #broomRows()} 的末尾（要先点进「扫帚模式」、再往下滚才看得到），现在它是自己的板块
      * （{@link Section#TETHER}，就排在「扫帚模式」后面），而且**第一条就是这个功能是什么**的详解。
-     *
      * <p>【排版口径】每一行脚下的注释（{@code comment}）就是这个面板的"详细介绍"——面板会把
      * 注释折行画在输入框下面，所以这里把"怎么用 / 什么规则 / 日志搜什么"都写进各行。
-     * <p>【实测六百八十九：分段】这里以前是"一整段 1000+ 字"的详解，窄窗口（GUI scale 4）下
-     * 要 22 行、比一页可用高还高——面板分页把"一行"当原子，于是它独占一页，还把文字画到翻页/
-     * 保存按钮上（玩家截图：第 1 页只剩板块标题、第 2 页正文压住按钮）。现在按【是什么 /
-     * 什么时候能绑 / 怎么解除 / 画面上的三件事（+ 1.21.1 专属的重锤）】拆成 4~5 条短行，
-     * 每条注释不超过 3 行；完整细节留在手册那一章（见 {@code GuideContent}），面板只留
-     * "看一行就够用"的部分。
+     * <p>【实测六百八十九：分段】这里以前是"一整段 1000+ 字"的详解，窄窗口（GUI scale 4）下 要 22 行、比一页可用高还高——面板分页把"一行"当原子，于是它独占一页，还把文字画到翻页/ 保存按钮上（玩家截图：第 1 页只剩板块标题、第 2 页正文压住按钮）。现在按【是什么 / 什么时候能绑 / 怎么解除 / 画面上的三件事（+ 1.21.1 专属的重锤）】拆成 4~5 条短行， 每条注释不超过 3 行；完整细节留在手册那一章（见 {@code GuideContent}），面板只留 "看一行就够用"的部分。
      */
     private void tetherRows() {
         this.rows.add(new SectionRow("—— 武装拴绳（TLM：拴住飞行女仆 = 直升机二号位）——", false));
@@ -4674,12 +4629,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * v1.5.393 实测八百零四【饰品「大运」】——鞘翅飞行开路的全部参数。
-     *
      * <p>需求原文："加入一个新饰品，可以由玩家和女仆进行佩戴。佩戴的效果是使用鞘翅飞行的过程中
      * 可以直接击毁自身周边 5×5 范围内除硬度大于等于黑曜石以及硬度&lt;0 的一切方块。配置选项里面
      * 也可以写。这个效果在女仆空袭的时候生效。"
-     *
      * <p>面板上的顺序刻意与玩家心里的问题一致：**这是什么 → 谁能戴 → 清哪些 → 怎么清**。
      */
     private void daYunRows() {
@@ -4729,12 +4681,8 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * v1.2.2 实测六百一十六【压缩盒】——新道具/新方块那一档的参数。
-     *
      * 可调的只有两条（格数固定 5、界面交互固定，不开放）：盒子放进女仆背包算不算
      * 她背包的延伸，以及每格能堆多少（默认 114514）。
-     *
-     * v1.2.4 实测六百四十五：原来还有两条——「禁入带附魔的物品」开关与「禁入清单」，
      * 都已删除（附魔物品一律禁入，判据写死在 {@code CompressionBoxFilter}）。
      * 这里保留一条**只读**的「禁入规则」说明行，让原位置仍然看得见口径。
      */
@@ -4913,18 +4861,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     // ---------- 矿表（v1.5.101b：目标矿物 / 障碍物 双名单） ----------
 
     /* ==================== 实测八百二十九【回退】 ====================
-     *
-     *
      * 于是给矿表/木材表这一页加【回退】：把某次改动之前的三张列表整张还原，最多可连续回退 3 步
      * （实测八百二十九b 由 1 步放宽到 3 步——单步容错率太低，手滑连删两下就回不去了）。
      * 为什么只挂在这一页——这页是全局唯一会"批量改一大堆"的地方（一键全部加入 / 搜索后批量
      * 点图标），也只有这页三张表彼此纠缠（障碍物额外名单 / 障碍物排除名单 / 目标矿物或木材
      * 价值表），一次误操作最容易把表刷乱。
-     *
-     * <p>口径：只有【真的改了配置】才落回退点（快照与当前逐字相同则丢弃），所以"点图标只是
-     * 锁定方块"这种不改配置的动作不会占用回退位。回退历史是一个后进先出的栈，最多保留最近
-     * {@link #UNDO_DEPTH} 步：连点回退就一步步往回退，退完为止；回退本身不再入栈（不产生
-     * "回退的回退"）。回退不落盘、不跨界面存活——关掉界面重开即失效。
+     * <p>口径：只有【真的改了配置】才落回退点（快照与当前逐字相同则丢弃），所以"点图标只是 锁定方块"这种不改配置的动作不会占用回退位。回退历史是一个后进先出的栈，最多保留最近 {@link #UNDO_DEPTH} 步：连点回退就一步步往回退，退完为止；回退本身不再入栈（不产生 "回退的回退"）。回退不落盘、不跨界面存活——关掉界面重开即失效。
      */
 
     /**
@@ -5266,9 +5208,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * 实测八百二十八【障碍物·一键全部加入】：把当前创造网格里【筛出来的全部方块】
      * 一次性设为可挖穿（障碍物）。
-     *
      * <p>口径与 {@link #toggleCreative} 的障碍物分支【逐字一致】，只是从"点一个加一个"
      * 变成"这一批全加"：基岩/屏障仍不加入；内置自然软方块从排除名单移出（恢复挖穿）；
      * 其余方块加进 MINE_BREAKABLES（去重）。搜索框过滤后的网格只含筛出来的方块，
@@ -5315,23 +5255,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
 
     /* ==================== v1.2.5 实测六百五十二：烧制清单子页 ====================
-     * v1.3.6 实测六百六十一【面板改造】
-     *
-     *
      * 于是：四张名单（只烧这些 / 禁止烧制 / 只用这些燃料 / 禁用燃料）收成**两个科目**
      * （烧制物品 / 燃料），每个科目一页、每个物品**一个勾**——勾上 = 可以，取消 = 不可以，
      * 交互与「投喂食物勾选」那张面板同款（绿 ✔ / 红 ✖）。
-     *
      * <p>底层存储**没换**：仍然是原来那四个配置键，所以老存档里填好的名单一个字都不丢。
      * 折算规则（与 MaidCookBehavior.smeltListed / fuelListed 的判定**逐字一致**）：
-     * <ul>
-     *   <li>「允许清单」为空（默认、也是绝大多数人的状态）→ 这一页编辑的是**禁止清单**：
-     *       勾 = 不在禁止清单里；取消 = 加进禁止清单；</li>
-     *   <li>「允许清单」非空（旧版的「只烧这些」模式）→ 这一页编辑的是**允许清单**：
-     *       只有清单里的勾着；勾 = 加进允许清单，取消 = 从允许清单移出（于是它就是"不可以"）。</li>
-     * </ul>
-     * 当前是哪一种，页顶那句话会写明白（黑名单 / 白名单）——不会出现「看到的勾与她真的会做的
-     * 不是一回事」。
+     * <ul> <li>「允许清单」为空（默认、也是绝大多数人的状态）→ 这一页编辑的是**禁止清单**： 勾 = 不在禁止清单里；取消 = 加进禁止清单；</li> <li>「允许清单」非空（旧版的「只烧这些」模式）→ 这一页编辑的是**允许清单**： 只有清单里的勾着；勾 = 加进允许清单，取消 = 从允许清单移出（于是它就是"不可以"）。</li> </ul> 当前是哪一种，页顶那句话会写明白（黑名单 / 白名单）——不会出现「看到的勾与她真的会做的 不是一回事」。
      */
 
     /** 两个科目（cookTableMode 0/1，与配置键一一对应：0 = 烧制，1 = 燃料） */
@@ -5494,20 +5423,10 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
     /**
      * 重建烧制清单的候选网格（中英文搜索；与 rebuildCreative 同款）。
-     *
-     * v1.3.2 实测六百五十六【"这张表乱填"】：旧版这里是**全物品**，玩家打开「只烧这些」
      * 看到的是一整注册表的物品——绝大多数根本没有炉子配方，而真正能烧的生肉/矿石/沙子在
      * 第 N 页。反馈原文「那些不可烧东西都进这张表了，原本可以烧制的食物和物品反而不在里面」。
      * 现在按**当前档位**过滤候选：
-     * <ul>
-     *   <li>「只烧这些」/「禁止烧制」（0/1）→ 只列当前世界**真的有炉子配方**的物品
-     *       （{@link com.maidsmart.task.MaidCookBehavior#smeltableForPicker}）；</li>
-     *   <li>「只用这些燃料」/「禁用燃料」（2/3）→ 只列原版**能当柴烧**的物品
-     *       （{@link com.maidsmart.task.MaidCookBehavior#fuelForPicker}）。</li>
-     * </ul>
-     * 判据都在 {@code MaidCookBehavior} 里（一处实现），所以"面板上看得见的"与"她真的会烧的"
-     * 不会是两套东西。客户端拿不到世界（理论上不会：面板是游戏内开的）时退回全物品，
-     * 至少不把人挡在门外。
+     * <ul> <li>「只烧这些」/「禁止烧制」（0/1）→ 只列当前世界**真的有炉子配方**的物品 （{@link com.maidsmart.task.MaidCookBehavior#smeltableForPicker}）；</li> <li>「只用这些燃料」/「禁用燃料」（2/3）→ 只列原版**能当柴烧**的物品 （{@link com.maidsmart.task.MaidCookBehavior#fuelForPicker}）。</li> </ul> 判据都在 {@code MaidCookBehavior} 里（一处实现），所以"面板上看得见的"与"她真的会烧的" 不会是两套东西。客户端拿不到世界（理论上不会：面板是游戏内开的）时退回全物品， 至少不把人挡在门外。
      */
     /** 当前筛选取条件是否放行这件候选（只作用于「烧制物品」档；燃料档不看它） */
     private boolean cookFilterKeeps(net.minecraft.world.item.ItemStack probe) {
@@ -5592,13 +5511,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
     /**
      * v1.3.3 实测六百五十七【"烧制清单里为什么没有食物"】——把这一页的**事实**打出来。
-     *
      * <p>背景：候选网格从 v1.3.2 起按"当前世界真有炉子配方"过滤。，而按代码
      * 食物**应该**在（生肉/土豆/海带在原版都有 smelting + smoking 配方）——所以要么是这套判据
      * 在你那个环境里拿不到配方（客户端没有配方表 / 整合包把食物配方改掉了），要么是过滤链里
      * 还有别的东西在挡。这两种原因**在游戏里长得一模一样**（都是"这一格里没有食物"），
      * 只能靠事实分辨——所以这里每次进某一档记一条，附一组代表物品的判定结果（真 = 会进网格）。
-     * 实测时把这一行发过来即可定位。日志里搜「烧制清单」。
      */
     private void logCookGridDiag(net.minecraft.world.level.Level level, boolean fuelMode) {
         try {
@@ -6398,8 +6315,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * v1.3.0 实测六百六十六：**带范围的整数行 setter**——越界钳到边界，并记一条给玩家看的提示。
-     *
      * 【为什么范围必须由面板自己判】ModConfigSpec.set() 完全不做范围校验：javap 实证它的
      * 方法体就是 {@code Preconditions.checkNotNull(...)} 两行 + {@code childConfig.set(path, value)}
      * + {@code cachedValue = value}——**范围只在"读配置文件"时由 correct() 钳**。
@@ -6604,17 +6519,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * v1.1.0 实测二十二【像素级重叠防御】：对注释做像素切割——按【面板实际像素宽】
      * 逐字符累积测量（width = width），超宽即折行；返回折行后的行列表。
-     * 旧版 ROW_H 固定 44，注释折成 3+ 行时（长说明 + 窄窗口 + GUI 缩放大）
      * 行高不够 → 注释尾部与下一行标签/输入框像素重叠。新版每行动态行高
      * （见 rowHeight()），本方法是高度计算的统一口径（渲染与布局共用）。
      */
     /**
-     * 实测六百八十九：注释里的 markdown 强调标记 {@code **…**} 就地转成金色。
-     * 面板不解析 markdown——旧版把星号原样画在界面上（玩家截图里能看到"**已经骑在扫帚上**"），
-     * 全面板有 24~25 行注释带这个标记。成对出现 → 前一个换金色、后一个还原（{@code §r} 落回
-     * drawComment 的浅蓝）；落单的星号照原样保留（否则一个 §e 会把后面整段染黄）。
+     * 面板不解析 markdown——旧版把星号原样画在界面上（玩家截图里能看到"**已经骑在扫帚上**"）， 全面板有 24~25 行注释带这个标记。成对出现 → 前一个换金色、后一个还原（{@code §r} 落回 drawComment 的浅蓝）；落单的星号照原样保留（否则一个 §e 会把后面整段染黄）。
      */
     private static String emphasis(String s) {
         int marks = 0;
@@ -6699,10 +6609,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * v1.5.110：配置项注释绘制——自动换行（面板宽度内）+ 右缘钳制，保证完整可见。
      * 每行从 clampLeftX 起点画（面板内容左缘，比标签 20 更靠右，对齐控件区）。
-     * v1.5.112：注释用【浅蓝 + "» " 前缀】渲染，与白色数值/浅灰标签明显区分——
-     * 旧版灰 0x888888 与标签 0xAAAAAA 太接近，反馈"注释做了跟没做一样"。
      * 首行带前缀，续行缩进对齐（前缀宽度计入折行/钳制，防右缘越界）。
      * v1.1.0 实测二十二：折行改走 wrapComment（像素切割统一口径——布局侧
      * rowHeight 用同一份行数计算行高，渲染与布局永不脱节）。
@@ -7321,11 +7228,8 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     cx, 32, 0xFFFFFF);
             // 行标签（按行实际位置画；行数受分页限制不会越界）
             // v1.1.0 实测二十二：渲染侧行位置与布局侧同口径（动态行高累加）——
-            // 旧版渲染独立按 ROW_H 匀质计算，与布局侧脱节就是重叠的根源
-            // v1.1.0 实测四十五：直接用 init 侧算好的 pageRowY——
             // 渲染侧重算（旧实现）拿 start..end 行查【全表】累加坐标，第二页
             // 起行 y 是第一页的绝对位置（起点偏低/错位）→ 文本重叠排版错乱
-            // v1.1.0 实测一百七十七：start/end/totalPages 同步改用 pageStarts
             // （逐页装填分页模型，与 init 侧完全同源——旧版按全局 perPage 均摊，
             // 行高不均的页 start/end 错位、页码总数也算错）
             int totalPagesR = Math.max(1, this.pageStarts.size());
@@ -7569,7 +7473,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             }
         }
         // v1.2.5 实测六百五十二：烧制清单子页网格点击 → 在当前那张名单里加入/移出
-        // v1.3.0 实测六百五十五【子页上所有按钮都是死按键】：
         // 原来这里写的是 `return this.clickCookGrid(...)` —— clickCookGrid 只在命中物品格时
         // 返回 true，其余一律 false，而这个 false **被直接 return 出去**，于是
         // super.mouseClicked 永远不会执行 → 子页上每一个子控件（四张名单的模式按钮、
@@ -7588,15 +7491,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * v1.5.126：真正的字符输入入口（照搬 MC 原版创造搜索框）——
      * 1.20.1 的键盘字符链是 KeyboardHandler.charTyped → screen.charTyped(char,int)
      * （GuiEventListener 接口方法；Screen 自身不实现，走 ContainerEventHandler
      * 默认实现 = 转发给 getFocused()）。原版 CreativeModeInventoryScreen 不依赖
      * getFocused()，而是重写 charTyped/keyPressed 直接转发给自己持有的 searchBox 字段
      * ——这里同样直接转发给自跟踪的 activeBox（点击输入框时记录，见 mouseClicked），
-     * 再兜底 super（getFocused() 链）。旧版 v1.5.123 重写的 isValidCharacterForName(String,char,int)
-     * 经字节码实证是 1.20.1 无人调用的死代码（方法体是字符合法性过滤器），
-     * 这是"点进输入框但打不了字"的根因——重写的方法根本不参与输入分发。
+     * 再兜底 super（getFocused() 链）。旧版 v1.5.123 重写的 isValidCharacterForName(String,char,int) 经字节码实证是 1.20.1 无人调用的死代码（方法体是字符合法性过滤器）， 这是"点进输入框但打不了字"的根因——重写的方法根本不参与输入分发。
      */
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
@@ -7631,13 +7531,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
     /**
      * 把输入框里未提交的文本统一写进配置（v1.5.124 延迟提交的**唯一**入口）。
-     *
-     * v1.3.0 实测六百六十六【不再静默丢输入】——
-     *
      * （格式非法 / 写入异常）就一声不响地丢掉，而输入框只标"不是数字"、不标"超出范围"，
      * 玩家完全看不出为什么没生效。现在把没写成功的行名带回去，由 {@link #m_7379_}
      * 画在面板上（并且**不关面板**，让玩家当场改）。
-     *
      * @return 没写成功的行标签列表（空 = 全部写成功）
      */
     private java.util.List<String> applyPending() {

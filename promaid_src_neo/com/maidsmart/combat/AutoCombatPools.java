@@ -79,18 +79,12 @@ public final class AutoCombatPools {
     }
 
     /**
-     * v1.3.9 实测七百九十六：她身上有没有【任何一个参战任务认的武器】——与 {@link #buildPools}
      * 候选判据**同源同实现**（直接问它），供 {@code NeutralThreatDriver} 的「真能打」闸
      * 复用，杜绝"两处各写一份武器判定、日后走偏"。
-     *
      * <p>用途：把"喂 ATTACK_TARGET"这一步也过一遍 ①（切战斗任务）早就有的武器闸。
      * 反馈"女仆拿着雪球也会主动参战打怪"的根因就是 ② 此前一个武器判据都没读——目标写进
      * brain 后，TLM 空闲任务 `TaskIdle` 的打雪仗行为会照着它扔雪球、单兵战术行为会照着
-     * 它跳劈，而雪球没有 {@code ATTACK_DAMAGE}（javap 实证 TLM 的 {@code TaskAttack.isWeapon}
-     * 就是查这个属性）→ 两池全空 → ① 本来就不会切她。现在 ② 也据此不喂目标。
-     *
-     * <p>两池全空 ⇔ {@code pickCombatTask} 返回 null ⇔ ① 不会发生——因此本闸不会误伤
-     * 任何"① 真的会参战"的场景（近战/远程/模组武器女仆照常）。
+     * 它跳劈，而雪球没有 {@code ATTACK_DAMAGE}（javap 实证 TLM 的 {@code TaskAttack.isWeapon} 就是查这个属性）→ 两池全空 → ① 本来就不会切她。现在 ② 也据此不喂目标。 <p>两池全空 ⇔ {@code pickCombatTask} 返回 null ⇔ ① 不会发生——因此本闸不会误伤 任何"① 真的会参战"的场景（近战/远程/模组武器女仆照常）。
      */
     public static boolean hasAnyCombatWeapon(EntityMaid maid) {
         try {
@@ -226,11 +220,7 @@ public final class AutoCombatPools {
         // 随机 → 1/3 概率落到原版攻击（= 拿着拔刀剑切普通攻击模式的来源；战中
         // 换战术同池随机同理会把拔刀剑换出）。修复：池内有模组任务时原版通用任务
         // 整体让位（模组武器 → 模组模式确定性生效）；原版任务退化为【无模组武器】
-        // 时的兜底。权重随机保留在多个模组任务之间（同为专属任务，随机选不退化）。
-        // v1.2.2 实测六百二十一【让位改成可控】：①配置里可以整体关掉（关 = 原版与模组
-        // 同池纯按权重随机，原版/模组两条权重照旧生效）②分类表里**点名写过分类**的
-        // 任务不参与让位（玩家点名优先于自动让位——否则"我把这个模组任务写成远程"
-        // 会被让位规则反手踢掉，等于表没用）。
+        // 时的兜底。权重随机保留在多个模组任务之间（同为专属任务，随机选不退化）。 同池纯按权重随机，原版/模组两条权重照旧生效）②分类表里**点名写过分类**的 任务不参与让位（玩家点名优先于自动让位——否则"我把这个模组任务写成远程" 会被让位规则反手踢掉，等于表没用）。
         if (CombatModeTable.vanillaYieldToMod()) {
             vanillaYieldToMod(meleePool, meleeWeights, vanillaNs, pinnedUids);
             vanillaYieldToMod(rangedPool, rangedWeights, vanillaNs, pinnedUids);
@@ -641,18 +631,12 @@ public final class AutoCombatPools {
     }
 
     /**
-     * v1.1.0 实测一百四十九：战斗还原时把 home 模式与作息还原到战斗前。
-     *
-     * v1.2.4 实测六百四十六（issue #22 第二条"打完怪变成跟随、回不去 home"）：
      * <ul>
      *   <li>**没有快照就什么都不做**。旧版无条件 {@code setHomeModeEnable(getBoolean(快照))}——
      *       快照不存在时 {@code getBoolean} 返回 false，等于"没记录也照样把 home 关掉"：
      *       老版本升级上来的残留标记、以及没走过参战快照的清理路径，都会把玩家的
      *       驻守（home）设置吃掉。</li>
-     *   <li>**所有调用点都必须先本方法、后 {@code clearMarkers}**：快照属于
-     *       {@code clearMarkers} 的清理对象，顺序反了就是"删在读取之前"。</li>
-     *   <li>排班开着时作息与模式由日程表管理，不覆盖（快照照旧由 clearMarkers 清掉）。</li>
-     * </ul>
+     *   <li>**所有调用点都必须先本方法、后 {@code clearMarkers}**：快照属于 {@code clearMarkers} 的清理对象，顺序反了就是"删在读取之前"。</li> <li>排班开着时作息与模式由日程表管理，不覆盖（快照照旧由 clearMarkers 清掉）。</li> </ul>
      */
     static void restorePrevMode(EntityMaid maid) {
         try {

@@ -19,14 +19,11 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * v1.5.252r：钓鱼自动坐垫【普通服务类】——全部逻辑从 FishingAutoChairMixin 迁出。
- *
  * 迁移原因（v1.5.252q 崩溃实证）：mixin 类被 mixin 插件特殊处理，普通代码
  * （ProMaidExtension.onServerTick）直接调用 mixin 静态方法时，JVM 判定该 mixin
  * 类 "is invalid" → NoClassDefFoundError → 进世界第一 tick 即崩。mixin 本身用
  * ASM 应用不受影响，但【普通代码永远不能直接引用 mixin 类】——逻辑放这里，
  * mixin 只留注入壳，ProMaidExtension/ChairNoDropMixin 都调本类。
- *
  * 功能（v1.5.252q 方案）：
  * 1. 原逻辑已找到椅子/船 → 不动，走原模组钓鱼流程；
  * 2. 没有 → 实体直接扫描 8 格内空坐垫/船（绕过传感器可见性）→ 走过去/贴脸直接上骑；
@@ -34,8 +31,7 @@ import java.util.Set;
  *    标记 + 女仆 UUID），startRiding(force) 直接坐上 → TLM 骑乘脑自动找水抛竿；
  * 4. 清理（服务端每秒 sweep）：任务解除（≠钓鱼）/ 脱离坐垫超 2 秒 / 女仆不在 → 删；
  * 5. 标记坐垫被摧毁（玩家拳打/创造击碎）→ 只移除实体无掉落（ChairNoDropMixin 调用
- *    isAutoChair 判定）；
- * 6. 原 no_sit 气泡在"马上要生成坐垫"时压掉，不再两句打架。
+ *    isAutoChair 判定）； 6. 原 no_sit 气泡在"马上要生成坐垫"时压掉，不再两句打架。
  */
 public final class FishingChairService {
     /** 标记坐垫的持久 NBT 键 */
@@ -76,17 +72,11 @@ public final class FishingChairService {
 
     /**
      * 【联机·服务端】每 3 tick（15 次/秒）的驱动入口——**只遍历"正在走向钓鱼坐垫"的那几只女仆**。
-     *
      * <p>旧写法在 {@code ProMaidExtension} 里自己写了两层循环：对**每个维度**取
      * {@link com.maidsmart.tool.EntitySnapshot}（= {@code ServerLevel.getAllEntities()} 的**全量活视图**）
      * 再 instanceof 过滤。也就是**15 次/秒 × 全部维度 × 全部实体**——在一个实体很多（动物/怪物/掉落物/箭）
      * 的多人服务器上，这条链的绝大部分时间花在"筛掉不是女仆的实体"上，而真正要做事的（有
-     * {@link #SEAT_TARGET} 的）通常只有 0~2 只。
-     *
-     * <p>候选集就是 {@link #SEAT_TARGET} 这张表本身（{@code recordSeatTarget} 由 mixin 写、
-     * {@link #tickKeepSeatWalk} 在"已骑上/任务解除"时自己摘）。这里按 UUID 直接从维度实体表取
-     * （{@code m_8791_}(uuid) = O(1) 哈希查），取不到（她卸载了/不在这个维度）就顺手摘掉。
-     * 行为与旧版逐字一致：旧版也是"对每只活着的女仆调 tickKeepSeatWalk"，只是它**遍历了所有实体**。
+     * {@link #SEAT_TARGET} 的）通常只有 0~2 只。 <p>候选集就是 {@link #SEAT_TARGET} 这张表本身（{@code recordSeatTarget} 由 mixin 写、 {@link #tickKeepSeatWalk} 在"已骑上/任务解除"时自己摘）。这里按 UUID 直接从维度实体表取 （{@code m_8791_}(uuid) = O(1) 哈希查），取不到（她卸载了/不在这个维度）就顺手摘掉。 行为与旧版逐字一致：旧版也是"对每只活着的女仆调 tickKeepSeatWalk"，只是它**遍历了所有实体**。
      */
     public static void tickKeepSeatWalkAll(net.minecraft.server.MinecraftServer server) {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_FISHING_CHAIR.get()) {
@@ -175,7 +165,6 @@ public final class FishingChairService {
         // （NEAREST_VISIBLE_LIVING_ENTITIES）找椅子并设置 walk target，原版找到
         // 时 sitEntity != null（上面已 return，走原版流畅流程）。这里只处理"原版
         // 没找到椅子"（no_sit 分支替换为生成坐垫）——【不再自己扫世界找椅子】：
-        // 旧版 findNearbySeat（16/32 格实体扫描）与原版可见内存产生分歧——原版
         // 找不到但 promaid 扫到 → promaid 接管走向（每 12 tick 重设 walk target
         // → 一步一停，日志实证 25 格走 18 秒）。套用原版后：可见空椅子原版必坐
         // （promaid 零干预）；原版找不到（不可见/被占）→ 7 秒宽限后生成坐垫。
@@ -308,15 +297,12 @@ public final class FishingChairService {
     private static final int[][] DIRS4 = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
     /**
-     * v1.5.255/256：大范围找水——v1.5.258 性能重构（256 实测卡死：单次
      * 160 万次逐格检查 + 30 秒一次 → 服务端主线程冻结 7 秒，日志实证
      * "Can't keep up! Running 7404ms"）。
      * 多阶段递减（水面越近扫描越少）：
      *  A1 同层 dy=0（半径 64，~1.6 万次 ≈ 5ms）——草地水池/同层水立即命中；
      *  A2 贴近 ±3（~11 万次 ≈ 35ms）；
-     *  B  全垂直 -16..+32 半径 40（~29 万次 ≈ 100ms，30 秒限频）。
-     * 统计：stats[0]=液体格 / stats[1]=通过上方空气 / stats[2]=合法岸边
-     *（诊断：失败日志显示判定卡在哪一步）。
+     *  B  全垂直 -16..+32 半径 40（~29 万次 ≈ 100ms，30 秒限频）。 统计：stats[0]=液体格 / stats[1]=通过上方空气 / stats[2]=合法岸边 （诊断：失败日志显示判定卡在哪一步）。
      */
     private static BlockPos findWaterSpotFar(ServerLevel level, EntityMaid maid, int[] stats) {
         BlockPos c = maid.m_20183_();

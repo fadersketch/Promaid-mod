@@ -12,37 +12,19 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 实测七百〇二【仿创造飞行 · 1.20.1 精简版 · 控制器】——让女仆悬浮并自由升降（创造模式飞行的手感）。
- *
  * 【这一步解决什么】整合包里给"创造飞行/悬浮"的手段五花八门（饰品、护甲套装、药水效果……），
  * 而它们几乎全部只对**玩家**生效；女仆拿到手上一字不动。本控制器不去复刻每个物品的物理，而是：
  * **只要她有资格（见 {@link MaidFreeFlightKit}），我们就托住她**——
  * {@code setNoGravity(true)} + 每 tick 直接给速度，形成"悬停 + 平滑位移"的创造飞行手感。
- *
  * 【为什么挂在事件上而不是 brain 行为】最初写的是 core 行为（priority 40，与其它附加行为同一条
  * 注册链）。现场诊断显示：行为**被实例化了**，但它的 {@code checkExtraStartConditions} **从来没有
  * 被调用过**。这里先用 {@code MaidTickEvent} 事件驱动实现同一套逻辑：不依赖大脑调度。
  * （TLM 的 {@code MaidTickEvent} 在 {@code EntityMaid.tick()} 里**早于** brain tick 发出，
  * 所以我们的速度设置在原版 travel 之前生效。）
- *
  * 【飞行力学：一阶，绝不累加】转向照抄扫帚模式那套已实测的公式
  * （{@code speed = min(1, dist / 1.5)}，分量限速 0.35/0.22，{@code dist < 0.35} 直接零速悬停）：速度
  * **直接由距离算**，不做任何累加——一旦接管了 travel（没有原版 0.91 阻力），增量式推进就是无阻尼
- * 谐振子，表现为"升空后空中上下摆动"。一阶系统数学上不可能振荡。
- *
- * 【安全底线】收工时若她还在半空 → 先"软着陆"（保持无重力、缓慢下降），落地或超时才交还重力；
- * 异常也保持悬停，绝不因为一次异常摔死她（她只有 20 血）。
- *
- * ── 1.20.1 精简版与 1.21.1 的差异（逐条对照，只有三处）──
- * <ol>
- *   <li><b>资格探测只有两路</b>：重力归零启发式（没有 {@code Attributes.GRAVITY}）与数据组件两路
- *       （1.20.5+ 才有）已砍，见 {@link MaidFreeFlightKit} 的类注释；</li>
- *   <li><b>名字是 SRG</b>：本树手工编译、无 refmap，原版成员一律用运行时名（{@code m_xxxxx_}、
- *       {@code f_xxxxx_}）；TLM 自己的方法保持可读名（如 {@code isMaidInSittingPose}）；</li>
- *   <li><b>Forge 的持久数据是 {@code maid.getPersistentData()} 的默认方法</b>（readable，无需强转）。</li>
- * </ol>
- * 其余（状态机、软着陆、智能待命、朝向 QoL、战斗档、赶路档、"在主人身边干活"、表寿命回收、遗留
- * 无重力交还）与 1.21.1 树逐字一致——它们全是纯数学与事件驱动，不碰版本差异。
+ * 谐振子，表现为"升空后空中上下摆动"。一阶系统数学上不可能振荡。 【安全底线】收工时若她还在半空 → 先"软着陆"（保持无重力、缓慢下降），落地或超时才交还重力； 异常也保持悬停，绝不因为一次异常摔死她（她只有 20 血）。 ── 1.20.1 精简版与 1.21.1 的差异（逐条对照，只有三处）── <ol> <li><b>资格探测只有两路</b>：重力归零启发式（没有 {@code Attributes.GRAVITY}）与数据组件两路 （1.20.5+ 才有）已砍，见 {@link MaidFreeFlightKit} 的类注释；</li> <li><b>名字是 SRG</b>：本树手工编译、无 refmap，原版成员一律用运行时名（{@code m_xxxxx_}、 {@code f_xxxxx_}）；TLM 自己的方法保持可读名（如 {@code isMaidInSittingPose}）；</li> <li><b>Forge 的持久数据是 {@code maid.getPersistentData()} 的默认方法</b>（readable，无需强转）。</li> </ol> 其余（状态机、软着陆、智能待命、朝向 QoL、战斗档、赶路档、"在主人身边干活"、表寿命回收、遗留 无重力交还）与 1.21.1 树逐字一致——它们全是纯数学与事件驱动，不碰版本差异。
  */
 public final class MaidFreeFlightController {
 
@@ -190,10 +172,8 @@ public final class MaidFreeFlightController {
 
     /**
      * 【"本来要走路过去的活"也交给仿创造飞行】需求方口径（
-     *
      * <p>调用点：{@code FreeFlightWalkGuardMixin}（{@code PathNavigation.moveTo(DDDD)Z} 的 HEAD，
      * = 挖矿 / 伐木 / 农活这类**直连寻路**）。返回 true = 这一发地面寻路被接管。
-     *
      * <p>接管条件（四条全中）：①她有飞行资格；②开关开着且她在非战斗的工作任务上；③这一格确实够
      * "费劲"（水平超 {@code freeFlightTravelDist} 或高差超 2 格）；④那一格底下落得下去。
      */

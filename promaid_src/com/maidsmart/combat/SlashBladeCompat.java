@@ -9,61 +9,19 @@ import java.lang.reflect.Method;
 import java.util.Optional;
 
 /**
- * v1.2.0 实测五百：拔刀剑（SlashBlade: Resharped）兼容层——**全反射，可选模组**。
+ * 拔刀剑（SlashBlade: Resharped）兼容层——**全反射，可选模组**。
  *
- * 反馈原文：「空袭技能目前不适配拔刀剑。」
- *
- * 【根因·两处，都用字节码实证】
- *
- * ① **TLM 的拔刀斩触发被硬编码门控在它自己的攻击任务上，我们的空袭任务永远进不去。**
- * TLM 的拔刀剑支持只有一处——`EntityMaid.m_6674_(swing)` 开头调用
- * `SlashBladeCompat.swingSlashBlade(maid, 主手)`；而那个方法体（反编译）第一步就是：
- * ```
- * if (isSlashBladeItem(stack)
- *         && maid.getTask().getUid().equals(TaskAttack.UID)) {   // ← 只认 touhou_little_maid:attack
- *     ... AttackManager.doSlash(...)
- * }
- * ```
- * 我们的飞行任务 UID 是 `maid_smart:flight_combat` / `flight_ranged`，不是
- * `touhou_little_maid:attack` → 这个 `equals` 恒 false → **女仆在空袭里挥刀，拔刀斩一次都不会触发**
- * （不是"触发得少"，是根本不进那段代码）。地面攻击任务下同一个女仆却能触发，这正是
- * 玩家看到的"空袭不适配拔刀剑"。
- *
- * ② **我们自己的命中结算只吃原版 `ATTACK_DAMAGE`，没有拔刀剑的伤害倍率。**
- * `MaidFlightCombatBehavior#hitOne` 的伤害 = `ATTACK_DAMAGE 属性 × 暴击 1.5 + 附魔`；
- * 而拔刀剑自己的口径（`AttackHelper.calculateTotalDamage` 反编译）是：
- * ```
- * 伤害 = (ATTACK_DAMAGE + 横扫加成 + 段位加成 + 附魔加成)
- *        × comboRatio × getSlashBladeDamageScale(攻击者) × SLASHBLADE_DAMAGE_MULTIPLIER
- * ```
- * 其中 `getSlashBladeDamageScale` 就是拔刀剑自己注册的 `SLASHBLADE_DAMAGE` 属性
- * （`ModAttributes.getSlashBladeDamage`，默认 1.0，随练度/段位成长）。我们那条通道
- * **整段没有这个乘数**，所以同一把刀在空袭里打出的数字明显低于她自己地面攻击时打出的。
- *
- * 【改法：只做一件事——把我们空袭的"挥刀"补上 TLM 给地面攻击补的那一下】
- * 既然 TLM 那处门控改不了（那是它的类，而且 slashblade 不在我们的编译 classpath 里），
- * 就在我们**自己**的挥刀点复刻 TLM 的同一段调用（逐点一致，不自己发挥）：
- * ```
- * roll = random.nextInt(60) - 30
- * AttackManager.doSlash(maid, roll, Vec3.ZERO, mute=false, critical=false,
- *                       comboRatio=1.0, KnockBacks.smash)
- * 主手拔刀剑的 BLADESTATE.setLastActionTime(level.getGameTime())
- * ```
- * `doSlash` 生成的 `EntitySlashEffect` 会**自己按拔刀剑的完整公式结算伤害**
- * （上面那 ① ② 两段公式都在它内部：`EntitySlashEffect.tick` → `AttackManager.areaAttack`
- * → `AttackHelper.attack`），所以 ② 那条缺口是被这同一个调用一并补上的——
- * 不需要（也不应该）再往 `hitOne` 里乘一次倍率，否则会变成"我们的原版伤害 + 拔刀斩伤害"叠乘，
- * 比玩家和 TLM 的女仆都强。**加了这一下之后，空袭持刀的表现 = 她自己地面攻击持刀的表现。**
- *
- * 【为什么必须是反射】`compile_promaid.txt` / `compile_neo.txt` 的 classpath 里
- * **没有** slashblade（已核对），模组也不保证装 —— 直接 import 会编译不过、装了就崩。
- * 全部符号按需 `Class.forName` + 缓存，缺模组时 `isLoaded()` 一票否决，零开销。
- *
- * 【主人免伤】`doSlash` 的伤害来源是 `damageSources().mobAttack(女仆)`（非玩家分支，
- * `AttackHelper.attack` 反编译实证）→ 加害者就是女仆 → 已有的 {@link FriendlyFireGuard}
- * （1.20.1 走 `LivingAttackEvent` + `LivingHurtEvent`）会拦掉主人/友方，无需新增免伤代码。
- * 另外拔刀剑自身默认 `pvp_enable=false`、`friendly_enable=false`，它的目标筛选器
- * （`TargetSelector$AttackablePredicate`）本来就只打敌对生物，这是第二层保险。
+ * 【根因】① TLM 的拔刀斩触发被硬编码门控在它自己的攻击任务上（{@code swingSlashBlade} 里
+ * {@code maid.getTask().getUid().equals(TaskAttack.UID)}）；我们的飞行任务 UID 不是
+ * {@code touhou_little_maid:attack} → 恒 false → **空袭里挥刀，拔刀斩一次都不触发**（1.21.1 的 TLM
+ * 1.5.3 完全没有拔刀剑兼容代码，本层在那边反而同时补上地面与空袭）。② 我们的命中结算只吃原版
+ * {@code ATTACK_DAMAGE}，缺拔刀剑的 {@code SLASHBLADE_DAMAGE} 倍率。
+ * 【改法】在**我们自己**的挥刀点复刻 TLM 给地面攻击补的那一下——{@code AttackManager.doSlash(maid,
+ * roll, ZERO, false, false, comboRatio=1.0, KnockBacks.smash)} + 写 BLADESTATE 动作时间。
+ * {@code doSlash} 生成的 {@code EntitySlashEffect} 自己按完整公式结算伤害，② 的缺口被同一调用补上——
+ * **不要**再往 {@code hitOne} 里乘倍率（否则叠乘超模）。
+ * 【必须反射】classpath 无 slashblade，直接 import 编译不过；{@code Class.forName}+缓存，缺模组时
+ * {@code isLoaded()} 一票否决。【主人免伤】伤害源是女仆，{@link FriendlyFireGuard} 已拦掉主人/友方。
  */
 public final class SlashBladeCompat {
 

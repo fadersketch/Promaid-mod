@@ -9,15 +9,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.5.287：干活不被打断⑤——周期拉回补漏。
- *
  * 根因：SchedulePullbackMixin 只堵住了【切班瞬间】的 restrictTo + 走回工位；
  * SchedulePos.tick 由 EntityMaid.tick 每 40 tick（2 秒）调用一次，home 模式
  * 下会再次 restrictTo（收紧活动半径）并【出圈就传送/走回】——javap 实证
  * tick 方法体只有这段拉回逻辑，别无职责。女仆在远处挖矿/干农活时照样每
  * 2 秒被拽一次（旧 patch 漏网，反馈："干活不被打断"）。
- *
- * 实测五百六十二（工作区域回归）：改成【只免掉拉回，圈心照常刷新】——
  * 原版整段 cancel 后限制圈停在旧锚点上，而任务扫描（WorkAreaClamp）与
  * 巡逻/驱动都以圈心为准，圈一旦过期整套工作区域就漂了。现在干活期间照常
  * restrictTo（圈心/半径保持最新），只跳过出圈时的传送/走回；目标选点已由

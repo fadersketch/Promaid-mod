@@ -25,23 +25,18 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 女仆主动对话管理器（P3，v1.5.191 重写为 7 阶段状态机）。
+ * 女仆主动对话管理器（P3）——对齐 maidsoulcore {@link ProactiveStage} 的 7 阶段状态机：
+ * LIGHT_FOLLOWUP → TOPIC_PUSH → WORLD_OBSERVE → RELATION_CANDIDATE → FINAL_NOTICE →
+ * LONG_SILENCE_CHECK → IDLE。
  *
- * 旧版（v1.5.190）：周期扫描按"低血 → 夜晚 → 沉默"三契机一次性挑一个触发，
- * 沉默计时用"女仆自己上次发言"（主人没说话也算沉默、主人刚说完反而不算——bug）。
- *
- * 新版（对齐 maidsoulcore ProactiveStage 7 阶段）：
- * LIGHT_FOLLOWUP → TOPIC_PUSH → WORLD_OBSERVE → RELATION_CANDIDATE
- * → FINAL_NOTICE → LONG_SILENCE_CHECK → IDLE
  * - 阶段推进 = 无主人互动且到点；主人互动（聊天/喂食）→ 周期重置回起点
  * - 每轮主动会话最多 dialogue.maxReplies 次（默认 4），7 阶段不会一次性全喷
- * - 沉默计时改用 ReplyFeedbackTracker 的真实"主人聊天时间"（bug 修复）
- * - 配额只在真正开火前获取：先做阶段选择（纯计算无副作用），选中才 tryAcquire，
- *   失败不推进阶段、不烧冷却（配额改革）
+ * - 沉默计时用 {@link ReplyFeedbackTracker} 的真实"主人聊天时间"（不是女仆自己上次发言）
+ * - 配额只在真正开火前获取：先做阶段选择（纯计算无副作用），选中才 tryAcquire，失败不推进阶段、不烧冷却
  * - repairMode（主人最近嫌话多/纠正过）时追加克制后缀，被拉黑话题不选
  *
- * 事件驱动（好感/击杀/重伤/死亡）保留旧 4 处理器，走统一 fireEvent()，
- * 计入日上限与全局配额，但不吃每轮 maxReplies 预算（紧急事件优先）。
+ * 事件驱动（好感/击杀/重伤/死亡）走统一 fireEvent()，计入日上限与全局配额，但不吃每轮 maxReplies 预算
+ * （紧急事件优先）。
  */
 public class ProactiveDialogueManager {
     /** 每女仆状态机 */

@@ -12,21 +12,19 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.5.79：建造区重力冻结（"搭建中的物品静止"的完整实现）。
+ * 建造区重力冻结（"搭建中的物品静止"的完整实现）。
  *
- * 背景：FallingBlock.onPlace（onPlace）无视 flag 静默、总会 scheduleTick →
- * 沙子/沙砾/混凝土粉末/铁砧放置后约 2 tick 就检查下方，悬空即下落——
- * 即使静默放置（flag 2）也无法阻止。挖空版蓝图挖掉支撑后，上方沙子
+ * 背景：{@code FallingBlock.onPlace} 无视 flag 静默、总会 scheduleTick → 沙子/沙砾/混凝土粉末/铁砧放置
+ * 后约 2 tick 就检查下方、悬空即下落——即使静默放置（flag 2）也拦不住。挖空版蓝图挖掉支撑后，上方沙子
  * 建造中就会崩落。
  *
- * 做法：拦截 FallingBlock.tick（tick，下落检查唯一入口——onPlace/
- * updateShape/neighborChanged 全部调度它）。位置在【建造中的蓝图区域】
- * （BuildPlan.isBuildingRegion，按区块包围盒 O(1)）→ cancel：悬空沙块
- * 保持原位不落。建造完成（GLOBAL_PLAN 清空）→ 自动解冻恢复物理。
+ * 做法：拦截 {@code FallingBlock.tick}（下落检查唯一入口——onPlace/updateShape/neighborChanged 全部调度
+ * 它）。位置在**建造中的蓝图区域**（{@code BuildPlan.isBuildingRegion}，按区块包围盒 O(1)）→ cancel：
+ * 悬空沙块保持原位不落。建造完成（{@code GLOBAL_PLAN} 清空）→ 自动解冻恢复物理。
  *
- * 说明：完成时若有悬空重力方块（图纸的悬浮设计），会在解冻后的下一次
- * 方块更新时落下——由完成气泡提示玩家（BlueprintLib.countSuspendedGravity）。
- * SRG 名（手工编译无 refmap）：tick = FallingBlock.tick。
+ * 完成时若有悬空重力方块（图纸的悬浮设计），会在解冻后的下一次方块更新时落下——由完成气泡提示玩家
+ * （{@code BlueprintLib.countSuspendedGravity}）。
+ * 【映射】本树官方名 {@code tick} = {@code FallingBlock.tick}（NeoForge / Mojmap）。
  */
 @Mixin(FallingBlock.class)
 public abstract class GravityFreezeMixin {

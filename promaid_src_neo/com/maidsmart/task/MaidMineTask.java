@@ -54,7 +54,6 @@ public class MaidMineTask implements IMaidTask {
     }
 
     /**
-     * v1.5.123：关闭 TLM 的"随机散步"（WORK activity 优先级 20 的 getLookAndRandomWalk
      * 内含 RandomStroll.create(0.3f, 5, 3)——IMaidTask.enableLookAndRandomWalk 默认
      * 返回 true，女仆挖矿时它每 60~120 tick 用【随机 5 格内目标、速度 0.3】覆盖我们
      * 设向矿的 WALK_TARGET → 女仆被反复拉去随机散步、"走一步停一下"、效率极低

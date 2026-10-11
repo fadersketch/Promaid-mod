@@ -18,11 +18,9 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * v1.3.3「防刷怪：发现刷怪笼就插火把」——
  * 「有玩家建议女仆在发现刷怪笼以后如果手上有火把会优先在刷怪笼上插火把（用来防止刷怪，
  *  当然可能涉及我的知识盲区，如果有和火把一样功效的东西，那么一样可以接受判定）。
  *  如果这一块区域被判定为 Home 模式工作区域（河童的罗盘标记的那一块）则不执行这个链路。」
- *
  * ── 为什么"光"就够（这一条是本类的立身之本，写清楚免得后人以为是玄学）──
  * 原版刷怪笼每次尝试生成都要过 {@code Monster.isDarkEnoughToSpawn}：目标位置亮度 ≤ 7 才放行
  * （字节码实证：{@code monsterSpawnLightTest} 是 0~7 的均匀分布）。刷怪笼的候选生成区是以自己
@@ -32,23 +30,7 @@ import java.util.WeakHashMap;
  * （火把 14 / 灵魂火把 10 / 萤石 15 / 海晶灯 15 … 都过；红石火把只有 7，留着它继续刷怪，
  * 所以清单里刻意没有它——与 {@code MaidTorchPlacerBehavior} 里"移出红石火把"同一个理由，
  * 那边还多一条"会发红石信号"）。这就是。
- *
- * ── 与 {@code MaidTorchPlacerBehavior}（被动插火把）的关系 ──
- * 那一个是"跟在主人身边、主人脚下黑了就补一根"，判据是"手上拿着火把"这一小张清单，
- * 目的是**人身边的照明**；本类判的是"能不能真的把刷怪笼按死"，判据是**亮度数字**，
- * 目的是**断刷怪**。两件事不同，所以清单各有一份、互不包含；但优先级顺序一致
- * （普通火把 > 灵魂火把 > 别的灯），并且把那一份的三件（普通火把/灵魂火把/tacz 火把）
- * 全含在内——时她要用的就是那三件。
- *
- * ── Home 工作区（河童的罗盘）里一律不碰 ──
- * 见 {@link #inHomeWorkArea}：圈里可能是玩家**故意留着**的刷怪塔/刷怪笼陷阱。这条判据
- * 读的是 TLM 的活动范围圆心与半径（{@code getRestrictCenter/getRestrictRadius}），
- * 与扫帚模式那把夹取（{@link MaidBroomKit#clampToHome}）读的是同一对字段——口径一处。
- *
- * ── 顺手说明"为什么它排在那么高的优先级"──
- * ，落在这里 = core 行为优先级 186（见 {@code ProMaidExtension}），
- * 比被动插火把（185）高、比自动装备（200）低：她发现刷怪笼会**先过去插火把**再回去干活。
- * 不想要这个"优先"就关掉 {@code combat.spawnerTorch.enable}，或者把优先级那一行改小。
+ * ── 与 {@code MaidTorchPlacerBehavior}（被动插火把）的关系 ── 那一个是"跟在主人身边、主人脚下黑了就补一根"，判据是"手上拿着火把"这一小张清单， 目的是**人身边的照明**；本类判的是"能不能真的把刷怪笼按死"，判据是**亮度数字**， 目的是**断刷怪**。两件事不同，所以清单各有一份、互不包含；但优先级顺序一致 （普通火把 > 灵魂火把 > 别的灯），并且把那一份的三件（普通火把/灵魂火把/tacz 火把） 全含在内——时她要用的就是那三件。 ── Home 工作区（河童的罗盘）里一律不碰 ── 见 {@link #inHomeWorkArea}：圈里可能是玩家**故意留着**的刷怪塔/刷怪笼陷阱。这条判据 读的是 TLM 的活动范围圆心与半径（{@code getRestrictCenter/getRestrictRadius}）， 与扫帚模式那把夹取（{@link MaidBroomKit#clampToHome}）读的是同一对字段——口径一处。 ── 顺手说明"为什么它排在那么高的优先级"── ，落在这里 = core 行为优先级 186（见 {@code ProMaidExtension}）， 比被动插火把（185）高、比自动装备（200）低：她发现刷怪笼会**先过去插火把**再回去干活。 不想要这个"优先"就关掉 {@code combat.spawnerTorch.enable}，或者把优先级那一行改小。
  */
 public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
 
@@ -240,9 +222,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 实测八百二十七：**"她本该动却没动"的留痕**（与 {@link #noteIdle} 共用 30 秒限频与同一枚
      * 计数位，所以两者最多一共 30 秒一条，不会刷屏）。
-     *
      * <p>【为什么非要有】这条链路过去有一整类**什么都没有发生**的状态：行为连 {@code tick()} 都
      * 没被调用（见 {@link #m_6737_} 的说明），玩家只能看到她不去拆，日志里一行都没有——只能靠
      * 猜。现在凡是被闸挡下/主动让位，都在这里写一行说清**是哪一闸、她当时什么状态**（末尾带
@@ -288,16 +268,10 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     /**
      * 能不能开跑：总开关开着 + 她还活着 + **不是乘客**（骑扫帚/坐椅子时她不走路，也就走不到
      * 刷怪笼跟前）+ 没坐着 + 没睡着 + 手上没有攻击目标（先打完再插火把）+ 不在自保逃跑里。
-     *
      * <p>【为什么不在这里判"有没有火把"】那要翻一遍背包，而 canUse 是**每 tick** 调的；
      * 这里只做零成本的闸门，"有没有灯/镐"留给 {@link #m_6725_} 在扫描那一步（4 秒一次）判。
-     *
      * <p>【实测八百二十七·为什么不再问 {@code canBrainMoving()}】那是 TLM 的一把**粗闸**，等于
-     * "没坐着 && 不是乘客 && 没睡着 && **没被拴绳**"。被拴绳这一条与本链路毫无关系——我们走过去
-     * 用的是直连 {@code moveTo}，不经过 TLM 的跟随闸，牵着绳她照样能走——却会在玩家用
-     * 【牵绳档 / 空袭挂载】时把整条链路**静默掐死**：日志里连一行都没有，只看到她"就是不去拆"。
-     * 现在拆成上面四条精确判据，并且**每一条被挡都会留痕**（{@link #noteBlocked}），
-     * 不再有"什么都没发生、也查不到原因"的黑箱。
+     * "没坐着 && 不是乘客 && 没睡着 && **没被拴绳**"。被拴绳这一条与本链路毫无关系——我们走过去 用的是直连 {@code moveTo}，不经过 TLM 的跟随闸，牵着绳她照样能走——却会在玩家用 【牵绳档 / 空袭挂载】时把整条链路**静默掐死**：日志里连一行都没有，只看到她"就是不去拆"。 现在拆成上面四条精确判据，并且**每一条被挡都会留痕**（{@link #noteBlocked}）， 不再有"什么都没发生、也查不到原因"的黑箱。
      */
     @Override
     protected boolean m_6114_(ServerLevel level, EntityMaid maid) {
@@ -346,18 +320,10 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     /**
      * 父类默认 canStillUse = false（试一次就停），必须重写为 true；这里**只保留两条硬失效**：
      * 「总开关被关掉」与「自保接管」（250 最高，一票否决），其余让位判断全部挪到 {@link #m_6725_} 里做。
-     *
      * <p>【为什么总开关要在这里也问一遍】Brain 对**正在跑**的行为每 tick 只问 canStillUse（不问你
      * {@code m_6114_}）：只在 canUse 里问开关，等于"关掉开关之后，已经在跑的那一半照跑完"——
      * 拆笼最多还能再拆 20 秒（玩家看到的就是"开关关了/切了 DIY，她还在挖"）。
-     * 停下来的收尾走 {@link #m_6732_}：借来的副手镐照旧还回去。
-     *
-     * <p>【实测八百二十七·为什么"战斗中没镐"不能写在这里（这是这次抓到的真凶）】反编译实证：
-     * Brain 每 tick 对 RUNNING 行为调的是 {@code Behavior.m_22558_}，它**先问 canStillUse**——
-     * 返回 false 就直奔 {@code doStop()}，连 {@code tick()} 都不会被调用。所以一旦把"战斗中没镐
-     * →让位"写在 canStillUse 里，整条链路就会彻底静默：不扫描、不借镐、不打任何日志。
-     * 玩家实测到的正是"她处于攻击状态时就是不换成镐去挖"，而日志里一行都没有（无从查起）。
-     * 现在让位判断放在 tick 里（行为保持 RUNNING，让位时不动走位、不碰副手，但一定留一行说明）。
+     * 停下来的收尾走 {@link #m_6732_}：借来的副手镐照旧还回去。 <p>【实测八百二十七·为什么"战斗中没镐"不能写在这里（这是这次抓到的真凶）】反编译实证： Brain 每 tick 对 RUNNING 行为调的是 {@code Behavior.m_22558_}，它**先问 canStillUse**—— 返回 false 就直奔 {@code doStop()}，连 {@code tick()} 都不会被调用。所以一旦把"战斗中没镐 →让位"写在 canStillUse 里，整条链路就会彻底静默：不扫描、不借镐、不打任何日志。 玩家实测到的正是"她处于攻击状态时就是不换成镐去挖"，而日志里一行都没有（无从查起）。 现在让位判断放在 tick 里（行为保持 RUNNING，让位时不动走位、不碰副手，但一定留一行说明）。
      */
     @Override
     protected boolean m_6737_(ServerLevel level, EntityMaid maid, long gameTime) {
@@ -436,8 +402,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         // Brain 连 tick() 都不调，整条链路静默（不扫描、不借镐、不留痕），玩家实测就是
         // "她处于攻击状态时不会自己换成镐去挖，而且日志里什么都没有"。写在这里：行为保持
         // RUNNING、让位时**不动走位标记、不碰副手**（其余系统毫无影响），但一定留一行说明。
-        // 只在"手上没有任何在推进的刷怪笼"（aim.spawner == null）时让位——已有目标的话
-        // 交给下面的 ⓪/① 走原本的清目标/超时放弃流程，免得把在途目标晾在那儿没人收尾。
+        // 只在"手上没有任何在推进的刷怪笼"（aim.spawner == null）时让位——已有目标的话 交给下面的 ⓪/① 走原本的清目标/超时放弃流程，免得把在途目标晾在那儿没人收尾。
         if (aim.spawner == null && MaidWorkTags.isAttackTask(maid) && !isBreakingSpawner(maid)) {
             if (!breakMode()) {
                 noteBlocked(level, maid, "战斗中 + 插火把模式 → 本链路让位（战斗永远优先）");
@@ -739,18 +704,11 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
 
     /**
      * 实测八百三十 + 八百三十七 + 八百五十七：{@code null} = 该拆；否则返回**一整句"不拆 + 为什么"**（直接进日志）。
-     *
      * <p>【实测八百五十七·判据顺序改了：先读刷怪表】旧顺序把"此刻在不在出货"的旁证排在最前
      * （12 格内有敌对生物 / 16 格内有玩家），读表排在最后。结果是**刷怪表里明明白白写着敌对生物**
      * 的笼子也常常不拆：她刚把刷出来的怪清掉、或玩家在 16 格外（典型：她在矿道深处拆笼、主人在上面）
      * → 判"没在出货" → 每 10 秒重判一次、每次同样拒绝（开发者反馈"拆除意愿特别低"）。
-     * 现在：**表里是敌对 → 就该拆**，只保留"光照已经把它压住且旁边也没有怪"这一种例外
-     * （那是玩家特意打亮保存的笼子）；**读不出表**（模组笼子）才回落到原来的旁证链。
-     *
-     * <p>各原因**各自成句**（旧版合成一句「空笼子 / 只刷牛羊猪 / 没在出货」，玩家与开发都分不出）：
-     * ① 刷怪表 = 敌对 且压不住 → 拆；② 表里只有和平生物 / 表是空的 → 不拆；
-     * ③ 表读不出来（模组笼子）→ 旁证：旁边就有敌对生物 → 拆；否则看"玩家在不在 16 格内 + 光照压没压住"；
-     * ④ 表里有 id 但一个都解析不出（模组笼子）→ 按在出货处理（宁可多拆不可漏拆）。句尾附"到底读到了什么"。
+     * 现在：**表里是敌对 → 就该拆**，只保留"光照已经把它压住且旁边也没有怪"这一种例外 （那是玩家特意打亮保存的笼子）；**读不出表**（模组笼子）才回落到原来的旁证链。 <p>各原因**各自成句**（旧版合成一句「空笼子 / 只刷牛羊猪 / 没在出货」，玩家与开发都分不出）： ① 刷怪表 = 敌对 且压不住 → 拆；② 表里只有和平生物 / 表是空的 → 不拆； ③ 表读不出来（模组笼子）→ 旁证：旁边就有敌对生物 → 拆；否则看"玩家在不在 16 格内 + 光照压没压住"； ④ 表里有 id 但一个都解析不出（模组笼子）→ 按在出货处理（宁可多拆不可漏拆）。句尾附"到底读到了什么"。
      */
     private static String spawnSkipReason(ServerLevel level, BlockPos spawner) {
         try {
@@ -998,10 +956,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
      *   <li>{@code SpawnData} → {@code {entity:{id:"..."}}}；</li>
      *   <li>{@code SpawnPotentials} 的每个条目 → {@code {weight:1, data:{entity:{id:"..."}}}}（两层壳）；</li>
      *   <li>少数手写结构文件 → 直接 {@code {id:"..."}}。</li>
-     * </ul>
-     * 所以不能只看一层：循环里先在当前层找 {@code id} / {@code Name}，找不到再往下剥
-     * {@code entity} 或 {@code data}（最多剥 4 层，防病态数据死循环）。找不到就返回 null
-     * （= 空笼子 / 认不出来）。
+     * </ul> 所以不能只看一层：循环里先在当前层找 {@code id} / {@code Name}，找不到再往下剥 {@code entity} 或 {@code data}（最多剥 4 层，防病态数据死循环）。找不到就返回 null （= 空笼子 / 认不出来）。
      */
     private static String entityIdIn(net.minecraft.nbt.CompoundTag data) {
         try {
@@ -1143,17 +1098,9 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
      * 推进"走过去把它拆了"（默认行为；模组刷怪笼无视光照，插火把压不住）。返回 false = 这一只
      * 处理完了（拆掉了 / 放弃 / 超时 / 不可破坏），调用方据此清目标并记冷却；返回 true = 还在
      * 处理中（本 tick 到此为止）。
-     *
      * <p>【被攻击也钉住】本方法**不查攻击目标**——她走到跟前就一镐一镐刨到底。这不是 bug：
      * 模组刷怪笼一刷怪她就会被写攻击目标，若这里让位就永远拆不完（
-     *
-     * 不受走位闸影响）；她自己的走位被 {@code SPAWNER_TORCH_TAG/SPAWNER_BREAK_TAG} 锁住，
-     * 谁都不许把她从刷怪笼前拖走（见两个 mixin）。血量跌破自保线（250）时自保接管、本行为让位。
-     *
-     * <p>挖掘公式逐字对齐 {@code MaidMineBehavior}（不依赖 FakePlayer）：硬度取**正解**
-     * {@code Block.getDestroySpeed}（=5.0）——**不是** Neo 树里那个把 {@code getShadeBrightness}
-     * 当硬度的既有 bug；正确工具除数 30、否则 100；效率附魔加成 {@code lv²+1}；乘全局
-     * {@code mine.speedFactor}；封顶 0.25/刻。镐在手约 4~15 刻拆完，徒手约 25 秒（故默认要求带镐）。
+     * 不受走位闸影响）；她自己的走位被 {@code SPAWNER_TORCH_TAG/SPAWNER_BREAK_TAG} 锁住， 谁都不许把她从刷怪笼前拖走（见两个 mixin）。血量跌破自保线（250）时自保接管、本行为让位。 <p>挖掘公式逐字对齐 {@code MaidMineBehavior}（不依赖 FakePlayer）：硬度取**正解** {@code Block.getDestroySpeed}（=5.0）——**不是** Neo 树里那个把 {@code getShadeBrightness} 当硬度的既有 bug；正确工具除数 30、否则 100；效率附魔加成 {@code lv²+1}；乘全局 {@code mine.speedFactor}；封顶 0.25/刻。镐在手约 4~15 刻拆完，徒手约 25 秒（故默认要求带镐）。
      */
     private static boolean walkAndBreak(ServerLevel level, EntityMaid maid, Aim aim, long gameTime) {
         BlockPos spawner = aim.spawner;
@@ -1305,11 +1252,9 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 实测八百二十七：她此刻是不是处于【副手锁定】——正在拆刷怪笼，且那把镐确实是本链路
      * 借到副手的（{@code aim.borrowedOffhand}）。供副手写入方让位查询：这段时间任何"换副手"
      * 的动作（战斗自动装备盾牌等）都不许动她的副手，直到刷怪笼被拆掉（{@link #isBreakingSpawner}
      * 转 false，最多 {@link #GIVE_UP_TICKS} = 20 秒）。
-     *
      * <p>【为什么只锁"借来的"】若那把镐是玩家自己放的 / 主手本就有的（没有借副手），则副手
      * 根本没被动过，没理由拦住原系统（举盾/自动装备）。只有真正借了副手，才需要独占。
      */
@@ -1393,14 +1338,9 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
      * 这一 tick 是否该走【副手借镐】模式？判据 = 她正挂着【非战斗的干活任务】
      * （挖矿/伐木/农活/建造/烹饪…由 {@code MaidWorkTags.isNonCombatWork} 识别）
      * **或者正在拆刷怪笼**（实测八百二十七：战斗中也拆——副手借镐、主手继续打）。
-     *
      * <p>【为什么必须换到副手】干活时那些任务的主手是它们干活要用的工具（挖矿的镐 / 伐木的斧 /
      * 农活的锄），工作行为会按自己的节奏把主手抢回去——旧版把拆除的镐放主手，等于"刚换上
-     * 就被抢走"，进度永远推不动，玩家实测到的就是"只有空闲状态下才会去挖刷怪笼"。副手不属于
-     * 任何工作任务的工具位（TLM 工作行为从不动副手），借一把镐放副手就能与干活并行、互不打扰。
-     * 战斗同理：主手要留着挥武器/举弓，拆除的镐也必须让到副手，才能"边打边拆"。
-     *
-     * <p>空闲 / 待命 / 无任务不算干活：没有别的东西抢主手，仍走主手（原口径不变）。
+     * 就被抢走"，进度永远推不动，玩家实测到的就是"只有空闲状态下才会去挖刷怪笼"。副手不属于 任何工作任务的工具位（TLM 工作行为从不动副手），借一把镐放副手就能与干活并行、互不打扰。 战斗同理：主手要留着挥武器/举弓，拆除的镐也必须让到副手，才能"边打边拆"。 <p>空闲 / 待命 / 无任务不算干活：没有别的东西抢主手，仍走主手（原口径不变）。
      */
     private static boolean offhandMode(EntityMaid maid) {
         try {
@@ -1435,14 +1375,11 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
 
     /**
      * 从背包借一把能挖这个刷怪笼的镐到【副手】。返回借到的那把镐（没借到 = 空栈，副手保持原样）。
-     *
      * <p>【副手原物品怎么处理】首次借镐时把副手原物品**整件摘下**写进她自己的持久 NBT
      * （{@link #stashOffhand}；脱离槽位、不复制、不塞背包），槽位让给借来的镐；
      * {@link #restoreOffhand} 再原样放回。这样既不丢、也不会复制玩家那件。**放 NBT 而不是放
      * 堆内存里的 {@code Aim} 字段**，是因为跨维度传送/世界重载/死亡复活都会换实体实例，
-     * 只有 NBT 跟着她走（见 {@link #SAVED_OFFHAND_TAG}）。与 {@code BombPose}/
-     * {@code FlightFireworkPose} 的"借副手"同一形状。借用期间若副手被别的东西顶掉，
-     * 顶掉的那件收进背包（不动 NBT 里那份），再借一把新的。
+     * 只有 NBT 跟着她走（见 {@link #SAVED_OFFHAND_TAG}）。与 {@code BombPose}/ {@code FlightFireworkPose} 的"借副手"同一形状。借用期间若副手被别的东西顶掉， 顶掉的那件收进背包（不动 NBT 里那份），再借一把新的。
      */
     private static ItemStack borrowOffhand(EntityMaid maid, Aim aim, BlockState state) {
         try {
@@ -1589,9 +1526,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
      *   ① 它自己顶上（火把立在刷怪笼上，最字面的那一处）
      *   ② 同一层的东南西北四邻（火把立在地板上）
      *   ③ 四邻的上一层（火把立在墙头上）
-     * </pre>
-     * 顺序即优先级；第一个"空气 + 能站住"的位置就是落点。九个都放不了才放弃。
-     * （扫怪笼本身是"可燃尽"的？不——它不可替换，所以从不考虑替换它。）
+     * </pre> 顺序即优先级；第一个"空气 + 能站住"的位置就是落点。九个都放不了才放弃。 （扫怪笼本身是"可燃尽"的？不——它不可替换，所以从不考虑替换它。）
      */
     private static List<BlockPos> candidates(BlockPos spawner) {
         List<BlockPos> list = new ArrayList<>(9);
@@ -1790,10 +1725,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
      *   <li>得是方块物品（能放下）；</li>
      *   <li>注册名在 {@link #LIGHT_IDS} 里，**或者**以 {@code torch}/{@code lantern} 结尾
      *       （模组火把/灯笼的常见命名）；</li>
-     *   <li><b>放下去真的够亮</b>：方块默认状态自身发光 ≥ {@link #LIGHT_ENOUGH}。
-     *       这一条把红石火把（7）以及各种"看着像灯其实照不亮"的东西挡在外面——
-     *       ，"功效"就是这一条数字。</li>
-     * </ol>
+     *   <li><b>放下去真的够亮</b>：方块默认状态自身发光 ≥ {@link #LIGHT_ENOUGH}。 这一条把红石火把（7）以及各种"看着像灯其实照不亮"的东西挡在外面—— ，"功效"就是这一条数字。</li> </ol>
      */
     private static boolean isLightItem(ItemStack stack) {
         try {

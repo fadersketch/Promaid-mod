@@ -15,8 +15,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 /**
- * v1.2.2 实测五百七十八：smart_work_area —— 「这块地方归你管 / 回来跟着我」。
- *
  * ── 用的是哪套数据（不另起一套定点系统）──
  * TLM 的 {@code SchedulePos}：工作锚点 + 休闲锚点 + 睡眠锚点 + "home 模式（不跟随）"开关。
  * 这也正是**潜行+中键工位标记**（实测五百六十二）与 **河童的罗盘**写的那一份数据——三者
@@ -27,15 +25,9 @@ import net.minecraft.world.entity.player.Player;
  *   <li>{@code action=follow}：关掉 home 模式——她恢复跟随主人（"别干活了跟着我"）；</li>
  *   <li>{@code action=info}：只读回报三个锚点与 home 状态（不修改任何东西）。</li>
  * </ul>
- *
  * ── 位置从哪来 ──
  * {@code where=owner}（默认）取**主人脚下**，{@code where=self} 取女仆自己脚下。
- * 刻意不做"主人看向的方块"的射线：那要自己拼 ClipContext，两树名字差异大、收益小
- * ——玩家站在目标位置说话就够了（与中键标记"标到那个方块"互为补充）。
- *
- * ── 与排班的关系 ──
- * 排班（日程表）会按时间段切任务；本工具只管**锚点**，所以正在排班的女仆也允许设置锚点
- * ——排班本身的开关仍归排班表（工具结果里会提一句，避免模型以为设了锚点就等于排好了班）。
+ * 刻意不做"主人看向的方块"的射线：那要自己拼 ClipContext，两树名字差异大、收益小 ——玩家站在目标位置说话就够了（与中键标记"标到那个方块"互为补充）。 ── 与排班的关系 ── 排班（日程表）会按时间段切任务；本工具只管**锚点**，所以正在排班的女仆也允许设置锚点 ——排班本身的开关仍归排班表（工具结果里会提一句，避免模型以为设了锚点就等于排好了班）。
  */
 public class WorkAreaTool implements ITool<WorkAreaTool.Result> {
     public static final String TOOL_ID = "smart_work_area";

@@ -17,8 +17,6 @@ import java.util.Map;
 /**
  * 建造计划：格式 ["O,x,y,z,name,id", "x,y,z,blockid", ...] —— 第一项为原点（绝对坐标）
  * +蓝图名+蓝图 id，其余为相对原点的步骤。
- *
- * v1.5.180：多区块共存重构——单计划（每维度一份 GLOBAL_PLAN）升级为
  * 【多区块共存 + 女仆-区块显式绑定】：
  * - PlanState：一个建造区块 = 一份计划（planId 全局唯一，跨维度）
  * - 存储全部按 planId 键控（PLANS / 进度 / 包围盒 / 强制加载 / 游标节流）
@@ -27,7 +25,6 @@ import java.util.Map;
  * - 创建区块不依赖女仆在场（BlueprintBuildExecutor 直接以玩家脚下为原点创建），
  *   唯一硬性要求：不与已有区块重叠（findOverlap）
  * - 存档：BuildArchive 存 SavedPlan 列表（每维度多区块），旧单计划档自动迁移
- *
  * CODEC 注意：TLM 的 TaskData 同步要求编码结果为 CompoundTag（对象），直接用
  * Codec.list 会编码成 ListTag → 每 tick 同步 ClassCastException 崩溃。因此用
  * RecordCodecBuilder 把列表包装成 {"steps": [...]} 对象（v1.5.3 修复）。
@@ -668,9 +665,6 @@ public final class BuildPlan {
     }
 
     /**
-     * v1.5.69：该女仆是否为当前工头（按其绑定区块判断）。
-     * v1.5.72/74 语义修正：无工头/工头失效/工头被暂停 → 放行（防全员静默）。
-     * v1.5.266：无工头/工头失效 → 【当场随机挑一只顶上并持久化】（反馈："不是说
      * 没设置的时候会随机设置一个吗"——v1.5.182 的补选在 start 时机经常失败：
      * 创建区块时女仆还没绑定、远程绑定 scanAreaMaids 扫不到 → foremanUuid 恒空
      * → 全员放行 = "所有人都在发"的根因）。服务端单线程顺序执行无竞态：

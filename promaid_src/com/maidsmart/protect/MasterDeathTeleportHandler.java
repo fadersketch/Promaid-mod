@@ -14,13 +14,8 @@ import java.util.UUID;
 /**
  * 主人死亡强制传送（v1.5.25c）：主人死亡瞬间，所有属于该主人的女仆
  * 【无条件、立即】传送回主人身边。
- *
- * v1.5.112：传送目标 = 玩家【重生点】（床/重生锚），不再是死亡位置——
- * 旧版传死亡地点：女仆赶去守尸体没意义（主人复活在别处）；重生锚可能在
  * 其他维度（下界床/末地重生锚）→ 目标维度一起解析，女仆跨维度传送。
  * 无重生点/维度异常 → 退主世界出生点。
- *
- * v1.5.231【死亡传送失效修复】：旧版用 level.m_143280_（getEntities）只能扫到
  * 【已加载区块】里的女仆——女仆在远处未加载区块时根本找不到，传送静默失效
  * （实测 04:47:19 苦力怕炸死，女仆在远处 → 无播报无传送 → "其他女仆全部消失"）。
  * 现在维护【女仆追踪表】（EntityJoinLevelEvent 注册 / EntityLeaveWorldEvent 标记
@@ -29,12 +24,7 @@ import java.util.UUID;
  * - 未加载女仆 → 【强制加载其所在区块】→ 传送 → 解除强制加载。
  * 与自保的 teleportHome 不同——那是"威胁消失后、检查周围无怪才传"的安全传送；
  * 本处理器【不受战斗判定影响】：不走冷却、不检查威胁/距离/范围、不依赖 LLM 开关。
- * 主人死亡是最高优先级事件，女仆必须立刻赶到重生点。
- *
- * v1.1.0 实测八十三【保持原位三态豁免】：home 看家钉死 / 坐姿停放 / 骑乘中的
- * 女仆不参与死亡传送与复活保险拉取（实测七十八确立的"看家的女仆不响应任何
- * 传送"语义此前漏盖了本处理器——复测 home 女仆仍被拽走）。战斗类女仆
- * （跟随/护卫）照常无条件赶往重生点。
+ * 主人死亡是最高优先级事件，女仆必须立刻赶到重生点。 女仆不参与死亡传送与复活保险拉取（实测七十八确立的"看家的女仆不响应任何 传送"语义此前漏盖了本处理器——复测 home 女仆仍被拽走）。战斗类女仆 （跟随/护卫）照常无条件赶往重生点。
  */
 public class MasterDeathTeleportHandler {
 
@@ -129,10 +119,8 @@ public class MasterDeathTeleportHandler {
         // 很远)→ "女仆凭空消失"(实测:触发手中图腾,聊天框"丈夫我赶紧赶到
         // 你身边",女仆消失)。改为登记后校验:【下一服务端 tick 末】玩家若已被
         // 图腾救活(活着)→ 跳过传送;真死(仍 dead/血量 0)→ 才执行。
-        // v1.5.audit:旧实现登记后在【同一 tick 的 END】就校验——死亡发生在
         // tick T 的实体阶段,同 tick END 立刻查,modded 图腾若在 T+1 才复活
-        // (先 post 事件、后复活)仍会误传。现在记录登记 tick,严格等 ≥1 tick
-        // 后才校验执行。
+        // (先 post 事件、后复活)仍会误传。现在记录登记 tick,严格等 ≥1 tick 后才校验执行。
         PENDING_DEATHS.put(player.m_20148_(), ServerLifecycleHooks.getCurrentServer() != null
                 ? ServerLifecycleHooks.getCurrentServer().m_129921_() : 0L);
     }
@@ -195,7 +183,6 @@ public class MasterDeathTeleportHandler {
         double ty = 0;
         double tz = 0;
         net.minecraft.core.BlockPos respawnPos = player.m_8961_(); // 重生点方块坐标
-        // v1.1.0 实测一百一十八【重生点方块校验】：respawnPosition 字段在床被拆/
         // 被占/重生锚空充能时仍存旧坐标（原版只在复活流程才清空）——直接传送会把
         // 女仆送到"床原来的位置"，而玩家实际复活在世界出生点，两处分离（此前仅靠
         // 复活保险纠偏，且旧床位置离实际复活点 64 格内时保险还会跳过）。加原版
@@ -299,26 +286,12 @@ public class MasterDeathTeleportHandler {
     }
 
     /**
-     * v1.1.0 实测一百零二：死亡传送豁免——主人死亡时所有女仆（含排班 Home 模式）
      * 均应传送至重生点；仅坐姿（玩家明确停放）和骑乘中（强拽脱离载具）豁免。
-     * 旧版将 Home 模式纳入豁免导致排班女仆死亡传送完全失效。
      * v1.1.0 实测三百四十九【口径反转】（反馈："排班女仆不应触发死亡传送"）：
      * 排班中的女仆（含排班自动 home 的守家女仆）重新纳入豁免——她们驻守在
      * 排班锚点（农场/熔炉/看家），主人死亡把守家女仆全部拽到重生点 = 守家
      * 空窗。想召回走排班表「传送到我身边」（先关她的排班，与一键集合同口径）。
-     *
-     * v1.3.0(beta) 实测七百一十七【issue #28：home 女仆被拽走后卡死】：
-     * 上面那次反转只把**排班**女仆纳回了豁免，**普通 Home 模式**（玩家 GUI 里
-     * 手动开 home，没走排班表）仍会被拽。报告：「农场工作、Home 模式的女仆，
-     * 玩家死亡复活后立即被传到身边，之后一直保持 Home 却停在复活点不再离开」。
-     * 根因是拽走之后的**死锁**：她被传到 home 圈外 → TLM 的回家走位被
-     * {@code SchedulePosTickMixin} 对"干活中女仆"整段 cancel、我们自己的
-     * home 巡逻/工作驱动又明确跳过非战斗工作（农场）→ 她既回不去、也够不到
-     * 圈外的作物 → 原地呆站。对照：同一份代码里**所有其它传送链路**
-     *（{@code MaidChunkLoadManager} 的 summon/pull/rescue）早就统一豁免
-     * {@code isHomeModeEnable() && !isBuildingMaid}，只有本处理器没跟上。
-     * 现在对齐同一条口径：home（非建造）女仆 = 玩家明确停放，死亡也不拽。
-     * 建造女仆仍照旧可拽（建造强制 home，但它属"可召回"那一类）。
+     * 上面那次反转只把**排班**女仆纳回了豁免，**普通 Home 模式**（玩家 GUI 里 手动开 home，没走排班表）仍会被拽。报告：「农场工作、Home 模式的女仆， 玩家死亡复活后立即被传到身边，之后一直保持 Home 却停在复活点不再离开」。 根因是拽走之后的**死锁**：她被传到 home 圈外 → TLM 的回家走位被 {@code SchedulePosTickMixin} 对"干活中女仆"整段 cancel、我们自己的 home 巡逻/工作驱动又明确跳过非战斗工作（农场）→ 她既回不去、也够不到 圈外的作物 → 原地呆站。对照：同一份代码里**所有其它传送链路** （{@code MaidChunkLoadManager} 的 summon/pull/rescue）早就统一豁免 {@code isHomeModeEnable() && !isBuildingMaid}，只有本处理器没跟上。 现在对齐同一条口径：home（非建造）女仆 = 玩家明确停放，死亡也不拽。 建造女仆仍照旧可拽（建造强制 home，但它属"可召回"那一类）。
      */
     private static boolean shouldStayPut(EntityMaid maid) {
         // 【实测七百二十四】悬空鞍位（龙）：她**不是乘客**、isPassenger 认不出她——
@@ -450,14 +423,12 @@ public class MasterDeathTeleportHandler {
     }
 
     /**
-     * v1.1.0 实测一百一十八：重生点方块有效性校验（镜像原版 Player.
      * findRespawnPositionAndUseSpawnBlock，m_36130_ javap 实证）：
      * - 床：维度允许睡觉（BedBlock.m_49488_ = canSetSpawn → dimensionType.bedWorks）
      *   且床边能站起（BedBlock.m_260958_ = findStandUpPosition 返回非空）；
      * - 重生锚：充能 > 0（RespawnAnchorBlock.f_55833_ = CHARGES）且维度允许重生锚
      *   （RespawnAnchorBlock.m_55850_ → dimensionType.respawnAnchorWorks，下界 true）。
-     * 两者都不是（/spawnpoint 空地、床被拆、锚空电、维度不允许）→ false，
-     * 调用方走主世界出生点兜底——与玩家实际复活点一致，女仆传过去就能汇合。
+     * 两者都不是（/spawnpoint 空地、床被拆、锚空电、维度不允许）→ false， 调用方走主世界出生点兜底——与玩家实际复活点一致，女仆传过去就能汇合。
      */
     public static boolean isRespawnPointValid(ServerLevel level, net.minecraft.core.BlockPos pos) {        try {
             net.minecraft.world.level.block.state.BlockState st = level.m_8055_(pos);
@@ -484,13 +455,9 @@ public class MasterDeathTeleportHandler {
      * v1.2.0【复活原地摔死根因修复】：原版等效落点——床/重生锚用原版
      * findStandUpPosition 算出的精确站位（与玩家复活站的地方一模一样），
      * 其余情况退回 findSafeLanding 的柱状扫描。
-     *
      * 为什么必须有这个：findSafeLanding 只能保证"两格净空、脚下有面"，它不保证
      * 落点【在重生点方块旁边】。床是两格宽的方块，站在床上方 1 格时脚下是床——
-     * 看着能站，实际上一旦床被判定为不可站立就会掉进下一格；而 findSafeLanding
-     * 的"向下贴地"循环会一路把她放到地面，与原版复活位置差出半张床的距离。
-     * 原版玩家复活走的就是 findStandUpPosition（床边一圈扫描 + 碰撞校验），
-     * 直接复用才能保证"女仆落在主人复活时站的那一格"。
+     * 看着能站，实际上一旦床被判定为不可站立就会掉进下一格；而 findSafeLanding 的"向下贴地"循环会一路把她放到地面，与原版复活位置差出半张床的距离。 原版玩家复活走的就是 findStandUpPosition（床边一圈扫描 + 碰撞校验）， 直接复用才能保证"女仆落在主人复活时站的那一格"。
      */
     public static double[] respawnLanding(ServerLevel level, net.minecraft.core.BlockPos respawn) {
         // 床：原版 findStandUpPosition（含床边一圈站位 + 碰撞箱校验）
@@ -523,8 +490,6 @@ public class MasterDeathTeleportHandler {
     }
 
     /**
-     * v1.2.0：清洗死亡快照里的"死亡瞬间状态"，让复活等价于原版复活。
-     *
      * 女仆的死亡存档是【死亡那一刻】的实体 NBT，里面带着：坠落距离 FallDistance、
      * 下坠速度 Motion、着火剩余 Fire、死亡计时 DeathTime、受击计时 HurtTime。
      * 直接 load 出来的话，她会以"还在下坠/还在着火/还在濒死"的状态出现——落地的
@@ -578,21 +543,12 @@ public class MasterDeathTeleportHandler {
     }
 
     /**
-     * v1.5.227：在 (tx, ty, tz) 所在柱子上找安全落点——从 ty 起向上扫描最多 24 格，
      * 找第一个【脚部 + 头部都是空气】的位置（女仆 1.8 格身高需要两格净空，否则
      * 卡进方块 → 实体剔除/模型卡没，"传过去女仆消失"的根因）。
-     * v1.5.228：找到空气格后【继续向下走到地面】再落——旧版直接落在第一个空气格
      * 上，若重生点上方有树/高台，女仆落在树顶/高台再坠落（"落地水"刷屏 + 落点
      * 看起来不对）；现在贴地落，无坠落无位移。
-     *
      * v1.2.0【致命：高度上下界取反，复活必摔死的根因】：
-     * `m_141928_` = getHeight（主世界 384 = 总高度）、`m_141937_` = getMinBuildHeight
-     * （主世界 -64）、`m_151558_` = getMaxBuildHeight（= min + height = 320）。旧版
-     * 写成 minY = getHeight()+1 = 385、limitUp = getMinBuildHeight()-3 = -67，两个
-     * 扫描循环都是【空循环】→ airY 恒 -1 → 走"兜底：原坐标上方 1 格" → 落点其实是
-     * y≈386 的天空。女仆一放出来就自由落体，复活→摔死→自动收符→放出→再摔死，
-     * 无限循环（反馈的"原地反复摔死"）。现在改为 minY = getMinBuildHeight()+1、
-     * limitUp = getMaxBuildHeight()-3，上下界各自归位。
+     * `m_141928_` = getHeight（主世界 384 = 总高度）、`m_141937_` = getMinBuildHeight （主世界 -64）、`m_151558_` = getMaxBuildHeight（= min + height = 320）。旧版 写成 minY = getHeight()+1 = 385、limitUp = getMinBuildHeight()-3 = -67，两个 扫描循环都是【空循环】→ airY 恒 -1 → 走"兜底：原坐标上方 1 格" → 落点其实是 y≈386 的天空。女仆一放出来就自由落体，复活→摔死→自动收符→放出→再摔死， 无限循环（反馈的"原地反复摔死"）。现在改为 minY = getMinBuildHeight()+1、 limitUp = getMaxBuildHeight()-3，上下界各自归位。
      */
     public static double[] findSafeLanding(ServerLevel level, double tx, double ty, double tz) {
         int x = net.minecraft.util.Mth.m_14107_(tx); // floor

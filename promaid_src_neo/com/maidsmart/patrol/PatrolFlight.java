@@ -10,19 +10,15 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * v1.3.8【巡逻航迹】运行时：生效判据 + 路径缓存 + 每拍目标点（纯追踪）。
- *
  * <p>── 玩家定下的口径（逐字）──
  * 「既然是巡逻，那它相当于替代了原来 home 模式下。所以这个功能也只对 home 模式下的扫帚模式下
  * 女仆进行操作。」⇒ {@link #effective} 要求三件同时成立：**任务=扫帚模式** + **home 模式开着**
  * + **绑定了一条已连接（闭环）的航迹**。缺任一条都返回 null，调用方原样走旧链路（home 沿工作圈
  * 盘旋 / 跟随主人 / 悬停），一个字节都不改。
- *
  * <p>── 接敌怎么办 ──
  * 什么都不用做。{@code MaidBroomBehavior.tick} 的相位顺序里"接敌档"排在"平时档"**前面**，
  * 所以敌人一出现就自动抢占（爬升 → 绕敌盘旋/轰炸），敌人消失后自然回到平时档、也就是回到这条
  * 航迹上。这正是玩家要的"发现敌人就绕着敌人转圈并攻击"，白捡的。
- *
  * <p>── 路径缓存 ──
  * 密采样一条航迹要几百次样条求值，绝不能每拍重算。缓存键 = 女仆 UUID，值 = (内容签名, Path)。
  * 签名取自 {@link PatrolRoute#signature()}——玩家改了航迹、或重新绑定，签名就变，下一拍自动重建。
@@ -53,16 +49,11 @@ public final class PatrolFlight {
 
     /**
      * 这只女仆此刻该不该按航迹巡逻。返回航迹本身（已过闭环/点数判据），否则 null。
-     *
      * <p>三件同时成立：
      * <ol>
      *   <li><b>任务 = 扫帚模式</b>——与 {@code MaidBroomKit.isBroomTask} 同一判据（不另写一份）；</li>
      *   <li><b>home 模式开着</b>——。
-     *       判据直接复用 {@code WorkAreaClamp.homeAnchor}（= home + 圈心有效，连"排班锚点兜底"
-     *       那一层一起），所以"她确实在守家"这件事的判定与本模组别处完全同口径；</li>
-     *   <li><b>绑了一条闭环航迹</b>——{@link PatrolChartData#readMaid} 非 null 且
-     *       {@link PatrolRoute#closed()} 且点数够。</li>
-     * </ol>
+     *       判据直接复用 {@code WorkAreaClamp.homeAnchor}（= home + 圈心有效，连"排班锚点兜底" 那一层一起），所以"她确实在守家"这件事的判定与本模组别处完全同口径；</li> <li><b>绑了一条闭环航迹</b>——{@link PatrolChartData#readMaid} 非 null 且 {@link PatrolRoute#closed()} 且点数够。</li> </ol>
      */
     public static PatrolRoute effective(EntityMaid maid) {
         try {

@@ -17,20 +17,16 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import java.util.UUID;
 
 /**
- * 实测七百四十五·点1【飞行聚晶 · 非 OP 的开关网络层】——两个包：
- *
  * <ul>
  *   <li>{@link TogglePacket}（C2S）：{@code action} 0 = 查询当前状态、1 = 设置；</li>
  *   <li>{@link StatePacket}（S2C）：把该女仆的自动档状态回给发起者，客户端写进缓存供界面显示。</li>
  * </ul>
- *
  * 【为什么需要这一层（）】
  * 七百一十八 那一版把 Goety 位移聚晶**只**挂在了 {@code /maid_smart goety_*} 命令上，而那批命令
  * 全部 {@code requires(hasPermission(2))}（OP 专属）。于是一个普通生存玩家即使身上真有飞行聚晶、
  * 也把女仆驯服了，**开不了这个功能**——只有服主能开。而"仿创造飞行"（同类飞行功能）一直有
  * 主人可用的路径（快捷键 + 女仆配置界面一行，见 {@code MaidFreeFlightNetworking}）。
  * 这里照搬那套：**主人本人或 OP** 即可开自己的女仆，且要求她在加载范围内、距离 8 格以内。
- *
  * 【服务端校验】与 {@code MaidFreeFlightNetworking} 完全同口径：主人或 OP + 8 格内。
  * 另外这一档还要额外满足 {@link MaidGoetyCompat#hasFocus}（她身上**真的**有飞行聚晶）——
  * 保真门禁：没有道具就不给开，免得玩家以为"开了却不飞"是坏了。

@@ -20,27 +20,19 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
- * v1.2.0（1.20.1）：飞行作战——鞘翅图层（**Bedrock 模型** 女仆走这条）。
- *
  * 【显示条件】任务为飞行作战 **或 正在滑翔**（六百一十一 放宽，见下）且胸甲槽穿着可用鞘翅
  * （三件齐备时 MaidFlightKit.equip 会穿上）= "激活即显示"，与玩家穿戴鞘翅一致。
- *
  * ── v1.2.2 实测六百一十一【判据加上"正在滑翔"】──
  * 飞行跟随的女仆**不是飞行任务**
  * （她在跟主人，任务可能是空闲/搭路），旧判据只看 `isFlightTask` → 她滑翔时背上一片空白。
  * 现在改成 `MaidFlightKit.isFlightVisual(maid)`（= `isFlightTask || isGliding`）：空袭那边一字不变（它本来就在滑翔），
  * 跟着飞的她与"玩家给她鞘翅、她自己滑起来"的情况也一并认——滑翔位是**同步过的共享标志位 7**，
  * 所以多人下客户端也认得出（不依赖服务端那些状态表）。
- *
  * 【照抄原版 ElytraLayer 的渲染配方】1.20.1 的 `ElytraLayer.m_6494_` 就是
  * `pushPose + translate(0,0,0.125) + setupAnim + getArmorFoilBuffer + renderToBuffer`；
  * 本层所处的 poseStack 与 vanilha 图层完全一致（EntityMaidRenderer 走
  * `super.m_7392_`，即 `scale(-1,-1,1)` → `scale(entity)` → `translate(0,-1.501,0)` 之后），
- * 所以不需要任何额外空间换算。翅膀张合由 `ElytraModel.setupAnim` 依据
- * `isFallFlying()`（共享标志位 7）决定：滑翔=张开、落地/收翅=收拢。
- *
- * 注意：1.20.1 的 `RenderLayer` 抽象方法在 SRG 环境里叫 `m_6494_`（javap 实证），
- * 参数是 `Entity` 而不是 `Mob`，必须按这个名字覆写。
+ * 所以不需要任何额外空间换算。翅膀张合由 `ElytraModel.setupAnim` 依据 `isFallFlying()`（共享标志位 7）决定：滑翔=张开、落地/收翅=收拢。 注意：1.20.1 的 `RenderLayer` 抽象方法在 SRG 环境里叫 `m_6494_`（javap 实证）， 参数是 `Entity` 而不是 `Mob`，必须按这个名字覆写。
  */
 @OnlyIn(Dist.CLIENT)
 public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
@@ -54,13 +46,10 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
     /** 实测四百九十一：尺寸 = 与玩家等大（1.0 倍；四百八十曾是 0.85 倍，用户要求改回） */
     private static final float SIZE_FACTOR = 1.0f;
     /**
-     * 实测四百九十一：整体上移 0.7 格（用户要求；四百八十曾是 1.0 格）。
-     *
      * 为什么是 0.7：winefox 的 `ElytraLocator` 枢轴在模型 y=30.9644px，而肩线
      * （`LeftArm` 枢轴 29.1、手臂方块顶 30.436px）换算成格后落在同一高度——**挂点
      * 本身就在肩线上**。所以"鞘翅顶端对准肩膀"由本上移量单独决定，把四百八十的
      * 1.0 格减掉用户目视偏高的 0.3 格即得。
-     *
      * 本层 Y 朝下，故施加时为 -Y。
      */
     private static final float LIFT_BLOCKS = 0.7f;

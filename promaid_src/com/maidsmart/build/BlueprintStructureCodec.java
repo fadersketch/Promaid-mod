@@ -34,15 +34,11 @@ public final class BlueprintStructureCodec {
     static volatile int noItemCells = 0;
 
     /**
-     * 「二次半块」= 门的上半扇。放置下半扇后由放置侧补全（{@code ensureDoorUpper}），
-     * 蓝图里的上半扇步骤直接跳过——**一件门物品只对应两格**，两扇都从计划里放会吞两份料。
-     *
-     * <p>【v1.3.0 实测八百一十五：床不再走这里】旧版这条还顺带把 {@code part=head}
-     * 的床也当二次半块跳过（注释写着"MC 自动补全"），可床根本没有补全的代码——
-     * 于是蓝图只落下了 foot 半扇，而原版床的掉落表只在 {@code part=head} 时才给物品
-     * （掉落表实证）→ 玩家看到的"床只剩半张、挖了也不掉"。床现在由
-     * {@link BlueprintLib#parseStructure} 按"配对半扇在不在计划里"单独判，
-     * 见 {@link #isRedundantBedHalf}。
+     * 「二次半块」= 门的上半扇：放置下半扇后由放置侧补全（{@code ensureDoorUpper}），蓝图里的上半扇
+     * 步骤直接跳过——**一件门物品只对应两格**，两扇都从计划里放会吞两份料。
+     * 床**不走这里**（旧版把 {@code part=head} 也当二次半块跳过，可床没有补全代码 → 只落下 foot 半扇，
+     * 而原版床掉落表只在 {@code part=head} 时给物品 → "床只剩半张、挖了也不掉"）；床现在由
+     * {@link BlueprintLib#parseStructure} 按"配对半扇在不在计划里"单独判（见 {@link #isRedundantBedHalf}）。
      */
     static boolean isSecondaryHalf(net.minecraft.nbt.CompoundTag stateTag) {
         try {

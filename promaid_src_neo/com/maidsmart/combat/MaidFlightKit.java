@@ -9,30 +9,19 @@ import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.IItemHandlerModifiable;
 
 /**
- * v1.2.0（1.21.1）：飞行作战模式的装备判定 / 穿戴 / 滑翔状态（工具类）。
- *
  * 【模式激活三要素】鞘翅 + 近战武器 + 烟花火箭——缺任意一个，本模式【不激活】：
- * v1.2.0：武器位由"重锤"放宽为"任意近战武器"（判据复用自动装备的
  * `MaidToolAutoEquip.isMeleeWeapon`，镐/弓/弩/御币排除）；手持重锤时猛击吃下落加成，
  * 其余近战武器在收翅下落命中时按原版规则结算 **暴击 ×1.5**。
- * v1.2.0 实测四百六十八：武器位再放开"枪械"——**飞行远战**认枪械（TACZ / 卓越前线，
  * 判据 `GunCompat.isGun`），开火走 TLM 自己的枪械通道（换弹 + 自动瞄准 + 开火，见
  * `MaidFlightCombatBehavior#tickGunFire`，射程用 `GunCompat.gunMaxRange`）；飞行近战
  * 仍只认近战武器（枪械挥砍没有意义）。
  * 行为退回"和普通攻击模式一致"的地面近战（与玩家的长矛地面拉扯同款）。
  * 判定覆盖背包 / 主手 / 副手 / 身上护甲位（用户要求："检测背包内/主副手/身上护甲位"）。
- *
  * 【滑翔的实现原理（字节码实证）】原版滑翔物理不在 Player 里，而在
  * LivingEntity.travel(Vec3)：唯一闸门是 isFallFlying() = getSharedFlag(7)，
  * 全程无 instanceof Player。所以把第 7 位共享标志位置 true 即可让女仆进入滑翔。
  * setSharedFlag 是 protected → 经 {@code EntityFlagInvoker} mixin 暴露。
- * 共享标志位是 SynchedEntityData，服务端置位自动同步客户端，无需自定义网络包。
- *
- * 【滑翔必须持续满足的条件（否则同一 tick 就被清掉）】
- * 1. 胸甲位是可用鞘翅——LivingEntity.updateFallFlying 每 tick（aiStep 内、travel 之前）
- *    检查胸甲位的 canElytraFly/elytraFlightTick，不满足就清第 7 位；所以本类
- *    equip() 必须把鞘翅真正穿到 EntityMaid 的 CHEST 槽；
- * 2. 不能落地——travel 的滑翔分支在 onGround() 时也会清第 7 位。
+ * 共享标志位是 SynchedEntityData，服务端置位自动同步客户端，无需自定义网络包。 【滑翔必须持续满足的条件（否则同一 tick 就被清掉）】 1. 胸甲位是可用鞘翅——LivingEntity.updateFallFlying 每 tick（aiStep 内、travel 之前） 检查胸甲位的 canElytraFly/elytraFlightTick，不满足就清第 7 位；所以本类 equip() 必须把鞘翅真正穿到 EntityMaid 的 CHEST 槽； 2. 不能落地——travel 的滑翔分支在 onGround() 时也会清第 7 位。
  */
 public final class MaidFlightKit {
 
@@ -58,16 +47,11 @@ public final class MaidFlightKit {
 
     /**
      * v1.2.2 实测六百一十一【外观口径：她该不该"看起来在飞"】——飞行任务 **或** 正在滑翔。
-     *
      * 三个纯渲染的调用点共用这一条：鞘翅翅膀图层（Bedrock / Gecko 两套）、
      * 跟随俯角的前倾、以及"离地强制展翅"。它们原来都写着 {@link #isFlightTask}，
      * 而**飞行跟随（六百〇八 起跟着主人飞）的女仆并不是飞行任务**——她在滑翔，
      * 背上却没有翅膀、模型还是走路姿态（）。
-     *
-     * 【为什么把滑翔位算进来就够】判据用的是**同步过的共享标志位 7**（{@link #isGliding}），
-     * 服务端/客户端一致，所以多人下客户端不需要任何本模组的服务端状态表也认得出；
-     * 空袭那边一字不变（它本来就满足 isFlightTask）；玩家给女仆穿鞘翅、她自己也滑起来的
-     * 情况同样认——这正是原版"谁在滑翔谁就有翅膀"的语义。
+     * 【为什么把滑翔位算进来就够】判据用的是**同步过的共享标志位 7**（{@link #isGliding}）， 服务端/客户端一致，所以多人下客户端不需要任何本模组的服务端状态表也认得出； 空袭那边一字不变（它本来就满足 isFlightTask）；玩家给女仆穿鞘翅、她自己也滑起来的 情况同样认——这正是原版"谁在滑翔谁就有翅膀"的语义。
      */
     public static boolean isFlightVisual(EntityMaid maid) {
         return isFlightTask(maid) || isGliding(maid);
@@ -111,8 +95,6 @@ public final class MaidFlightKit {
 
     /**
      * 远程武器：弓/弩/御币/模组弹射武器（ProjectileWeaponItem）+ **三叉戟** + 枪械（TACZ / 卓越前线）。
-     *
-     * v1.2.0 实测四百七十八【三叉戟】：它**不是** `ProjectileWeaponItem`
      * （1.21.1 是 `TridentItem extends Item implements ProjectileItem`，两个不同接口），
      * 所以旧版这个判据会把它当"不是武器" → 三件套永远不齐 → 飞行远战激活不了，
      * 而且 `hasWeapon`/自动装备也认不出它。TLM 自己的 `TaskTridentAttack.isWeapon`
@@ -134,35 +116,11 @@ public final class MaidFlightKit {
 
     /**
      * 是否**激流**三叉戟（`Enchantments.RIPTIDE`）。
-     *
-     * v1.2.0 实测五百三十二。用户提问："TLM是怎么处理三叉戟的激流附魔的？
      * 我觉得我们的空袭也需要注意一下这个，理论上激流三叉戟应被判定为近战武器。"
-     *
      * 【原版语义（`TridentItem` 两版字节码逐条对上）——激流把三叉戟变成"近战突进"】：
      * <ul>
      *   <li>`use`：激流 > 0 且**不在水中/雨中**（`isInWaterOrRain`）→ 直接 return，
-     *       连"举起来蓄力"都不允许；</li>
-     *   <li>`releaseUsing`：同一道闸门（`EnchantmentHelper.getTridentSpinAttackStrength` > 0
-     *       且 `!isInWaterOrRain` → return）；而**投掷 `new ThrownTrident` 那一支只在
-     *       无激流时走**，激流分支走的是 `player.startAutoSpinAttack(20, dmg, stack)` + `push(...)`。</li>
-     * </ul>
-     * 也就是说：**带激流的三叉戟永远不是投掷武器**，它是靠旋转突进贴脸的近战武器。
-     *
-     * 【TLM 怎么处理的】**完全没处理**——两个版本的 jar 里搜不到任何激流标识
-     * （`getTridentSpinAttackStrength` / `startAutoSpinAttack` 全部 0 命中，
-     * 只剩 geckolib 那个客户端动画绑定读 `isAutoSpinAttack`）。TLM 的 `TaskTridentAttack`
-     * 只做了"剥忠诚"一件事，投掷时**不看激流**——所以在 TLM 里激流三叉戟照样被投出去，
-     * 等于一个有玩家在手上绝对投不出去的附魔，在女仆手上变成了普通三叉戟。
-     * 本模组的 `throwTrident` 原本照搬 TLM，因此继承了这个不一致。
-     *
-     * 【本模组的口径】既然原版里它投不出去，就按**近战武器**归类：
-     * 远程空袭里它不算"远程武器"（三件套不齐 → 不起飞并提示缺远程武器），
-     * 近战空袭里它照旧算近战武器（镐/弓/弩/御币之外带攻击力属性的都算），
-     * 由俯冲猛击那一记去结算——与"玩家拿它在水里突进"是同一档的近战用法。
-     *
-     * 【为什么用 keySet+is 而不是 EnchantmentKeys】本方法是 `ItemStack` 单参（调用方
-     * `isRangedWeapon` 拿不到 level/registryAccess），而 `ItemEnchantments.keySet()` 给的
-     * 就是 `Holder<Enchantment>`，`Holder.is(ResourceKey)` 直接可比——不需要注册表。
+     *       连"举起来蓄力"都不允许；</li> <li>`releaseUsing`：同一道闸门（`EnchantmentHelper.getTridentSpinAttackStrength` > 0 且 `!isInWaterOrRain` → return）；而**投掷 `new ThrownTrident` 那一支只在 无激流时走**，激流分支走的是 `player.startAutoSpinAttack(20, dmg, stack)` + `push(...)`。</li> </ul> 也就是说：**带激流的三叉戟永远不是投掷武器**，它是靠旋转突进贴脸的近战武器。 【TLM 怎么处理的】**完全没处理**——两个版本的 jar 里搜不到任何激流标识 （`getTridentSpinAttackStrength` / `startAutoSpinAttack` 全部 0 命中， 只剩 geckolib 那个客户端动画绑定读 `isAutoSpinAttack`）。TLM 的 `TaskTridentAttack` 只做了"剥忠诚"一件事，投掷时**不看激流**——所以在 TLM 里激流三叉戟照样被投出去， 等于一个有玩家在手上绝对投不出去的附魔，在女仆手上变成了普通三叉戟。 本模组的 `throwTrident` 原本照搬 TLM，因此继承了这个不一致。 【本模组的口径】既然原版里它投不出去，就按**近战武器**归类： 远程空袭里它不算"远程武器"（三件套不齐 → 不起飞并提示缺远程武器）， 近战空袭里它照旧算近战武器（镐/弓/弩/御币之外带攻击力属性的都算）， 由俯冲猛击那一记去结算——与"玩家拿它在水里突进"是同一档的近战用法。 【为什么用 keySet+is 而不是 EnchantmentKeys】本方法是 `ItemStack` 单参（调用方 `isRangedWeapon` 拿不到 level/registryAccess），而 `ItemEnchantments.keySet()` 给的 就是 `Holder<Enchantment>`，`Holder.is(ResourceKey)` 直接可比——不需要注册表。
      */
     public static boolean isRiptide(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
@@ -182,7 +140,6 @@ public final class MaidFlightKit {
 
     /**
      * 本任务口径的"武器位"判据（远战认远程武器，近战认近战武器）。
-     *
      * 【刻意**不**在这里放行激流三叉戟（v1.2.4 实测六百四十一）】这个判据还喂给
      * {@link #equip}（换主手武器）与 {@code resolveRangedWeapon}（找一个远程武器去数弹药）——
      * 在这里放行会同时把"远程空袭的主手换成三叉戟"和"三叉戟算远程武器"两件事一起带进来，
@@ -194,19 +151,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * v1.2.4 实测六百四十一【三件套里的"武器位"：远程空袭也认激流三叉戟】。
-     *
      * 反馈原文："远程空袭不认这把武器能够起飞。"
-     *
      * 【为什么原本不认】实测五百三十二 把激流三叉戟归成"近战武器"（当时是用户自己的口径：
      * "理论上激流三叉戟应被判定为近战武器"），于是远程任务里 {@link #isWeaponForTask} 直接把它
      * 排除 → {@link #hasWeapon} 为假 → {@link #isModeActive} 直接不成立 → 她**连模式都进不去**，
      * 更别提起飞（缺件提示还会报"远程武器"）。
-     *
-     * 【现在的口径】远程任务下**优先远程武器**（背包里真有弓/弩/枪械时一切照旧：自动装备换的
-     * 还是那把远程武器，主手不会莫名变成三叉戟）；她**没有任何远程武器**时，那把激流三叉戟顶替
-     * 武器位——放行的只是"能起飞"（它不能开火：远程空袭的开火那一支 {@code hasUsableRangedWeapon}
-     * 判据一字未动，她拿不出远程武器时就只是不开火，不做玩家做不到的事）。
+     * 【现在的口径】远程任务下**优先远程武器**（背包里真有弓/弩/枪械时一切照旧：自动装备换的 还是那把远程武器，主手不会莫名变成三叉戟）；她**没有任何远程武器**时，那把激流三叉戟顶替 武器位——放行的只是"能起飞"（它不能开火：远程空袭的开火那一支 {@code hasUsableRangedWeapon} 判据一字未动，她拿不出远程武器时就只是不开火，不做玩家做不到的事）。
      */
     public static boolean hasWeaponForFlightTask(EntityMaid maid) {
         if (hasWeapon(maid)) {
@@ -243,17 +193,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * v1.2.0：是否处于"飞行作战的空中状态"——滑翔中。
      * 供全模组的"空中禁传送/禁落地缓冲"抑制链使用（与重锤跃起 isAirborne 并列）。
-     *
-     * v1.2.0【实测四百八十七】只认滑翔位是不够的：收翅猛击时 `tickSmash` 会**主动**
      * 清掉滑翔位（收翅才吃得到猛击判定），于是"飞向敌人、贴近地面"那一刻恰好不满足
      * `isGliding` → 主人一远，自动传送就把她拽走，这一轮扑击白费（
      * "飞向敌人离地面较近的时候…会触发自动传送。导致本次攻击被卡掉"）。
-     *
      * 现在并入 {@code MaidFlightCombatBehavior.isEngaged}：本轮攻击的任一阶段
-     * （起跳/爬升/收翅猛击/等待再放烟花/远程俯冲助推）都算"空中状态"。
-     * 该状态由行为收尾 `forget()` 整清，豁免有界——一轮打完立刻恢复正常传送。
+     * （起跳/爬升/收翅猛击/等待再放烟花/远程俯冲助推）都算"空中状态"。 该状态由行为收尾 `forget()` 整清，豁免有界——一轮打完立刻恢复正常传送。
      */
     public static boolean isFlightAirborne(EntityMaid maid) {
         if (isGliding(maid)) {
@@ -269,18 +214,12 @@ public final class MaidFlightKit {
     /* ---------------- 装备检测 ---------------- */
 
     /**
-     * v1.2.2 实测六百〇九：**本模组自己借走的那件副手物品**（没借走就空栈）。
-     *
      * 两个"手上亮一下"的链路（{@link BombPose} / {@link FlightFireworkPose}）只补动作表现：
      * 把"她这一下正在用的那件"放进副手举十几 tick，原物留在它们自己的快照里。也就是说
      * 那十几 tick 里，玩家给她的那件东西（羽扇 / 烟花 / 盾牌…）**不在任何槽位里**——
      * 就绪判定若只看槽位，就会在这十几 tick 里得到"没有"。
-     *
-     * 实测现场：粉丝把孔雀羽扇挂在她副手，空袭每十几秒起手一次轰炸 → 就绪判定报
      * 「可以飞行的道具」→ 主人聊天框一条系统消息；借还之后判定又齐、把播报冷却清零，
-     * 下一轮再报一条，**每 10 秒一条永远不停**。修法：就绪判定把"借走的那件"算作
-     * **仍在她身上**（{@link #hasInHandsOrBorrowed}）。取用（{@code takeFirework} /
-     * {@code TwilightFanKit.findFan}）**不变**：真要动手挥扇 / 烧烟花时它必须在槽位里。
+     * 下一轮再报一条，**每 10 秒一条永远不停**。修法：就绪判定把"借走的那件"算作 **仍在她身上**（{@link #hasInHandsOrBorrowed}）。取用（{@code takeFirework} / {@code TwilightFanKit.findFan}）**不变**：真要动手挥扇 / 烧烟花时它必须在槽位里。
      */
     public static ItemStack borrowedOffhand(EntityMaid maid) {
         if (maid == null) {
@@ -337,31 +276,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * v1.2.0 实测四百九十五：【远程空袭】的弹药门禁——没弹药就不必起飞。
-     *
      * 需求原文："远程空袭激活时还需要检测一下有没有对应的弹药，否则没必要起飞。"
-     *
      * 【为什么不能一刀切】远程武器里**只有一部分消耗弹药**，照 TLM 自己的口径分三类：
      * ```
      *   弓 / 弩          → 需要箭（弩还额外认烟花火箭当弹药）  ← TLM TaskBowAttack/TaskCrossBowAttack
      *   枪械（TACZ/SBW）  → 需要子弹（能量武器内部充能、免检）    ← GunCompat.hasGunAndAmmo 已处理
-     *   御币 / 三叉戟     → **不消耗弹药**（弹幕用武器本体、三叉戟投的是自己）
-     * ```
-     * 后两类在 TLM 里也没有弹药门禁（`TaskDanmakuAttack` / `TaskTridentAttack` 都没有
-     * hasArrow 之类的判据，反编译实证），所以这里对它们一律**放行**——否则"持御币/三叉戟
-     * 的女仆永远判定缺弹药、永远不起飞"，那才是真正的新 bug。
-     *
-     * v1.2.0 实测五百零一【这三类必须排在最前面判】：御币虽然"不需要弹药"，但它是
-     * `ProjectileWeaponItem` 的**子类**（`ItemHakureiGohei extends ProjectileWeaponItem`，
-     * 两版 TLM 字节码实证），所以一旦把它放在下面那条 `ProjectileWeaponItem` 分支之后，
-     * 它就会被"数箭"那一路吃掉 —— 这正是"检测御币时显示没有弹药"的根因。
-     * 判据顺序：枪械 → **御币** → **三叉戟** → 弩 → 其它弹射武器。
-     *
-     * 【箭的判据照抄 TLM】用**武器自己的** `supportedProjectiles` 谓词在背包里找
-     * （`TaskBowAttack.findArrow` 就是 `ItemsUtil.findStackSlot(inv, bow.m_6437_())`）——
-     * 这样模组弹射武器也能用它们自己的弹药，不是只认原版箭。
-     *
-     * @return true = 该武器不需要弹药，或者需要且背包里确实有
+     *   御币 / 三叉戟     → **不消耗弹药**（弹幕用武器本体、三叉戟投的是自己） ``` 后两类在 TLM 里也没有弹药门禁（`TaskDanmakuAttack` / `TaskTridentAttack` 都没有 hasArrow 之类的判据，反编译实证），所以这里对它们一律**放行**——否则"持御币/三叉戟 的女仆永远判定缺弹药、永远不起飞"，那才是真正的新 bug。 v1.2.0 实测五百零一【这三类必须排在最前面判】：御币虽然"不需要弹药"，但它是 `ProjectileWeaponItem` 的**子类**（`ItemHakureiGohei extends ProjectileWeaponItem`， 两版 TLM 字节码实证），所以一旦把它放在下面那条 `ProjectileWeaponItem` 分支之后， 它就会被"数箭"那一路吃掉 —— 这正是"检测御币时显示没有弹药"的根因。 判据顺序：枪械 → **御币** → **三叉戟** → 弩 → 其它弹射武器。 【箭的判据照抄 TLM】用**武器自己的** `supportedProjectiles` 谓词在背包里找 （`TaskBowAttack.findArrow` 就是 `ItemsUtil.findStackSlot(inv, bow.m_6437_())`）—— 这样模组弹射武器也能用它们自己的弹药，不是只认原版箭。 @return true = 该武器不需要弹药，或者需要且背包里确实有
      */
     public static boolean hasAmmoForRanged(EntityMaid maid) {
         if (maid == null) {
@@ -386,20 +306,13 @@ public final class MaidFlightKit {
                 return false;
             }
             // 枪械：走 GunCompat（口径由枪械 mod 自己回答，见 GunCompat.canFeed 的类注释）
-            // v1.3.0 实测六百六十六：改成**按这把枪**问——旧版是"她身上任意一把枪有弹就算"，
             // 于是"手里是喂不上弹的重武器/蓄力枪、背包里另有一把能用的手枪"时模式照样激活，
             // 她就一直绕圈不开火（粉丝反馈"一直绕圈但不射击"的成因；开火用的就是这把枪）
-            // 【实测六百九十二："喂得上弹"分两档】canFeed = 这一拍**打得响**（弹匣/弹膛里有），
             // canReload = 现在打不响但**换得上**（背包里有这把枪认的弹药/弹药箱，开火链路自己会
             // 拉栓换弹）。门禁取"打得响 **或** 换得上"——旧版只认前者，于是弹匣打空的那一拍
             // 模式就判"缺弹药"，扫帚模式当场把她从空中放下来（玩家报的"冲锋枪/狙击枪飞着飞着
             // 就掉下来"），空袭那边同理。口径只在 GunCompat 一处，别处不重写。
-            // 【实测六百九十四 / 六百九十五：两档现在都由枪械 mod 自己回答】canFeed 问两家各自的
-            // 「打得响吗」（TACZ 的 NO_AMMO 门 = 实测六百六十六；卓越前线的 hasEnoughAmmoToShoot），
-            // canReload 问两家各自的「换得上弹吗」（TACZ 的 AbstractGunItem.canReload = 实测六百九十四；
-            // 卓越前线的 GunData.shouldStartReloading——与 TLM 自己的 SBW 换弹链路同一个方法 = 实测六百九十五）
-            // ——**不再是"任意远程武器 + 任意弹药"**。
-            // 。
+            // 「打得响吗」（TACZ 的 NO_AMMO 门 = 实测六百六十六；卓越前线的 hasEnoughAmmoToShoot）， canReload 问两家各自的「换得上弹吗」（TACZ 的 AbstractGunItem.canReload = 实测六百九十四； 卓越前线的 GunData.shouldStartReloading——与 TLM 自己的 SBW 换弹链路同一个方法 = 实测六百九十五） ——**不再是"任意远程武器 + 任意弹药"**。 。
             if (GunCompat.isGun(weapon)) {
                 return GunCompat.canFeed(maid, weapon) || GunCompat.canReload(maid, weapon);
             }
@@ -418,20 +331,13 @@ public final class MaidFlightKit {
                 return true;
             }
             // 弩：烟花火箭 **或** 箭。
-            //
-            // v1.2.0 实测五百三十三【不再要求"带爆炸"】：旧版只认带 `Explosions` 的烟花，
             // 玩家拿一叠普通烟花配弩会被判成"缺弹药"→ 一发不开
             // （反馈原文："女仆不认烟花火箭是弩的弹药"）。**原版 `CrossbowItem` 的弹药谓词
             // 认的就是任意烟花火箭**，不看有没有爆炸组件；这里对齐原版，
             // 并与开火路径 {@link #takeBestCrossbowFirework} 严格同一口径。
-            //
             // 顺序不变（烟花优先、其次箭；TLM `TaskCrossBowAttack.hasAmmunition` 同款），
             // 但**具体用哪一枚由 {@link #takeBestCrossbowFirework} 按威力挑**：
-            // 威力 = 爆炸条目数（= 合成时用的烟火之星个数），原版伤害 = `5 + 2×条目数`
-            // （字节码实证）——所以"好烟花"先用，不会一上来就烧普通燃料烟花。
-            //
-            // v1.2.0 实测五百三十五："普通烟花算不算弹药"由配置
-            // `combat.crossbowPlainFirework` 决定（见 {@link #hasAmmoFirework}）。
+            // 威力 = 爆炸条目数（= 合成时用的烟火之星个数），原版伤害 = `5 + 2×条目数` （字节码实证）——所以"好烟花"先用，不会一上来就烧普通燃料烟花。 `combat.crossbowPlainFirework` 决定（见 {@link #hasAmmoFirework}）。
             if (weapon.getItem() instanceof net.minecraft.world.item.CrossbowItem) {
                 if (hasAmmoFirework(maid)) {
                     return true;
@@ -467,7 +373,6 @@ public final class MaidFlightKit {
 
     /**
      * 解析"实际会被使用的那把远程武器"——**必须与 {@link #equip} 的选武器口径一致**。
-     *
      * 为什么不能直接看主手：`isModeActive` 是在 `equip` **之前**被调用的，那一刻主手
      * 可能还是空的、而弓和箭都在背包里。若按主手判弹药就会误判"缺弹药"→ 永远不激活
      * （把本来能用的配置锁死，属于比原问题更糟的回归）。
@@ -511,18 +416,12 @@ public final class MaidFlightKit {
     /* ---------------- 实测七百一十二：主手打不响 → 先翻背包换一把能接着打的 ---------------- */
 
     /**
-     * 【实测七百一十二】"主手那把打不响，但背包里还有能接着打的"——**模式门禁要认这一条**。
-     *
      * <p>
-     *
-     *
-     *
      * <p>【为什么必须在门禁这里判】门禁原先只看"她**会用的那一把**"
      * （{@link #resolveRangedWeapon}：主手优先）——主手那把干打不响就直接判缺弹药、把模式关掉，
      * **根本不给她翻背包的机会**；空袭那边更狠：{@code isModeActive} 在 {@code equip}
      * **之前**判假就 {@code endFlightSafely} 了。所以门禁必须改成"**她身上有没有一把能接着打的**"
-     * ——只要背包里还有一把喂得上弹/能量没空的，就算齐备；真正把它换到主手由
-     * {@link #ensureUsableRangedWeapon} 在同一次 tick 完成（**口径只有一处**：门禁与换装共用本方法）。
+     * ——只要背包里还有一把喂得上弹/能量没空的，就算齐备；真正把它换到主手由 {@link #ensureUsableRangedWeapon} 在同一次 tick 完成（**口径只有一处**：门禁与换装共用本方法）。
      */
     public static boolean hasUsableRangedWeaponAny(EntityMaid maid) {
         return hasUsableRangedWeapon(maid, MaidFlightKit::isRangedWeapon);
@@ -550,15 +449,11 @@ public final class MaidFlightKit {
     }
 
     /**
-     * 【实测七百一十二】把主手换成"能接着打"的那把——**只在主手那把打不响时才动手**
      * （打不响 = 合法远程武器、但 {@link #hasAmmoForWeapon} 为假，也就是弹药/能量耗尽）。
-     *
      * <p>挑选顺序（玩家要求"优先模组武器"）：**模组武器优先于原版武器**，同档取先扫到的
      * （背包槽序）。找不到能用的就**保持现状**——绝不因为"换不到更好的"把玩家给的武器换掉。
-     *
      * <p>调用点：空袭 {@link #equip}（主手那一档）与扫帚模式
      * （{@code MaidToolAutoEquipBehavior} 的扫帚分支）——两条链路共用本方法，不各写一份。
-     *
      * @return 主手此刻是否有一把能用的远程武器
      */
     public static boolean ensureUsableRangedWeapon(EntityMaid maid) {
@@ -692,23 +587,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * v1.2.4 实测六百三十三【激流三叉戟也能当飞行推进剂】：找她身上的激流三叉戟（没有则 EMPTY）。
-     *
      * 【找哪三处】**主手 → 副手 → 背包**（与 六百三十三 的原始口径一致）。实测六百三十八
      * 曾把这里收成"只认背包"（当时的理由是"主手那件是玩家的武器，不该被当成燃料"），
      * **实测六百四十 按玩家要求改回来了**——
-     *
      * 的存档会被判成没有推进剂；两侧（判定与取用）现在是同一口径。
-     *
      * 【耐久扣在谁身上】找到哪一件就用哪一件（{@code hurtAndBreak} 就在那一件 stack 上，
-     * 见 {@code MaidTridentSpinBehavior#boostForFlight} 与 {@code MaidRiptideBoost#ignite}）——
-     * 也就是说"拿在手上用的就是手上那把、装包里用的就是包里那把"，不会有歧义。
-     *
-     * 【近战突进仍只看主手】{@link MaidTridentSpinBehavior#spinWeapon} 要求的"主手举着激流三叉戟"
-     * 一条没动：那是攻击起手（与原版一致），不走本方法。
-     *
-     * 【额外容器】这三处都没有时，用 {@link #fetchRiptide} 再问一次精妙背包 / 旅行者背包
-     * （TLM 的额外容器体系，见 {@link com.maidsmart.tool.MaidExtraContainer}）。
+     * 见 {@code MaidTridentSpinBehavior#boostForFlight} 与 {@code MaidRiptideBoost#ignite}）—— 也就是说"拿在手上用的就是手上那把、装包里用的就是包里那把"，不会有歧义。 【近战突进仍只看主手】{@link MaidTridentSpinBehavior#spinWeapon} 要求的"主手举着激流三叉戟" 一条没动：那是攻击起手（与原版一致），不走本方法。 【额外容器】这三处都没有时，用 {@link #fetchRiptide} 再问一次精妙背包 / 旅行者背包 （TLM 的额外容器体系，见 {@link com.maidsmart.tool.MaidExtraContainer}）。
      */
     public static ItemStack findRiptide(EntityMaid maid) {
         if (maid == null) {
@@ -736,19 +620,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * v1.2.4 实测六百三十九【先看身上，再问额外容器】：**真要动手推一口时**调这个。
      * 主手/副手/背包里有 → 直接用；都没有 → 请 TLM 的额外容器系统（精妙背包 **或旅行者背包**）
      * 把激流三叉戟搬进她的背包，然后再找一次（{@link com.maidsmart.tool.MaidExtraContainer#pull}）。
-     *
      * 【与 findRiptide 的分工】findRiptide 是纯读取（判定/气泡/日志都用它，不许有副作用）；
      * 本方法会真的搬东西，所以只在"已经决定要用"的那几处（空袭抬升/俯冲、起飞与飞行跟随）
      * 调用。搬进来的三叉戟落在她背包里，扣的还是它自己的耐久。
-     *
-     * 【额外容器是"两个 mod 一套代码"】TLM 的额外容器体系里，精妙背包（{@code SBackpackSlotRef}）
-     * 与旅行者背包（{@code TBackpackSlotRef}）是**同一个接口下的两个实现**（javap 实证：
-     * 两者都 extends {@code CuriosSlotRef}、都按 NeoForge 的 {@code Capabilities.ItemHandler}
-     * 操作饰品栏里那件背包），而本方法走的是 TLM 自己的容器列表——所以**旅行者背包与精妙背包
-     * 从第一天起就是同一条路**，不需要各写一份。
+     * 【额外容器是"两个 mod 一套代码"】TLM 的额外容器体系里，精妙背包（{@code SBackpackSlotRef}） 与旅行者背包（{@code TBackpackSlotRef}）是**同一个接口下的两个实现**（javap 实证： 两者都 extends {@code CuriosSlotRef}、都按 NeoForge 的 {@code Capabilities.ItemHandler} 操作饰品栏里那件背包），而本方法走的是 TLM 自己的容器列表——所以**旅行者背包与精妙背包 从第一天起就是同一条路**，不需要各写一份。
      */
     public static ItemStack fetchRiptide(EntityMaid maid) {
         ItemStack own = findRiptide(maid);
@@ -798,32 +675,10 @@ public final class MaidFlightKit {
     /**
      * v1.2.2 实测六百一十三【飞行跟随的启动并入位移法术】：她"能飞起来"的**道具件**口径——
      * 烟花火箭 / 孔雀羽扇（{@link #hasFlightFuel}）**或**能上天的位移法术（{@link #hasClimbSpell}）。
-     *
      * 【为什么收敛成一个方法】这个"三选一"原先在空袭激活（{@link #isModeActive}）与缺件气泡
      * （{@link #missingParts}）里各写一遍，六百一十三 又要给飞行跟随的启动门禁加同一件事——
      * 再加一遍就是第四份。口径必须**只有一处定义**：这一类的账本模组里已经吃过好几次亏
-     * （"气泡说齐了、她却不飞"就是两处判据写歪出来的）。现在空袭与飞行跟随共用这一份。
-     *
-     * 【开关归属】位移法术那一支由空袭的「位移法术·起飞/补高」开关
-     * （{@code combat.flightDashClimb}，默认开）管：关掉它 → 空袭与飞行跟随**同时**退回
-     * 只认烟花/羽扇，两处口径依然一致（不需要再开一个新开关）。
-     *
-     * 【与 {@link #hasFlightFuel} 的区别】那个是"有没有可燃的道具"（烟花/羽扇，补推要扣它）；
-     * 这个是"能不能飞起来"（含不消耗物资的法术与只扣三叉戟耐久的激流）。要判断"能不能起飞"
-     * 一律用这一个。
-     *
-     * v1.2.4 实测六百三十三【第四条腿 = 激流三叉戟】：推进剂再添一件——**带激流附魔的三叉戟**
-     * 也能把她推起来（沿视线推原版那一口 `3.0 × (1 + 等级) / 4`，见
-     * {@code MaidTridentSpinBehavior#boostForFlight}），于是"只带一把激流三叉戟、没有烟花/
-     * 羽扇/法术"的女仆也能起飞、也能启动飞行跟随。开关沿用 `combat.riptideDash`
-     * （激流三叉戟旋转突进，默认开）——**不新增配置项**，关掉它这一条腿也一起退回。
-     *
-     * v1.3.0(beta) 实测七百一十【第五条腿 = 自推鞘翅】：再来一件——**那些"自己会推玩家"的
-     * 模组鞘翅**（伊卡洛斯之翼空域系 / 神秘遗物+ 的壮丽·混沌，见
-     * {@link MaidSelfPropelledWings}）也算推进剂：她穿着它就不需要烟花。这一条腿与前面四条的
-     * 差别在于"推力由谁给"——前面四条的推力本来就由我们调用，而这一条的**模组推力只挂在
-     * PlayerTickEvent 上、女仆收不到**，所以由 {@code MaidSelfPropelledWings.tick} 替她推。
-     * 开关 `combat.selfWings`（默认开）——关掉它这一条腿一起退回。
+     * （"气泡说齐了、她却不飞"就是两处判据写歪出来的）。现在空袭与飞行跟随共用这一份。 【开关归属】位移法术那一支由空袭的「位移法术·起飞/补高」开关 （{@code combat.flightDashClimb}，默认开）管：关掉它 → 空袭与飞行跟随**同时**退回 只认烟花/羽扇，两处口径依然一致（不需要再开一个新开关）。 【与 {@link #hasFlightFuel} 的区别】那个是"有没有可燃的道具"（烟花/羽扇，补推要扣它）； 这个是"能不能飞起来"（含不消耗物资的法术与只扣三叉戟耐久的激流）。要判断"能不能起飞" 一律用这一个。 也能把她推起来（沿视线推原版那一口 `3.0 × (1 + 等级) / 4`，见 {@code MaidTridentSpinBehavior#boostForFlight}），于是"只带一把激流三叉戟、没有烟花/ 羽扇/法术"的女仆也能起飞、也能启动飞行跟随。开关沿用 `combat.riptideDash` （激流三叉戟旋转突进，默认开）——**不新增配置项**，关掉它这一条腿也一起退回。 模组鞘翅**（伊卡洛斯之翼空域系 / 神秘遗物+ 的壮丽·混沌，见 {@link MaidSelfPropelledWings}）也算推进剂：她穿着它就不需要烟花。这一条腿与前面四条的 差别在于"推力由谁给"——前面四条的推力本来就由我们调用，而这一条的**模组推力只挂在 PlayerTickEvent 上、女仆收不到**，所以由 {@code MaidSelfPropelledWings.tick} 替她推。 开关 `combat.selfWings`（默认开）——关掉它这一条腿一起退回。
      */
     public static boolean hasFlightPropellant(EntityMaid maid) {
         return hasFlightFuel(maid) || hasClimbSpell(maid) || hasRiptide(maid)
@@ -835,12 +690,9 @@ public final class MaidFlightKit {
      * 见 `hasAmmoForRanged` 的弩分支。 */
 
     /**
-     * v1.2.0 实测五百七十二【位移法术可顶替烟花】：她有没有"能把自己顶上天"的位移法术。
-     *
      * 需求（法术模组作者转达的）也要能用于**平地起飞**。
      * 而空袭原来把"烟花火箭"写死在激活条件里——没有烟花模式压根不激活，那条路永远走不到。
      * 所以这里给烟花开一个替代件：带得起飞法术 = 推进剂不缺。
-     *
      * 结果按 20 tick 缓存（isModeActive 每 tick 会被问好几次，而扫她的书单是反射调用）。
      */
     private static final java.util.Map<java.util.UUID, Boolean> DASH_KIT_CACHE = new java.util.HashMap<>();
@@ -888,11 +740,7 @@ public final class MaidFlightKit {
 
     /**
      * 三要素齐备 = 模式激活（缺一即未激活，行为退回普通攻击模式）。
-     *
-     * v1.2.0 实测四百九十五：**远程空袭**额外要求弹药（见 {@link #hasAmmoForRanged}）——
      * 没箭/没子弹就没必要起飞（需求："否则没必要起飞"）。近战空袭不受影响。
-     *
-     * v1.2.0 实测五百七十二：推进剂那一件改成 **烟花火箭 或 能上天的位移法术**——
      * 这也是"平地起飞"能成立的前提（没有烟花时模式必须照样激活，否则那条分支永远走不到）。
      */
     public static boolean isModeActive(EntityMaid maid) {
@@ -907,20 +755,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * 【实测六百七十七】**任务无关**的"空袭三件套齐"——给"扫帚模式的女仆也能报出这一句"用。
-     *
      * <p>
-     *
-     *
-     *
      * <p>【为什么不能直接用 {@link #isModeActive}】那一条里的"武器位"是**按当前任务分流**的
      * （{@link #hasWeaponForFlightTask} → {@link #isWeaponForTask}：远程任务要远程武器、
      * 其余任务要近战武器）。而这一句的触发场合是**扫帚模式**——她的任务是扫帚、不是飞行任务，
      * 于是同一个背包会被 {@code isModeActive} 判成"缺武器"（它转头去数近战武器了）。
-     * 所以她能不能空袭这件事必须按**任务无关**的口径问：鞘翅 / 远程武器 / 推进剂 / 弹药。
-     * 四件**全部复用既有判据**（{@link #hasElytra}、{@link #hasRangedWeaponOnly}、
-     * {@link #hasFlightPropellant}、{@link #hasAmmoForWeapon}），不新写第二份"什么算鞘翅"——
-     * 弹药那两行与 {@link MaidBroomKit#ammoOk} 是同一份口径（本模组"同一个口径只有一处"）。
+     * 所以她能不能空袭这件事必须按**任务无关**的口径问：鞘翅 / 远程武器 / 推进剂 / 弹药。 四件**全部复用既有判据**（{@link #hasElytra}、{@link #hasRangedWeaponOnly}、 {@link #hasFlightPropellant}、{@link #hasAmmoForWeapon}），不新写第二份"什么算鞘翅"—— 弹药那两行与 {@link MaidBroomKit#ammoOk} 是同一份口径（本模组"同一个口径只有一处"）。
      */
     public static boolean airAssaultReady(EntityMaid maid) {
         try {
@@ -935,16 +775,11 @@ public final class MaidFlightKit {
 
     /**
      * v1.2.4 实测六百四十一【远程空袭的弹药门禁：只有"真拿得出远程武器"时才要求弹药】。
-     *
      * 反馈原文："远程空袭不认这把武器能够起飞。"旧版这里是直白的
      * {@code !isRangedTask(maid) || hasAmmoForRanged(maid)}，而 {@code hasAmmoForRanged} 在
      * "背包里没有远程武器"时恒为假——于是"只带一把激流三叉戟"的远程空袭**模式都激活不了**
      * （{@link #hasWeaponForFlightTask} 那一头 六百四十一 已经放行三叉戟顶武器位，这一头必须
-     * 跟着放行，否则两头口径打架、她的表现仍是"不认这把武器"）。
-     *
-     * 口径：有远程武器 → 按老规矩要弹药（缺箭/缺子弹照旧不放行，提示照报）；**没有远程武器、
-     * 武器位由激流三叉戟顶着** → 不吃弹药（它本来就不耗弹药，见 {@link #hasAmmoForRanged} 的
-     * 三类划分）。两者都没有 → 仍然不放行。
+     * 跟着放行，否则两头口径打架、她的表现仍是"不认这把武器"）。 口径：有远程武器 → 按老规矩要弹药（缺箭/缺子弹照旧不放行，提示照报）；**没有远程武器、 武器位由激流三叉戟顶着** → 不吃弹药（它本来就不耗弹药，见 {@link #hasAmmoForRanged} 的 三类划分）。两者都没有 → 仍然不放行。
      */
     public static boolean rangedAmmoOk(EntityMaid maid) {
         if (!isRangedTask(maid)) {
@@ -971,12 +806,9 @@ public final class MaidFlightKit {
     }
 
     /**
-     * v1.2.0 实测四百七十四：未激活时缺哪一件的**可读原因**（气泡/系统消息用）。
-     *
      * 需求：两种空战没进入激活状态时，给玩家一条气泡 + 系统消息说明。只说
      * "未激活"没用——玩家不知道缺什么；所以按缺件逐条报，缺多件就一起报。
      * 顺序固定（鞘翅 → 武器 → 可以飞行的道具 → 弹药），与 isModeActive 的判定口径完全一致。
-     *
      * @return null = 三件齐备（不该调用）；否则形如「鞘翅、可以飞行的道具」
      */
     public static String missingParts(EntityMaid maid) {
@@ -1026,10 +858,7 @@ public final class MaidFlightKit {
      * 穿戴装备：胸甲槽穿鞘翅、主手换重锤（远战换远程武器）。
      * 换武器与攻击模式切换武器逻辑完全一致（背包 ↔ 槽位交换，用 IItemHandlerModifiable，
      * 与 MaidToolAutoEquip 同款）。
-     *
-     * v1.2.0 实测五百一十：**不再占用副手**（旧版把烟花常驻副手，导致盾牌/食物装不进去、
      * 空战无法进食回血）。烟花改为按需从背包取用——发射路径自己造弹体，不需要手持。
-     *
      * @return 是否已全部就位（true = 可起飞）
      */
     public static boolean equip(EntityMaid maid) {
@@ -1122,22 +951,13 @@ public final class MaidFlightKit {
             }
         }
         // 副手：v1.2.0 实测五百一十【让出副手，不再常驻烟花】。
-        //
-        // 旧版这里把烟花**常驻副手**（`hands.setStackInSlot(1, fw)`），且把"副手是烟花"
         // 写进了下面的就绪判定。后果（
-        //
         // 而回血吃（TLM `MaidHealSelfTask`）扫的是"主手/副手/背包"且换手时要把旧物腾出来，
         // 副手被占 → 无法进食回血（"女仆没办法在空战状态下吃东西回血"）。
-        //
         // 关键事实：烟花**根本不需要拿在手上**——发射走的是
         // `MaidFlightCombatBehavior.launchFirework`，它自己 `new ItemStack(Items.FIREWORK_ROCKET)`
         // 造一枚全新火箭弹体并直接入世界，从不读女仆手里的物品。所以"常驻副手"纯属多余占用。
-        // 现在改为：**副手完全让出**（供盾牌/食物使用），烟花只从背包按需取用
-        // （`hasFirework` / `takeFirework` 都已是"主手→副手→背包"三处覆盖，不依赖副手）。
-        //
-        // 【实测七百一十】末尾这道 "hasFirework" 就绪判据跟着 hasFlightPropellant 一起放宽：
-        // 穿着自推鞘翅的女仆**不需要烟花**——否则 equip() 会一直报"没就位"，而她的链路其实
-        // 已经能飞（本模组吃过"气泡说没齐、她却在飞"的亏，这类口径必须同源）。
+        // 现在改为：**副手完全让出**（供盾牌/食物使用），烟花只从背包按需取用 （`hasFirework` / `takeFirework` 都已是"主手→副手→背包"三处覆盖，不依赖副手）。 穿着自推鞘翅的女仆**不需要烟花**——否则 equip() 会一直报"没就位"，而她的链路其实 已经能飞（本模组吃过"气泡说没齐、她却在飞"的亏，这类口径必须同源）。
         return ok && isElytraLike(maid.getItemBySlot(EquipmentSlot.CHEST), maid)
                 && isWeaponForTask(maid, maid.getMainHandItem())
                 && (hasFirework(maid) || MaidSelfPropelledWings.hasWings(maid));
@@ -1177,26 +997,10 @@ public final class MaidFlightKit {
     /**
      * 取 1 枚**威力最大**的烟花火箭当弩弹药（同威力时优先手上，其次背包靠前的格子）。
      * 找不到返回空。
-     *
-     * v1.2.0 实测五百三十三【认烟花 + 优先威力大的】。需求原文："女仆不认烟花火箭是弩的
      * 弹药，如果要认的话，优先使用威力大（合成用烟火之星多）的烟花。"
-     *
      * 【口径】候选 = **任意烟花火箭**（`isFirework`），与 `hasAmmoForRanged` 的弩分支、
      * 原版 `CrossbowItem` 的弹药谓词三处一致。
-     * v1.2.0 实测五百三十五：是否包含"普通烟花"（无爆炸组件）由配置
-     * `combat.crossbowPlainFirework` 决定。**实测五百三十七起默认【关】**：普通烟花在原版
-     * 恒为 0 伤害（见 {@link #isExplosiveFirework}），默认只当飞行燃料；打开才认它们。
-     *
-     * 【为什么按威力挑】原版烟花的伤害只取决于爆炸条目数：
-     * `FireworkRocketEntity.m_37087_` 字节码 = `5.0f + 2 * Explosions.size()`，
-     * 不带爆炸则整段早退（0 伤害）。而"取哪一枚"旧版是"按格子顺序取第一个"——
-     * 背包里普通燃料烟花排在前面时，先被烧掉的会是它们。现在按威力降序挑：
-     * **威力大的先用光**，普通烟花只在没有更好的时候才当弹药。
-     *
-     * 【同威力时的稳定次序】副手 → 主手 → 背包（原版/TLM 口径：副手是烟花就直接当弹药）；
-     * 判据用**严格大于**，所以同威力时先被看到的那一枚胜出，不会因为排序抖动而乱拿。
-     *
-     * 【只抽 1 枚】绝不整叠拿走——与 {@link #takeFirework} 同一套消耗语义。
+     * `combat.crossbowPlainFirework` 决定。**实测五百三十七起默认【关】**：普通烟花在原版 恒为 0 伤害（见 {@link #isExplosiveFirework}），默认只当飞行燃料；打开才认它们。 【为什么按威力挑】原版烟花的伤害只取决于爆炸条目数： `FireworkRocketEntity.m_37087_` 字节码 = `5.0f + 2 * Explosions.size()`， 不带爆炸则整段早退（0 伤害）。而"取哪一枚"旧版是"按格子顺序取第一个"—— 背包里普通燃料烟花排在前面时，先被烧掉的会是它们。现在按威力降序挑： **威力大的先用光**，普通烟花只在没有更好的时候才当弹药。 【同威力时的稳定次序】副手 → 主手 → 背包（原版/TLM 口径：副手是烟花就直接当弹药）； 判据用**严格大于**，所以同威力时先被看到的那一枚胜出，不会因为排序抖动而乱拿。 【只抽 1 枚】绝不整叠拿走——与 {@link #takeFirework} 同一套消耗语义。
      */
     public static ItemStack takeBestCrossbowFirework(EntityMaid maid) {
         if (maid == null) {
@@ -1278,19 +1082,10 @@ public final class MaidFlightKit {
     /**
      * v1.2.0 实测五百五十五【模组"内置鞘翅的装备"兼容】：宽松口径——**原版鞘翅** 或者
      * **任何自称能滑翔的物品**（鞘翅胸甲这类：不是 `ElytraItem`，是护甲 + 重写滑翔钩子）。
-     *
      * 判据取 `ItemStack.canElytraFly(LivingEntity)`（Forge/NeoForge 扩展方法，javap 实证
      * `ItemStack implements IItemStackExtension`）。选它的唯一理由是**口径同源**：原版滑翔的
      * 闸门 `LivingEntity.updateFallFlying`（aiStep 内、travel 之前）在 NeoForge 里读的就是
-     * 这个方法——字节码里依次调用 `ItemStack.canElytraFly` 与 `ItemStack.elytraFlightTick`，
-     * 而原版 `ElytraItem` 的实现恰好就是 `ElytraItem.isFlyEnabled`（等于旧判据）。所以
-     * "她能不能滑翔"与"我们认不认这件装备"从此是同一个判据：不会出现"我们认了但原版每 tick
-     * 把滑翔位清掉"，也不会反过来。
-     *
-     * 【旧版的病】只认 `instanceof ElytraItem` → 鞘翅胸甲被当成"没有鞘翅" → 三件套永远不齐
-     * → 空袭模式不激活、并且会不停播报"缺鞘翅"。
-     *
-     * @param entity 判据要的实体（模组实现可能按穿着者判定）；null 时退化为只认原版鞘翅
+     * 这个方法——字节码里依次调用 `ItemStack.canElytraFly` 与 `ItemStack.elytraFlightTick`， 而原版 `ElytraItem` 的实现恰好就是 `ElytraItem.isFlyEnabled`（等于旧判据）。所以 "她能不能滑翔"与"我们认不认这件装备"从此是同一个判据：不会出现"我们认了但原版每 tick 把滑翔位清掉"，也不会反过来。 【旧版的病】只认 `instanceof ElytraItem` → 鞘翅胸甲被当成"没有鞘翅" → 三件套永远不齐 → 空袭模式不激活、并且会不停播报"缺鞘翅"。 @param entity 判据要的实体（模组实现可能按穿着者判定）；null 时退化为只认原版鞘翅
      */
     public static boolean isElytraLike(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
         if (isUsableElytra(stack)) {
@@ -1314,29 +1109,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * 【实测六百八十四 / 本轮修订】"该不该给她画我们那一对翅膀"——判据就是
      * {@link #isElytraLike}（{@code ItemStack.canElytraFly}）。
-     *
      * <p><b>
-     *
      * 而不是一些专门的适配。尽可能规避去专门适配的情况。"
-     *
      * <p><b>本轮删掉了"护甲型滑翔装备一律不画"这条例外。</b>那条规则在 实测六百八十四 时的
      * 理由是"这件装备自己就有护甲外观，再叠一层翅膀会穿模"——但那个理由**建立在一个错误前提上**：
-     * 实测（javap + jar 全量扫描，1.20.1 与 1.21.1 两个 TLM 版本都一样）表明
-     * <b>TLM 根本不给女仆画任何护甲</b>——{@code EntityMaidRenderer} 只挂了
-     * Held/Head/Backpack/BackItem/Banner 五层，全 jar 对 {@code HumanoidArmorLayer} /
-     * {@code models/armor} / {@code textures/models/armor} 的引用数**都是 0**，也没有任何护甲贴图资源。
-     * 所以"鞘翅胸甲这类"穿在女仆身上**本来什么都不显示**，把它们从翅膀渲染里排除掉 =
-     * 穿了个寂寞；叠一层翅膀既不会穿模，还正好补上"她穿着滑翔胸甲"应有的观感。
-     * 原版 {@code ElytraLayer} 只认 {@code Items.ELYTRA} 是因为**原版玩家会画护甲**、
-     * 那件护甲自己就有外观；女仆这边没有这个前提，照抄那条限制反而是错的。
-     *
-     * <p><b>贴图</b>：由 {@link com.maidsmart.client.MaidWingSkins#textureFor} 三段式解析
-     * （先反射模组自己公开的取值口 → 再查静态表 → 退回原版）。所以"能画出来"是通用的，
-     * "画成它自己的样子"对公开了取值口的模组是零适配的。
-     *
-     * @param entity 判据要的实体（模组实现可能按穿着者判定）；null 时只认原版鞘翅
+     * <b>TLM 根本不给女仆画任何护甲</b>——{@code EntityMaidRenderer} 只挂了 Held/Head/Backpack/BackItem/Banner 五层，全 jar 对 {@code HumanoidArmorLayer} / {@code models/armor} / {@code textures/models/armor} 的引用数**都是 0**，也没有任何护甲贴图资源。 所以"鞘翅胸甲这类"穿在女仆身上**本来什么都不显示**，把它们从翅膀渲染里排除掉 = 穿了个寂寞；叠一层翅膀既不会穿模，还正好补上"她穿着滑翔胸甲"应有的观感。 原版 {@code ElytraLayer} 只认 {@code Items.ELYTRA} 是因为**原版玩家会画护甲**、 那件护甲自己就有外观；女仆这边没有这个前提，照抄那条限制反而是错的。 <p><b>贴图</b>：由 {@link com.maidsmart.client.MaidWingSkins#textureFor} 三段式解析 （先反射模组自己公开的取值口 → 再查静态表 → 退回原版）。所以"能画出来"是通用的， "画成它自己的样子"对公开了取值口的模组是零适配的。 @param entity 判据要的实体（模组实现可能按穿着者判定）；null 时只认原版鞘翅
      */
     public static boolean isWingRenderable(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
         // 通用口径：能滑翔就画翅膀（含护甲型滑翔装备——见上方"本轮删掉…"那段）。
@@ -1350,7 +1128,6 @@ public final class MaidFlightKit {
 
     /**
      * 【本轮修订】胸甲槽是一件"模组滑翔装备、但我们没能查到它自己的翅膀贴图"时的留痕（40 tick 节流）。
-     *
      * <p>玩家问"其他模组的鞘翅装备能不能渲染出来"——答案是"能滑翔的都会画翅膀；但**外观**要么
      * 是它自己公开/被收录的贴图，要么退回原版"。这一行就是后一种情况的运行期证据：日志里看到它，
      * 说明"她确实穿着能滑翔的装备、我们给她画了翅膀、只是外观用的是原版鞘翅贴图"，而不是渲染链路趴了。
@@ -1416,7 +1193,6 @@ public final class MaidFlightKit {
     /**
      * v1.2.0 实测五百五十五【排查用诊断】：一行说清"鞘翅判定为什么不过"——
      * 胸甲/主手/副手各是什么物品、`canElytraFly` 钩子对女仆返回什么。
-     *
      * 有了它，"模组鞘翅装备不认"这种问题一眼定位：如果日志里 `canElytraFly=false`，
      * 那就是**那个物品没实现滑翔钩子**（原版滑翔闸门认的就是它），我们认了也没用——
      * 那种装备对玩家同样滑不起来，该找的是那个模组。由 `notifyNotReady` 在播报
@@ -1474,14 +1250,10 @@ public final class MaidFlightKit {
     /**
      * v1.2.2 实测六百〇九【排查用诊断】：一行说清"飞行燃料判定为什么不过"——
      * 主手 / 副手各是什么、背包里有没有烟花 / 羽扇 / 激流三叉戟、她会不会"能上天的位移法术"。
-     *
      * 与 {@link #elytraDiagnostic} 同一用途、同一节流（由 {@code notifyNotReady} 落盘，
      * 最多 15 秒一行）。
-     *
      * 【为什么补这一行】旧版只给"缺鞘翅"留了诊断，缺"可以飞行的道具"时运行日志里一片安静，
-     * 而气泡 / 主人系统消息照发——玩家报"她明明拿着孔雀羽扇却说缺飞行道具"时，日志里
-     * 查无此事，只能靠猜。本批真正的根因（本模组自己的"手上亮一下"把副手借走十几 tick）
-     * 就是靠这一行读出来的：现场那一行里 `副手=` 显示的是**我们的展示件**而不是玩家的羽扇。
+     * 而气泡 / 主人系统消息照发——玩家报"她明明拿着孔雀羽扇却说缺飞行道具"时，日志里 查无此事，只能靠猜。本批真正的根因（本模组自己的"手上亮一下"把副手借走十几 tick） 就是靠这一行读出来的：现场那一行里 `副手=` 显示的是**我们的展示件**而不是玩家的羽扇。
      */
     public static String fuelDiagnostic(EntityMaid maid) {
         if (maid == null) {
@@ -1525,14 +1297,10 @@ public final class MaidFlightKit {
     /**
      * 身上是否有**可当弩弹药**的烟花——由配置 {@code combat.crossbowPlainFirework} 决定
      * 是否把"普通烟花"（无爆炸组件）也算进来。
-     *
-     * v1.2.0 实测五百三十五。v1.2.0 实测五百三十七起默认 **false** = 只认**攻击性烟花**
      * （带烟火之星的那种）——普通烟花留着当飞行燃料，绝不被弩烧掉（它打出去本来也是
      * 0 伤害，见 {@link #isExplosiveFirework}）。打开才退回"任意烟花都能当弹药"
      * （原版 `CrossbowItem` 的弹药谓词就不看爆炸组件，玩家拿普通烟花照样能射）。
-     *
-     * 【与取用口径必须一致】本判据与 {@link #takeBestCrossbowFirework} 读同一个开关，
-     * 否则会出现"判定有弹药、起飞后一发打不出来"的死角（本文件反复强调的红线）。
+     * 【与取用口径必须一致】本判据与 {@link #takeBestCrossbowFirework} 读同一个开关， 否则会出现"判定有弹药、起飞后一发打不出来"的死角（本文件反复强调的红线）。
      */
     public static boolean hasAmmoFirework(EntityMaid maid) {
         if (maid == null) {
@@ -1548,18 +1316,10 @@ public final class MaidFlightKit {
     /**
      * 是否**攻击性**烟花火箭——即带爆炸组件（`Fireworks.Explosions` 非空）的那种。
      * 等价于 {@link #fireworkPower} > 0。
-     *
      * v1.2.0 实测四百九十九：为什么必须把"攻击性"和"飞行燃料"分开。
-     *
      * 烟花组件里 `Explosions` 是**伤害的唯一来源**：`FireworkRocketEntity.dealExplosionDamage`
      * 开头就是 `if (!this.hasExplosion()) return;`（= `!getExplosions().isEmpty()`），
-     * 也就是说**不带爆炸的烟花打出去是 0 伤害**（只有一条直线飞行轨迹）。
-     *
-     * v1.2.0 实测五百三十三：一度改成"任意烟花都算"；实测五百三十七起弩默认又回到本判据
-     * ——`combat.crossbowPlainFirework` 默认关闭，弩只认带爆炸的（开关打开才退回"任意烟花
-     * 都算"，原版 `CrossbowItem` 的弹药谓词就不看爆炸组件），见
-     * {@link #takeBestCrossbowFirework}。
-     * 保留它是因为"这枚打出去有没有伤害"仍是个有意义的判据。
+     * 也就是说**不带爆炸的烟花打出去是 0 伤害**（只有一条直线飞行轨迹）。 ——`combat.crossbowPlainFirework` 默认关闭，弩只认带爆炸的（开关打开才退回"任意烟花 都算"，原版 `CrossbowItem` 的弹药谓词就不看爆炸组件），见 {@link #takeBestCrossbowFirework}。 保留它是因为"这枚打出去有没有伤害"仍是个有意义的判据。
      */
     public static boolean isExplosiveFirework(ItemStack stack) {
         return fireworkPower(stack) > 0;
@@ -1567,10 +1327,7 @@ public final class MaidFlightKit {
 
     /**
      * 烟花火箭的**威力** = 爆炸条目数 = 合成时用掉的**烟火之星个数**（普通烟花 = 0）。
-     *
-     * v1.2.0 实测五百三十三：弩挑弹药就按这个值降序——需求原文"优先使用威力大
      * （合成用烟火之星多）的烟花"。
-     *
      * 【这不是拍脑袋的排序依据】原版伤害就是这一个数在决定：
      * `FireworkRocketEntity.m_37087_` 字节码 = `5.0f + 2 * Explosions.size()`
      * （每多一枚烟火之星 +2 伤害），不带爆炸则整段早退 = 0 伤害。
@@ -1590,12 +1347,9 @@ public final class MaidFlightKit {
     }
 
     /**
-     * v1.2.2 实测六百〇八【飞行跟随】：从背包/手上取一件可用鞘翅（**只取，不穿**）。
-     *
      * 取用优先级与 {@link #equip} 完全一致（带护甲的"鞘翅胸甲"优先，其次普通鞘翅，最后手上），
      * 只是把"穿上"那一步留给调用方——飞行跟随要记下**换下来的原胸甲**并在收手时还回去，
      * 那件事只有调用方知道。
-     *
      * @return 取到的鞘翅（空 = 没有）
      */
     public static ItemStack takeElytra(EntityMaid maid) {
@@ -1639,26 +1393,11 @@ public final class MaidFlightKit {
 
     /**
      * v1.2.2 实测六百〇八【飞行跟随】：放一枚"只有推力、没有爆炸"的挂载型烟花。
-     *
      * 与 {@link MaidFlightCombatBehavior} 里那一枚同一口径：**爆炸条目为空列表**，
      * 所以到期 `explode()` 时伤害为 0，不会按 5+2n 炸到骑乘者自己（女仆只有 20 血）。
      * 单独提出来是为了让"飞行跟随"不必复用空袭行为里的私有发射方法。
-     *
-     * 【实测六百一十二：返回值从 boolean 改成那枚火箭本身】调用方需要它来**解除推进矢量**
      * （见 {@code MaidFlightFollowBehavior.releaseThrust}）。烟花对骑手的推力**不是一次性的**，
-     * 而是它活着的那十几 tick 里**每 tick 都把骑手速度往"1.7×视线"上拉**——1.21.1
-     * `FireworkRocketEntity.tick` 字节码与 1.20.1 同形（那一支只判
-     * {@code rider.isFallFlying()}，也就是我们置的滑翔位）：
-     * <pre>
-     *       Vec3 look = rider.getLookAngle();
-     *       rider.setDeltaMovement(vel.add(
-     *           look.x * 0.1 + (look.x * 1.5 - vel.x) * 0.5, …y…, …z…));
-     * </pre>
-     * 即 `v = v * 0.5 + look * 0.85`（不动点 = 1.7 倍视线方向）。所以"进到主人身边就解除"
-     * 必须把**还挂在背上的那枚**收掉（{@code discard()}），否则下一 tick 它又把速度补回来，
-     * 清零等于白清。
-     *
-     * @return 放出去的那枚火箭（要给调用方 discard 用）；null = 没放成
+     * 而是它活着的那十几 tick 里**每 tick 都把骑手速度往"1.7×视线"上拉**——1.21.1 `FireworkRocketEntity.tick` 字节码与 1.20.1 同形（那一支只判 {@code rider.isFallFlying()}，也就是我们置的滑翔位）： <pre> Vec3 look = rider.getLookAngle(); rider.setDeltaMovement(vel.add( look.x * 0.1 + (look.x * 1.5 - vel.x) * 0.5, …y…, …z…)); </pre> 即 `v = v * 0.5 + look * 0.85`（不动点 = 1.7 倍视线方向）。所以"进到主人身边就解除" 必须把**还挂在背上的那枚**收掉（{@code discard()}），否则下一 tick 它又把速度补回来， 清零等于白清。 @return 放出去的那枚火箭（要给调用方 discard 用）；null = 没放成
      */
     public static net.minecraft.world.entity.projectile.FireworkRocketEntity launchBoostRocket(
             net.minecraft.server.level.ServerLevel level, EntityMaid maid) {

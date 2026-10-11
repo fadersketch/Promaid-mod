@@ -15,23 +15,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 酿造配方链反推（v1.1.0 实测二百七十七）——从原版 PotionBrewing 的运行时配方表
- * （f_43494_：List<Mix<Potion>>，from+reagent→to）构建「目标药水 → 整条酿造链」，
- * 供定向酿造模式精确下料。
+ * 酿造配方链反推——从原版 {@code PotionBrewing} 的运行时配方表（from+reagent→to）构建
+ * "目标药水 → 整条酿造链"，供定向酿造模式精确下料。
  *
- * 实现依据（javap 实证 1.20.1 SRG）：
- * - PotionBrewing.f_43494_ = 药水配方表（private static final，反射读取）
- * - PotionBrewing$Mix.from = from、ingredient = Ingredient（材料）、
- *   to = to——v1.1.0 实测二百七十九：Forge binpatch 把 from/to 的类型改成
- *   Holder.Reference（原版是 Potion/Item 本体），反射取值后必须经 unwrapHolder
- *   解包（value = Holder.value()）
- * - PotionBrewing.mix(材料, 瓶) = 公开混合方法（酿造台 doBrew 实际调用它）
- * - 酿造台判定（isBrewable）完全走原版 PotionBrewing，无 Forge 介入——反推链与
- *   运行时行为一致
- *
- * 链结构：从目标 Potion 沿 to→from 递归回退至 water/awkward 基底，得到
- * [基底, 材料1, 材料2, ...] 的步骤序列。形态（喷溅/滞留）是 Item 层转换
- * （f_43495_ 表：火药/龙息），由调用方按配置单独处理。
+ * 实现依据（javap 实证）：配方表是 private static final，反射读取；{@code Mix} 的 from/材料/to 在
+ * Forge binpatch 下类型被改成 {@code Holder.Reference}（原版是本体），反射取值后必须经 unwrapHolder
+ * 解包；公开混合方法 {@code PotionBrewing.mix(材料, 瓶)} 是酿造台实际调用者；酿造台判定完全走原版
+ * PotionBrewing，无 Forge 介入——反推链与运行时行为一致。
+ * 链结构：从目标 Potion 沿 to→from 递归回退至 water/awkward 基底，得到 [基底, 材料1, ...] 步骤序列。
+ * 形态（喷溅/滞留）是 Item 层转换（火药/龙息），由调用方按配置单独处理。
  */
 public final class BrewRecipeResolver {
     /** 链上一步：from 药水 + 材料 + 结果药水 */
