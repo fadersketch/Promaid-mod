@@ -123,7 +123,7 @@ public final class WorldProbe {
             ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(block);
             return id == null ? "" : id.m_135815_();
         } catch (Exception e) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("WorldProbe", e); return "";
         }
     }
 
@@ -430,7 +430,7 @@ public final class WorldProbe {
                     : ResourceLocation.parse("minecraft:" + name);
             return net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(rl);
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("WorldProbe", e); return null;
         }
     }
 
@@ -503,7 +503,7 @@ public final class WorldProbe {
             net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(e.m_6095_());
             return key == null ? "unknown" : key.toString();
         } catch (Exception ex) {
-            return "unknown";
+             com.maidsmart.diag.Diag.swallow("WorldProbe", ex); return "unknown";
         }
     }
 

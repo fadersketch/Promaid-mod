@@ -46,7 +46,7 @@ public abstract class MaidGoetyMoveSuppressMixin {
         maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         try {
             maid.getNavigation().stop();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyMoveSuppressMixin", ignored);
         }
         ci.cancel();
     }

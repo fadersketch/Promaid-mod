@@ -167,7 +167,7 @@ public final class AiMemoryStore {
                             AiMemoryModels.Meta.class);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryStore", ignored);
         }
         // 重建跳表时间索引（数据源为段落列表；被 prune 移除的段落留 stale 项，
         // 查询侧经 paragraphByHash 判空过滤）
@@ -831,7 +831,7 @@ public final class AiMemoryStore {
                     + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}\n";
             java.nio.file.Files.writeString(f, line, StandardCharsets.UTF_8,
                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryStore", ignored);
         }
     }
 
@@ -999,7 +999,7 @@ public final class AiMemoryStore {
             if (snap != null) {
                 this.affectSnapshotJson = snap.toJson();
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryStore", ignored);
         }
         return this.affectSnapshotJson;
     }
@@ -1058,7 +1058,7 @@ public final class AiMemoryStore {
         try {
             java.nio.file.Files.deleteIfExists(this.dir.resolve("working_note.txt"));
             java.nio.file.Files.deleteIfExists(this.dir.resolve("archiver_state.json"));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryStore", ignored);
         }
     }
 

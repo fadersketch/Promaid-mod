@@ -109,7 +109,7 @@ public final class FriendlyFireGuard {
                 return null; // 玩家要原版口径 → 这一层让位
             }
             return MaidTntBlastGuard.maidOfTnt(direct != null ? direct : cause);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
             return null;
         }
     }
@@ -129,7 +129,7 @@ public final class FriendlyFireGuard {
             for (ServerLevel lvl : server.m_129785_()) {
                 // 实测五百六十四（PR #9 移植）：全世界 AABB → getAllEntities()——
                 // Sable 会拒查超大 AABB 并静默返回空
-                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }
@@ -158,7 +158,7 @@ public final class FriendlyFireGuard {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
         }
     }
 
@@ -186,7 +186,7 @@ public final class FriendlyFireGuard {
         }
         try {
             return maid.m_7307_(target);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
             return false;
         }
     }
@@ -206,7 +206,7 @@ public final class FriendlyFireGuard {
             }
             LivingEntity mem = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_).orElse(null);
             return isHostileTarget(maid, mem);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
             return false;
         }
     }

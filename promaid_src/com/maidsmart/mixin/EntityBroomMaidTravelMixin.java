@@ -112,7 +112,7 @@ public abstract class EntityBroomMaidTravelMixin {
             self.m_20256_(v);
             self.m_19915_(com.maidsmart.combat.MaidBroomDrive.yaw(self), 0.0f);
             self.m_6478_(MoverType.SELF, v);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBroomMaidTravelMixin", ignored);
             // 驱动出问题时"原地悬停"而不是放她自由落体（她只有 20 血，掉下去就是死）
         }
         ci.cancel();
@@ -126,7 +126,7 @@ public abstract class EntityBroomMaidTravelMixin {
                 return null;
             }
             return self.m_20197_().get(0) instanceof EntityMaid m ? m : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBroomMaidTravelMixin", ignored);
             return null;
         }
     }
@@ -156,7 +156,7 @@ public abstract class EntityBroomMaidTravelMixin {
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 服务端开始接管扫帚驱动（车上 "
                             + broom.m_20197_().size() + " 人，无玩家驾驶；y="
                             + String.format(java.util.Locale.ROOT, "%.2f", broom.m_20186_()) + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBroomMaidTravelMixin", ignored);
         }
     }
 

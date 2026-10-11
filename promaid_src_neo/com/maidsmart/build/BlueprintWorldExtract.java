@@ -166,7 +166,7 @@ public final class BlueprintWorldExtract {
                             return new double[]{pos.getDouble(0), pos.getDouble(1), pos.getDouble(2)};
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintWorldExtract", ignored);
                 }
             }
         }
@@ -191,7 +191,7 @@ public final class BlueprintWorldExtract {
                                 data.getInt("SpawnY"), data.getInt("SpawnZ")};
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintWorldExtract", ignored);
             }
         }
         return null;
@@ -226,7 +226,7 @@ public final class BlueprintWorldExtract {
                         new java.io.DataInputStream(new java.io.ByteArrayInputStream(nbt)));
                 parseChunk(root, blocks, stateIds, stateList, anchor, range);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintWorldExtract", ignored);
         }
     }
 
@@ -244,7 +244,7 @@ public final class BlueprintWorldExtract {
             in.close();
             return bos.toByteArray();
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("BlueprintWorldExtract", e); return null;
         }
     }
 
@@ -391,7 +391,7 @@ public final class BlueprintWorldExtract {
                     blocks.put(packWorldKey(wx, wy, wz), new int[]{wx, wy, wz, sid});
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintWorldExtract", ignored);
         }
     }
 }

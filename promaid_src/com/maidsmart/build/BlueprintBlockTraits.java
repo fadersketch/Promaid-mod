@@ -221,7 +221,7 @@ public final class BlueprintBlockTraits {
                     level.m_246945_(net.minecraft.core.registries.Registries.f_256747_), stateTag);
             return parsed != null && !parsed.m_60795_() ? parsed : null;
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("BlueprintBlockTraits", e); return null;
         }
     }
 }

@@ -58,7 +58,8 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
      */
     @Override
     protected boolean m_6737_(ServerLevel level, EntityMaid maid, long gameTime) {
-        return true;
+        // 重写为 true 的原因见上；TD-10：总开关也在 canStillUse 里问——关掉即刻停，不用等跑完。
+        return com.maidsmart.config.MaidSmartConfig.TORCH_PLACER_ENABLE.get();
     }
 
     @Override
@@ -229,7 +230,7 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
             } else {
                 paid = com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(inv, slot);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidTorchPlacerBehavior", ignored);
             paid = false;
         }
         if (!paid) {
@@ -310,7 +311,7 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidTorchPlacerBehavior", ignored);
         }
         return -1;
     }
@@ -338,7 +339,7 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
             DIAG_TICK.put(id, gameTime);
             com.maidsmart.tool.PromaidLog.log("插火把",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTorchPlacerBehavior", ignored);
         }
     }
 

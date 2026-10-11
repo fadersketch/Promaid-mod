@@ -133,7 +133,7 @@ public final class MaidGoetyFlight {
             com.maidsmart.tool.StateTables.cap("Goety推进.TASKS", TASKS);
             com.maidsmart.tool.StateTables.cap("Goety推进.LAST_BOOST", LAST_BOOST);
             com.maidsmart.tool.StateTables.cap("Goety推进.BOOST_UNTIL", BOOST_UNTIL);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyFlight", ignored);
         }
     }
 
@@ -172,7 +172,7 @@ public final class MaidGoetyFlight {
                 TASKS.remove(maid.m_20148_());
                 return false;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyFlight", ignored);
             // 判不了就当还活着（宁可不删，也不误放开正在飞的她）
         }
         return true;
@@ -323,7 +323,7 @@ public final class MaidGoetyFlight {
     public void onMaidTick(MaidTickEvent event) {
         try {
             tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyFlight", ignored);
         }
     }
 
@@ -428,7 +428,7 @@ public final class MaidGoetyFlight {
         maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
         try {
             maid.m_21573_().m_26573_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyFlight", ignored);
         }
 
         Long boostUntil = BOOST_UNTIL.get(maid.m_20148_());
@@ -526,7 +526,7 @@ public final class MaidGoetyFlight {
         maid.f_19860_ = pitch;
         try {
             maid.m_21563_().m_24950_(aim.f_82479_, aim.f_82480_, aim.f_82481_, 360.0F, 360.0F);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyFlight", ignored);
         }
     }
 

@@ -294,7 +294,7 @@ public final class DaYunBreaker {
             // MaidWoodBehavior 读硬度的写法完全一致（同一个 SRG 名，别改成 BlockState 上的那个）
             float hardness = state.m_60734_().m_7749_(state, level, pos);
             return hardness >= 0.0f && hardness < maxHardness;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBreaker", ignored);
             return false;
         }
     }
@@ -329,7 +329,7 @@ public final class DaYunBreaker {
                 return false; // 容器：配置里说了不破坏 → 她也撞不开
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBreaker", ignored);
             return false;
         }
     }

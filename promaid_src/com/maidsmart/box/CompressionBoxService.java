@@ -153,7 +153,7 @@ public final class CompressionBoxService {
         try {
             left = ItemHandlerHelper.insertItemStacked(
                     new PlayerMainInvWrapper(player.m_150109_()), left, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxService", ignored);
             // 背包访问出问题也要掉出来，不能留在手里
         }
         if (!left.m_41619_()) {
@@ -226,7 +226,7 @@ public final class CompressionBoxService {
                 return click(player, inv, box, items, handOrdinal, index, button, shift);
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxService", ignored);
             // 界面动作出错不该把服务端拖下水：什么都不改，下次点击重来。
             // 【注意】六百一十八起，各条动作自己保证「要么两边都改完，要么一点都不改」
             // （见 clickBox 的「先在副本上算」），所以这里吞掉异常不会再吃掉物品。

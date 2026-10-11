@@ -65,7 +65,7 @@ public final class MaidFreeFlightKeysClient {
                     mc.player.displayClientMessage(Component.literal("\u00a7e" + maid.getName().getString()
                             + " \u00a7r仿创造飞行：" + (next ? "\u00a7a开" : "\u00a77关")), true);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKeysClient", ignored);
             }
         }
     }
@@ -84,7 +84,7 @@ public final class MaidFreeFlightKeysClient {
                     m -> m.isAlive() && m.isOwnedBy(mc.player));
             return near.stream().min((a, b) -> Double.compare(
                     a.distanceToSqr(mc.player), b.distanceToSqr(mc.player))).orElse(null);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKeysClient", ignored);
             return null;
         }
     }

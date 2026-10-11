@@ -80,7 +80,7 @@ public final class ScheduleManager {
             maid.refreshBrain(level);
             com.maidsmart.tool.PromaidLog.log("排班", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 切段后大脑无工作记忆（任务=" + p.taskUid + "）——refreshBrain 自愈");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleManager", ignored);
         }
     }
 
@@ -126,11 +126,11 @@ public final class ScheduleManager {
         // 正常换算，循环覆盖所有已加载区块。
         for (ServerLevel level : event.getServer().getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
-            // 未预建 EntityMaid 桶的 section 被整段跳过，排班扫描扫不到该 section
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）：
+            // 光靠类查询会漏扫该 section，排班扫描扫不到它
             // 里的女仆 → 任务不随时间段切换
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.isAlive()
                         || !ScheduleData.isOn(maid)) {
                     continue;
@@ -247,11 +247,11 @@ public final class ScheduleManager {
                             if (maid.getOwner() instanceof net.minecraft.server.level.ServerPlayer sp) {
                                 ScheduleNetworking.sendMaidStateSync(sp, maid);
                             }
-                        } catch (Throwable ignored) {
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleManager", ignored);
                         }
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleManager", ignored);
             }
             diag(maid, "rest", who + " 当前游戏时间无段覆盖（休息时段）——作息已切到班次模式，待机/睡觉", level);
             return;
@@ -319,7 +319,7 @@ public final class ScheduleManager {
                 if (maid.getOwner() instanceof net.minecraft.server.level.ServerPlayer sp) {
                     ScheduleNetworking.sendMaidStateSync(sp, maid);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleManager", ignored);
             }
             // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：
             // 切段成功 → 登记大脑自愈待检（60 tick 后若无工作记忆则 refreshBrain 一次）
@@ -349,7 +349,7 @@ public final class ScheduleManager {
             }
         }
         } catch (Throwable t) {
-            // v1.1.0 实测一百三十五：隔离层——任一异常落日志 + 10 秒重试节流，
+             com.maidsmart.diag.Diag.swallow("ScheduleManager", t); // v1.1.0 实测一百三十五：隔离层——任一异常落日志 + 10 秒重试节流，
             // 不让它击穿 ServerTickEvent 每 tick 重演（排班系统瘫痪）
             try {
                 RETRY_AFTER.put(maid.getUUID(), level.getGameTime() + 200L);
@@ -362,7 +362,7 @@ public final class ScheduleManager {
                             com.maidsmart.tool.PromaidLog.nameOf(maid)
                                     + " applyNow 异常（已隔离，10 秒后重试）：" + t);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleManager", ignored);
             }
         }
     }
@@ -378,7 +378,7 @@ public final class ScheduleManager {
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().putString(ScheduleData.APPLIED_TAG, "");
             ATTEMPTED.remove(maid.getUUID());
             RETRY_AFTER.remove(maid.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleManager", ignored);
         }
     }
 
@@ -390,7 +390,7 @@ public final class ScheduleManager {
     public static void clearAppliedForJoin(EntityMaid maid) {
         try {
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().putString(ScheduleData.APPLIED_TAG, "");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleManager", ignored);
         }
     }
 }

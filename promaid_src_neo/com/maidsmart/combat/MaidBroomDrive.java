@@ -363,7 +363,7 @@ public final class MaidBroomDrive {
         net.minecraft.world.entity.Entity prev = null;
         try {
             prev = maid.getVehicle(); // force 骑乘会把她从这上面叫下来，先记着是谁（日志用）
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         EntityBroom broom = null;
         try {
@@ -371,7 +371,7 @@ public final class MaidBroomDrive {
             broom.moveTo(maid.getX(), maid.getY(), maid.getZ(), maid.getYRot(), 0.0f);
             try {
                 broom.setOwnerUUID(maid.getOwnerUUID());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             }
             if (!level.addFreshEntity(broom)) {
                 giveBack(maid, taken);
@@ -399,7 +399,7 @@ public final class MaidBroomDrive {
             if (broom != null) {
                 try {
                     broom.kill();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
                 }
             }
             giveBack(maid, taken);
@@ -673,7 +673,7 @@ public final class MaidBroomDrive {
                 this.bx = maid.getX();
                 this.bz = maid.getZ();
                 this.blockedAt = maid.level().getGameTime();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
                 this.blockedAt = 0L;
             }
             this.sinceBlocked = 0;
@@ -685,7 +685,7 @@ public final class MaidBroomDrive {
                 double dx = maid.getX() - this.bx;
                 double dz = maid.getZ() - this.bz;
                 return Math.sqrt(dx * dx + dz * dz);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
                 return 0.0;
             }
         }
@@ -711,7 +711,7 @@ public final class MaidBroomDrive {
             long now;
             try {
                 now = maid.level().getGameTime();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
                 now = this.blockedAt;
             }
             this.sinceBlocked = (int) Math.max(0L, now - this.blockedAt);
@@ -733,7 +733,7 @@ public final class MaidBroomDrive {
                     }
                 }
                 return true;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
                 return true;
             }
         }
@@ -752,7 +752,7 @@ public final class MaidBroomDrive {
                     sb.append("+").append(dy).append("=").append(st.isAir() ? "空气" : blockName(st));
                 }
                 return sb.toString();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
                 return "（读不到）";
             }
         }
@@ -762,7 +762,7 @@ public final class MaidBroomDrive {
                 net.minecraft.resources.ResourceLocation rl =
                         net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(st.getBlock());
                 return rl == null ? String.valueOf(st.getBlock()) : rl.toString();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
                 return "?";
             }
         }
@@ -793,7 +793,7 @@ public final class MaidBroomDrive {
         ItemStack debt = DEBT.remove(broom.getUUID());
         try {
             maid.stopRiding();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         noteDismount(maid, why, debt != null);
         if (debt == null) {
@@ -805,7 +805,7 @@ public final class MaidBroomDrive {
                 // kill() 只移除实体、**不**按原版掉落（原版掉落走 killEntity），物品由我们精确归还
                 broom.kill();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         forget(broom.getUUID());
         giveBack(maid, debt);
@@ -826,7 +826,7 @@ public final class MaidBroomDrive {
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 下扫帚（理由=" + why + "，这把是"
                     + (hadDebt ? "本模组放的，扫帚收进背包" : "世界里那把，原地留着") + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
     }
 
@@ -1103,7 +1103,7 @@ public final class MaidBroomDrive {
                 HOME_ALT.put(id, new PatrolAlt(cx, cz, wantY));
             }
             return new Vec3(x, safeY(maid, x, z, wantY, p.y), z);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return null;
         }
     }
@@ -1128,7 +1128,7 @@ public final class MaidBroomDrive {
             // 【实测七百四十九·点3】算式搬到 MaidRideKit.ridePhase（坐骑那边用同一个）——
             // 这里只是把"她"包一层。
             return MaidRideKit.ridePhase(maid.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 0.0;
         }
     }
@@ -1204,7 +1204,7 @@ public final class MaidBroomDrive {
                 peers.add(other.position());
             }
             return MaidRideKit.separateAim(aim, phaseOf(maid), peers, combat);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return aim;
         }
     }
@@ -1217,7 +1217,7 @@ public final class MaidBroomDrive {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         return false;
     }
@@ -1254,7 +1254,7 @@ public final class MaidBroomDrive {
                     return y + 0.5;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             // 读不到方块（异常）→ 按想要的高度走（与旧行为一致，不新增坑）
         }
         return wantY;
@@ -1285,7 +1285,7 @@ public final class MaidBroomDrive {
                 }
                 p = p.below();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         return Double.NaN;
     }
@@ -1380,7 +1380,7 @@ public final class MaidBroomDrive {
             }
             logPark(maid, p.y, target);
             steerVerticalTo(maid, target);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             hoverInPlace(maid);
         }
     }
@@ -1395,14 +1395,14 @@ public final class MaidBroomDrive {
             PARK_LOGGED.put(maid.getUUID(), now);
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 待命 → 降回地面（y " + fmt(fromY) + " → " + fmt(toY) + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
     }
 
     private static boolean idleLandEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_IDLE_LAND.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return true; // 读不到配置（早期加载）→ 按默认开
         }
     }
@@ -1439,7 +1439,7 @@ public final class MaidBroomDrive {
         try {
             faceYaw(broom, (float) (-Math.atan2(target.getX() - broom.getX(),
                     target.getZ() - broom.getZ()) * DEG));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
     }
 
@@ -1518,7 +1518,7 @@ public final class MaidBroomDrive {
             // 每 tick 重写寻路目标（与其它行为同款；真正的移动由 TLM 的导航执行）
             net.minecraft.world.entity.ai.behavior.BehaviorUtils.setWalkAndLookTargetMemories(maid, goal.blockPosition(),
                     HUNT_SPEED, 1);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         return true;
     }
@@ -1547,7 +1547,7 @@ public final class MaidBroomDrive {
                 }
             }
             return best;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return null;
         }
     }
@@ -1588,7 +1588,7 @@ public final class MaidBroomDrive {
                     + " → " + (lifted ? "原地抬起 " + RISE_BLOCKS + " 格"
                                       : "5 秒内刚起过一次，不重复抬高度"));
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return false;
         }
     }
@@ -1613,7 +1613,7 @@ public final class MaidBroomDrive {
                 }
             }
             return best;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return null;
         }
     }
@@ -1644,7 +1644,7 @@ public final class MaidBroomDrive {
                     + " 把地上的扫帚捡进背包了（" + stack.getCount() + "x "
                     + stack.getHoverName().getString() + "）");
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return false;
         }
     }
@@ -1758,7 +1758,7 @@ public final class MaidBroomDrive {
             }
             // ② 沿航迹
             return com.maidsmart.patrol.PatrolFlight.nextPoint(maid, broom);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return null;
         }
     }
@@ -1988,7 +1988,7 @@ public final class MaidBroomDrive {
                                     + " 被方块顶住，但附近没有能容下她的空气格（一格死洞 / 5 秒内刚去过）→ 原地不动等下一轮");
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         return aim;
     }
@@ -2080,7 +2080,7 @@ public final class MaidBroomDrive {
                 }
             }
             return bestPos;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return null;
         }
     }
@@ -2101,7 +2101,7 @@ public final class MaidBroomDrive {
         try {
             return maid.isInWall();
         } catch (Throwable t) {
-            return false; // 判不出来当"没事"：绝不能因为读不到判据把她往别处搬
+             com.maidsmart.diag.Diag.swallow("MaidBroomDrive", t); return false; // 判不出来当"没事"：绝不能因为读不到判据把她往别处搬
         }
     }
 
@@ -2134,7 +2134,7 @@ public final class MaidBroomDrive {
     private static boolean isAirAt(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos p) {
         try {
             return level.getBlockState(p).isAir();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return false;
         }
     }
@@ -2210,7 +2210,7 @@ public final class MaidBroomDrive {
     private static boolean unstickCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_UNSTICK.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return true;
         }
     }
@@ -2281,7 +2281,7 @@ public final class MaidBroomDrive {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         try {
             // 额外容器（精妙背包 / 旅行者背包）里有的先请 TLM 搬进来一个（与 MaidFlightKit 同款）
@@ -2295,7 +2295,7 @@ public final class MaidBroomDrive {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
         return ItemStack.EMPTY;
     }
@@ -2316,7 +2316,7 @@ public final class MaidBroomDrive {
         try {
             return broom != null
                     && broom.getControllingPassenger() instanceof net.minecraft.world.entity.player.Player;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return false;
         }
     }
@@ -2354,7 +2354,7 @@ public final class MaidBroomDrive {
             startClimb(maid, TAKEOFF, maid.getY() + RISE_BLOCKS + CLIMB_LEAD);
             return true;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidBroomDrive", t); return false;
         }
     }
 
@@ -2374,7 +2374,7 @@ public final class MaidBroomDrive {
             MOUNT_LOGGED.put(maid.getUUID(), Long.valueOf(now));
             com.maidsmart.tool.StateTables.cap("扫帚.MOUNT_LOGGED", MOUNT_LOGGED);
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
     }
 
@@ -2395,7 +2395,7 @@ public final class MaidBroomDrive {
             }
             return gameTime - since.longValue() >= BROOMLESS_DEBOUNCE;
         } catch (Throwable t) {
-            return true; // 判不了就按旧行为（立刻去找）
+             com.maidsmart.diag.Diag.swallow("MaidBroomDrive", t); return true; // 判不了就按旧行为（立刻去找）
         }
     }
 
@@ -2403,7 +2403,7 @@ public final class MaidBroomDrive {
     private static void clearBroomless(EntityMaid maid) {
         try {
             BROOMLESS_SINCE.remove(maid.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
     }
 
@@ -2422,7 +2422,7 @@ public final class MaidBroomDrive {
             }
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 她已经在一把扫帚上了（不是本模组放出去的）→ 直接接管驱动，收工时不会回收它");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
     }
 
@@ -2443,7 +2443,7 @@ public final class MaidBroomDrive {
             }
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 想飞却没骑上扫帚（ridingBroom=null；当前载具=" + entityName(maid) + "）→ 这一拍不动");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
         }
     }
 
@@ -2460,7 +2460,7 @@ public final class MaidBroomDrive {
         }
         try {
             return String.valueOf(e.getType());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return "?";
         }
     }
@@ -2469,7 +2469,7 @@ public final class MaidBroomDrive {
     private static String entityName(EntityMaid maid) {
         try {
             return entityName(maid.getVehicle());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return "?";
         }
     }
@@ -2483,7 +2483,7 @@ public final class MaidBroomDrive {
     private static double rangeCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_RANGE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 8.0;
         }
     }
@@ -2498,7 +2498,7 @@ public final class MaidBroomDrive {
     private static double orbitMaxCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_ORBIT_MAX.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 10.0;
         }
     }
@@ -2512,7 +2512,7 @@ public final class MaidBroomDrive {
     private static double minStandoffCfg() {
         try {
             return Math.max(1.0, com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_MIN_STANDOFF.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return MIN_STANDOFF;
         }
     }
@@ -2521,7 +2521,7 @@ public final class MaidBroomDrive {
     private static double hoverCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_HOVER.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 2.0;
         }
     }
@@ -2534,7 +2534,7 @@ public final class MaidBroomDrive {
     private static boolean maneuverEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_MANEUVER_ENABLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return true;
         }
     }
@@ -2546,7 +2546,7 @@ public final class MaidBroomDrive {
     private static double yoyoAmpCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 4.0;
         }
     }
@@ -2567,7 +2567,7 @@ public final class MaidBroomDrive {
     private static double homeAltCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_HOME_ALT.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 8.0;
         }
     }
@@ -2576,7 +2576,7 @@ public final class MaidBroomDrive {
     private static long gameTimeOf(EntityMaid maid) {
         try {
             return maid.level().getGameTime();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 0L;
         }
     }
@@ -2590,7 +2590,7 @@ public final class MaidBroomDrive {
     private static double climbCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return 12.0;
         }
     }

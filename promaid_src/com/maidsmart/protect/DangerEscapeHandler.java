@@ -83,8 +83,8 @@ public class DangerEscapeHandler {
         long now = server.m_129921_();
         for (ServerLevel level : server.m_129785_()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_()
                         || maid.m_269323_() == null) {
                     continue; // 无主不处理
@@ -174,7 +174,7 @@ public class DangerEscapeHandler {
         try {
             net.minecraft.world.phys.AABB box = new AABB(c).m_82400_(-0.05);
             return !level.m_45976_(net.minecraft.world.entity.LivingEntity.class, box).isEmpty();
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("DangerEscapeHandler", ignored);
             return false;
         }
     }

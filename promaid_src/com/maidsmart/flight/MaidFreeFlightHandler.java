@@ -25,7 +25,7 @@ public final class MaidFreeFlightHandler {
     public void onMaidTick(MaidTickEvent event) {
         try {
             MaidFreeFlightController.tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightHandler", ignored);
         }
     }
 }

@@ -52,7 +52,7 @@ public final class ItemUses {
                 return -1;
             }
             return Math.max(0, max - stack.m_41773_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ItemUses", ignored);
             return -1;
         }
     }
@@ -65,7 +65,7 @@ public final class ItemUses {
             }
             int max = stack.m_41776_();
             return (max <= 0 || max > MAX_VARIANTS) ? -1 : max;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ItemUses", ignored);
             return -1;
         }
     }
@@ -81,7 +81,7 @@ public final class ItemUses {
             net.minecraft.resources.ResourceLocation rl =
                     net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             return rl == null ? "" : rl.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ItemUses", ignored);
             return "";
         }
     }
@@ -106,7 +106,7 @@ public final class ItemUses {
         }
         try {
             return Integer.parseInt(key.substring(i + 1).trim());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ItemUses", ignored);
             return -1;
         }
     }
@@ -131,7 +131,7 @@ public final class ItemUses {
                     stack.m_41721_(Math.max(0, max - remaining));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ItemUses", ignored);
         }
         return stack;
     }
@@ -179,7 +179,7 @@ public final class ItemUses {
                     return "剩余 " + rem + "/" + max + " 次";
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ItemUses", ignored);
         }
         return "剩余 " + rem + " 次";
     }

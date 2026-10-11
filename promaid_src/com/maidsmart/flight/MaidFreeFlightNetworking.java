@@ -90,7 +90,7 @@ public final class MaidFreeFlightNetworking {
                     EntityMaid maid = null;
                     try {
                         maid = (EntityMaid) level.m_8791_(UUID.fromString(pkt.maidUuid));
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightNetworking", ignored);
                     }
                     if (maid == null) {
                         player.m_5661_(Component.m_237113_("\u00a7c她不在加载范围内（走近一点再试）。"), false);
@@ -115,7 +115,7 @@ public final class MaidFreeFlightNetworking {
                     byte st = explicit == null ? 0 : (explicit ? (byte) 1 : (byte) 2);
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                             new StatePacket(pkt.maidUuid, st));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightNetworking", ignored);
                 }
             });
             ctx.setPacketHandled(true);

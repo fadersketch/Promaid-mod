@@ -54,7 +54,7 @@ public abstract class RandomStrollGoalRiddenMixin {
             if (com.maidsmart.combat.MaidRideKit.isDriven(this.f_25725_)) {
                 cir.setReturnValue(false);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RandomStrollGoalRiddenMixin", ignored);
         }
     }
 }

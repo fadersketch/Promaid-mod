@@ -99,7 +99,7 @@ public final class LlmEnableManager {
                         DISK_TOGGLES.putAll(loaded);
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("LlmEnableManager", ignored);
             }
         }
         return togglesFile;
@@ -109,7 +109,7 @@ public final class LlmEnableManager {
         try {
             Files.writeString(togglesFile(level), AiMemoryModels.GSON.toJson(DISK_TOGGLES),
                     StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("LlmEnableManager", ignored);
         }
     }
 }

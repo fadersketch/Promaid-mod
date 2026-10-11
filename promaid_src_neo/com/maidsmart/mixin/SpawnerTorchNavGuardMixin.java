@@ -54,7 +54,7 @@ public abstract class SpawnerTorchNavGuardMixin {
                 return;
             }
             cir.setReturnValue(false); // 她正走去插火把：别的驱动这一发寻路不生效
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SpawnerTorchNavGuardMixin", ignored);
         }
     }
 }

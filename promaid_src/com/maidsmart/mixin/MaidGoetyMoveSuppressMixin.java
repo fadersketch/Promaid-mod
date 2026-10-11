@@ -49,7 +49,7 @@ public abstract class MaidGoetyMoveSuppressMixin {
         maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
         try {
             maid.m_21573_().m_26573_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyMoveSuppressMixin", ignored);
         }
         ci.cancel();
     }

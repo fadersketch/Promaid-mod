@@ -153,7 +153,7 @@ public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
                     return id;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SmartDesignTool", ignored);
         }
         return null;
     }
@@ -293,10 +293,10 @@ public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
                                     "\u00a77[" + (this.getMaid().getDisplayName() != null
                                             ? this.getMaid().getDisplayName().getString() : "女仆") + "] \u00a7f" + bubble));
                         }
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SmartDesignTool", ignored);
                     }
                 });
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SmartDesignTool", ignored);
             }
         }
 

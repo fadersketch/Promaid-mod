@@ -44,7 +44,7 @@ public final class AiMemoryAudit {
             sb.append(",\"detail\":").append(quote(detail)).append("}\n");
             Files.writeString(dir.resolve("audit_log.jsonl"), sb.toString(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryAudit", ignored);
         }
     }
 
@@ -78,7 +78,7 @@ public final class AiMemoryAudit {
                     return m.fingerprint;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryAudit", ignored);
         }
         return "";
     }
@@ -93,7 +93,7 @@ public final class AiMemoryAudit {
             m.updatedAt = System.currentTimeMillis();
             Files.writeString(dir.resolve("memory_index_manifest.json"),
                     AiMemoryModels.GSON.toJson(m), StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryAudit", ignored);
         }
     }
 

@@ -91,7 +91,7 @@ public abstract class EntityGunnerHangMixin {
             fn.m_20372_(passenger, anchor.m_20185_() + off.f_82479_,
                     anchor.m_20186_() + off.f_82480_, anchor.m_20189_() + off.f_82481_);
             ci.cancel();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityGunnerHangMixin", ignored);
         }
     }
 

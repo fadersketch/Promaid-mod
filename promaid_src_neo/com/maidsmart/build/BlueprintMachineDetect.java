@@ -94,7 +94,7 @@ public final class BlueprintMachineDetect {
                     structs.add(path);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintMachineDetect", ignored);
         }
         return new MachineLook(parts, structs);
     }
@@ -166,7 +166,7 @@ public final class BlueprintMachineDetect {
                             + "需要流体的机器图纸请把文件名加上机器关键词（{}），"
                             + "或把配置 build.keepFluids 改成 always",
                     fname, sb, scanMachineParts(tag).describe(), machineKeywordHint());
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintMachineDetect", ignored);
         }
     }
 

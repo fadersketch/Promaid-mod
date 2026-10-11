@@ -70,7 +70,7 @@ public final class JarVoicePack {
                         }
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("JarVoicePack", ignored);
             }
             entries = list;
             loaded = true;
@@ -135,7 +135,7 @@ public final class JarVoicePack {
                 BYTES_CACHE.put(file, data);
                 return data;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("JarVoicePack", ignored);
         }
         return null;
     }

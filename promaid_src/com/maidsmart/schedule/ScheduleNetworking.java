@@ -112,7 +112,7 @@ public final class ScheduleNetworking {
             CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
                     new SchedulePacketsPlan.MaidStateSyncPacket(maid.m_20148_().toString(), taskUid, sched,
                             ScheduleData.isOn(maid)));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleNetworking", ignored);
         }
     }
 
@@ -124,7 +124,7 @@ public final class ScheduleNetworking {
             int sched = maid.getSchedule() == null ? -1 : maid.getSchedule().ordinal();
             CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
                     new SchedulePacketsPlan.MaidTaskResyncPacket(maid.m_19879_(), taskUid, sched));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleNetworking", ignored);
         }
     }
 
@@ -141,7 +141,7 @@ public final class ScheduleNetworking {
         List<String[]> maids = new ArrayList<>();
         List<String> taskUids = new ArrayList<>();
         for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                 if (!(e instanceof EntityMaid m) || !m.m_6084_()) {
                     continue;
                 }
@@ -179,7 +179,7 @@ public final class ScheduleNetworking {
                         for (var task : TaskManager.getNotHiddenTaskList(m)) {
                             taskUids.add(task.getUid().toString());
                         }
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ScheduleNetworking", ignored);
                     }
                 }
                 if (maids.size() >= 200) {
@@ -250,7 +250,7 @@ public final class ScheduleNetworking {
                 default -> level.m_46472_().m_135782_().m_135815_();
             };
         } catch (Exception e) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("ScheduleNetworking", e); return "?";
         }
     }
 

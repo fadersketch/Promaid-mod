@@ -87,7 +87,7 @@ public final class TwilightFanKit {
             ResourceLocation key = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             return key != null && FAN_ID.equals(key.toString());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("TwilightFanKit", t); return false;
         }
     }
 
@@ -109,7 +109,7 @@ public final class TwilightFanKit {
                     return inv.getStackInSlot(i);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
         return ItemStack.f_41583_;
     }
@@ -164,7 +164,7 @@ public final class TwilightFanKit {
             playWhoosh(level, maid);
             fanParticles(level, maid, look);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
             return false;
         }
     }
@@ -203,7 +203,7 @@ public final class TwilightFanKit {
             playWhoosh(level, maid);
             fanParticles(level, maid, look);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
             return false;
         }
     }
@@ -231,7 +231,7 @@ public final class TwilightFanKit {
             }
             return fanned;
         } catch (Throwable t) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("TwilightFanKit", t); return 0;
         }
     }
 
@@ -240,7 +240,7 @@ public final class TwilightFanKit {
         try {
             fan.m_41622_(fanned + 1, maid,
                     user -> user.m_21190_(net.minecraft.world.InteractionHand.MAIN_HAND));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
     }
 
@@ -252,7 +252,7 @@ public final class TwilightFanKit {
             if (snd != null) {
                 level.m_5594_(null, maid.m_20183_(), snd, SoundSource.NEUTRAL, 1.0f, 1.0f);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
     }
 
@@ -262,7 +262,7 @@ public final class TwilightFanKit {
             level.m_8767_(ParticleTypes.f_123796_, maid.m_20185_(),
                     maid.m_20186_() + maid.m_20192_(), maid.m_20189_(),
                     10, look.f_82479_ * 1.5, look.f_82480_ * 1.5, look.f_82481_ * 1.5, 0.02);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
     }
 }

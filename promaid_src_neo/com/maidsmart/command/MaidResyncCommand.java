@@ -93,7 +93,7 @@ public final class MaidResyncCommand {
             label = "UUID " + arg;
         } else {
             for (ServerLevel lvl : server.getAllLevels()) {
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof EntityMaid m) || !m.isAlive()) {
                         continue;
                     }
@@ -274,7 +274,7 @@ public final class MaidResyncCommand {
                         break;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidResyncCommand", ignored);
             }
         }
     }
@@ -366,7 +366,7 @@ public final class MaidResyncCommand {
                         break;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidResyncCommand", ignored);
             }
             if (fired && shots > 0) {
                 FORCED_SHOTS.put(id, shots);
@@ -398,7 +398,7 @@ public final class MaidResyncCommand {
         try {
             resyncTo(owner, maid);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidResyncCommand", ignored);
             return false;
         }
     }
@@ -489,7 +489,7 @@ public final class MaidResyncCommand {
                         + ATTR_RESEND_TICKS + " 拍）：直连主人兜底="
                         + (online ? (sameDim ? "用（主人同维）" : "不用（主人异维）") : "不用（主人离线）"));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidResyncCommand", ignored);
         }
     }
 
@@ -515,7 +515,7 @@ public final class MaidResyncCommand {
                         break;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidResyncCommand", ignored);
             }
         }
     }
@@ -632,7 +632,7 @@ public final class MaidResyncCommand {
                             com.github.tartaricacid.touhoulittlemaid.network.message.SyncBaublePackage
                                     .fullSync(maid.getId(), baubles), viewer);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidResyncCommand", ignored);
             }
         } catch (Throwable t) {
             PromaidLog.log("重同步", "补包失败：" + t);
@@ -673,7 +673,7 @@ public final class MaidResyncCommand {
             }
             return "在 sub-level 内（无法解析变换坐标）";
         } catch (Throwable t) {
-            return "Sable 诊断不可用：" + t.getClass().getSimpleName();
+             com.maidsmart.diag.Diag.swallow("MaidResyncCommand", t); return "Sable 诊断不可用：" + t.getClass().getSimpleName();
         }
     }
 }

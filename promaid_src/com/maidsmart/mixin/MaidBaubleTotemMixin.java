@@ -34,7 +34,7 @@ public abstract class MaidBaubleTotemMixin {
     private void maidsmart$baubleTotem(DamageSource source, CallbackInfoReturnable<Boolean> cir) {
         try {
             maidsmart$baubleTotemInner(source, cir);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBaubleTotemMixin", ignored);
             // v1.1.0 实测十六（审查 P2）：致命伤路径整体异常保护——本注入点跑在
             // 原版 hurt/die 调用链里，handler 任一异常（聊天管理器/实体扫描等）
             // 都会抛穿伤害结算最坏崩服。其他注入（HomingPotionMixin）同款标准：
@@ -194,7 +194,7 @@ public abstract class MaidBaubleTotemMixin {
             if (!handler.extractItem(slot, 1, false).m_41619_()) {
                 return;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBaubleTotemMixin", ignored);
         }
         try {
             ItemStack live = handler.getStackInSlot(slot);
@@ -204,7 +204,7 @@ public abstract class MaidBaubleTotemMixin {
             if (live.m_41619_() && handler instanceof net.minecraftforge.items.ItemStackHandler ish) {
                 ish.setStackInSlot(slot, ItemStack.f_41583_);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBaubleTotemMixin", ignored);
         }
     }
 
@@ -233,7 +233,7 @@ public abstract class MaidBaubleTotemMixin {
             entity.m_9236_().m_46796_(2007,
                     net.minecraft.core.BlockPos.m_274561_(
                             entity.m_20185_(), entity.m_20186_(), entity.m_20189_()), 0);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBaubleTotemMixin", ignored);
         }
     }
 
@@ -247,7 +247,7 @@ public abstract class MaidBaubleTotemMixin {
                     return i;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBaubleTotemMixin", ignored);
         }
         return -1;
     }
@@ -262,7 +262,7 @@ public abstract class MaidBaubleTotemMixin {
                     return i;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBaubleTotemMixin", ignored);
         }
         return -1;
     }

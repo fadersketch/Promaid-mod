@@ -210,7 +210,7 @@ public final class CooldownHudRenderer {
     private static long parse(String s) {
         try {
             return Long.parseLong(s);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("CooldownHudRenderer", ignored);
             return 0L;
         }
     }

@@ -49,7 +49,7 @@ public final class BlueprintStructureCodec {
             if (stateTag.m_128425_("Properties", 10)) {
                 return "upper".equals(stateTag.m_128469_("Properties").m_128461_("half"));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStructureCodec", ignored);
         }
         return false;
     }
@@ -58,7 +58,7 @@ public final class BlueprintStructureCodec {
     static boolean isBedState(net.minecraft.nbt.CompoundTag stateTag) {
         try {
             return stateTag.m_128461_("Name").endsWith("_bed");
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStructureCodec", ignored);
             return false;
         }
     }
@@ -67,7 +67,7 @@ public final class BlueprintStructureCodec {
     static String bedPart(net.minecraft.nbt.CompoundTag stateTag) {
         try {
             return stateTag.m_128469_("Properties").m_128461_("part");
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStructureCodec", ignored);
             return "";
         }
     }
@@ -77,7 +77,7 @@ public final class BlueprintStructureCodec {
     static String bedFacing(net.minecraft.nbt.CompoundTag stateTag) {
         try {
             return stateTag.m_128469_("Properties").m_128461_("facing");
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStructureCodec", ignored);
             return "";
         }
     }
@@ -101,7 +101,7 @@ public final class BlueprintStructureCodec {
                 net.minecraft.nbt.ListTag pos = cell.m_128437_("pos", 3);
                 out.add(key3(pos.m_128763_(0), pos.m_128763_(1), pos.m_128763_(2)));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStructureCodec", ignored);
         }
         return out;
     }
@@ -127,7 +127,7 @@ public final class BlueprintStructureCodec {
             net.minecraft.core.BlockPos paired =
                     new net.minecraft.core.BlockPos(x, y, z).m_121945_(f.m_122424_());
             return footKeys.contains(key3(paired.m_123341_(), paired.m_123342_(), paired.m_123343_()));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStructureCodec", ignored);
             return false;
         }
     }

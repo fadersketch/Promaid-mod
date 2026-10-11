@@ -131,7 +131,7 @@ public class ReplyFeedbackTracker {
         try {
             nowTick = maid.m_9236_().m_46467_();
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", e); return false;
         }
         List<String[]> list = TOPIC_BLACKLIST.get(id);
         if (list == null) {
@@ -307,7 +307,7 @@ public class ReplyFeedbackTracker {
             AiMemoryModels.Paragraph p = AiMemoryModels.Paragraph.create("dialogue", "user", content,
                     "error_mark,feedback", 5, false, now, level.m_46467_());
             store.addParagraph(p);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", ignored);
         }
     }
 
@@ -322,7 +322,7 @@ public class ReplyFeedbackTracker {
             // v1.1.0：统一走灵魂路由（同 writeErrorMark）
             AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
             store.reinforceByTopic(last);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", ignored);
         }
     }
 

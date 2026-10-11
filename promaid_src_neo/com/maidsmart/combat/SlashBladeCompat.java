@@ -126,7 +126,7 @@ public final class SlashBladeCompat {
         }
         try {
             return itemBladeClass.isInstance(stack.getItem());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return false;
         }
     }
@@ -153,11 +153,11 @@ public final class SlashBladeCompat {
             bladeState(blade).ifPresent(state -> {
                 try {
                     setLastActionTime.invoke(state, maid.level().getGameTime());
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
                 }
             });
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return false;
         }
     }
@@ -169,7 +169,7 @@ public final class SlashBladeCompat {
         try {
             Object resolved = bladeStateOf.invoke(null, stack);
             return resolved instanceof Optional<?> opt ? opt : Optional.empty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return Optional.empty();
         }
     }
@@ -195,7 +195,7 @@ public final class SlashBladeCompat {
                 LOGGER.info("promaid: 拔刀剑兼容已启用（空袭挥刀将触发拔刀斩）");
             }
             return ok;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return false;
         }
     }

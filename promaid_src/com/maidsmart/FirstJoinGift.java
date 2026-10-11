@@ -94,7 +94,7 @@ public final class FirstJoinGift {
                                 + "maid_smart:blueprint_book\u3002"));
             }
         } catch (Throwable t) {
-            // 进度系统出问题不能让玩家登不进来——退回旧发法（可能重发，但优先可用）
+             com.maidsmart.diag.Diag.swallow("FirstJoinGift", t); // 进度系统出问题不能让玩家登不进来——退回旧发法（可能重发，但优先可用）
             com.maidsmart.tool.PromaidLog.log("赠礼", "进度授予失败，退回旧发法：" + t);
             fallbackGive(player);
         }
@@ -112,7 +112,7 @@ public final class FirstJoinGift {
                     ProMaidMod.BLUEPRINT_BOOK.get()));
             player.m_150109_().m_36054_(new net.minecraft.world.item.ItemStack(
                     ProMaidMod.SCHEDULE_BOOK.get()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FirstJoinGift", ignored);
         }
     }
 }

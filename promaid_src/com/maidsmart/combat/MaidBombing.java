@@ -515,7 +515,7 @@ public final class MaidBombing {
             if (ph != null && ph.level != null) {
                 try {
                     BombPlacement.rollback(ph.level, ph);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
                 }
             }
         }
@@ -553,7 +553,7 @@ public final class MaidBombing {
             long now;
             try {
                 now = r.level.m_46467_();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
                 ri.remove(); // 关卡对象已经不可用，这一条没意义了
                 continue;
             }
@@ -615,7 +615,7 @@ public final class MaidBombing {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
         }
         return null;
     }
@@ -777,7 +777,7 @@ public final class MaidBombing {
     private static String dimKey(ServerLevel level) {
         try {
             return String.valueOf(level.m_46472_().m_135782_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
             return "?";
         }
     }
@@ -819,7 +819,7 @@ public final class MaidBombing {
             // v1.2.2 实测五百九十四：重生锚那一段的原因（缺萤石 / 这个维度不炸）同样写下来
             hintAnchorSkip(level, maid);
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸跳过（没有可用链路）：" + sb);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
         }
     }
 
@@ -884,7 +884,7 @@ public final class MaidBombing {
             HINT_CD.put(id, now);
             HINT_LAST.put(id, said);
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸链路没开成：" + said);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
         }
     }
 
@@ -892,7 +892,7 @@ public final class MaidBombing {
     private static boolean anchorWorks(ServerLevel level) {
         try {
             return net.minecraft.world.level.block.RespawnAnchorBlock.m_55850_(level);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
             return true;
         }
     }
@@ -928,7 +928,7 @@ public final class MaidBombing {
                 return !bedWorks(level);
             }
             return true; // 末地水晶不挑维度：原版哪儿都能放、哪儿都炸
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
             return false;
         }
     }
@@ -937,7 +937,7 @@ public final class MaidBombing {
     private static boolean bedWorks(ServerLevel level) {
         try {
             return net.minecraft.world.level.block.BedBlock.m_49488_(level);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
             return true;
         }
     }
@@ -1034,7 +1034,7 @@ public final class MaidBombing {
             }
             EnumMap<Kind, Phase> map = PHASE.get(maid.m_20148_());
             return map != null && !map.isEmpty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
             return false;
         }
     }
@@ -1183,7 +1183,7 @@ public final class MaidBombing {
                 net.minecraft.server.MinecraftServer server = event.getServer();
                 if (server != null) {
                     for (ServerLevel lvl : server.m_129785_()) {
-                        for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                        for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                             if (e instanceof EntityMaid m) {
                                 tickCombatTnt(lvl, m);
                             }
@@ -1205,7 +1205,7 @@ public final class MaidBombing {
             if (b.entity != null && b.entity.m_6084_()) {
                 b.entity.m_142687_(Entity.RemovalReason.DISCARDED);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
         }
     }
 

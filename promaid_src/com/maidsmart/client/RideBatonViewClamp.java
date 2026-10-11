@@ -79,7 +79,7 @@ public final class RideBatonViewClamp {
             // 认得出才吞这一下 + 上报（服务端自己算座位、自己校验，不信任这里推出来的任何东西）
             com.maidsmart.combat.MaidSeatNetworking.requestSwapSeat(v.m_19879_());
             event.setCanceled(true);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBatonViewClamp", ignored);
         }
     }
 

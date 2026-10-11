@@ -383,6 +383,10 @@ public final class MaidMountCompat {
             return;
         }
         swbInited = true;
+        // TD-15：先在场地判断（ModList，零异常），再走反射探针——SWB 单一发行版，modid 确定。
+        if (!net.minecraftforge.fml.ModList.get().isLoaded(MOD_SWB)) {
+            return;
+        }
         try {
             cVehicle = Class.forName("com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity");
             mProcessInput = cVehicle.getMethod("processInput", short.class);
@@ -400,7 +404,7 @@ public final class MaidMountCompat {
             // 以下都是"可选"：某版本没有也不该让驾驶失效，各自单独 try
             try {
                 mIsWreck = cVehicle.getMethod("isWreck");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mIsWreck = null;
             }
             try {
@@ -408,7 +412,7 @@ public final class MaidMountCompat {
                 mVehicleShoot = cVehicle.getMethod("vehicleShoot", LivingEntity.class,
                         String.class, java.util.UUID.class, Vec3.class);
                 mGetGunName = cVehicle.getMethod("getGunName", int.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mCanShoot = null;
                 mVehicleShoot = null;
                 mGetGunName = null;
@@ -416,7 +420,7 @@ public final class MaidMountCompat {
             try {
                 mGetSeatIndex = cVehicle.getMethod("getSeatIndex", Entity.class);
                 mGetMaxPassengers = cVehicle.getMethod("getMaxPassengers");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetSeatIndex = null;
                 mGetMaxPassengers = null;
             }
@@ -426,7 +430,7 @@ public final class MaidMountCompat {
                 mSetPower = cVehicle.getMethod("setPower", float.class);
                 mSetDeltaRot = cVehicle.getMethod("setDeltaRot", float.class);
                 mSetTargetSpeed = cVehicle.getMethod("setTargetSpeed", double.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mSetPower = null;
                 mSetDeltaRot = null;
                 mSetTargetSpeed = null;
@@ -439,7 +443,7 @@ public final class MaidMountCompat {
                 mGetTurretCtrlIdx = cVehicle.getMethod("getTurretControllerIndex");
                 mGetWeaponCtrlIdx = cVehicle.getMethod("getPassengerWeaponStationControllerIndex");
                 mGetNthEntity = cVehicle.getMethod("getNthEntity", int.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mSetAiTurretUUID = null;
                 mSetAiWeaponUUID = null;
                 mHasTurret = null;
@@ -452,7 +456,7 @@ public final class MaidMountCompat {
             // 不该把上面那组炮塔/武器位反射一起关掉。
             try {
                 mChangeSeat = cVehicle.getMethod("changeSeat", Entity.class, int.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mChangeSeat = null;
             }
             // 【实测七百二十五】直升机的鼠标通道 + 悬停开关：各自单独 try，缺一个也不该让其余失效。
@@ -463,7 +467,7 @@ public final class MaidMountCompat {
                 mSetMouseSpeedY = cVehicle.getMethod("setMouseMoveSpeedY", float.class);
                 mSetHoverMode = cVehicle.getMethod("setHoverMode", boolean.class);
                 mGetHoverMode = cVehicle.getMethod("getHoverMode");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetMouseSpeedX = null;
                 mGetMouseSpeedY = null;
                 mSetMouseSpeedX = null;
@@ -477,18 +481,18 @@ public final class MaidMountCompat {
                 Class<?> quat = Class.forName("org.joml.Quaternionf");
                 mSetLoiterParams = cVehicle.getMethod("setLoiterParams", quat);
                 mSetLoiterActive = cVehicle.getMethod("setLoiterActive", boolean.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mSetLoiterParams = null;
                 mSetLoiterActive = null;
             }
             try {
                 mSetLiftSpeed = cVehicle.getMethod("setLiftSpeed", float.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mSetLiftSpeed = null;
             }
             try {
                 mGetPower = cVehicle.getMethod("getPower");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetPower = null;
             }
             // 【实测七百八十】固定翼强制滚转：单独 try——拿不到就退回"借左右位"那套慢滚转
@@ -496,7 +500,7 @@ public final class MaidMountCompat {
             try {
                 mGetRoll = cVehicle.getMethod("getRoll");
                 mSetRoll = cVehicle.getMethod("setZRot", float.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetRoll = null;
                 mSetRoll = null;
             }
@@ -505,14 +509,14 @@ public final class MaidMountCompat {
             try {
                 mGetEnergy = cVehicle.getMethod("getEnergy");
                 mGetMaxEnergy = cVehicle.getMethod("getMaxEnergy");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetEnergy = null;
                 mGetMaxEnergy = null;
             }
             // 【实测七百八十三】固定翼降落接地后清 crash 标记的写口（缺了只是"不清标记"）。
             try {
                 mSetCrash = cVehicle.getMethod("setCrash", boolean.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mSetCrash = null;
             }
             // 【实测七百二十六·点6】装弹反射链：车的容器 + 这车这门枪要哪种子弹 + 子弹物品的类型。
@@ -520,7 +524,7 @@ public final class MaidMountCompat {
             try {
                 mGetInventory = cVehicle.getMethod("getInventory");
                 mGetGunDataMap = cVehicle.getMethod("getGunDataMap");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetInventory = null;
                 mGetGunDataMap = null;
             }
@@ -528,7 +532,7 @@ public final class MaidMountCompat {
                 Class<?> gdCls = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
                 mGunUseBackpackAmmo = gdCls.getMethod("useBackpackAmmo");
                 mGunSelectedAmmo = gdCls.getMethod("selectedAmmoConsumer");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGunUseBackpackAmmo = null;
                 mGunSelectedAmmo = null;
             }
@@ -538,7 +542,7 @@ public final class MaidMountCompat {
                 // 物品型（ItemAmmoStrategy）与枚举型（PlayerAmmoStrategy）**两种都成立**，是正解。
                 mConsumerIsAmmoItem = acCls.getMethod("isAmmoItem",
                         net.minecraft.world.item.ItemStack.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mConsumerIsAmmoItem = null;
             }
             // 取代表物品的方法（{@code stack()}）：与上面分开 try——它缺了只是"没实体弹的武器判不出来"，
@@ -546,7 +550,7 @@ public final class MaidMountCompat {
             try {
                 Class<?> acCls2 = Class.forName("com.atsuishio.superbwarfare.data.gun.AmmoConsumer");
                 mConsumerStack = acCls2.getMethod("stack");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mConsumerStack = null;
             }
             // 【实测七百三十一·暴力后门】炮塔朝向直写 + 直接开火 + 弹匣补弹。各自 try。
@@ -563,10 +567,10 @@ public final class MaidMountCompat {
                 // serverYaw 把 yRot 往回 lerp）。单独 try——缺了它只是"直写会被慢慢拽回"。
                 try {
                     mSetServerYaw = cVehicle.getMethod("setServerYaw", float.class);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     mSetServerYaw = null;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetTurretYRot = null;
                 mSetTurretYRot = null;
                 mGetTurretXRot = null;
@@ -578,13 +582,13 @@ public final class MaidMountCompat {
             try {
                 mVehicleShootAt = cVehicle.getMethod("vehicleShoot", LivingEntity.class,
                         java.util.UUID.class, Vec3.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mVehicleShootAt = null;
             }
             try {
                 mGetGunDataSeat = cVehicle.getMethod("getGunData", int.class);
                 mAmmoSupplier = cVehicle.getMethod("getAmmoSupplier");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetGunDataSeat = null;
                 mAmmoSupplier = null;
             }
@@ -594,7 +598,7 @@ public final class MaidMountCompat {
                 mGunReloading = gdCls2.getMethod("reloading");
                 mGunCurrentAmmo = gdCls2.getMethod("currentAvailableAmmo", Entity.class);
                 mGunCanShoot = gdCls2.getMethod("canShoot", Entity.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGunReloadAmmo = null;
                 mGunReloading = null;
                 mGunCurrentAmmo = null;
@@ -606,7 +610,7 @@ public final class MaidMountCompat {
                 mGetWeaponIndex = cVehicle.getMethod("getWeaponIndex", int.class);
                 mSetWeaponIndex = cVehicle.getMethod("setWeaponIndex", int.class, int.class);
                 mGetGunNameAtSeatWeapon = cVehicle.getMethod("getGunName", int.class, int.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetWeaponIndex = null;
                 mSetWeaponIndex = null;
                 mGetGunNameAtSeatWeapon = null;
@@ -619,7 +623,7 @@ public final class MaidMountCompat {
                 mGunGetProp = gdCls3.getMethod("get", gpCls);
                 mChangeAmmoConsumer = gdCls3.getMethod("changeAmmoConsumer", int.class, Entity.class);
                 mConsumerCount = acCls3.getMethod("count", gdCls3, Entity.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 fGunPropAmmoConsumer = null;
                 mGunGetProp = null;
                 mChangeAmmoConsumer = null;
@@ -635,7 +639,7 @@ public final class MaidMountCompat {
                 mGetShootPosEntity = cVehicle.getMethod("getShootPos", Entity.class, float.class);
                 mGetProjectileVelocity = cVehicle.getMethod("getProjectileVelocity", Entity.class);
                 mGetProjectileGravity = cVehicle.getMethod("getProjectileGravity", Entity.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mTurretAutoAimFromVector = null;
                 mPassengerWeaponAutoAimFromVector = null;
                 mGetShootVecEntity = null;
@@ -647,7 +651,7 @@ public final class MaidMountCompat {
                 Class<?> rt = Class.forName("com.atsuishio.superbwarfare.tools.RangeTool");
                 mRangeFiringSolution = rt.getMethod("calculateFiringSolution",
                         Vec3.class, Vec3.class, Vec3.class, double.class, double.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mRangeFiringSolution = null;
             }
             // 【实测七百四十一·点2/点3】按**炮名**取的那一组（与上面按 Entity 那组一一对应）。
@@ -662,7 +666,7 @@ public final class MaidMountCompat {
                 mGetGunNameAtSeat = cVehicle.getMethod("getGunName", int.class);
                 mHasWeaponSeat = cVehicle.getMethod("hasWeapon", int.class);
                 mGetGunDataName = cVehicle.getMethod("getGunData", String.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mGetShootPosName = null;
                 mGetShootVecName = null;
                 mGetProjectileVelocityName = null;
@@ -680,14 +684,14 @@ public final class MaidMountCompat {
                         net.minecraft.server.level.ServerLevel.class, Vec3.class, Vec3.class,
                         gdCls4, double.class, boolean.class, java.util.UUID.class, Vec3.class);
                 mGunDataShootParams = gdCls4.getMethod("shoot", spCls);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 ctorShootParams = null;
                 mGunDataShootParams = null;
             }
             try {
                 Class<?> gpCls2 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunProp");
                 fGunPropSpread = gpCls2.getField("SPREAD");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 fGunPropSpread = null;
             }
             // 枪口火光/音效的客户端同步包（引擎那条 vehicleShoot 里会发；我们直瞄绕过了它，
@@ -705,7 +709,7 @@ public final class MaidMountCompat {
                         break;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 ctorVehicleShootMsg = null;
                 mSendPacketToAll = null;
             }
@@ -721,7 +725,7 @@ public final class MaidMountCompat {
                         "com.atsuishio.superbwarfare.item.ammo.AmmoSupplierItem");
                 mSupplierGetType = supCls774.getMethod("getType");
                 cAmmoSupplier = supCls774;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 cAmmoBoxItem = null;
                 cAmmoSupplier = null;
                 mConsumerPlayerAmmoType = null;
@@ -730,21 +734,21 @@ public final class MaidMountCompat {
             }
             try {
                 mVehicleWeaponRpmName = cVehicle.getMethod("vehicleWeaponRpm", String.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mVehicleWeaponRpmName = null;
             }
             // 【实测七百七十五·点2】投弹安全高度 = 这门炸弹自己的爆炸半径（GunProp.EXPLOSION_RADIUS）。
             try {
                 Class<?> gpCls775 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunProp");
                 fGunPropExplosionRadius = gpCls775.getField("EXPLOSION_RADIUS");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 fGunPropExplosionRadius = null;
             }
             // 【实测七百七十七·点1】引擎自己的"无限弹"判据（静态方法，见 vehicleHasInfiniteAmmo）。
             try {
                 Class<?> itCls777 = Class.forName("com.atsuishio.superbwarfare.tools.InventoryTool");
                 mHasCreativeAmmoBoxEntity = itCls777.getMethod("hasCreativeAmmoBox", Entity.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mHasCreativeAmmoBoxEntity = null;
             }
             // 【实测七百七十七·点1】"直接把弹匣写满"的反射（见 forceMagazineFull）。
@@ -760,7 +764,7 @@ public final class MaidMountCompat {
                 // 【实测七百八十六】"这炮什么都没写"的判据要用它俩（见 gunDeclaresNoRateData）。
                 fGunPropNormalReload = gpCls777.getField("NORMAL_RELOAD_TIME");
                 fGunPropHeatPerShoot = gpCls777.getField("HEAT_PER_SHOOT");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 fGunAmmo = null;
                 mIntValueGet = null;
                 mIntValueSet = null;
@@ -786,7 +790,7 @@ public final class MaidMountCompat {
                 mBoolValueSet = bvCls778.getMethod("set", boolean.class);
                 mDoubleValueGet = dvCls778.getMethod("get");
                 mDoubleValueSet = dvCls778.getMethod("set", double.class);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 fGunBackupAmmoCount = null;
                 mGunResetStatus = null;
                 mGunCharging = null;
@@ -803,11 +807,11 @@ public final class MaidMountCompat {
             try {
                 mVehicleGetAmmo = cVehicle.getMethod("getAmmo",
                         Class.forName("com.atsuishio.superbwarfare.data.gun.GunData"));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mVehicleGetAmmo = null;
             }
             swbOk = true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             swbOk = false;
         }
     }
@@ -817,6 +821,10 @@ public final class MaidMountCompat {
             return;
         }
         iafInited = true;
+        // TD-15：先在场地判断（普通版与社区版 modid 都是 iceandfire，故这一道不会误伤任一发行版）。
+        if (!net.minecraftforge.fml.ModList.get().isLoaded(MOD_IAF)) {
+            return;
+        }
         // 普通版与社区版两个包名都试；1.21.1 社区版类名带 Entity 后缀
         String[] candidates = {
                 "com.github.alexthe666.iceandfire.entity.EntityDragonBase", // 普通版（1.20.1）
@@ -844,7 +852,7 @@ public final class MaidMountCompat {
                 mRiderShootFire = shoot;
                 iafOk = true;
                 return;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 // 换下一个类名
             }
         }
@@ -867,7 +875,7 @@ public final class MaidMountCompat {
     public static boolean modMountsEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_MOD_MOUNTS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return true;
         }
     }
@@ -876,7 +884,7 @@ public final class MaidMountCompat {
     public static boolean modMountFireEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_MOD_MOUNT_FIRE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return true;
         }
     }
@@ -910,7 +918,7 @@ public final class MaidMountCompat {
         try {
             initSwb();
             return swbOk && cVehicle != null && cVehicle.isInstance(e);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -920,7 +928,7 @@ public final class MaidMountCompat {
         try {
             initIaf();
             return iafOk && cDragon != null && cDragon.isInstance(e);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -1001,7 +1009,7 @@ public final class MaidMountCompat {
                 return false;
             }
             return UNRIDABLE.contains(key.toString());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -1018,7 +1026,7 @@ public final class MaidMountCompat {
                 }
                 return key.toString();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return "载具";
     }
@@ -1057,7 +1065,7 @@ public final class MaidMountCompat {
                 }
                 return null;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return null;
     }
@@ -1071,7 +1079,7 @@ public final class MaidMountCompat {
                     return i;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return 0;
     }
@@ -1085,7 +1093,7 @@ public final class MaidMountCompat {
                     return i;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return -1;
     }
@@ -1093,7 +1101,7 @@ public final class MaidMountCompat {
     private static boolean isAlive(Entity e) {
         try {
             return e.m_6084_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -1173,7 +1181,7 @@ public final class MaidMountCompat {
             }
             Object v = mGetRiderPosition.invoke(dragon);
             return v instanceof Vec3 vec ? vec : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -1211,7 +1219,7 @@ public final class MaidMountCompat {
                     return cy;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return y;
     }
@@ -1229,7 +1237,7 @@ public final class MaidMountCompat {
             net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.m_274561_(x, y, z);
             return level.m_8055_(p).m_60742_(level, p,
                     net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -1337,7 +1345,7 @@ public final class MaidMountCompat {
             maid.f_19860_ = dragon.f_19860_;
             maid.m_146926_(dragon.m_146909_());
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -1348,7 +1356,7 @@ public final class MaidMountCompat {
             if (e != null) {
                 e.m_20242_(!gravity); // setNoGravity(!gravity)
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -1375,14 +1383,14 @@ public final class MaidMountCompat {
             if (maid instanceof net.minecraft.world.entity.Mob mob) {
                 try {
                     mob.m_21573_().m_26573_();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             maid.m_20256_(Vec3.f_82478_);
             if (maid instanceof net.minecraft.world.entity.LivingEntity le) {
                 le.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -1430,7 +1438,7 @@ public final class MaidMountCompat {
                 return;
             }
             maid.m_21837_(sitting);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -1438,7 +1446,7 @@ public final class MaidMountCompat {
     public static boolean isSitting(EntityMaid maid) {
         try {
             return maid != null && maid.isMaidInSittingPose();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -1452,7 +1460,7 @@ public final class MaidMountCompat {
                     return i;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return -1;
     }
@@ -1466,7 +1474,7 @@ public final class MaidMountCompat {
             if (mSetCommand != null && isDragon(dragon)) {
                 mSetCommand.invoke(dragon, 2);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -1476,7 +1484,7 @@ public final class MaidMountCompat {
             if (mSetCommand != null && isDragon(dragon) && prev >= 0) {
                 mSetCommand.invoke(dragon, prev);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -1509,7 +1517,7 @@ public final class MaidMountCompat {
             }
             Object p = mPartGetParent.invoke(target);
             return p instanceof Entity parent ? parent : target;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return target;
         }
     }
@@ -1526,7 +1534,7 @@ public final class MaidMountCompat {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -1539,6 +1547,10 @@ public final class MaidMountCompat {
             return;
         }
         partInited = true;
+        // TD-15：先在场地判断（冰火传说，普通版/社区版 modid 同为 iceandfire）。
+        if (!net.minecraftforge.fml.ModList.get().isLoaded(MOD_IAF)) {
+            return;
+        }
         String[] candidates = {
                 "com.iafenvoy.iceandfire.entity.EntityMultipartPart",        // 社区版 1.20.1
                 "com.iafenvoy.iceandfire.entity.MultipartPartEntity",        // 社区版 1.21.1
@@ -1548,7 +1560,7 @@ public final class MaidMountCompat {
             try {
                 mPartGetParent = Class.forName(cn).getMethod("getParent");
                 return;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 // 换下一个类名
             }
         }
@@ -1572,7 +1584,7 @@ public final class MaidMountCompat {
                 return en.name();
             }
             return et == null ? "" : String.valueOf(et);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return "";
         }
     }
@@ -1601,7 +1613,7 @@ public final class MaidMountCompat {
             }
             // 【实测七百二十三】DRAGON 不再由本类驱动：降级方案里女仆只是"挂在龙的骑乘位
             // 上"（不是乘客），龙自己那套飞行物理照常跑。我们**不碰**它的 flightManager。
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -1629,7 +1641,7 @@ public final class MaidMountCompat {
             if (kindOf(mount) == Kind.VEHICLE) {
                 return driveVehicle(mount, target, modifier, maid, true);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -1653,7 +1665,7 @@ public final class MaidMountCompat {
             double v = horizontalSpeed(mount);
             r = Math.max(r, v * GROUND_ORBIT_SPEED_GAIN);          // 开得越快，圈越大
             r = Math.max(r, mount.m_20205_() * GROUND_ORBIT_WIDTH_GAIN); // 车越大，圈越大
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return clamp(r, GROUND_ORBIT_FLOOR, GROUND_ORBIT_MAX);
     }
@@ -1675,7 +1687,7 @@ public final class MaidMountCompat {
                 stopVehicle(mount);
             }
             // 【实测七百二十三】DRAGON 无需"收手"：我们从没驱动过它。
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -1776,7 +1788,7 @@ public final class MaidMountCompat {
                 try {
                     maid.m_5618_(desiredYaw);   // setYHeadRot：引擎唯一读的那个
                     maid.m_146922_(desiredYaw); // setYRot：模型/身体跟上，免得扭着走
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             // 车头自己按有限速率朝目标转（补上引擎那一项被 steeringSpeed 卡住的速率）
@@ -1796,10 +1808,10 @@ public final class MaidMountCompat {
                 if (mSetServerYaw != null) {
                     try {
                         mSetServerYaw.invoke(mount, yaw);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             }
         }
 
@@ -1854,7 +1866,7 @@ public final class MaidMountCompat {
             logDrive(mount, (orbit ? "绕圈档 " : "") + "位掩码=" + bits + " 引擎=" + (eng.isEmpty() ? "?" : eng)
                     + (headSteer ? " 头朝向=" + Math.round(desiredYaw) : "")
                     + " 距目标=" + (long) horiz + "格");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return true;
     }
@@ -1871,7 +1883,7 @@ public final class MaidMountCompat {
         double base = stopSlackFor(mount);
         try {
             return base + mount.m_20184_().m_82553_() * 10.0;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return base;
         }
     }
@@ -1886,7 +1898,7 @@ public final class MaidMountCompat {
             if (mount != null) {
                 return Math.max(1.5, (double) mount.m_20205_() + 1.0);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return 1.5;
     }
@@ -1918,7 +1930,7 @@ public final class MaidMountCompat {
                 mSetTargetSpeed.invoke(mount, 0.0d);
             }
             mount.m_20256_(mount.m_20184_().m_82490_(0.45));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -1944,20 +1956,20 @@ public final class MaidMountCompat {
                 if (isAircraftEngine(eng) && mSetLoiterActive != null) {
                     try {
                         mSetLoiterActive.invoke(mount, false);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
                 // 【实测七百四十三·点3】飞艇收手：liftSpeed 归零（引擎会自己按重力收敛回浮高）。
                 if (isAirshipEngine(eng) && mSetLiftSpeed != null) {
                     try {
                         mSetLiftSpeed.invoke(mount, 0.0f);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
                 if (mSetHoverMode != null && !isAirshipEngine(eng) && !isTomEngine(eng)) {
                     try {
                         mSetHoverMode.invoke(mount, true); // 站着不动 → 悬停（飞艇/汤姆6 没这个开关）
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
                 // 【实测七百四十五·点2】收手时也要抹掉残余**水平**速度（竖直分量保留，空中不能失去升力）：
@@ -1970,7 +1982,7 @@ public final class MaidMountCompat {
             }
             // 【实测七百二十四】地面停车 = 真刹车（旧版只清输入，车会继续滑）。
             brakeVehicle(mount);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -2044,7 +2056,7 @@ public final class MaidMountCompat {
     public static boolean isFlyingVehicle(Entity e) {
         try {
             return isVehicle(e) && isFlyingEngine(engineType(e));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -2124,7 +2136,7 @@ public final class MaidMountCompat {
                 return false; // hasEnergyStorage() == false：这车没有能量仓 → 引擎那套闸本来也不生效
             }
             return energy <= 0; // 电量到底 → 与引擎"没电熄火"同口径
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -2135,13 +2147,13 @@ public final class MaidMountCompat {
             if (mProcessInput != null) {
                 mProcessInput.invoke(mount, (short) 0); // 清输入位
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         try {
             if (mSetPower != null) {
                 mSetPower.invoke(mount, 0.0f); // 不写 power 引擎就一直"点火中"，写 0 才是松手
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         try {
             if (mSetMouseSpeedX != null) {
@@ -2150,7 +2162,7 @@ public final class MaidMountCompat {
             if (mSetMouseSpeedY != null) {
                 mSetMouseSpeedY.invoke(mount, 0.0f);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -2170,7 +2182,7 @@ public final class MaidMountCompat {
             com.maidsmart.tool.PromaidLog.log("载具电量", describeKind(mount) + " 引擎=" + eng
                     + " 电量不足 → 拒绝驱动飞行（与引擎自身那条\u201c没电熄火\u201d闸同口径；"
                     + "日志搜「载具电量」）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -2232,12 +2244,12 @@ public final class MaidMountCompat {
                 float held = hoverYawHold(mount);
                 try {
                     mount.m_146922_(held);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
                 if (mSetServerYaw != null) {
                     try {
                         mSetServerYaw.invoke(mount, held);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
             } else {
@@ -2260,7 +2272,7 @@ public final class MaidMountCompat {
                 // 弱控制器（悬停档系数 0.01），正好当我们的慢速外环。
                 try {
                     mProcessInput.invoke(mount, (short) 0);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
                 // 【实测七百三十·点1·根因】直升机的**俯仰输入要乘一个很小的 propeller**：
                 //   反编译 helicopterEngine:611 → xRot += 1.5 * pitchSpeed(0.75) * mouseY * propeller，
@@ -2320,7 +2332,7 @@ public final class MaidMountCompat {
                     powerCmd = (float) clamp(base + lead * k, 0.045, 0.12);
                     try {
                         mSetPower.invoke(mount, powerCmd);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                         powerCmd = -1.0f;
                     }
                 }
@@ -2329,7 +2341,7 @@ public final class MaidMountCompat {
                 if (mSetHoverMode != null) {
                     try {
                         mSetHoverMode.invoke(mount, parked);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
                 // 【实测七百四十五·抽公共】"急停三件套"（硬刹 + 每 0.5 秒周期脉冲 + 水平速度硬上限）
@@ -2352,12 +2364,12 @@ public final class MaidMountCompat {
                     float held = hoverYawHold(mount);
                     try {
                         mount.m_146922_(held);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                     if (mSetServerYaw != null) {
                         try {
                             mSetServerYaw.invoke(mount, held);
-                        } catch (Throwable ignored) {
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                         }
                     }
                     mSetMouseX(mount, 0.0f);
@@ -2413,7 +2425,7 @@ public final class MaidMountCompat {
                     liftCmd = (float) clamp(alead * AIRSHIP_LIFT_PER_BLOCK, -0.25, 0.25);
                     try {
                         mSetLiftSpeed.invoke(mount, liftCmd);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                         liftCmd = Float.NaN;
                     }
                 }
@@ -2444,7 +2456,7 @@ public final class MaidMountCompat {
                 mSetMouseY(mount, 0.0f);
                 try {
                     mProcessInput.invoke(mount, (short) 0); // 清输入位（引擎那两条 setPower(0) 分支别打架）
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
                 forceHeadingOnto(mount, err);            // 机头对准目标（与直升机同源）
                 // 俯仰：按高度差给目标角（负 = 抬头爬升 / 正 = 低头前飞），再直写 XRot。
@@ -2460,7 +2472,7 @@ public final class MaidMountCompat {
                 boolean grounded;
                 try {
                     grounded = mount.m_20096_(); // onGround
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     grounded = false;
                 }
                 float tomPitch;
@@ -2472,7 +2484,7 @@ public final class MaidMountCompat {
                 }
                 try {
                     mount.m_146926_(tomPitch);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
                 float tomPower = 0.0f;
                 if (horiz > FLIGHT_ARRIVE) {
@@ -2484,7 +2496,7 @@ public final class MaidMountCompat {
                 if (mSetPower != null) {
                     try {
                         mSetPower.invoke(mount, tomPower);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
                 int tBrake = flightBrake(mount, shouldHardBrake(horiz, horizontalSpeed(mount), fighting), fighting);
@@ -2532,7 +2544,7 @@ public final class MaidMountCompat {
                 boolean grounded;
                 try {
                     grounded = mount.m_20096_();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     grounded = false;
                 }
                 // 只有"确实要去某处"才起飞助跑：目标就在脚下同高度时不该硬把炮艇从地面拔起来。
@@ -2542,7 +2554,7 @@ public final class MaidMountCompat {
                 long vnow = 0L;
                 try {
                     vnow = mount.m_9236_() == null ? 0L : mount.m_9236_().m_46467_();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
                 Long climbUntil = AIRCRAFT_CLIMB.get(mount.m_20148_());
                 boolean climbing = climbUntil != null && vnow < climbUntil;
@@ -2559,12 +2571,12 @@ public final class MaidMountCompat {
                     if (rw == null) {
                         try {
                             mProcessInput.invoke(mount, (short) 0); // 清输入位（不滑跑）
-                        } catch (Throwable ignored) {
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                         }
                         if (mSetPower != null) {
                             try {
                                 mSetPower.invoke(mount, 0.0f);
-                            } catch (Throwable ignored) {
+                            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                             }
                         }
                         refuseTakeoff(mount, maid);
@@ -2591,7 +2603,7 @@ public final class MaidMountCompat {
                     // ② 抬头（负 = 机头朝上）：让引擎的 viewVector 带上竖直分量。
                     try {
                         mount.m_146926_(-AIRCRAFT_TAKEOFF_PITCH);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                     // ② 直接补竖直速度，顶掉"必须助跑"的物理死锁。
                     //    地面摩擦 f≈0.497、重力 0.06 ⇒ add=0.25 时稳态 v≈0.128 格/拍（≈2.5 格/秒）。
@@ -2600,7 +2612,7 @@ public final class MaidMountCompat {
                         Vec3 tdm = mount.m_20184_();
                         mount.m_20256_(new net.minecraft.world.phys.Vec3(tdm.f_82479_,
                                 Math.max(tdm.f_82480_, 0.0) + AIRCRAFT_TAKEOFF_LIFT, tdm.f_82481_));
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                     // ③ 推力拉满：先把 engineStart 点着（power > 0.2 → engineStartOver，:884，
                     //    那是 loiter 的另一个前置条件 baseTick:3845）。
@@ -2611,7 +2623,7 @@ public final class MaidMountCompat {
                     if (mSetPower != null) {
                         try {
                             mSetPower.invoke(mount, 1.0f);
-                        } catch (Throwable ignored) {
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                         }
                     }
                     // ④ 【实测七百七十九·点2】把引擎自己的 loiter 明确关掉：779 起固定翼的航向/
@@ -2638,7 +2650,7 @@ public final class MaidMountCompat {
                     aircraftClimbAssist(mount, dy);
                     try {
                         mount.m_146926_(-AIRCRAFT_TAKEOFF_PITCH);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                     // 【实测七百七十八·点2】爬升要的是"升力 ≥ 重力"，而升力 ∝ 速度 → 推力拉满
                     // （旧版只顶到 1.0：AC-130H 在 power=1 的空中稳态速度只有 ~0.7，
@@ -2646,7 +2658,7 @@ public final class MaidMountCompat {
                     aircraftPowerAtLeast(mount, AIRCRAFT_GROUND_MAX_POWER);
                     try {
                         mProcessInput.invoke(mount, (short) (0x004 | 0x100));
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                     aircraftLoiterOff(mount);
                     // 【实测七百八十】爬升档也留一道硬上限（{@link #AIRCRAFT_HMAX}）：这一段推力是
@@ -2707,7 +2719,7 @@ public final class MaidMountCompat {
                 boolean grounded;
                 try {
                     grounded = mount.m_20096_();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     grounded = false;
                 }
                 if (grounded) {
@@ -2715,12 +2727,12 @@ public final class MaidMountCompat {
                     // （起飞助跑那一档只对"确实要去某处"开，见上面 wantAir）。
                     try {
                         mProcessInput.invoke(mount, (short) 0);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                     if (mSetPower != null) {
                         try {
                             mSetPower.invoke(mount, 0.0f);
-                        } catch (Throwable ignored) {
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                         }
                     }
                     logDrive(mount, "固定翼待命（贴地、目标就在脚下，不强行起飞）");
@@ -2750,7 +2762,7 @@ public final class MaidMountCompat {
                         + (terrain ? "→" + (long) dySafe : ""));
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -2769,7 +2781,7 @@ public final class MaidMountCompat {
                 return 0.0;
             }
             return mount.m_20184_().f_82480_;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0.0;
         }
     }
@@ -2785,7 +2797,7 @@ public final class MaidMountCompat {
             }
             Vec3 dm = mount.m_20184_();
             return Math.sqrt(dm.f_82479_ * dm.f_82479_ + dm.f_82481_ * dm.f_82481_);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0.0;
         }
     }
@@ -2859,7 +2871,7 @@ public final class MaidMountCompat {
                 }
             }
             return lift;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0.0;
         }
     }
@@ -2879,7 +2891,7 @@ public final class MaidMountCompat {
             AVOID_AT.put(id, now);
             com.maidsmart.tool.PromaidLog.log("载具避险", describeKind(mount)
                     + " 贴地/前方有方块 → 期望高度抬升 " + fmt2(lift) + " 格越过");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -2911,7 +2923,7 @@ public final class MaidMountCompat {
                     return fmt2(n.doubleValue());
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return "?";
     }
@@ -2925,7 +2937,7 @@ public final class MaidMountCompat {
                     return String.valueOf(Math.round(n.doubleValue()));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return "?";
     }
@@ -3152,7 +3164,7 @@ public final class MaidMountCompat {
             RUNWAY_CACHE.put(id, new double[]{bestYaw, bestRelief, now + AIRCRAFT_RUNWAY_CACHE_TICKS,
                     ok ? 1.0 : 0.0});
             return ok ? new double[]{bestYaw, bestRelief} : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -3166,7 +3178,7 @@ public final class MaidMountCompat {
                     return y;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return Integer.MIN_VALUE;
     }
@@ -3194,9 +3206,9 @@ public final class MaidMountCompat {
                             "[女仆助手] 环境不允许起飞：周围没有足够平整的助跑道（落差要 ≤ "
                                     + (long) AIRCRAFT_RUNWAY_MAX_RELIEF + " 格）"));
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3322,7 +3334,7 @@ public final class MaidMountCompat {
         }
         try {
             mSetLoiterActive.invoke(mount, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3352,7 +3364,7 @@ public final class MaidMountCompat {
         }
         try {
             mProcessInput.invoke(mount, bits);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
         // ② 滚转：直接写滚转角（舵量上限的唯一来源，见 780 那段的推导）
@@ -3401,7 +3413,7 @@ public final class MaidMountCompat {
             if (Math.abs(step) > 1.0E-4f) {
                 mSetRoll.invoke(mount, cur + step);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3478,7 +3490,7 @@ public final class MaidMountCompat {
             //    它的量级小、只做阻尼，主升力仍来自 ①。
             double step = clamp(errV, -AIRCRAFT_VY_STEP, AIRCRAFT_VY_STEP);
             mount.m_20256_(new Vec3(dm.f_82479_, clamp(dm.f_82480_ + step, -0.30, 0.30), dm.f_82481_));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3549,7 +3561,7 @@ public final class MaidMountCompat {
     private static long gameTimeOf(Entity e) {
         try {
             return e.m_9236_().m_46467_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0L;
         }
     }
@@ -3558,7 +3570,7 @@ public final class MaidMountCompat {
     private static void beatAircraftLanding(Entity mount) {
         try {
             AIRCRAFT_LAND_BEAT.put(mount.m_20148_(), gameTimeOf(mount));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3581,7 +3593,7 @@ public final class MaidMountCompat {
             AIRCRAFT_LAND_BEAT.remove(id);
             AIRCRAFT_LAND_SPOT.remove(id);
             AIRCRAFT_LAND_SPOT_AT.remove(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3623,7 +3635,7 @@ public final class MaidMountCompat {
                 if (mSetPower != null) {
                     try {
                         mSetPower.invoke(mount, 0.0f);   // 贴地怠速，免得一直往前蹭
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
                 logDrive(mount, "固定翼降落完成：已接地 → 停住不动（" + why + "）");
@@ -3659,7 +3671,7 @@ public final class MaidMountCompat {
             }
             try {
                 mProcessInput.invoke(mount, bits);   // **不给前进/冲刺位**：让阻力把她减速
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             }
             aircraftBank(mount, err);
             // 收油门到怠速：这是减速的唯一来源。固定翼的升力 ∝ 速度，减速=下沉，
@@ -3667,7 +3679,7 @@ public final class MaidMountCompat {
             if (mSetPower != null) {
                 try {
                     mSetPower.invoke(mount, AIRCRAFT_LAND_IDLE_POWER);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             boolean flare = aboveGround <= AIRCRAFT_LAND_FLARE_ALT;
@@ -3698,7 +3710,7 @@ public final class MaidMountCompat {
                     + " 竖直速度=" + fmt2(verticalSpeed(mount))
                     + " 水平速度=" + fmt2(horizontalSpeed(mount)));
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -3712,7 +3724,7 @@ public final class MaidMountCompat {
             java.util.UUID id = mount.m_20148_();
             AIRCRAFT_LAND_SPOT.remove(id);
             AIRCRAFT_LAND_SPOT_AT.remove(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3723,7 +3735,7 @@ public final class MaidMountCompat {
         }
         try {
             mSetCrash.invoke(mount, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3741,7 +3753,7 @@ public final class MaidMountCompat {
         long now = 0L;
         try {
             now = sl.m_46467_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         Vec3 cached = AIRCRAFT_LAND_SPOT.get(id);
         Long at = AIRCRAFT_LAND_SPOT_AT.get(id);
@@ -3780,7 +3792,7 @@ public final class MaidMountCompat {
     private static int groundAt(net.minecraft.server.level.ServerLevel sl, int x, int z) {
         try {
             return sl.m_6924_(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return Integer.MIN_VALUE;
         }
     }
@@ -3829,7 +3841,7 @@ public final class MaidMountCompat {
         try {
             double floor = aircraftTerrainFloor(mount, err);
             return floor == Double.NEGATIVE_INFINITY ? carrotY : Math.max(carrotY, floor);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return carrotY;
         }
     }
@@ -3887,7 +3899,7 @@ public final class MaidMountCompat {
         int g = surfaceY(sl, bx, from, bz);
         try {
             g = sl.m_6924_(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, bx, bz);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         // 【实测七百八十一】净空 = CLEAR + 固定翼专属 ALT_BONUS（只这条路用，别处不碰）。
         return g == Integer.MIN_VALUE ? Double.NEGATIVE_INFINITY
@@ -3917,7 +3929,7 @@ public final class MaidMountCompat {
             double step = clamp(want - dm.f_82480_, -AIRCRAFT_VY_STEP, AIRCRAFT_VY_STEP);
             mount.m_20256_(new net.minecraft.world.phys.Vec3(dm.f_82479_,
                     clamp(dm.f_82480_ + step, -0.30, 0.30), dm.f_82481_));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -3928,7 +3940,7 @@ public final class MaidMountCompat {
                 return "?";
             }
             return String.valueOf(((Number) mGetEnergy.invoke(mount)).intValue());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return "?";
         }
     }
@@ -4034,7 +4046,7 @@ public final class MaidMountCompat {
             } else if (mMouseInput != null) {
                 mMouseInput.invoke(mount, (double) v, 0.0d);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -4046,7 +4058,7 @@ public final class MaidMountCompat {
             } else if (mMouseInput != null) {
                 mMouseInput.invoke(mount, 0.0d, (double) v);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -4075,7 +4087,7 @@ public final class MaidMountCompat {
             }
             Vec3 dm = mount.m_20184_();
             mount.m_20256_(new net.minecraft.world.phys.Vec3(dm.f_82479_ * retain, dm.f_82480_, dm.f_82481_ * retain));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -4099,7 +4111,7 @@ public final class MaidMountCompat {
             }
             double k = max / hs;
             mount.m_20256_(new net.minecraft.world.phys.Vec3(dm.f_82479_ * k, dm.f_82480_, dm.f_82481_ * k));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -4164,7 +4176,7 @@ public final class MaidMountCompat {
             }
             capHorizontal(mount, FLIGHT_HMAX * FLIGHT_SPEED_CAP_SLACK);
             flags |= BRAKE_FLAG_CAP;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return flags;
     }
@@ -4183,7 +4195,7 @@ public final class MaidMountCompat {
         try {
             capHorizontal(mount, AIRCRAFT_HMAX);
             return BRAKE_FLAG_CAP;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0;
         }
     }
@@ -4218,7 +4230,7 @@ public final class MaidMountCompat {
             }
             double k = cap / hs;
             mount.m_20256_(new Vec3(dm.f_82479_ * k, dm.f_82480_, dm.f_82481_ * k));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return BRAKE_FLAG_CAP;
     }
@@ -4248,7 +4260,7 @@ public final class MaidMountCompat {
             if (now < floor) {
                 mSetPower.invoke(mount, floor);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -4301,11 +4313,11 @@ public final class MaidMountCompat {
             if (mSetServerYaw != null) {
                 try {
                     mSetServerYaw.invoke(mount, yaw);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -4355,7 +4367,7 @@ public final class MaidMountCompat {
                 return cur;
             }
             return held.floatValue();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0.0f;
         }
     }
@@ -4366,7 +4378,7 @@ public final class MaidMountCompat {
             if (mount != null) {
                 HOVER_YAW.remove(mount.m_20148_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -4414,7 +4426,7 @@ public final class MaidMountCompat {
             try {
                 Vec3 dm = mount.m_20184_();
                 speed = Math.sqrt(dm.f_82479_ * dm.f_82479_ + dm.f_82481_ * dm.f_82481_);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             }
             float cap = (float) Math.max(CAR_HEAD_MIN_STEP, CAR_HEAD_SPEED_GAIN * speed);
             cap = Math.min(cap, CAR_HEAD_MAX_STEP);
@@ -4426,11 +4438,11 @@ public final class MaidMountCompat {
             if (mSetServerYaw != null) {
                 try {
                     mSetServerYaw.invoke(mount, yaw);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -4500,7 +4512,7 @@ public final class MaidMountCompat {
             }
             BRAKE_PULSE.put(mount.m_20148_(), v);
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -4531,7 +4543,7 @@ public final class MaidMountCompat {
                     ensureMagazineLoaded(mount, gs);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -4568,7 +4580,7 @@ public final class MaidMountCompat {
                     if (s instanceof Entity e) {
                         supplier = e;
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             final Entity sup = supplier;
@@ -4589,7 +4601,7 @@ public final class MaidMountCompat {
             for (int i = 0; i < n; i++) {
                 try {
                     mChangeAmmoConsumer.invoke(gd, i, sup);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     continue;
                 }
                 if (ammoAvailable(gd, sup)) {
@@ -4632,7 +4644,7 @@ public final class MaidMountCompat {
                 return true;
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -4674,7 +4686,7 @@ public final class MaidMountCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -4692,7 +4704,7 @@ public final class MaidMountCompat {
                     return wl.size();
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return 0;
     }
@@ -4701,7 +4713,7 @@ public final class MaidMountCompat {
         try {
             java.lang.reflect.Method m = computed.getClass().getMethod("seats");
             return m.invoke(computed);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -4713,7 +4725,7 @@ public final class MaidMountCompat {
             }
             java.lang.reflect.Method m = seatInfo.getClass().getMethod("weapons");
             return m.invoke(seatInfo);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -4726,7 +4738,7 @@ public final class MaidMountCompat {
     private static Object listGet(Object list, int i) {
         try {
             return list instanceof java.util.List<?> l && i >= 0 && i < l.size() ? l.get(i) : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -4746,7 +4758,7 @@ public final class MaidMountCompat {
                 return null;
             }
             return mGetGunDataName.invoke(mount, gunName);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -4763,7 +4775,7 @@ public final class MaidMountCompat {
                     return i;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return -1;
     }
@@ -4834,7 +4846,7 @@ public final class MaidMountCompat {
                     return g;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return null;
     }
@@ -4879,7 +4891,7 @@ public final class MaidMountCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return out;
     }
@@ -4931,7 +4943,7 @@ public final class MaidMountCompat {
                     best = Math.max(best, n.doubleValue());
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return best;
     }
@@ -4943,7 +4955,7 @@ public final class MaidMountCompat {
                 return false;
             }
             return mGetNthEntity.invoke(mount, seat) instanceof net.minecraft.world.entity.player.Player;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -4956,7 +4968,7 @@ public final class MaidMountCompat {
             }
             Object v = mGetGunNameAtSeat.invoke(mount, seat);
             return v instanceof String s && !s.isEmpty() ? s : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -4972,7 +4984,7 @@ public final class MaidMountCompat {
             }
             Object idx = ctrlIdx.invoke(mount);
             return idx instanceof Integer i ? i : -1;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return -1;
         }
     }
@@ -4987,7 +4999,7 @@ public final class MaidMountCompat {
             }
             Object v = mGetShootPosSeat.invoke(mount, seat, 1.0f);
             return v instanceof Vec3 vec ? vec : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -5003,7 +5015,7 @@ public final class MaidMountCompat {
                 return;
             }
             ensureGunLoaded(mount, mGetGunDataSeat.invoke(mount, seat));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5017,7 +5029,7 @@ public final class MaidMountCompat {
                 return;
             }
             ensureGunLoaded(mount, gunDataOf(mount, gun));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5040,7 +5052,7 @@ public final class MaidMountCompat {
                     if (s instanceof Entity e) {
                         supplier = e;
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             if (mGunCurrentAmmo != null) {
@@ -5050,7 +5062,7 @@ public final class MaidMountCompat {
                 }
             }
             mGunReloadAmmo.invoke(gd, supplier, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5099,7 +5111,7 @@ public final class MaidMountCompat {
             if (cur < mag) {
                 mIntValueSet.invoke(ammoVal, mag);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5126,7 +5138,7 @@ public final class MaidMountCompat {
             if (cur < FORCE_BACKUP_AMMO) {
                 mIntValueSet.invoke(bv, FORCE_BACKUP_AMMO);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5167,7 +5179,7 @@ public final class MaidMountCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5191,7 +5203,7 @@ public final class MaidMountCompat {
             if (mVehicleGetAmmo != null) {
                 sb.append("车侧弹量=").append(mVehicleGetAmmo.invoke(mount, gd)).append(' ');
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         sb.append("ammo=").append(intValueText(fGunAmmo, gd, mIntValueGet));
         sb.append(" 后备=").append(intValueText(fGunBackupAmmoCount, gd, mIntValueGet));
@@ -5199,13 +5211,13 @@ public final class MaidMountCompat {
             if (mGunReloading != null) {
                 sb.append(" 装填中=").append(Boolean.TRUE.equals(mGunReloading.invoke(gd)));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         try {
             if (mGunCharging != null) {
                 sb.append(" 蓄力中=").append(Boolean.TRUE.equals(mGunCharging.invoke(gd)));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         sb.append(" 拉栓=").append(boolValueText(fGunBoltSub, fBoltNeeded, gd, mBoolValueGet));
         sb.append(" 过热=").append(boolValueText(fGunOverHeat, null, gd, mBoolValueGet));
@@ -5214,7 +5226,7 @@ public final class MaidMountCompat {
             if (mGunCanShoot != null) {
                 sb.append(" canShoot=").append(Boolean.TRUE.equals(mGunCanShoot.invoke(gd, supplier)));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return sb.toString();
     }
@@ -5230,7 +5242,7 @@ public final class MaidMountCompat {
             }
             Object n = get.invoke(v);
             return n instanceof Number num ? String.valueOf(num.intValue()) : "?";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return "?";
         }
     }
@@ -5249,7 +5261,7 @@ public final class MaidMountCompat {
                 return "?";
             }
             return String.valueOf(get.invoke(v));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return "?";
         }
     }
@@ -5265,7 +5277,7 @@ public final class MaidMountCompat {
             }
             Object n = get.invoke(v);
             return n instanceof Number num ? fmt2(num.doubleValue()) : "?";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return "?";
         }
     }
@@ -5332,7 +5344,7 @@ public final class MaidMountCompat {
                 }
             }
             logGunDry(mount, gun);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5345,7 +5357,7 @@ public final class MaidMountCompat {
                     return e;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return mount;
     }
@@ -5382,7 +5394,7 @@ public final class MaidMountCompat {
             for (int i = 0; i < n; i++) {
                 try {
                     mChangeAmmoConsumer.invoke(gd, i, supplier);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     continue;
                 }
                 if (ammoAvailable(gd, supplier)) {
@@ -5394,10 +5406,10 @@ public final class MaidMountCompat {
             if (orig >= 0) {
                 try {
                     mChangeAmmoConsumer.invoke(gd, orig, supplier); // 还原：不替玩家改选中的弹种
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -5417,7 +5429,7 @@ public final class MaidMountCompat {
             ADRY_AT.put(key, now);
             com.maidsmart.tool.PromaidLog.log("模组坐骑·缺弹", describeKind(mount)
                     + " 炮「" + gun + "」弹匣空、全部弹种都换不出余弹（车容器与她背包都没有对得上的弹）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5495,14 +5507,14 @@ public final class MaidMountCompat {
                 try {
                     mTurretAutoAimFromVector.invoke(mount, desired);
                     aimed = true;
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             if (mPassengerWeaponAutoAimFromVector != null && stationMob) {
                 try {
                     mPassengerWeaponAutoAimFromVector.invoke(mount, desired);
                     aimed = true;
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             if (!aimed) {
@@ -5515,7 +5527,7 @@ public final class MaidMountCompat {
                 return false; // 确实没有可瞄的炮 → 交回旧行为
             }
             return alignedWith(mount, gun, desired);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -5557,7 +5569,7 @@ public final class MaidMountCompat {
             return Boolean.TRUE.equals(mHasTurret == null ? null : mHasTurret.invoke(mount))
                     || Boolean.TRUE.equals(mHasWeaponStation == null ? null
                             : mHasWeaponStation.invoke(mount));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -5589,7 +5601,7 @@ public final class MaidMountCompat {
             }
             AIM_STALL.put(id, v);
             return v;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0;
         }
     }
@@ -5604,7 +5616,7 @@ public final class MaidMountCompat {
             }
             double dot = clamp(cur.m_82541_().m_82554_(desired.m_82541_()), -1.0, 1.0);
             return Math.toDegrees(Math.acos(dot));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return -1.0;
         }
     }
@@ -5653,7 +5665,7 @@ public final class MaidMountCompat {
                     + " 夹角=" + (long) deg + "°"
                     + " 累计未对准=" + (stall == null ? 0 : stall) + "拍"
                     + (perGun.length() == 0 ? "" : " 逐炮=" + perGun));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -5669,7 +5681,7 @@ public final class MaidMountCompat {
             double dot = clamp(a.m_82554_(b), -1.0, 1.0);
             double deg = Math.toDegrees(Math.acos(dot));
             return deg <= AIM_ALIGN_DEG;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -5721,7 +5733,7 @@ public final class MaidMountCompat {
                 double g = target.m_21051_(
                         net.minecraft.world.entity.ai.attributes.Attributes.f_22276_).m_22135_();
                 targetVel = targetVel.m_82492_(0.0, g, 0.0);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             }
             if (target instanceof net.minecraft.world.entity.player.Player) {
                 targetVel = targetVel.m_82520_(2.0, 1.0, 2.0);
@@ -5739,7 +5751,7 @@ public final class MaidMountCompat {
                 }
             }
             return out;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -5752,7 +5764,7 @@ public final class MaidMountCompat {
     private static Vec3 lastDesired(Entity mount) {
         try {
             return mount == null ? null : LAST_DESIRED.get(mount.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -5768,7 +5780,7 @@ public final class MaidMountCompat {
             }
             Object v = mGetShootPosName.invoke(mount, gun, 1.0f);
             return v instanceof Vec3 vec ? vec : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -5781,7 +5793,7 @@ public final class MaidMountCompat {
             }
             Object v = mGetShootVecName.invoke(mount, gun, 1.0f);
             return v instanceof Vec3 vec ? vec : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -5793,7 +5805,7 @@ public final class MaidMountCompat {
             if (v instanceof Number n && n.doubleValue() > 0.0) {
                 return n.doubleValue();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return 20.0;
     }
@@ -5805,7 +5817,7 @@ public final class MaidMountCompat {
             if (v instanceof Number n && n.doubleValue() > 0.0) {
                 return n.doubleValue();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return 0.05;
     }
@@ -5861,7 +5873,7 @@ public final class MaidMountCompat {
             }
             mVehicleShootByName.invoke(mount, maid, use, target.m_20148_(), null);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -5946,7 +5958,7 @@ public final class MaidMountCompat {
                     if (s instanceof Entity e) {
                         supplier = e;
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             // 没弹/没拉栓 → 交回原路：它会去装弹 / 换一个"有弹的模式"（ensureAmmo/ensureUsableAmmoMode）。
@@ -5967,7 +5979,7 @@ public final class MaidMountCompat {
             mGunDataShootParams.invoke(gd, params);
             sendVehicleShootFx(mount, maid, use);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -5981,7 +5993,7 @@ public final class MaidMountCompat {
                     return n.doubleValue();
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return 0.0;
     }
@@ -5999,7 +6011,7 @@ public final class MaidMountCompat {
             }
             Object msg = ctorVehicleShootMsg.newInstance(maid.m_20148_(), mount.m_20148_(), 0, gun);
             mSendPacketToAll.invoke(null, msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6029,7 +6041,7 @@ public final class MaidMountCompat {
             if (mSetAiWeaponUUID != null && isControllerMob(mount, mHasWeaponStation, mGetWeaponCtrlIdx)) {
                 mSetAiWeaponUUID.invoke(mount, uuid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6050,7 +6062,7 @@ public final class MaidMountCompat {
             }
             Object nth = mGetNthEntity == null ? null : mGetNthEntity.invoke(mount, idx);
             return nth instanceof net.minecraft.world.entity.Mob;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -6083,7 +6095,7 @@ public final class MaidMountCompat {
                 return false; // 玩家在这个位上手动瞄 → 让开
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -6126,7 +6138,7 @@ public final class MaidMountCompat {
             NOSE_AIM.put(mount.m_20148_(), new double[]{wantYaw, wantPitch,
                     (double) (NOW_TICK + NOSE_AIM_TTL_TICKS)});
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -6164,12 +6176,12 @@ public final class MaidMountCompat {
             if (mSetServerYaw != null) {
                 try {
                     mSetServerYaw.invoke(mount, yaw);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             mSetMouseX(mount, 0.0f); // 清掉飞行档刚写的鼠标通道，免得它这一拍再转一点与我们对冲
             mSetMouseY(mount, 0.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6208,7 +6220,7 @@ public final class MaidMountCompat {
     public static boolean ammoFeedEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AMMO_FEED.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return true;
         }
     }
@@ -6308,7 +6320,7 @@ public final class MaidMountCompat {
                 logCreativeAmmo(mount);
             }
             return moved;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0;
         }
     }
@@ -6371,7 +6383,7 @@ public final class MaidMountCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return out;
     }
@@ -6383,7 +6395,7 @@ public final class MaidMountCompat {
                 return null;
             }
             return mConsumerStack.invoke(consumer);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -6392,7 +6404,7 @@ public final class MaidMountCompat {
     private static net.minecraftforge.items.IItemHandler availableInv(EntityMaid maid) {
         try {
             return maid.getAvailableBackpackInv();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -6431,7 +6443,7 @@ public final class MaidMountCompat {
                 }
                 moved++;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return moved;
     }
@@ -6503,7 +6515,7 @@ public final class MaidMountCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -6519,7 +6531,7 @@ public final class MaidMountCompat {
         try {
             return stack != null && !stack.m_41619_()
                     && stack.m_41720_().getClass().getName().contains("CreativeAmmoBoxItem");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -6535,7 +6547,7 @@ public final class MaidMountCompat {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -6560,7 +6572,7 @@ public final class MaidMountCompat {
                 }
                 return false; // 引擎的判据就是权威（含"乘客手持盒 + 车型开关"那一支）
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         try {
             if (mGetInventory != null) {
@@ -6569,7 +6581,7 @@ public final class MaidMountCompat {
                     return containerHasCreativeAmmoBox(handler);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -6589,7 +6601,7 @@ public final class MaidMountCompat {
             com.maidsmart.tool.PromaidLog.log("创造弹药盒", describeKind(mount)
                     + " 车容器里有创造模式弹药盒 → 全车武器按\u201c无限弹\u201d算"
                     + "（SWB 自己的判据 InventoryTool.hasCreativeAmmoBox：不消耗、也不用再搬实弹）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6617,7 +6629,7 @@ public final class MaidMountCompat {
             com.maidsmart.tool.PromaidLog.log("无限弹开炮", describeKind(mount)
                     + " 检测到创造模式弹药盒 → 强制允许开炮"
                     + "（弹匣/后备弹写足 + 清装填·拉栓·蓄力 + 过热度归零，不走任何缺弹审查）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6645,7 +6657,7 @@ public final class MaidMountCompat {
             }
             com.maidsmart.tool.PromaidLog.log("无限弹受阻", describeKind(mount)
                     + " 炮「" + gun + "」已按平弹量/状态位，canShoot 仍为假：" + shootGateText(mount, gd, supplier));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6657,7 +6669,7 @@ public final class MaidMountCompat {
     private static Object playerAmmoTypeOf(Object consumer) {
         try {
             return mConsumerPlayerAmmoType == null ? null : mConsumerPlayerAmmoType.invoke(consumer);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -6676,7 +6688,7 @@ public final class MaidMountCompat {
             }
             com.maidsmart.tool.PromaidLog.log("模组坐骑·装弹", describeKind(mount)
                     + " 女仆把对得上的子弹搬进载具弹药容器：+" + moved + " 发");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6761,7 +6773,7 @@ public final class MaidMountCompat {
                 // 多炮齐射（本类）与它是并行关系，主炮偶尔会两侧各打一发（RPM 节流后不失控）。
                 try {
                     maid.m_6710_(null);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
                 // 【实测七百二十四】再把目标写进炮塔/武器位的 **AI 目标 UUID**——车自己那套
                 // **瞄准**读的是它（它只瞄、不开火，与我们算的是同一个解，互补不冲突）。
@@ -6874,10 +6886,10 @@ public final class MaidMountCompat {
                     com.maidsmart.goety.MaidGoetyCompat.openPriorityGate(mob);
                     mob.m_6710_(target);
                     logAttackGeneric(mount, target);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6892,11 +6904,11 @@ public final class MaidMountCompat {
                     return le;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         try {
             return maid.m_5448_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -6915,7 +6927,7 @@ public final class MaidMountCompat {
                 int st = dragonStage(e);
                 return "冰火传说龙" + (st > 0 ? "(阶段" + st + ")" : "");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return "";
     }
@@ -6946,7 +6958,7 @@ public final class MaidMountCompat {
                 LOG_AT.clear(); // 兜底：表不会无限涨
             }
             com.maidsmart.tool.PromaidLog.log("模组坐骑", describeKind(mount) + " " + detail);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6974,7 +6986,7 @@ public final class MaidMountCompat {
             com.maidsmart.tool.PromaidLog.log("模组坐骑·炮位", describeKind(mount)
                     + " 炮塔目标=" + (target == null ? "无"
                             : String.valueOf(target.m_6095_()).replace("entity.minecraft.", "")));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -7093,7 +7105,7 @@ public final class MaidMountCompat {
                         && propNumber(gd, fGunPropNormalReload) <= 0.0
                         && propNumber(gd, fGunPropHeatPerShoot) <= 0.0;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
         if (GFIRE_NODATA.size() > 512) {
@@ -7108,7 +7120,7 @@ public final class MaidMountCompat {
         try {
             Object v = mGunGetProp.invoke(gd, prop.get(null));
             return v instanceof Number n ? n.doubleValue() : 0.0;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 0.0;
         }
     }
@@ -7134,7 +7146,7 @@ public final class MaidMountCompat {
                     + " 炮「" + gun + "」的 vehicle json 没写射速数据（RPM/弹匣/装填/热度全缺，"
                     + "引擎 RPM 默认 " + ENGINE_DEFAULT_RPM + " 会让它 0.1 秒一发）→ 兜底 "
                     + ticks + " 拍/发（" + fmt2(ticks / 20.0) + " 秒）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -7147,7 +7159,7 @@ public final class MaidMountCompat {
                     rpm = i;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         int t = (int) Math.ceil(1200.0 / Math.max(1, rpm));
         t = Math.max(1, Math.min(t, 1200));
@@ -7201,7 +7213,7 @@ public final class MaidMountCompat {
                     cycle = (int) Math.ceil(load / (double) mag);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         if (GFIRE_CYCLE.size() > 512) {
             GFIRE_CYCLE.clear(); // 兜底：表不会无限涨（与其它几张表同口径）
@@ -7229,7 +7241,7 @@ public final class MaidMountCompat {
             }
             GFIRE_TICK.put(key, v);
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -7252,7 +7264,7 @@ public final class MaidMountCompat {
             com.maidsmart.tool.PromaidLog.log("模组坐骑·开火", describeKind(mount)
                     + " 开火[" + guns + "] → "
                     + String.valueOf(target.m_6095_()).replace("entity.minecraft.", ""));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -7289,7 +7301,7 @@ public final class MaidMountCompat {
                     + (target == null ? "无" : String.valueOf(target.m_6095_())
                             .replace("entity.minecraft.", ""))
                     + " 它自己=" + mine);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -7324,7 +7336,7 @@ public final class MaidMountCompat {
                     return i;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return -1;
     }
@@ -7352,10 +7364,10 @@ public final class MaidMountCompat {
                 if (maid.m_20202_() == mount) {
                     maid.m_8127_();
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             }
             return maid.m_7998_(mount, true);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return true; // 探测失败不拦路（她照常坐上去，只是可能开不动）
         }
     }
@@ -7410,7 +7422,7 @@ public final class MaidMountCompat {
             // ② 女仆挪进主人刚才那一座（changeSeat 要求"目标座为空 + 她已是乘客"）
             try {
                 mChangeSeat.invoke(mount, maid, maidWants);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             }
             boolean maidMoved = seatIndexOf(mount, maid) == maidWants;
             // ③ 主人重新上车。**这里必须先开一张"重上车放行条"**——
@@ -7435,7 +7447,7 @@ public final class MaidMountCompat {
             if (seatIndexOf(mount, player) != ownerWants) {
                 try {
                     mChangeSeat.invoke(mount, player, ownerWants);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             boolean ownerMoved = seatIndexOf(mount, player) == ownerWants;
@@ -7448,7 +7460,7 @@ public final class MaidMountCompat {
                 return "\u00a7a你换过来了\u00a7f（她那座没动，再按一次左击试试）";
             }
             return "\u00a7e换座只成功了一半\u00a7f（再按一次左击试试）";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
         }
     }
@@ -7482,7 +7494,7 @@ public final class MaidMountCompat {
                     return i; // 空座
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return -1;
     }
@@ -7524,11 +7536,11 @@ public final class MaidMountCompat {
             if (mChangeSeat != null) {
                 try {
                     mChangeSeat.invoke(mount, player, seat);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -7565,7 +7577,7 @@ public final class MaidMountCompat {
             }
             Entity first = mount.m_146895_();
             return first instanceof net.minecraft.world.entity.player.Player;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return false;
         }
     }
@@ -7590,7 +7602,7 @@ public final class MaidMountCompat {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
         return false;
     }
@@ -7642,7 +7654,7 @@ public final class MaidMountCompat {
             GROUND_STALL.put(id, stall);
             GROUND_SIGN.put(id, sign);
             return sign;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return 1.0;
         }
     }

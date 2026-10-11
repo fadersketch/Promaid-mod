@@ -64,7 +64,7 @@ public class IndexStoneInterruptHandler {
             boolean soulSlab = item != null && item.m_150930_(
                     com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_HAS_MAID.get());
             IndexStoneService.onMaidRecalled(maid, event.getData(), soulSlab);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneInterruptHandler", ignored);
         }
     }
 }

@@ -213,8 +213,8 @@ public final class BlueprintCatalog {
             // 实测五百六十四（PR #9 移植）：改为 getAllEntities() 遍历本维度全部实体
             // ——旧版的原点高度盒扫不到远处的女仆，Sable 也不会拒查它
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(sl)) {
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(sl)) {
                 if (!(e instanceof EntityMaid m) || BuildPlan.getBoundPlanId(m) == null) {
                     continue;
                 }
@@ -377,7 +377,7 @@ public final class BlueprintCatalog {
                     && !el.getAsString().isEmpty()) {
                 return el.getAsString();
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintCatalog", ignored);
         }
         return null;
     }
@@ -454,7 +454,7 @@ public final class BlueprintCatalog {
             }
             return steps;
         } catch (Exception e) {
-            // 实测八百三十一：把真正的解析错误留下来（旧版一律 return null，只剩
+             com.maidsmart.diag.Diag.swallow("BlueprintCatalog", e); // 实测八百三十一：把真正的解析错误留下来（旧版一律 return null，只剩
             // "格式不对" 四个字，玩家与模型都无从下手）
             LAST_JSON_ERROR = "JSON 解析失败：" + e.getClass().getSimpleName()
                     + (e.getMessage() == null ? "" : ("（" + e.getMessage() + "）"));
@@ -469,7 +469,7 @@ public final class BlueprintCatalog {
             if (name != null && !name.getAsString().isEmpty()) {
                 return name.getAsString();
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintCatalog", ignored);
         }
         return null;
     }

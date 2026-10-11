@@ -29,7 +29,7 @@ public class PromaidVoiceSoundInstance extends MaidAISoundInstance {
         try {
             // 直接覆盖 protected 音量字段（不走 mixin；只影响本实例）
             this.f_119573_ = Math.max(0.0f, volume);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidVoiceSoundInstance", ignored);
         }
     }
 
@@ -66,7 +66,7 @@ public class PromaidVoiceSoundInstance extends MaidAISoundInstance {
             float vol = (float) (double) com.maidsmart.config.MaidSmartConfig.TTS_VOLUME_MULTIPLIER.get()
                     * (float) (double) com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_VOLUME.get();
             mc.m_91106_().m_120367_(new PromaidVoiceSoundInstance(maid, data, vol));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidVoiceSoundInstance", ignored);
         }
     }
 }

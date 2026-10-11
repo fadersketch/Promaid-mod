@@ -51,7 +51,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 case "x1.5" -> 4;
                 default -> 2;
             };
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
         }
     }
 
@@ -134,7 +134,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             maid.setPos(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
             maid.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO); // 清速度防瞬移后滑移
             LAST_TELEPORT.put(maid.getUUID(), now);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
         }
     }
 
@@ -166,7 +166,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.level.block.state.BlockState under = level.getBlockState(pos.offset(0, -1, 0));
             return !under.isAir()
                     && !under.getFluidState().is(net.minecraft.tags.FluidTags.WATER);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
             return false;
         }
     }
@@ -397,7 +397,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     BuildPlan.setForeman(level, ps0, fm);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
         }
         // v1.5.121：曾恢复"进入建造 → 强制 home 模式"（v1.5.117 撤销后建造不执行：
         // 非 home 模式下 TLM MaidFollowOwnerTask 会启动，把女仆从 WORK 拉向跟随）。
@@ -933,7 +933,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                                         && prog.plannedPositions(plan)
                                                 .contains(posKey(supPos, origin));
                             }
-                        } catch (Exception ignored) {
+                        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
                         }
                         if (waitPlanSupport) {
                             // v1.5.264：支撑格区块未加载 → 延后等区块加载（252af
@@ -1402,7 +1402,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     e.remove(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
         }
         // 方块实体数据（箱子内容/告示牌文字等）
         if (beSnbt != null) {
@@ -1413,7 +1413,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     be.loadWithComponents(beTag, level.registryAccess());
                     be.setRemoved();
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
             }
         }
         // v1.5.13：每放一块输出一次动作——挥臂 + 方块放置音效（隔空建造的"手感"）
@@ -1701,7 +1701,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 return BlueprintLib.consumeBlock(maid, id) != null;
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
             return false;
         }
     }
@@ -1895,7 +1895,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     && (BlueprintBuildExecutor.isBuildingTask(maid)
                         // 指标石临时搭建（任务 uid 是 index_build，与 build 不同）同口径
                         || com.maidsmart.build.IndexStoneService.isIndexBuilding(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
             return false;
         }
     }
@@ -2019,7 +2019,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 level.setBlock(paired, state.setValue(partProp, other)
                         .setValue(net.minecraft.world.level.block.BedBlock.OCCUPIED, false), 3);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
         }
     }
 
@@ -2044,7 +2044,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         && !com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, above)) {
                     level.setBlock(above, state.setValue(halfProp, net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER), 3);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBehavior", ignored);
             }
             return;
         }

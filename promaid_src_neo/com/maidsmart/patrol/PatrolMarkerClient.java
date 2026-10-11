@@ -77,7 +77,7 @@ public final class PatrolMarkerClient {
             }
             net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                     new PatrolNetworking.MarkPatrolPointPacket());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolMarkerClient", ignored);
         }
     }
 
@@ -89,7 +89,7 @@ public final class PatrolMarkerClient {
                     + " onGround=" + mc.player.onGround()
                     + " riding=" + (mc.player.getVehicle() == null ? "否" : "是")
                     + " 手上=" + (PatrolChartKit.isChart(mc.player.getMainHandItem()) ? "主手" : "副手"));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolMarkerClient", ignored);
         }
     }
 
@@ -106,7 +106,7 @@ public final class PatrolMarkerClient {
         try {
             return PatrolChartKit.isChart(mc.player.getMainHandItem())
                     || PatrolChartKit.isChart(mc.player.getOffhandItem());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolMarkerClient", ignored);
             return false;
         }
     }

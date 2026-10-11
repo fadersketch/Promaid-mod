@@ -220,7 +220,7 @@ public final class BlueprintBlockTraits {
                     level.holderLookup(net.minecraft.core.registries.Registries.BLOCK), stateTag);
             return parsed != null && !parsed.isAir() ? parsed : null;
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("BlueprintBlockTraits", e); return null;
         }
     }
 }

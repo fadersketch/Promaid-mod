@@ -112,7 +112,7 @@ public final class BombThrow {
                 }
                 // 只改方向、不改速度大小（需求
                 h.tnt.setDeltaMovement(new Vec3(sx / sl * h.speed, sy / sl * h.speed, sz / sl * h.speed));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
             }
         }
     }
@@ -127,7 +127,7 @@ public final class BombThrow {
             }
             return maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask at
                     && at.canAttack(maid, le); // 只打「她的任务认的敌人」（与 TLM 索敌同口径）
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
             return false;
         }
     }
@@ -153,7 +153,7 @@ public final class BombThrow {
                     bestSqr = d;
                     best = le;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
             }
         }
         return best;
@@ -185,7 +185,7 @@ public final class BombThrow {
             if (max > 0.0f && maid.getHealth() / max <= BombConfig.cfgTntBurstRatio()) {
                 return Math.max(1, BombConfig.cfgTntBurstCount());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
         }
         return 1;
     }
@@ -398,11 +398,11 @@ public final class BombThrow {
             if (rl != null) {
                 return rl.toString();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
         }
         try {
             return e.getClass().getSimpleName();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
             return "未知实体";
         }
     }

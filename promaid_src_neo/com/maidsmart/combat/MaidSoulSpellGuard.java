@@ -143,7 +143,7 @@ public final class MaidSoulSpellGuard {
             tag.putString(AUTO_SAVED_NAME_TAG, com.maidsmart.tool.PromaidLog.nameOf(maid));
             item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
                     net.minecraft.world.item.component.CustomData.of(tag));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", ignored);
         }
     }
 
@@ -209,7 +209,7 @@ public final class MaidSoulSpellGuard {
                     net.minecraft.sounds.SoundSource.NEUTRAL, 0.65f, 1.0f);
             maid.discard(); // 从世界移除（收进魂符）
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", ignored);
             return false;
         }
     }

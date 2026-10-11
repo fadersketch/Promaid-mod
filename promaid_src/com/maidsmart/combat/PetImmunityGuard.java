@@ -68,8 +68,8 @@ public final class PetImmunityGuard {
             long now = server.m_129785_().iterator().next().m_46467_();
             for (net.minecraft.server.level.ServerLevel lvl : server.m_129785_()) {
                 // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-                // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }
@@ -91,11 +91,11 @@ public final class PetImmunityGuard {
                                     com.maidsmart.tool.PromaidLog.nameOf(maid),
                                     target.m_5446_() != null ? target.m_5446_().getString() : target.m_20148_());
                         }
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
     }
 
@@ -147,9 +147,9 @@ public final class PetImmunityGuard {
                                 victim.m_20148_(), vn.getString(), custom, plain);
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
     }
 
@@ -173,7 +173,7 @@ public final class PetImmunityGuard {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         try {
             var custom = target.m_7770_();
@@ -184,7 +184,7 @@ public final class PetImmunityGuard {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         try {
             var plain = target.m_7755_();
@@ -195,7 +195,7 @@ public final class PetImmunityGuard {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         try {
             if (target instanceof TamableAnimal t) {
@@ -205,7 +205,7 @@ public final class PetImmunityGuard {
                     return true; // 可驯服且持有者 = 女仆的主人（主人的宠物）
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         return false;
     }

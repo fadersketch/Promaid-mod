@@ -46,7 +46,7 @@ public final class MaidModeCompat {
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMPAT_PUPPET_BLACKLIST.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidModeCompat", ignored);
             return true;
         }
     }
@@ -63,7 +63,7 @@ public final class MaidModeCompat {
         }
         try {
             return isBlacklistedUid(String.valueOf(task.getUid()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidModeCompat", ignored);
             return false;
         }
     }
@@ -73,7 +73,7 @@ public final class MaidModeCompat {
         try {
             String name = task == null ? null : BLACKLIST.get(String.valueOf(task.getUid()));
             return name == null ? "第三方玩法模式" : name;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidModeCompat", ignored);
             return "第三方玩法模式";
         }
     }
@@ -95,7 +95,7 @@ public final class MaidModeCompat {
         try {
             IMaidTask t = maid.getTask();
             return t != null && isBlacklistedUid(String.valueOf(t.getUid()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidModeCompat", ignored);
             return false;
         }
     }

@@ -32,7 +32,7 @@ public abstract class EntityBatonMountGateMixin {
                 return;
             }
             cir.setReturnValue(false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBatonMountGateMixin", ignored);
         }
     }
 }

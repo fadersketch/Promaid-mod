@@ -78,7 +78,7 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
                 flight = com.maidsmart.combat.MaidFlightKit.isFlightTask(maid);
                 ranged = com.maidsmart.combat.MaidFlightKit.isRangedTask(maid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ReadinessTool", ignored);
         }
         sb.append("任务：").append(taskName);
         if (!taskUid.isEmpty()) {
@@ -120,7 +120,7 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
                 sb.append("\n飞行状态：滑翔中=").append(yn(com.maidsmart.combat.MaidFlightKit.isGliding(maid)))
                         .append("、滞空=").append(yn(com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ReadinessTool", ignored);
         }
 
         // ---- v1.3.0 扫帚模式（同样复用她自己的判定口径，不另写一份）----
@@ -135,7 +135,7 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
                         ? " → 齐了，可以骑扫帚开打"
                         : " → ⚠ 缺「" + bMissing + "」，缺件时她原地待命（不硬撑着乱跑）");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ReadinessTool", ignored);
         }
 
         // ---- 驻守 / 排班 / 工作锚点 ----
@@ -149,7 +149,7 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
                         .append("、睡眠=").append(pos(sp.getSleepPos()))
                         .append("（已配置=").append(yn(sp.isConfigured())).append("）");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ReadinessTool", ignored);
         }
 
         // ---- 主人侧：饥饿（喂食/喂水相关决策常要用）----
@@ -161,7 +161,7 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
             } else {
                 sb.append("\n主人：不在线/未认领");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ReadinessTool", ignored);
         }
 
         return callback.addToolResult(sb.toString(), toolId);

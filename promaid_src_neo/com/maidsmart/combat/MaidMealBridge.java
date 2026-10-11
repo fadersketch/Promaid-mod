@@ -126,7 +126,7 @@ public final class MaidMealBridge {
                 NON_CONSUMED_CD.put(cdKey(eater, live), System.currentTimeMillis() + NON_CONSUMED_CD_MS);
             }
             return consumed;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMealBridge", ignored);
             return 0;
         }
     }
@@ -152,7 +152,7 @@ public final class MaidMealBridge {
             if (eater instanceof net.minecraft.world.entity.player.Player player) {
                 return player.getCooldowns().isOnCooldown(stack.getItem());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMealBridge", ignored);
         }
         return false;
     }
@@ -177,7 +177,7 @@ public final class MaidMealBridge {
             ItemStack result = live.getItem().finishUsingItem(live, user.level(), user);
             // 物品没交还任何东西时归还**真栈本身**（它可能已被原地清空 → 调用方判空跳过）
             return result == null ? live : result;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMealBridge", ignored);
             return null;
         }
     }
@@ -188,7 +188,7 @@ public final class MaidMealBridge {
             net.minecraft.resources.ResourceLocation rl =
                     net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
             id = rl == null ? String.valueOf(stack.getItem()) : rl.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMealBridge", ignored);
             id = "?";
         }
         return eater.getUUID() + "|" + id;
@@ -244,7 +244,7 @@ public final class MaidMealBridge {
                                 + " → " + String.format("%.2f", eater.getHealth()));
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMealBridge", ignored);
             // TLM 缺这个 API（未来版本改名/移除）→ 退回"只有原版 eat"的旧行为，
             // 绝不因为补回血失败而把整条投喂链路打断（食物已经吃下去了）。
         }

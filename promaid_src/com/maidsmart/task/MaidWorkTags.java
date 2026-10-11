@@ -196,7 +196,7 @@ public final class MaidWorkTags {
             }
             // 拆除：恒独占（默认行为，不受"优先去插"开关影响）；插火把：仍受该开关管
             return brk || com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_TORCH_PRIORITY.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
             return false;
         }
     }
@@ -205,7 +205,7 @@ public final class MaidWorkTags {
     public static void setSpawnerTorch(EntityMaid maid, boolean on) {
         try {
             maid.getPersistentData().m_128379_(SPAWNER_TORCH_TAG, on);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
         }
     }
 
@@ -213,7 +213,7 @@ public final class MaidWorkTags {
     public static void setSpawnerBreak(EntityMaid maid, boolean on) {
         try {
             maid.getPersistentData().m_128379_(SPAWNER_BREAK_TAG, on);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
         }
     }
 
@@ -221,7 +221,7 @@ public final class MaidWorkTags {
     public static boolean isSpawnerBreak(EntityMaid maid) {
         try {
             return maid.getPersistentData().m_128471_(SPAWNER_BREAK_TAG);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
             return false;
         }
     }

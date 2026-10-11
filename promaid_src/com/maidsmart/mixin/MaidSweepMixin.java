@@ -90,7 +90,7 @@ public abstract class MaidSweepMixin {
             if (com.maidsmart.combat.RideBindManager.isDragonChairRider(self)) {
                 return;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSweepMixin", ignored);
         }
         ci.cancel(); // 真·空中（跳劈/坠落）→ 保持原口径
     }

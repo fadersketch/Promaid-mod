@@ -96,7 +96,7 @@ public class SmartPlaceTool implements ITool<SmartPlaceTool.Result> {
         try {
             blockId = ResourceLocation.m_135820_(blockStr); // parse（非法 id 抛异常→兜底）
         } catch (Exception ex) {
-            return callback.addToolResult("方块 id 格式不对：" + blockStr, toolId);
+             com.maidsmart.diag.Diag.swallow("SmartPlaceTool", ex); return callback.addToolResult("方块 id 格式不对：" + blockStr, toolId);
         }
         if (blockId == null) {
             return callback.addToolResult("方块 id 格式不对：" + blockStr, toolId);

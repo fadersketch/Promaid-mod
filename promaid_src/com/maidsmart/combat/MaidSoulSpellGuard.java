@@ -98,7 +98,7 @@ public final class MaidSoulSpellGuard {
         try {
             net.minecraft.nbt.CompoundTag maidInfo = item.m_41698_(MAID_INFO_TAG);
             com.maidsmart.protect.MasterDeathTeleportHandler.sanitizeDeathState(maidInfo);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", ignored);
         }
         tag.m_128473_(AUTO_SAVED_TAG);
     }
@@ -131,7 +131,7 @@ public final class MaidSoulSpellGuard {
             net.minecraft.nbt.CompoundTag tag = item.m_41784_();
             tag.m_128356_(COOLDOWN_UNTIL_TAG, until);
             tag.m_128359_(AUTO_SAVED_NAME_TAG, com.maidsmart.tool.PromaidLog.nameOf(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", ignored);
         }
     }
 
@@ -191,7 +191,7 @@ public final class MaidSoulSpellGuard {
                     net.minecraft.sounds.SoundSource.NEUTRAL, 0.65f, 1.0f);
             maid.m_146870_(); // 从世界移除（收进魂符）
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", ignored);
             return false;
         }
     }

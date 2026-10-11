@@ -61,7 +61,7 @@ public final class MaidRideKit {
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ENABLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -69,7 +69,7 @@ public final class MaidRideKit {
     public static double followDist() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_FOLLOW_DIST.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return 5.0;
         }
     }
@@ -77,7 +77,7 @@ public final class MaidRideKit {
     public static double speedScale() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_SPEED_SCALE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return 1.0;
         }
     }
@@ -108,7 +108,7 @@ public final class MaidRideKit {
             java.util.List<? extends String> list;
             try {
                 list = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_FURNITURE_BLACKLIST.get();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
                 return false;
             }
             if (list == null || list.isEmpty()) {
@@ -129,7 +129,7 @@ public final class MaidRideKit {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
         return false;
     }
@@ -142,7 +142,7 @@ public final class MaidRideKit {
             }
             Entity v = maid.getVehicle();
             return v != null && isFurniture(v);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -166,7 +166,7 @@ public final class MaidRideKit {
     public static boolean isBroom(Entity e) {
         try {
             return e instanceof com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -194,7 +194,7 @@ public final class MaidRideKit {
             }
             String tag = maid.getPersistentData().getString(TAG_RIDE_MOUNT);
             return tag != null && !tag.isEmpty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -233,7 +233,7 @@ public final class MaidRideKit {
                 return false;
             }
             return e.getPassengers().isEmpty() || e.getPassengers().get(0) == maid;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -244,7 +244,7 @@ public final class MaidRideKit {
     public static boolean noSaddlePetsEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_NO_SADDLE_PETS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return true;
         }
     }
@@ -309,7 +309,7 @@ public final class MaidRideKit {
                 }
                 c = c.getSuperclass();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
         return false;
     }
@@ -343,7 +343,7 @@ public final class MaidRideKit {
     public static boolean servantAutoEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_SERVANT_AUTO.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return true;
         }
     }
@@ -352,7 +352,7 @@ public final class MaidRideKit {
     public static boolean servantTransferEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_SERVANT_TRANSFER.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return true;
         }
     }
@@ -390,7 +390,7 @@ public final class MaidRideKit {
             inst.addTransientModifier(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
                     SERVANT_SPEED_ID, hers - base,
                     net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADD_VALUE));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
     }
 
@@ -404,7 +404,7 @@ public final class MaidRideKit {
                     inst.removeModifier(SERVANT_SPEED_ID);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
     }
 
@@ -465,7 +465,7 @@ public final class MaidRideKit {
             mount.goalSelector.setControlFlag(net.minecraft.world.entity.ai.goal.Goal.Flag.LOOK, true);
             mount.goalSelector.setControlFlag(net.minecraft.world.entity.ai.goal.Goal.Flag.JUMP, true);
             mount.goalSelector.setControlFlag(net.minecraft.world.entity.ai.goal.Goal.Flag.TARGET, true);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
     }
 
@@ -507,7 +507,7 @@ public final class MaidRideKit {
             if (!e.getPassengers().isEmpty() && e.getPassengers().get(0) != maid) {
                 return "它背上已经有人了～";
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
         return null;
     }
@@ -519,7 +519,7 @@ public final class MaidRideKit {
             if (e instanceof LivingEntity le) {
                 return le.getAttributeValue(Attributes.MOVEMENT_SPEED);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
         return -1.0;
     }
@@ -534,7 +534,7 @@ public final class MaidRideKit {
             double target = Math.max(m, d) * speedScale();
             double mod = target / m;
             return Math.max(0.3, Math.min(mod, 4.0));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return 1.0;
         }
     }
@@ -566,7 +566,7 @@ public final class MaidRideKit {
                 return false;
             }
             return !("touhou_little_maid".equals(uid.getNamespace()) && "idle".equals(uid.getPath()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -611,7 +611,7 @@ public final class MaidRideKit {
     public static double ridePhase(java.util.UUID id) {
         try {
             return id == null ? 0.0 : ((id.hashCode() & 0xFFFF) / 65536.0) * (Math.PI * 2.0);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return 0.0;
         }
     }
@@ -683,7 +683,7 @@ public final class MaidRideKit {
             }
             double k = Math.min(1.0, sepMax / len);
             return new Vec3(aim.x + ox * k, aim.y, aim.z + oz * k);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return aim;
         }
     }
@@ -703,7 +703,7 @@ public final class MaidRideKit {
                 return null; // 实测七百一十七：家具（椅子/坐垫）不算坐骑——本链路一律不碰
             }
             return v;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return null;
         }
     }
@@ -755,7 +755,7 @@ public final class MaidRideKit {
                 return false; // 现在骑的不是"已上鞍的坐骑"（船/矿车/别人的椅子一律不算）
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -780,7 +780,7 @@ public final class MaidRideKit {
                 return null;
             }
             return new Vec3(p.getX() + 0.5, p.getY(), p.getZ() + 0.5);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return null;
         }
     }
@@ -792,7 +792,7 @@ public final class MaidRideKit {
                     return m;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
         return null;
     }
@@ -819,7 +819,7 @@ public final class MaidRideKit {
                 return false;
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return false;
         }
     }
@@ -834,7 +834,7 @@ public final class MaidRideKit {
                 return null;
             }
             return owner;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
             return null;
         }
     }
@@ -887,7 +887,7 @@ public final class MaidRideKit {
                 // 渠道二：不只是会跑路的坐骑 —— 直连操纵，不依赖地面寻路
                 mob.getMoveControl().setWantedPosition(target.x, target.y, target.z, modifier);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
     }
 
@@ -901,7 +901,7 @@ public final class MaidRideKit {
             }
             mob.getNavigation().stop();
             mob.getMoveControl().setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0.0);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
     }
 
@@ -917,7 +917,7 @@ public final class MaidRideKit {
                 }
                 return String.valueOf(e.getType()).replace("entity.minecraft.", "");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
         return "?";
     }

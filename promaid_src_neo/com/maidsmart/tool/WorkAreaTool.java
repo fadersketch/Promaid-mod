@@ -108,7 +108,7 @@ public class WorkAreaTool implements ITool<WorkAreaTool.Result> {
             try {
                 maid.setHomeModeEnable(false);
             } catch (Throwable t) {
-                return callback.addToolResult("解除驻守失败：" + t, toolId);
+                 com.maidsmart.diag.Diag.swallow("WorkAreaTool", t); return callback.addToolResult("解除驻守失败：" + t, toolId);
             }
             ToolKit.bubble(maid, "好，我跟着你");
             return callback.addToolResult("已解除驻守（home 模式关闭）——她现在恢复跟随主人；"
@@ -135,7 +135,7 @@ public class WorkAreaTool implements ITool<WorkAreaTool.Result> {
             sp.setConfigured(true);
             sp.restrictTo(maid);
         } catch (Throwable t) {
-            return callback.addToolResult("设置工作区失败：" + t, toolId);
+             com.maidsmart.diag.Diag.swallow("WorkAreaTool", t); return callback.addToolResult("设置工作区失败：" + t, toolId);
         }
         ToolKit.bubble(maid, "这儿交给我");
         StringBuilder sb = new StringBuilder();

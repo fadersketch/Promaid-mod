@@ -100,7 +100,7 @@ public final class BuildHudTracker {
                 lastHadEntries = true;
                 sendToInvolved(server, entries, java.util.Set.copyOf(alive));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BuildHudTracker", ignored);
             // HUD 广播失败不影响建造
         }
     }
@@ -149,7 +149,7 @@ public final class BuildHudTracker {
                         net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p),
                         new BlueprintBookBuildPackets.BuildHudPacket(
                                 out == null ? new java.util.ArrayList<>() : out));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BuildHudTracker", ignored);
             }
         }
     }
@@ -174,7 +174,7 @@ public final class BuildHudTracker {
                 }
             }
             return new Object[]{planId, lvl, BuildPlan.planRegion(ps), owners};
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildHudTracker", ignored);
             return null;
         }
     }
@@ -196,7 +196,7 @@ public final class BuildHudTracker {
             @SuppressWarnings("unchecked")
             java.util.Set<java.util.UUID> owners = (java.util.Set<java.util.UUID>) info[3];
             return owners.contains(p.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildHudTracker", ignored);
             return false;
         }
     }

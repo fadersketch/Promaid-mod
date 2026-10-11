@@ -62,7 +62,7 @@ public abstract class MaidConfigGoetyMixin {
                     });
             this.promaid$goetyBtn = btn;
             promaid$addRenderable(screen, btn);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigGoetyMixin", ignored);
         }
     }
 
@@ -82,7 +82,7 @@ public abstract class MaidConfigGoetyMixin {
             btn.setMessage(com.maidsmart.client.MaidConfigRowLayout.text(
                     com.maidsmart.client.MaidConfigRowLayout.LABELS[2],
                     promaid$value(maid.getUUID().toString())));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigGoetyMixin", ignored);
         }
     }
 
@@ -100,7 +100,7 @@ public abstract class MaidConfigGoetyMixin {
                     net.minecraft.client.gui.components.events.GuiEventListener.class);
             m.setAccessible(true);
             m.invoke(screen, widget);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigGoetyMixin", ignored);
         }
     }
 }

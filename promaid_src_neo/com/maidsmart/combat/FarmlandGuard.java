@@ -27,7 +27,7 @@ public final class FarmlandGuard {
                     && com.maidsmart.tool.MaidScope.owned(maid)) {
                 event.setCanceled(true); // v1.2.2 实测六百：无主女仆照原版踩踏农田
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FarmlandGuard", ignored);
         }
     }
 }

@@ -114,7 +114,7 @@ public final class PinkFireSweep {
             }
             // BlockPos 本身不可变（可变的是 MutableBlockPos），直接存引用即可
             TRACKED.add(new Tracked(sl, pos, sl.m_46467_() + delay));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireSweep", ignored);
         }
     }
 

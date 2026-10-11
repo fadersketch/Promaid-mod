@@ -48,7 +48,7 @@ public final class PlayerCircle {
             }
             data(maid).putBoolean(PLAYER_TAG, true);
             data(maid).putBoolean(AUTO_TAG, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlayerCircle", ignored);
         }
     }
 
@@ -58,7 +58,7 @@ public final class PlayerCircle {
             if (maid != null) {
                 data(maid).putBoolean(PLAYER_TAG, false);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlayerCircle", ignored);
         }
     }
 
@@ -70,7 +70,7 @@ public final class PlayerCircle {
             }
             data(maid).putBoolean(AUTO_TAG, true);
             data(maid).putBoolean(PLAYER_TAG, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlayerCircle", ignored);
         }
     }
 
@@ -81,7 +81,7 @@ public final class PlayerCircle {
                 return false;
             }
             return data(maid).getBoolean(PLAYER_TAG);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlayerCircle", ignored);
             return false;
         }
     }
@@ -96,7 +96,7 @@ public final class PlayerCircle {
                 return true;
             }
             return !data(maid).getBoolean(PLAYER_TAG);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlayerCircle", ignored);
             return true;
         }
     }
@@ -112,7 +112,7 @@ public final class PlayerCircle {
                     + " 开关=" + com.maidsmart.config.MaidSmartConfig.MISC_COMPASS_PRIORITY.get()
                     + " 允许自动锚定=" + mayAutoAnchor(maid);
         } catch (Throwable t) {
-            return "读取异常：" + t;
+             com.maidsmart.diag.Diag.swallow("PlayerCircle", t); return "读取异常：" + t;
         }
     }
 }

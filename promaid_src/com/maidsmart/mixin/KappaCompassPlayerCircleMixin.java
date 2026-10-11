@@ -46,7 +46,7 @@ public abstract class KappaCompassPlayerCircleMixin {
             } else {
                 PlayerCircle.clearPlayerCircle(maid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("KappaCompassPlayerCircleMixin", ignored);
         }
     }
 }

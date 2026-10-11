@@ -261,7 +261,7 @@ public class BrewManualScreen extends Screen {
             if (p != null) {
                 com.maidsmart.brew.PotionCompat.setPotion(stack, p);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewManualScreen", ignored);
         }
         return stack;
     }
@@ -487,7 +487,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
                 mats.add(new Object[]{new ItemStack(BrewRecipeResolver.formReagent(BrewConfig.FORM_SPLASH)), 1});
                 mats.add(new Object[]{new ItemStack(BrewRecipeResolver.formReagent(BrewConfig.FORM_LINGERING)), 1});
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewManualScreen", ignored);
         }
         return mats;
     }
@@ -519,7 +519,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
             }
             return name;
         } catch (Throwable t) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("BrewManualScreen", t); return "";
         }
     }
 
@@ -537,7 +537,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
             ItemStack stack = makePotionStack(net.minecraft.core.registries.BuiltInRegistries.POTION.getKey(p).toString(), 0);
             return stack.getDisplayName().getString();
         } catch (Throwable t) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("BrewManualScreen", t); return "?";
         }
     }
 
@@ -549,7 +549,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
             }
             return new ItemStack(item).getDisplayName().getString();
         } catch (Throwable t) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("BrewManualScreen", t); return "?";
         }
     }
 

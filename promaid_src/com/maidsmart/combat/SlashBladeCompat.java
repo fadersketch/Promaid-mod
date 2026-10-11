@@ -88,6 +88,8 @@ public final class SlashBladeCompat {
     private static Method itemGetCapability;
     private static Method lazyResolve;
     private static Method setLastActionTime;
+    /** {@code CapabilitySlashBlade.BLADESTATE} 那个 capability 对象：解析一次存下，别每次挥刀再 Class.forName（TD-15）。 */
+    private static Object bladeStateCapability;
 
     private SlashBladeCompat() {
     }
@@ -114,7 +116,7 @@ public final class SlashBladeCompat {
         }
         try {
             return itemBladeClass.isInstance(stack.m_41720_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return false;
         }
     }
@@ -141,11 +143,11 @@ public final class SlashBladeCompat {
             bladeState(blade).ifPresent(state -> {
                 try {
                     setLastActionTime.invoke(state, maid.m_9236_().m_46467_());
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
                 }
             });
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return false;
         }
     }
@@ -154,15 +156,17 @@ public final class SlashBladeCompat {
 
     /** 1.20.1 取拔刀剑状态：ItemStack.getCapability(BLADESTATE) → LazyOptional.resolve() → Optional */
     private static Optional<?> bladeState(ItemStack stack) {
+        if (bladeStateCapability == null) {
+            return Optional.empty();
+        }
         try {
-            Object capability = Class.forName(CLS_CAPABILITY_BLADE).getField("BLADESTATE").get(null);
-            Object lazy = itemGetCapability.invoke(stack, capability);
+            Object lazy = itemGetCapability.invoke(stack, bladeStateCapability);
             if (lazy == null) {
                 return Optional.empty();
             }
             Object resolved = lazyResolve.invoke(lazy);
             return resolved instanceof Optional<?> opt ? opt : Optional.empty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return Optional.empty();
         }
     }
@@ -185,13 +189,15 @@ public final class SlashBladeCompat {
             Class<?> bladeState = Class.forName(
                     "mods.flammpfeil.slashblade.capability.slashblade.ISlashBladeState");
             setLastActionTime = bladeState.getMethod("setLastActionTime", long.class);
+            bladeStateCapability = Class.forName(CLS_CAPABILITY_BLADE).getField("BLADESTATE").get(null);
             boolean ok = doSlashMethod != null && smashKnockback != null
-                    && itemGetCapability != null && lazyResolve != null && setLastActionTime != null;
+                    && itemGetCapability != null && lazyResolve != null && setLastActionTime != null
+                    && bladeStateCapability != null;
             if (ok) {
                 LOGGER.info("promaid: 拔刀剑兼容已启用（空袭挥刀将触发拔刀斩）");
             }
             return ok;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SlashBladeCompat", ignored);
             return false;
         }
     }

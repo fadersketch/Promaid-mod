@@ -89,7 +89,7 @@ public final class PatrolRevocation extends SavedData {
                         net.minecraft.util.datafix.DataFixTypes.SAVED_DATA_RANDOM_SEQUENCES);
             }
             return ow.getDataStorage().computeIfAbsent(FACTORY, DATA_NAME);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
             return null;
         }
     }
@@ -104,7 +104,7 @@ public final class PatrolRevocation extends SavedData {
         try {
             PatrolRevocation s = get(server);
             return s != null && s.revoked.contains(routeId);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
             return false;
         }
     }
@@ -119,7 +119,7 @@ public final class PatrolRevocation extends SavedData {
                 return false;
             }
             return revoked(maid.level().getServer(), routeId);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
             return false;
         }
     }
@@ -142,7 +142,7 @@ public final class PatrolRevocation extends SavedData {
             if (s != null && s.revoked.add(routeId)) {
                 s.setDirty();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
         }
         n = unbindLoaded(server, routeId);
         return n;
@@ -156,7 +156,7 @@ public final class PatrolRevocation extends SavedData {
                 return 0;
             }
             for (ServerLevel lvl : server.getAllLevels()) {
-                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                         continue;
                     }
@@ -173,7 +173,7 @@ public final class PatrolRevocation extends SavedData {
                                     + "」已被玩家删除 → 就地解绑，她回到默认状态");
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
         }
         return n;
     }

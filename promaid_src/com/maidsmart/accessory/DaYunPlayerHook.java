@@ -71,11 +71,11 @@ public final class DaYunPlayerHook {
                                 player.m_20184_(),
                                 MaidSmartConfig.DAYUN_RANGE.get());
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunPlayerHook", ignored);
                     // 单个玩家出错不影响其它玩家
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunPlayerHook", ignored);
         }
     }
 
@@ -102,7 +102,7 @@ public final class DaYunPlayerHook {
     public static boolean hasDaYun(ServerPlayer player) {
         try {
             return com.maidsmart.combat.CuriosElytraCompat.hasCurio(player, DaYunPlayerHook::isDaYun);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunPlayerHook", ignored);
             return false;
         }
     }
@@ -112,7 +112,7 @@ public final class DaYunPlayerHook {
         try {
             return stack != null && !stack.m_41619_()
                     && stack.m_150930_(com.maidsmart.ProMaidMod.DA_YUN.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunPlayerHook", ignored);
             return false;
         }
     }

@@ -123,7 +123,7 @@ public final class WorldProbe {
             ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block);
             return id == null ? "" : id.getPath();
         } catch (Exception e) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("WorldProbe", e); return "";
         }
     }
 
@@ -430,7 +430,7 @@ public final class WorldProbe {
                     : ResourceLocation.parse("minecraft:" + name);
             return net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(rl);
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("WorldProbe", e); return null;
         }
     }
 
@@ -503,7 +503,7 @@ public final class WorldProbe {
             net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType());
             return key == null ? "unknown" : key.toString();
         } catch (Exception ex) {
-            return "unknown";
+             com.maidsmart.diag.Diag.swallow("WorldProbe", ex); return "unknown";
         }
     }
 

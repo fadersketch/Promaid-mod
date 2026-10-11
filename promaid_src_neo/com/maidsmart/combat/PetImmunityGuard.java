@@ -65,9 +65,9 @@ if (++scanCounter < 40) {
             long now = server.getAllLevels().iterator().next().getGameTime();
             for (net.minecraft.server.level.ServerLevel lvl : server.getAllLevels()) {
                 // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-                // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+                // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
                 // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                         continue;
                     }
@@ -89,11 +89,11 @@ if (++scanCounter < 40) {
                                     com.maidsmart.tool.PromaidLog.nameOf(maid),
                                     target.getDisplayName() != null ? target.getDisplayName().getString() : target.getUUID());
                         }
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
     }
 
@@ -145,9 +145,9 @@ if (++scanCounter < 40) {
                                 victim.getUUID(), vn.getString(), custom, plain);
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
     }
 
@@ -171,7 +171,7 @@ if (++scanCounter < 40) {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         try {
             var custom = target.getCustomName();
@@ -182,7 +182,7 @@ if (++scanCounter < 40) {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         try {
             var plain = target.getName();
@@ -193,7 +193,7 @@ if (++scanCounter < 40) {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         try {
             if (target instanceof TamableAnimal t) {
@@ -203,7 +203,7 @@ if (++scanCounter < 40) {
                     return true; // 可驯服且持有者 = 女仆的主人（主人的宠物）
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         return false;
     }

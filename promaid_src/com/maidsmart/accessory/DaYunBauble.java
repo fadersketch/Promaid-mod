@@ -64,7 +64,7 @@ public class DaYunBauble implements IMaidBauble {
                     MaidSmartConfig.DAYUN_MAX_PER_TICK.get(),
                     maid.m_20184_(),
                     MaidSmartConfig.DAYUN_RANGE.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBauble", ignored);
             // 饰品 tick 跑在女仆主 tick 里，任何异常都不能抛穿（最坏也只是这一拍不破坏）
         }
     }
@@ -106,7 +106,7 @@ public class DaYunBauble implements IMaidBauble {
         }
         try {
             return com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBauble", ignored);
             return false;
         }
     }
@@ -115,7 +115,7 @@ public class DaYunBauble implements IMaidBauble {
     public static boolean isAirRaidTask(EntityMaid maid) {
         try {
             return com.maidsmart.combat.MaidFlightKit.isFlightTask(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBauble", ignored);
             return false;
         }
     }

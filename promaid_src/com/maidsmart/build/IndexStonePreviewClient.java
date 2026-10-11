@@ -208,7 +208,7 @@ public final class IndexStonePreviewClient {
                     return p;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return null;
     }
@@ -226,7 +226,7 @@ public final class IndexStonePreviewClient {
                 double d = cam.m_20182_().m_82554_(bhr.m_82425_().m_252807_());
                 return d > NEAR_REACH ? p : null;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return null;
     }
@@ -239,7 +239,7 @@ public final class IndexStonePreviewClient {
             if (hit instanceof BlockHitResult bhr && bhr.m_6662_() == HitResult.Type.BLOCK) {
                 return cam.m_20182_().m_82554_(bhr.m_82425_().m_252807_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return Double.MAX_VALUE;
     }
@@ -325,7 +325,7 @@ public final class IndexStonePreviewClient {
                 }
                 return p;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return null;
     }
@@ -390,7 +390,7 @@ public final class IndexStonePreviewClient {
             Vec3 to = camera.m_82520_(lx + 0.5, ly + 0.5, lz + 0.5);
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, edge,
                     from, to, 1.0f, 0.65f, 0.25f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
     }
 

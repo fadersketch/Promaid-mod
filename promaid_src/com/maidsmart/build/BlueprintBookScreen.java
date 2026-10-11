@@ -331,7 +331,7 @@ public class BlueprintBookScreen extends Screen {
                     return name;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookScreen", ignored);
         }
         return BlueprintLib.cnName(itemId);
     }
@@ -1675,7 +1675,7 @@ public class BlueprintBookScreen extends Screen {
             if (m.length > 3) {
                 try {
                     totalPara += Long.parseLong(m[3]);
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookScreen", ignored);
                 }
             }
         }

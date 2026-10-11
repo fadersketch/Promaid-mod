@@ -71,7 +71,7 @@ public final class CombatModeTable {
         List<? extends String> raw;
         try {
             raw = com.maidsmart.config.MaidSmartConfig.COMBAT_TASK_MODES.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatModeTable", ignored);
             return Map.of(); // 配置还没建好（极早期调用）：按空表处理
         }
         if (raw != null && raw.equals(cachedRaw)) {
@@ -135,7 +135,7 @@ public final class CombatModeTable {
     public static boolean vanillaYieldToMod() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_VANILLA_YIELD_TO_MOD.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatModeTable", ignored);
             return true;
         }
     }
@@ -270,7 +270,7 @@ public final class CombatModeTable {
                         + (mode == null ? "（表里没写）" : "（表里点名 " + label(mode) + "）")
                         + (OFF.equals(mode) ? " ｜ 不参与自主切换" : " ｜ 参与自主切换"));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatModeTable", ignored);
         }
         if (out.isEmpty()) {
             out.add("（一个攻击类任务都没扫到——附属模组没加载？）");

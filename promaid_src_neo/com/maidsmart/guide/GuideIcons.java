@@ -50,7 +50,7 @@ public final class GuideIcons {
             if (rl != null && BuiltInRegistries.ITEM.containsKey(rl)) {
                 out = new ItemStack(BuiltInRegistries.ITEM.get(rl));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GuideIcons", ignored);
             // 认不出就是空栈，绝不外溢
         }
         CACHE.put(id, out);
@@ -66,7 +66,7 @@ public final class GuideIcons {
         }
         try {
             return s.getHoverName().getString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GuideIcons", ignored);
             return id;
         }
     }

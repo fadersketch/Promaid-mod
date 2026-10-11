@@ -115,7 +115,7 @@ public final class BrewRecipeResolver {
             if (stacks != null && stacks.length > 0) {
                 return stacks[0];
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", ignored);
         }
         return ItemStack.EMPTY;
     }
@@ -127,7 +127,7 @@ public final class BrewRecipeResolver {
             try {
                 return h.value();
             } catch (Throwable t) {
-                return null;
+                 com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); return null;
             }
         }
         return o;
@@ -140,7 +140,7 @@ public final class BrewRecipeResolver {
             if (stacks != null && stacks.length > 0 && !stacks[0].isEmpty()) {
                 return stacks[0].getItem();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", ignored);
         }
         return null;
     }
@@ -242,7 +242,7 @@ public final class BrewRecipeResolver {
             Potion p = net.minecraft.core.registries.BuiltInRegistries.POTION.get(ResourceLocation.parse(potionId));
             return p == null ? new Chain(null, Collections.emptyList()) : resolveChain(p);
         } catch (Throwable t) {
-            return new Chain(null, Collections.emptyList());
+             com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); return new Chain(null, Collections.emptyList());
         }
     }
 
@@ -280,7 +280,7 @@ public final class BrewRecipeResolver {
         try {
             return net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(id));
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); return null;
         }
     }
 

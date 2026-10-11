@@ -187,7 +187,7 @@ public final class MaidBroomRecall {
                 }
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomRecall", ignored);
             return false;
         }
     }

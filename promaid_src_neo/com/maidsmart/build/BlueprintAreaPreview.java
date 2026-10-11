@@ -331,7 +331,7 @@ public final class BlueprintAreaPreview {
                 out[n++] = y;
                 out[n++] = z;
                 out[n++] = null;
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintAreaPreview", ignored);
             }
         }
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);

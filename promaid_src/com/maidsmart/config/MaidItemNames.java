@@ -43,7 +43,7 @@ public final class MaidItemNames {
             if (n != null && !n.isEmpty()) {
                 return n;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidItemNames", ignored);
         }
         return id(stack);
     }
@@ -56,7 +56,7 @@ public final class MaidItemNames {
         try {
             ResourceLocation k = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             return k == null ? "" : k.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidItemNames", ignored);
             return "";
         }
     }

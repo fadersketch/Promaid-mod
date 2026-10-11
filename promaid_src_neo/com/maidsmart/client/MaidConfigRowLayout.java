@@ -133,7 +133,7 @@ public final class MaidConfigRowLayout {
                     // 沿继承链继续找
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigRowLayout", ignored);
         }
         return null;
     }

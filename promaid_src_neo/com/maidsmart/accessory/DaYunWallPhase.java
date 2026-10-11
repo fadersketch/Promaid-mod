@@ -65,7 +65,7 @@ public final class DaYunWallPhase {
                 return false;
             }
             return wearsDaYun(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunWallPhase", ignored);
             return false;
         }
     }
@@ -116,7 +116,7 @@ public final class DaYunWallPhase {
                 cursor = cursor.add(direction.scale((tExit + PASS_EPSILON) / length));
             }
             return false; // 迭代到顶（不该发生）：保守判不通
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunWallPhase", ignored);
             return false;
         }
     }
@@ -156,7 +156,7 @@ public final class DaYunWallPhase {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunWallPhase", ignored);
         }
         return false;
     }

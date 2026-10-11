@@ -78,7 +78,7 @@ public final class MaidFlightHazardGuard {
         try {
             return MaidSmartConfig.COMBAT_FLIGHT_DANGER_AVOID.get();
         } catch (Throwable t) {
-            return false; // 配置没加载等异常：按关闭处理（绝不因为避让坏了飞行）
+             com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", t); return false; // 配置没加载等异常：按关闭处理（绝不因为避让坏了飞行）
         }
     }
 
@@ -112,7 +112,7 @@ public final class MaidFlightHazardGuard {
             }
             return DangerBlocks.cellDangerousBoxed(level, bx, by, bz, radius);
         } catch (Throwable t) {
-            return false; // 判不出来就当她能过（宁可漏一次，不误杀飞行）
+             com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", t); return false; // 判不出来就当她能过（宁可漏一次，不误杀飞行）
         }
     }
 
@@ -121,7 +121,7 @@ public final class MaidFlightHazardGuard {
         try {
             return DangerBlocks.boxRadius(maid.m_20205_());
         } catch (Throwable t) {
-            return 1; // 读不到宽度就按女仆的常规宽度保守取 1（多判一格，不会误放行）
+             com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", t); return 1; // 读不到宽度就按女仆的常规宽度保守取 1（多判一格，不会误放行）
         }
     }
 
@@ -146,7 +146,7 @@ public final class MaidFlightHazardGuard {
             }
             return false;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", t); return false;
         }
     }
 
@@ -204,7 +204,7 @@ public final class MaidFlightHazardGuard {
             stickyClear(maid);
             return up(level, from, desired, rad);
         } catch (Throwable t) {
-            return desired;
+             com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", t); return desired;
         }
     }
 
@@ -255,7 +255,7 @@ public final class MaidFlightHazardGuard {
             }
             // 只抬竖直、水平收一下；朝向交给原本的盘旋/弹开逻辑（本方法不碰姿态）
             maid.m_20256_(new Vec3(v.f_82479_ * 0.7, LIFT, v.f_82481_ * 0.7));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", ignored);
         }
     }
 
@@ -269,7 +269,7 @@ public final class MaidFlightHazardGuard {
             }
             return (int) st[0];
         } catch (Throwable t) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", t); return 0;
         }
     }
 
@@ -280,14 +280,14 @@ public final class MaidFlightHazardGuard {
             if (STICKY.size() > 256) {
                 STICKY.clear();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", ignored);
         }
     }
 
     private static void stickyClear(EntityMaid maid) {
         try {
             STICKY.remove(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightHazardGuard", ignored);
         }
     }
 }

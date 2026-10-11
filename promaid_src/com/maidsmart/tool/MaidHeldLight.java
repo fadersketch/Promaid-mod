@@ -46,7 +46,7 @@ public final class MaidHeldLight {
             try {
                 lightBlock = ForgeRegistries.BLOCKS.getValue(
                         new net.minecraft.resources.ResourceLocation("minecraft", "light"));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
             }
         }
         return lightBlock;
@@ -111,7 +111,7 @@ public final class MaidHeldLight {
                 if (level == null) {
                     continue;
                 }
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }
@@ -216,7 +216,7 @@ public final class MaidHeldLight {
                     return Math.min(15, Math.max(1, l));
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
         return 0;
     }
@@ -241,7 +241,7 @@ public final class MaidHeldLight {
                     + Math.abs(p.m_123342_() - e.pos().m_123342_())
                     + Math.abs(p.m_123343_() - e.pos().m_123343_());
             return Math.max(0, own - d);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
             return 0;
         }
     }
@@ -280,7 +280,7 @@ public final class MaidHeldLight {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
         return out;
     }
@@ -296,7 +296,7 @@ public final class MaidHeldLight {
                 return false;
             }
             return level.m_8055_(p).m_60734_() == lightBlock();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
             return false;
         }
     }
@@ -323,7 +323,7 @@ public final class MaidHeldLight {
                     level.m_7731_(pos, lightBlock().m_49966_().m_61124_(LEVEL_PROP, l), 3);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
     }
 
@@ -333,7 +333,7 @@ public final class MaidHeldLight {
             if (level.m_8055_(pos).m_60734_() == lightBlock()) {
                 level.m_7731_(pos, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
     }
 

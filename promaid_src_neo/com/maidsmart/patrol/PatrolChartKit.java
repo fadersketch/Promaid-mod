@@ -42,7 +42,7 @@ public final class PatrolChartKit {
             if (event.getEntity() instanceof ServerPlayer sp) {
                 PatrolMarking.clear(sp);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartKit", ignored);
         }
     }
 }

@@ -87,7 +87,7 @@ public final class MaidGhostRender {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_GHOST_ALPHA.get();
         } catch (Throwable t) {
-            return 1.0;
+             com.maidsmart.diag.Diag.swallow("MaidGhostRender", t); return 1.0;
         }
     }
 
@@ -107,7 +107,7 @@ public final class MaidGhostRender {
             activeKind = KIND_MAID;
             return true;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidGhostRender", t); return false;
         }
     }
 
@@ -127,7 +127,7 @@ public final class MaidGhostRender {
             activeKind = KIND_BROOM;
             return true;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidGhostRender", t); return false;
         }
     }
 
@@ -194,7 +194,7 @@ public final class MaidGhostRender {
         try {
             return maid.m_269323_() != null && maid.m_269323_().m_20148_().equals(me.m_20148_());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidGhostRender", t); return false;
         }
     }
 
@@ -211,7 +211,7 @@ public final class MaidGhostRender {
             if (renderer != null && maid != null) {
                 tex = renderer.getTextureLocation(maid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGhostRender", ignored);
         }
         return wrapFor(src, tex);
     }
@@ -236,7 +236,7 @@ public final class MaidGhostRender {
                         mapped = twin;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGhostRender", ignored);
             }
             return new GhostVertex(src.m_6299_(mapped), mul);
         };
@@ -266,7 +266,7 @@ public final class MaidGhostRender {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGhostRender", ignored);
         }
         if (TWIN.size() > 512) {
             TWIN.clear();
@@ -280,7 +280,7 @@ public final class MaidGhostRender {
         try {
             return a.m_110508_() == b.m_110508_() && a.m_173186_() == b.m_173186_();
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidGhostRender", t); return false;
         }
     }
 
@@ -309,7 +309,7 @@ public final class MaidGhostRender {
                         got = shard;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGhostRender", ignored);
             }
             translucentRef = got;
         }
@@ -325,7 +325,7 @@ public final class MaidGhostRender {
                         f.setAccessible(true);
                         Object v = f.get(shard);
                         return v instanceof java.util.Optional<?> o ? o.orElse(null) : null;
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGhostRender", ignored);
                         return null;
                     }
                 }

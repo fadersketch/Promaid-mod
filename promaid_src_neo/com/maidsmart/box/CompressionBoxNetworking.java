@@ -67,7 +67,7 @@ public final class CompressionBoxNetworking {
             PacketDistributor.sendToPlayer(player, new BoxStatePacket(hand.ordinal(), items,
                     CompressionBoxService.carryOf(player),
                     CompressionBoxService.noticeOf(player), true));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxNetworking", ignored);
         }
     }
 
@@ -77,7 +77,7 @@ public final class CompressionBoxNetworking {
             PacketDistributor.sendToPlayer(player, new BoxStatePacket(handOrdinal, items,
                     CompressionBoxService.carryOf(player),
                     CompressionBoxService.noticeOf(player), false));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxNetworking", ignored);
         }
     }
 
@@ -88,7 +88,7 @@ public final class CompressionBoxNetworking {
             PacketDistributor.sendToPlayer(player, new BoxStatePacket(handOrdinal,
                     CompressionBoxData.read(box), CompressionBoxService.carryOf(player),
                     CompressionBoxService.noticeOf(player), false));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxNetworking", ignored);
         }
     }
 
@@ -245,7 +245,7 @@ public final class CompressionBoxNetworking {
         public static void send(int hand, int action, int index, int button, boolean shift) {
             try {
                 PacketDistributor.sendToServer(new BoxActionPacket(hand, action, index, button, shift));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxNetworking", ignored);
             }
         }
 

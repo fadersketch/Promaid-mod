@@ -64,7 +64,7 @@ public abstract class BuildActivityForceMixin {
                 // Activity.WORK = WORK（SRG 实证：static{} 里 "work" 赋给 WORK）
                 brain.setActiveActivityIfPossible(Activity.WORK);
                 ci.cancel(); // 跳过时间表切换——建造期间 activity 钉在 WORK
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BuildActivityForceMixin", ignored);
             }
         }
     }

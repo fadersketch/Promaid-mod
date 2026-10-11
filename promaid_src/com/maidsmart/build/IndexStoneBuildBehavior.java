@@ -350,7 +350,7 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
             com.maidsmart.task.PlacedBlockTracker.placeSound(level, target, block);
             return true;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("IndexStoneBuildBehavior", t); return false;
         }
     }
 

@@ -80,7 +80,7 @@ public final class PromaidClientSetup {
         try {
             com.maidsmart.patrol.PatrolChartScreen.accept(pkt.offHand, pkt.book,
                     pkt.problems, pkt.notes, pkt.length, pkt.seconds, pkt.open);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidClientSetup", ignored);
         }
     }
 
@@ -89,7 +89,7 @@ public final class PromaidClientSetup {
             com.maidsmart.patrol.PatrolNetworking.MaidListPacket pkt) {
         try {
             com.maidsmart.patrol.PatrolChartScreen.acceptMaids(pkt.offHand, pkt.rows);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidClientSetup", ignored);
         }
     }
 
@@ -98,7 +98,7 @@ public final class PromaidClientSetup {
             com.maidsmart.patrol.PatrolNetworking.MarkingStatePacket pkt) {
         try {
             com.maidsmart.patrol.PatrolChartScreen.acceptMarking(pkt.marking, pkt.routeId);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidClientSetup", ignored);
         }
     }
 
@@ -146,7 +146,7 @@ public final class PromaidClientSetup {
     public static void handleDaYunMusic(int wearerId, int track, boolean playing) {
         try {
             com.maidsmart.client.DaYunMusicPlayer.handle(wearerId, track, playing);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidClientSetup", ignored);
         }
     }
 

@@ -7,6 +7,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 
 /**
  * 实测八百三十九：已加载女仆名册——"现在有哪些女仆"全模组只来这里问一次，按
@@ -89,5 +90,20 @@ public final class MaidRoster {
      *  用它整体跳过；像 AiMemoryManager 那样兼做与女仆无关的事的不能跳）。 */
     public static boolean any(MinecraftServer server) {
         return !all(server).isEmpty();
+    }
+
+    /** 某维度里活着的女仆，按 {@link Entity} 视图交出——给"循环体只用到女仆、却还写成
+     *  {@code for (Entity e : EntitySnapshot.of(lvl))} 再 instanceof 过滤"的老站点做最小改动
+     *  （只换来源表达式，循环体一字不动）。{@link EntitySnapshot} 那条"整表拷贝"从此只在
+     *  真需要非女仆实体的站点（骑乘留痕 / 自动坐垫 / 制导弹）保留。 */
+    public static List<Entity> inAsEntities(ServerLevel level) {
+        if (level == null || level.getServer() == null) {
+            return List.of();
+        }
+        List<Entity> out = new ArrayList<>();
+        for (EntityMaid maid : in(level.getServer(), level)) {
+            out.add(maid);
+        }
+        return out;
     }
 }

@@ -74,7 +74,7 @@ public final class MaidExtraContainer {
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.MISC_BACKPACK_OVERFLOW.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             return false;
         }
     }
@@ -122,7 +122,7 @@ public final class MaidExtraContainer {
                 if (leftN < stack.getCount()) {
                     return true; // 这个容器能收下一部分（TLM 自己的拾取会真正收下）
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             }
         }
         return false;
@@ -177,7 +177,7 @@ public final class MaidExtraContainer {
                             + rest.getCount() + " 件（未吞物品）");
                 }
                 return true;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             }
         }
         return false;
@@ -227,7 +227,7 @@ public final class MaidExtraContainer {
             }
             logPull(maid, inv.getStackInSlot(slot), maxCount);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             return false;
         }
     }
@@ -247,7 +247,7 @@ public final class MaidExtraContainer {
                 if (filter.test(inv.getStackInSlot(i))) {
                     return i;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             }
         }
         return -1;
@@ -281,12 +281,12 @@ public final class MaidExtraContainer {
             String id;
             try {
                 id = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(got.getItem()));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
                 id = got.getItem().toString();
             }
             PromaidLog.log("额外容器", nameOf(maid) + " 她身上没有 → 从精妙背包/旅行者背包取来 "
                     + got.getCount() + "x" + id + (maxCount == -1 ? "（整组）" : ""));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
         }
     }
 
@@ -325,7 +325,7 @@ public final class MaidExtraContainer {
                 }
                 rest = next;
                 moved += before - rest.getCount();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             }
         }
         // 第二轮：任何容器（第 0 项是她自己的背包，已经试过了）
@@ -342,7 +342,7 @@ public final class MaidExtraContainer {
                 }
                 rest = next;
                 moved += before - rest.getCount();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             }
         }
         if (moved > 0) {
@@ -376,7 +376,7 @@ public final class MaidExtraContainer {
                 return null;
             }
             return new java.util.ArrayList<>(all.subList(1, all.size()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             return null;
         }
     }
@@ -384,7 +384,7 @@ public final class MaidExtraContainer {
     private static String nameOf(EntityMaid maid) {
         try {
             return PromaidLog.nameOf(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
             return "女仆";
         }
     }

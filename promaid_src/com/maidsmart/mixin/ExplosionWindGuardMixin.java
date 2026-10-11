@@ -54,7 +54,7 @@ public abstract class ExplosionWindGuardMixin {
             if (FriendlyWindGuard.shouldBlockExplosion((Explosion) (Object) this, entity, vec)) {
                 return; // 不 setDeltaMovement：击退不生效
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ExplosionWindGuardMixin", ignored);
         }
         entity.m_20256_(vec);
     }
@@ -83,7 +83,7 @@ public abstract class ExplosionWindGuardMixin {
             if (kept != null) {
                 cir.setReturnValue(kept); // 副本，不动原表
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ExplosionWindGuardMixin", ignored);
         }
     }
 }

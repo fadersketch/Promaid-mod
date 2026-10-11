@@ -103,7 +103,7 @@ public final class BlockWalkOn {
             return !level.m_8055_(below).m_60742_(level, below,
                     net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_();
         } catch (Exception e) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("BlockWalkOn", e); return true;
         }
     }
 }

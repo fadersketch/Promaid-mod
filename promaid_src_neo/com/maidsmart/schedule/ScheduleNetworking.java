@@ -80,7 +80,7 @@ public final class ScheduleNetworking {
             int sched = maid.getSchedule() == null ? 2 : maid.getSchedule().ordinal();
             PacketDistributor.sendToPlayer(player, new SchedulePacketsPlan.MaidStateSyncPacket(maid.getUUID().toString(), taskUid, sched,
                             ScheduleData.isOn(maid)));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleNetworking", ignored);
         }
     }
 
@@ -91,7 +91,7 @@ public final class ScheduleNetworking {
                     : maid.getTask().getUid().toString();
             int sched = maid.getSchedule() == null ? -1 : maid.getSchedule().ordinal();
             PacketDistributor.sendToPlayer(player, new SchedulePacketsPlan.MaidTaskResyncPacket(maid.getId(), taskUid, sched));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleNetworking", ignored);
         }
     }
 
@@ -108,7 +108,7 @@ public final class ScheduleNetworking {
         List<String[]> maids = new ArrayList<>();
         List<String> taskUids = new ArrayList<>();
         for (ServerLevel lvl : player.level().getServer().getAllLevels()) {
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                 if (!(e instanceof EntityMaid m) || !m.isAlive()) {
                     continue;
                 }
@@ -146,7 +146,7 @@ public final class ScheduleNetworking {
                         for (var task : TaskManager.getNotHiddenTaskList(m)) {
                             taskUids.add(task.getUid().toString());
                         }
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ScheduleNetworking", ignored);
                     }
                 }
                 if (maids.size() >= 200) {
@@ -216,7 +216,7 @@ public final class ScheduleNetworking {
                 default -> level.dimension().location().getPath();
             };
         } catch (Exception e) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("ScheduleNetworking", e); return "?";
         }
     }
 

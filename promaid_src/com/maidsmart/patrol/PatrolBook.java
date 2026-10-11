@@ -197,7 +197,7 @@ public final class PatrolBook {
                 book.routes.add(legacy);
                 book.selectedId = legacy.id();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolBook", ignored);
         }
         return book;
     }
@@ -218,7 +218,7 @@ public final class PatrolBook {
         }
         try {
             readInto(book, bookTag);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolBook", ignored);
         }
         return book;
     }

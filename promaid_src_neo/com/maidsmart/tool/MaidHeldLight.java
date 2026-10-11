@@ -47,7 +47,7 @@ public final class MaidHeldLight {
             try {
                 lightBlock = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
                         ResourceLocation.fromNamespaceAndPath("minecraft", "light"));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
             }
         }
         return lightBlock;
@@ -109,7 +109,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
                 if (level == null) {
                     continue;
                 }
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                         continue;
                     }
@@ -214,7 +214,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
                     return Math.min(15, Math.max(1, l));
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
         return 0;
     }
@@ -239,7 +239,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
                     + Math.abs(p.getY() - e.pos().getY())
                     + Math.abs(p.getZ() - e.pos().getZ());
             return Math.max(0, own - d);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
             return 0;
         }
     }
@@ -278,7 +278,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
         return out;
     }
@@ -294,7 +294,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
                 return false;
             }
             return level.getBlockState(p).getBlock() == lightBlock();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
             return false;
         }
     }
@@ -321,7 +321,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
                     level.setBlock(pos, lightBlock().defaultBlockState().setValue(LEVEL_PROP, l), 3);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
     }
 
@@ -331,7 +331,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
             if (level.getBlockState(pos).getBlock() == lightBlock()) {
                 level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHeldLight", ignored);
         }
     }
 

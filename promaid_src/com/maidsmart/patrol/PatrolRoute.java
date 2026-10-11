@@ -126,7 +126,7 @@ public final class PatrolRoute {
             List<net.minecraft.world.phys.Vec3> poly = PatrolCurve.polyline(points, true, 1.0);
             double[] cum = PatrolCurve.cumulative(poly);
             return cum.length == 0 ? 0.0 : cum[cum.length - 1];
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRoute", ignored);
             return 0.0;
         }
     }
@@ -135,7 +135,7 @@ public final class PatrolRoute {
     public double secondsSafe() {
         try {
             return PatrolGeometry.secondsFor(lengthSafe());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRoute", ignored);
             return 0.0;
         }
     }
@@ -359,7 +359,7 @@ public final class PatrolRoute {
                     r.lift = h;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRoute", ignored);
         }
         return r;
     }

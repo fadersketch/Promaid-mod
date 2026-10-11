@@ -121,7 +121,7 @@ public class ProactiveDialogueManager {
                     + maxReplies() + "）· 主人聊天=" + lastChat
                     + " · 修复模式=" + (ReplyFeedbackTracker.repairMode(maid) ? "开" : "关");
         } catch (Exception e) {
-            return "主动对话：读取失败";
+             com.maidsmart.diag.Diag.swallow("ProactiveDialogueManager", e); return "主动对话：读取失败";
         }
     }
 
@@ -179,7 +179,7 @@ if (!AIConfig.LLM_ENABLED.get()) {
                     "\u00a77\u3010\u4e3b\u52a8\u5bf9\u8bdd\u3011" + name
                             + "\u4eca\u5929\u7684\u4e3b\u52a8\u5bf9\u8bdd\u5df2\u8fbe\u4e0a\u9650\uff08"
                             + proactiveDaily() + "\u6b21\uff09\uff0c\u660e\u5929\u518d\u804a\u5427\u3002"));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ProactiveDialogueManager", ignored);
         }
     }
 

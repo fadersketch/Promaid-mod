@@ -122,7 +122,7 @@ public class PerceptionQueryTool implements ITool<PerceptionQueryTool.Result> {
                             + "inspect <x> <y> <z> / scanblock <id> [r] / scanentity [type] [r]", toolId);
             }
         } catch (Exception e) {
-            return callback.addToolResult("查询失败: " + e.getMessage(), toolId);
+             com.maidsmart.diag.Diag.swallow("PerceptionQueryTool", e); return callback.addToolResult("查询失败: " + e.getMessage(), toolId);
         }
     }
 
@@ -130,7 +130,7 @@ public class PerceptionQueryTool implements ITool<PerceptionQueryTool.Result> {
         try {
             return Integer.parseInt(s.trim());
         } catch (Exception e) {
-            return def;
+             com.maidsmart.diag.Diag.swallow("PerceptionQueryTool", e); return def;
         }
     }
 

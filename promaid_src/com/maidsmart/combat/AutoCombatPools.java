@@ -96,7 +96,7 @@ public final class AutoCombatPools {
         try {
             TaskPools pools = buildPools(maid, false);
             return !pools.meleePool().isEmpty() || !pools.rangedPool().isEmpty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             return false; // 判定本身异常 → 按"无武器"处理（宁可少喂一次目标，也不要让雪球触发参战）
         }
     }
@@ -129,7 +129,7 @@ public final class AutoCombatPools {
                         && "touhou_little_maid:feed_animal".equals(task.getUid().toString())) {
                     continue;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             }
             // v1.2.2 实测五百九十【第三方玩法模式黑名单】：傀儡师（傀儡装配 Modular
             // Golems）不是本模组该碰的战斗模式——自主参战/战中换战术都永不切进去
@@ -150,7 +150,7 @@ public final class AutoCombatPools {
                 if (task.isHidden(maid)) { // isHidden——隐藏任务不进候选（接口方法名编译期已实证（TLM jar 未混淆该方法））
                     continue;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             }
             // 背包/主手有该任务认的武器才算候选（isWeapon 是 IAttackTask 的默认方法：
             // 原版任务按武器类型判；模组任务自定义判定——法书/史诗武器等）
@@ -260,7 +260,7 @@ public final class AutoCombatPools {
                             "combat pools: maid={} melee=[{}] ranged=[{}] spellGear={}",
                             com.maidsmart.tool.PromaidLog.nameOf(maid), mp, rp, gear);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             }
         }
         return new TaskPools(meleePool, meleeWeights, rangedPool, rangedWeights);
@@ -428,7 +428,7 @@ public final class AutoCombatPools {
             if (override != null) {
                 return override;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
         }
         return defaultRangedByUid(task);
     }
@@ -484,7 +484,7 @@ public final class AutoCombatPools {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             return false; // 背包遍历本身异常 → 视为无武器（与「空手不参战」同口径）
         }
     }
@@ -507,7 +507,7 @@ public final class AutoCombatPools {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             return false;
         }
     }
@@ -518,7 +518,7 @@ public final class AutoCombatPools {
                     net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_());
             return key != null && "minecraft".equals(key.m_135827_());
         } catch (Exception e) {
-            return false; // 注册名异常按非原版处理（模组侧自定义注册）
+             com.maidsmart.diag.Diag.swallow("AutoCombatPools", e); return false; // 注册名异常按非原版处理（模组侧自定义注册）
         }
     }
 
@@ -526,7 +526,7 @@ public final class AutoCombatPools {
         try {
             return stack.m_41638_(EquipmentSlot.MAINHAND).containsKey(Attributes.f_22281_);
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("AutoCombatPools", e); return false;
         }
     }
 
@@ -542,7 +542,7 @@ public final class AutoCombatPools {
             }
             String assigned = maid.getPersistentData().m_128461_(AutoCombatSwitch.ASSIGNED_TAG);
             return !assigned.isEmpty() && assigned.equals(task.getUid().toString());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             return false;
         }
     }
@@ -574,7 +574,7 @@ public final class AutoCombatPools {
             }
             return real;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("AutoCombatPools", t); return false;
         }
     }
 
@@ -585,7 +585,7 @@ public final class AutoCombatPools {
             // 还原时永远读不到快照，把 home 强行写成 false（issue #22 第二条）。
             restorePrevMode(maid);
             clearMarkers(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
         }
     }
 
@@ -662,7 +662,7 @@ public final class AutoCombatPools {
             com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 战斗前模式已还原：驻守（home）=" + (maid.isHomeModeEnable() ? "开" : "跟随")
                     + (sched.isEmpty() ? "" : "，作息=" + sched));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
         }
     }
 
@@ -684,7 +684,7 @@ public final class AutoCombatPools {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
         }
         return "touhou_little_maid:idle";
     }

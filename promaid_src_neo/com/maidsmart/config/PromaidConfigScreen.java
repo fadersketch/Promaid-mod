@@ -123,7 +123,7 @@ public class PromaidConfigScreen extends Screen {
             Double.parseDouble(s.trim());
             return true;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", e); return false;
         }
     }
     private MinableList minableList;
@@ -264,7 +264,7 @@ public class PromaidConfigScreen extends Screen {
             String cn = "";
             try {
                 cn = new net.minecraft.world.item.ItemStack(item).getHoverName().getString();
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             creativeCache.add(new String[]{id, cn == null ? "" : cn});
         }
@@ -285,7 +285,7 @@ public class PromaidConfigScreen extends Screen {
         net.minecraft.world.item.ItemStack probe;
         try {
             probe = new net.minecraft.world.item.ItemStack(item);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return;
         }
         int max = com.maidsmart.action.ItemUses.total(probe);
@@ -325,7 +325,7 @@ public class PromaidConfigScreen extends Screen {
                 if (stack.get(net.minecraft.core.component.DataComponents.FOOD) == null) {
                     continue; // 没有食物属性 → 不是食物
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 continue;
             }
             net.minecraft.resources.ResourceLocation key =
@@ -336,7 +336,7 @@ public class PromaidConfigScreen extends Screen {
             String cn = "";
             try {
                 cn = stack.getHoverName().getString();
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             // 实测五百八十：耐久物品（"能喂好几次"的）按剩余次数各占一行
             addVariantRows(foodCache, item, key.toString(), cn, seen);
@@ -368,7 +368,7 @@ public class PromaidConfigScreen extends Screen {
                         && !com.maidsmart.action.ThirstCompat.isWaterPotion(stack)) {
                     continue; // 既不恢复口渴也不是水瓶 → 不是候选
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 continue;
             }
             net.minecraft.resources.ResourceLocation key =
@@ -379,7 +379,7 @@ public class PromaidConfigScreen extends Screen {
             String cn = "";
             try {
                 cn = stack.getHoverName().getString();
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             // 实测五百八十：同 ensureFoodCache——耐久容器（水壶）按剩余次数各占一行
             addVariantRows(waterCache, item, key.toString(), cn, seen);
@@ -403,12 +403,12 @@ public class PromaidConfigScreen extends Screen {
                         }
                         cn = new net.minecraft.world.item.ItemStack(it).getHoverName().getString();
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 }
                 waterCache.add(new String[]{base, cn == null ? "" : cn, id,
                         com.maidsmart.action.ItemUses.labelOfKey(id)});
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
         waterCacheBuilt = now;
     }
@@ -574,7 +574,7 @@ public class PromaidConfigScreen extends Screen {
             if (net.minecraft.client.Minecraft.getInstance().screen instanceof PromaidConfigScreen cur) {
                 cur.applyPending();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
         net.minecraft.client.Minecraft.getInstance().setScreen(scr);
     }
@@ -1346,7 +1346,7 @@ public class PromaidConfigScreen extends Screen {
                     String eff = com.maidsmart.combat.MaidSupportPolicy.potionId(stack);
                     supportCache.add(new String[]{
                             com.maidsmart.combat.MaidSupportPolicy.baseId(stack), cn, key, "", eff});
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 }
             }
         }
@@ -1363,13 +1363,13 @@ public class PromaidConfigScreen extends Screen {
                         || com.maidsmart.combat.MaidSupportPolicy.potionItem(stack)) {
                     continue; // 药水已在上一步按效果铺开
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 continue;
             }
             String cn = "";
             try {
                 cn = stack.getHoverName().getString();
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             int max = com.maidsmart.action.ItemUses.total(stack);
             if (max <= 0) {
@@ -1399,7 +1399,7 @@ public class PromaidConfigScreen extends Screen {
                 String base = com.maidsmart.action.ItemUses.baseId(lhs);
                 supportCache.add(new String[]{base, "", lhs, "", ""});
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
         supportCacheBuilt = now;
     }
@@ -1410,7 +1410,7 @@ public class PromaidConfigScreen extends Screen {
             return this.supportMode == 1
                     ? new ArrayList<>(MaidSmartConfig.AID_SUPPORT_CATEGORY_UNDEAD.get())
                     : new ArrayList<>(MaidSmartConfig.AID_SUPPORT_CATEGORY.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return new ArrayList<>();
         }
     }
@@ -1439,7 +1439,7 @@ public class PromaidConfigScreen extends Screen {
                 com.maidsmart.brew.PotionCompat.setPotion(stack, potion);
             }
             return stack;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return null;
         }
     }
@@ -1535,7 +1535,7 @@ public class PromaidConfigScreen extends Screen {
         try {
             return (mode == 1 ? MaidSmartConfig.AID_SUPPORT_CATEGORY_UNDEAD.get()
                     : MaidSmartConfig.AID_SUPPORT_CATEGORY.get()).size();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return 0;
         }
     }
@@ -1553,7 +1553,7 @@ public class PromaidConfigScreen extends Screen {
     private int countDrinkables() {
         try {
             return MaidSmartConfig.AID_DRINK_WHITELIST.get().size();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return 0;
         }
     }
@@ -1563,7 +1563,7 @@ public class PromaidConfigScreen extends Screen {
         try {
             ensureWaterCache();
             return waterCache.size();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return 0;
         }
     }
@@ -1678,7 +1678,7 @@ public class PromaidConfigScreen extends Screen {
                 n++;
             }
             return n;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return 0;
         }
     }
@@ -2203,7 +2203,7 @@ public class PromaidConfigScreen extends Screen {
             if (this.bdNInput != null && !this.bdNInput.getValue().trim().isEmpty()) {
                 return Math.max(0, Integer.parseInt(this.bdNInput.getValue().trim()));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
         return 16;
     }
@@ -2246,7 +2246,7 @@ public class PromaidConfigScreen extends Screen {
             if (this.bdRules && this.bdRuleList != null) {
                 this.bdRuleList.rebuild();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
     }
 
@@ -2258,7 +2258,7 @@ public class PromaidConfigScreen extends Screen {
                     && !this.cookTable && !this.buildBlackTable && !this.bdRules) {
                 this.rebuildWidgets();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
     }
 
@@ -2288,7 +2288,7 @@ public class PromaidConfigScreen extends Screen {
             this.entries.clear();
             try {
                 this.entries.addAll(bdCurrentRules());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             for (String e : this.entries) {
                 this.addEntry(new BdRuleEntry(e));
@@ -2380,7 +2380,7 @@ public class PromaidConfigScreen extends Screen {
             if (stack.getItem() instanceof net.minecraft.world.item.BlockItem bi) {
                 return com.maidsmart.tool.MaidBuildBlockFilter.isBlacklistedBuildBlock(bi.getBlock());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
         return true; // 认不出对应方块 → 按"禁止"画（别让玩家以为她能用）
     }
@@ -2414,7 +2414,7 @@ public class PromaidConfigScreen extends Screen {
                 this.buildBlackList.rebuild();
             }
         } catch (Throwable t) {
-            // 写配置失败不能静默：面板上会"点了没反应"，日志里必须留痕（本工程惯例）
+             com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", t); // 写配置失败不能静默：面板上会"点了没反应"，日志里必须留痕（本工程惯例）
             com.maidsmart.tool.PromaidLog.log("搭方块名单", "写名单失败：" + t);
         }
     }
@@ -2433,7 +2433,7 @@ public class PromaidConfigScreen extends Screen {
                 this.buildBlackList.rebuild();
             }
         } catch (Throwable t) {
-            // 写配置失败不能静默：面板上会"点了没反应"，日志里必须留痕（本工程惯例）
+             com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", t); // 写配置失败不能静默：面板上会"点了没反应"，日志里必须留痕（本工程惯例）
             com.maidsmart.tool.PromaidLog.log("搭方块名单", "写名单失败：" + t);
         }
     }
@@ -2448,7 +2448,7 @@ public class PromaidConfigScreen extends Screen {
             for (String s : MaidSmartConfig.BRIDGE_BUILD_ALLOWED.get()) {
                 out.add(new String[]{s, "allow"});
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
         return out;
     }
@@ -2764,7 +2764,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         tag = "\u00a77[" + com.maidsmart.build.BlueprintLib.materialFamily(blk)
                                 + "\u00b7" + com.maidsmart.build.BlueprintLib.blockFunction(blk) + "] \u00a7f";
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 }
                 g.drawString(PromaidConfigScreen.this.font,
                         Component.literal(tag + com.maidsmart.build.BlueprintLib.cnName(this.id)),
@@ -3490,7 +3490,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                                 net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                                         new com.maidsmart.build.BlueprintBookEntityPackets.VoicePackImportPacket(path));
                             });
-                        } catch (Exception ignored) {
+                        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                         }
                     });
                     fileDlg.setDaemon(true);
@@ -4791,7 +4791,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     continue;
                 }
                 items.add(new Object[]{String.join(".", path), name, cv});
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
         }
         java.util.Set<String> seenPath = new java.util.HashSet<>();
@@ -4828,7 +4828,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         this.rows.add(new InfoRow(label, String.valueOf(cur), tip));
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
         }
     }
@@ -4849,7 +4849,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     out.add(t);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
         return out;
     }
@@ -4891,7 +4891,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             ((ModConfigSpec.ConfigValue<java.util.List<? extends String>>) cv).set(out);
             return true;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", t); return false;
         }
     }
 
@@ -5371,7 +5371,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     private boolean cookWhitelistMode(int mode) {
         try {
             return !cookAllowFor(mode).isEmpty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return false;
         }
     }
@@ -5384,7 +5384,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             }
             List<String> allow = cookAllowFor(mode);
             return allow.isEmpty() || allow.contains(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return true;
         }
     }
@@ -5407,7 +5407,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             return cookWhitelistMode(mode)
                     ? "只认 " + cookAllowFor(mode).size() + " 项"
                     : "禁止 " + cookDenyFor(mode).size() + " 项";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return "?";
         }
     }
@@ -5547,7 +5547,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             com.maidsmart.tool.PromaidLog.log("烧制清单",
                     "已把 " + added + " 件原版食物填进「烧制物品」名单（当前共 " + cur.size()
                             + " 条）——她现在只烧这些；想恢复自动判定就把这张名单清空");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
     }
 
@@ -5629,7 +5629,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                                     COOK_LIST_NAMES.length - 1)]
                             + " | 世界=" + (level == null ? "读不到（网格会退回全物品）" : "有")
                             + " | 代表物品=" + sb);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
         }
     }
 
@@ -5847,7 +5847,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             this.entries.clear();
             try {
                 this.entries.addAll(PromaidConfigScreen.this.cookListFor(PromaidConfigScreen.this.cookTableMode));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             for (String e : this.entries) {
                 this.addEntry(new CookEntry(e));
@@ -5945,7 +5945,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             this.entries.clear();
             try {
                 this.entries.addAll(MaidSmartConfig.AID_DRINK_WHITELIST.get());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             for (String e : this.entries) {
                 this.addEntry(new WaterEntry(e));
@@ -6137,7 +6137,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             this.entries.clear();
             try {
                 this.entries.addAll(PromaidConfigScreen.this.supportEntriesNow());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             for (String e : this.entries) {
                 this.addEntry(new SupportEntry(e));
@@ -6383,7 +6383,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         try {
             value.set((int) Double.parseDouble(s.trim()));
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return false;
         }
     }
@@ -6392,7 +6392,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         try {
             value.set(Double.parseDouble(s.trim()));
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return false;
         }
     }
@@ -6419,7 +6419,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                             + "）超出范围，已按 " + fmtNum(c) + " 生效");
                 }
                 return true;
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 return false;
             }
         };
@@ -6438,7 +6438,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                             + "）超出范围，已按 " + fmtNum(c) + " 生效");
                 }
                 return true;
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
                 return false;
             }
         };
@@ -6460,7 +6460,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         try {
             double v = Double.parseDouble(s.trim());
             return (min == null || v >= min) && (max == null || v <= max);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             return false;
         }
     }
@@ -6490,7 +6490,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             value.set(out);
             return true;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", t); return false;
         }
     }
 
@@ -7654,7 +7654,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             boolean ok = false;
             try {
                 ok = Boolean.TRUE.equals(setter.apply(text));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
             if (!ok) {
                 failed.add(shortLabel(e.getKey()));
@@ -7677,7 +7677,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     com.maidsmart.tool.PromaidLog.log("配置面板",
                             "这一行没改（内容解析为空）：" + shortLabel(e.getKey()));
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidConfigScreen", ignored);
             }
         }
         return failed;

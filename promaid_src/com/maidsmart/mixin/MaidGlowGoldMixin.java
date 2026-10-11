@@ -52,7 +52,7 @@ public abstract class MaidGlowGoldMixin {
                 return;
             }
             cir.setReturnValue(PROMAID_GOLD);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGlowGoldMixin", ignored);
         }
     }
 }

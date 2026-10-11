@@ -61,7 +61,7 @@ public class MasterDeathTeleportHandler {
             }
             MAID_TRACK.put(maid.getUUID(), new MaidTrack(owner.getUUID(),
                     maid.level().dimension(), maid.getX(), maid.getY(), maid.getZ(), true));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
     }
 
@@ -281,7 +281,7 @@ if (PENDING_DEATHS.isEmpty()) {
                     // 防止之后每次主人都死都白加载这个区块
                     MAID_TRACK.remove(e.getKey());
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
             }
         }
         if (closest != null) {
@@ -336,12 +336,12 @@ if (PENDING_DEATHS.isEmpty()) {
             if (com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
         try {
             return com.maidsmart.schedule.ScheduleData.isOn(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", t); return false;
         }
     }
 
@@ -438,7 +438,7 @@ if (PENDING_DEATHS.isEmpty()) {
                         MAID_TRACK.remove(e.getKey());
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
             }
         }
     }
@@ -470,7 +470,7 @@ if (PENDING_DEATHS.isEmpty()) {
                         st.getValue(net.minecraft.world.level.block.BedBlock.FACING), 0.0f).isPresent();
             }
             return false;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
             return false;
         }
     }
@@ -494,7 +494,7 @@ if (PENDING_DEATHS.isEmpty()) {
                 nbt.remove(k);
             }
             nbt.putFloat("FallDistance", 0.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
     }
 
@@ -526,7 +526,7 @@ if (PENDING_DEATHS.isEmpty()) {
                     net.minecraft.world.effect.MobEffects.DAMAGE_RESISTANCE, 40, 4));
             maid.addEffect(new net.minecraft.world.effect.MobEffectInstance(
                     net.minecraft.world.effect.MobEffects.FIRE_RESISTANCE, 40, 0));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
     }
 
@@ -564,7 +564,7 @@ if (PENDING_DEATHS.isEmpty()) {
                     return new double[]{v.x, v.y, v.z};
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
         return findSafeLanding(level, respawn.getX() + 0.5, respawn.getY(), respawn.getZ() + 0.5);
     }

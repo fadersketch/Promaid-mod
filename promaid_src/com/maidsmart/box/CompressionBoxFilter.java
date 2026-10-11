@@ -110,7 +110,7 @@ public final class CompressionBoxFilter {
                 return true;
             }
             return stack.m_41793_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxFilter", ignored);
             return false;
         }
     }

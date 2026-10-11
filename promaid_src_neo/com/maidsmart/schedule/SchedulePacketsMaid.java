@@ -182,7 +182,7 @@ public final class SchedulePacketsMaid {
             try {
                 return new MaidSummonPacket(buf.readUtf(64));
             } catch (Exception e) {
-                return new MaidSummonPacket("");
+                 com.maidsmart.diag.Diag.swallow("SchedulePacketsMaid", e); return new MaidSummonPacket("");
             }
         }
 

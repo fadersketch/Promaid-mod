@@ -222,7 +222,7 @@ public final class MaidGoetyFlyCommand {
                             src.getPosition().x + 64, src.getPosition().y + 64, src.getPosition().z + 64);
             return src.getLevel().getEntitiesOfClass(EntityMaid.class, box).stream().findFirst().orElse(null);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidGoetyFlyCommand", t); return null;
         }
     }
 

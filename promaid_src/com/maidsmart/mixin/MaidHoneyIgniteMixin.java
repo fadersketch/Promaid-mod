@@ -74,7 +74,7 @@ public abstract class MaidHoneyIgniteMixin {
                 maid.m_6674_(InteractionHand.MAIN_HAND);
                 return;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidHoneyIgniteMixin", ignored);
         }
     }
 }

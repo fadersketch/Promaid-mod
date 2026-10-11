@@ -133,7 +133,7 @@ public final class FishingChairService {
                     continue;
                 }
                 tickKeepSeatWalk(found);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FishingChairService", ignored);
             }
         }
     }
@@ -538,7 +538,7 @@ public final class FishingChairService {
                 FIND_START.keySet().removeIf(k -> !allMaids.containsKey(k));
                 SEAT_TARGET.keySet().removeIf(k -> !allMaids.containsKey(k)); // v1.5.275
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("FishingChairService", ignored);
             // 清扫失败不影响游戏
         }
     }

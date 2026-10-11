@@ -42,7 +42,7 @@ public final class ElytraSpread {
             right.xRot = SPREAD_X;
             right.yRot = 0.0f;
             right.zRot = -SPREAD_Z;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ElytraSpread", ignored);
         }
     }
 }

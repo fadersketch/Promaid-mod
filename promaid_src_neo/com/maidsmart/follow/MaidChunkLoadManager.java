@@ -154,7 +154,7 @@ public final class MaidChunkLoadManager {
             level.getChunkSource().addRegionTicket(MAID_TICKET, new ChunkPos(key.chunk()),
                     TICKET_LEVEL, Unit.INSTANCE);
             CHUNK_TICKET_BORN.put(key, level.getGameTime());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -184,7 +184,7 @@ public final class MaidChunkLoadManager {
             try {
                 level.getChunkSource().removeRegionTicket(MAID_TICKET, new ChunkPos(key.chunk()),
                         TICKET_LEVEL, Unit.INSTANCE);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
         }
     }
@@ -233,7 +233,7 @@ public final class MaidChunkLoadManager {
             if (ow != null) {
                 MaidSeenStore.get(ow).put(maidId, seen);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -246,7 +246,7 @@ public final class MaidChunkLoadManager {
             if (ow != null) {
                 MaidSeenStore.get(ow).remove(maidId);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -262,7 +262,7 @@ public final class MaidChunkLoadManager {
                 LAST_SEEN.clear();
                 LAST_SEEN.putAll(MaidSeenStore.get(ow).snapshot());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -365,7 +365,7 @@ public final class MaidChunkLoadManager {
                     if (maidId != null && ownerId != null) {
                         seen.put(maidId, new MaidSeen(dim, pos, ownerId, at, stay, homeOnly, name));
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 }
             }
         }
@@ -536,14 +536,14 @@ public final class MaidChunkLoadManager {
                     boolean scheduled = false;
                     try {
                         scheduled = com.maidsmart.schedule.ScheduleData.isOn(maid);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                     }
                     if (scheduled) {
                         wantedPersistent.put(maid.getUUID(), key);
                     } else {
                         wanted.put(maid.getUUID(), key);
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 }
             }
         }
@@ -660,7 +660,7 @@ public final class MaidChunkLoadManager {
             Entity en;
             try {
                 en = level.getEntity(e.getKey());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 continue;
             }
             if (!(en instanceof EntityMaid maid) || !maid.isAlive() || maid.isRemoved()) {
@@ -676,7 +676,7 @@ public final class MaidChunkLoadManager {
                 TicketKey next = new TicketKey(cur.dim(), now);
                 acquireTicket(server, next, ownerKey(OWNER_MAID, e.getKey()));
                 ACTIVE_TICKETS.put(e.getKey(), next);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
         }
     }
@@ -705,7 +705,7 @@ public final class MaidChunkLoadManager {
             TicketKey next = new TicketKey(level.dimension(), now);
             acquireTicket(level.getServer(), next, ownerKey(OWNER_MAID, maid.getUUID()));
             ACTIVE_TICKETS.put(maid.getUUID(), next);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -731,7 +731,7 @@ public final class MaidChunkLoadManager {
                     MaidVisibilityGuard.check(level, entityMap, maid);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -749,7 +749,7 @@ public final class MaidChunkLoadManager {
             if (lvl != null) {
                 try {
                     lvl.getChunkSource().removeRegionTicket(MAID_TICKET, p.chunk(), TICKET_LEVEL, Unit.INSTANCE);
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 }
             }
         }
@@ -764,7 +764,7 @@ public final class MaidChunkLoadManager {
                 try {
                     level.getChunkSource().removeRegionTicket(MAID_TICKET,
                             new ChunkPos(key.chunk()), TICKET_LEVEL, Unit.INSTANCE);
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 }
             }
         }
@@ -838,7 +838,7 @@ public final class MaidChunkLoadManager {
             com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
             com.maidsmart.combat.MaidFlightCombatBehavior.pauseRound(maid.getUUID());
             com.maidsmart.combat.MaidFlightCombatBehavior.forget(maid.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
         com.maidsmart.tool.PromaidLog.log("传送", name + " 持续空中让位超过 "
                 + (MAX_AIR_DEFER / 20) + " 秒（距离/维度已超线）→ 放弃本轮让位，强制拉回");
@@ -904,7 +904,7 @@ public final class MaidChunkLoadManager {
                 net.minecraft.world.entity.LivingEntity airOwner = maid.getOwner();
                 crossDimAir = airOwner != null && airOwner.isAlive()
                         && maid.level() != airOwner.level();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 crossDimAir = false;
             }
             if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
@@ -937,7 +937,7 @@ public final class MaidChunkLoadManager {
             boolean scheduled = false;
             try {
                 scheduled = com.maidsmart.schedule.ScheduleData.isOn(maid);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
             // v1.5.393 实测八百零三：建造/指标石临时搭建中跨维度【自动跟随】同样不传——
             // 不再借 home 压制 TLM 之后，这道自动跟随会把她从工地跨维度拽走（建造就地白费）。
@@ -998,7 +998,7 @@ BlockPos stand = findStand(newLevel,
                     + stand.getX() + "," + stand.getY() + "," + stand.getZ());
             // v1.3.0(beta) 实测七百一十七【issue #27】：跨维传送后补属性表包（治血上限掉回 20）
             com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -1017,7 +1017,7 @@ BlockPos stand = findStand(newLevel,
         java.util.Set<UUID> seen = new java.util.HashSet<>();
         java.util.UUID pid = player.getUUID();
         for (ServerLevel lvl : player.level().getServer().getAllLevels()) {
-            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+            for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                 if (!(e instanceof EntityMaid md) || !md.isAlive() || !md.isOwnedBy(player)) {
                     continue;
                 }
@@ -1151,7 +1151,7 @@ BlockPos stand = findStand(newLevel,
                     try {
                         owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                                 "§7【集合】有一名女仆没能等到（可能已被魂符收回或不在了）"));
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                     }
                     seenRemove(en.getKey()); // 实测六百九十九：位置多半失效，别再拿它召回（写穿落盘）
                 }
@@ -1165,7 +1165,7 @@ BlockPos stand = findStand(newLevel,
                 it.remove();
                 continue;
             }
-            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+            for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                 if (e instanceof EntityMaid md && en.getKey().equals(md.getUUID())
                         && md.isOwnedBy(owner)) {
                     // v1.3.6：骑扫帚的照传（连人带扫帚，见 recallBroomRider）——不能因为「她是乘客」就把她的强载票收掉
@@ -1196,7 +1196,7 @@ BlockPos stand = findStand(newLevel,
                                 owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(ok
                                         ? "§a【集合】" + name2 + " 已从未加载的区块召回"
                                         : "§c【集合】" + name2 + " 召回了但身边没有可站立点"));
-                            } catch (Exception ignored) {
+                            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                             }
                             releasePendingTicket(server, p, en.getKey());
                             it.remove();
@@ -1207,7 +1207,7 @@ BlockPos stand = findStand(newLevel,
                             String name = md.getDisplayName() != null ? md.getDisplayName().getString() : "女仆";
                             owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                                     "§7【集合】" + name + " 在家模式/坐姿中，保持原位（想召回先解除她的排班/在家模式）"));
-                        } catch (Exception ignored) {
+                        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                         }
                         releasePendingTicket(server, p, en.getKey());
                         it.remove();
@@ -1222,7 +1222,7 @@ BlockPos stand = findStand(newLevel,
                         owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(ok
                                 ? "§a【集合】" + name + " 已从未加载的区块召回"
                                 : "§c【集合】" + name + " 召回了但身边没有可站立点"));
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                     }
                     releasePendingTicket(server, p, en.getKey());
                     it.remove();
@@ -1377,7 +1377,7 @@ BlockPos stand = findStand(newLevel,
                 return false; // 格被实体占用
             }
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             return false;
         }
     }
@@ -1391,7 +1391,7 @@ BlockPos stand = findStand(newLevel,
                     net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(level.getBlockState(p).getBlock());
             return rl == null ? "?" : rl.toString();
         } catch (Exception e) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return "?";
         }
     }
 
@@ -1480,7 +1480,7 @@ BlockPos stand = findStand(newLevel,
             // 坐姿**：请她下车（或直接起身）后只传她一个人。home（守家）已在最前面挡掉。
             return summonNamed(maid, player) ? 1 : 2;
         } catch (Exception e) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return 0;
         }
     }
 
@@ -1531,7 +1531,7 @@ BlockPos stand = findStand(newLevel,
         if (maid.isPassenger()) {
             try {
                 maid.stopRiding(); // 只拽人：载体（船/矿车/椅子）留在原地
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
         }
         return teleportCore(maid, owner, true);
@@ -1698,7 +1698,7 @@ BlockPos stand = findStand(newLevel,
             }
             return broomRiderTo(maid, dest, stand, owner.getYRot(), owner.getXRot());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -1727,7 +1727,7 @@ BlockPos stand = findStand(newLevel,
             }
             return broomRiderTo(maid, dest, stand, maid.getYRot(), maid.getXRot());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -1748,7 +1748,7 @@ BlockPos stand = findStand(newLevel,
             }
             return broomRiderTo(maid, dest, cell, maid.getYRot(), maid.getXRot());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -1766,7 +1766,7 @@ BlockPos stand = findStand(newLevel,
                     // 先解开乘客关系：teleportTo 内部也会 unRide，但"先搬扫帚"这一步做完时
                     // 她已经不是乘客了，才轮得到"重新落座"那一步有一个干净的前提
                     maid.stopRiding();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 }
                 try {
                     // 扫帚先走。跨维度这一下会让旧实体退场、新实体入场（同 UUID）——
@@ -1774,7 +1774,7 @@ BlockPos stand = findStand(newLevel,
                     broom.teleportTo(dest, stand.getX() + 0.5, stand.getY(),
                             stand.getZ() + 0.5, java.util.Collections.emptySet(),
                             broom.getYRot(), broom.getXRot());
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 }
             }
             if (!teleportCoreTo(maid, dest, stand, yRot, xRot)) {
@@ -1789,13 +1789,13 @@ BlockPos stand = findStand(newLevel,
                         com.maidsmart.combat.MaidBroomDrive.clearIntent(at);
                         // force 落座：与 MaidBroomDrive.ensureMounted 同一支（跳过 canRide 判定）
                         maid.startRiding(at, true);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                     }
                 }
             }
             return true;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -1811,7 +1811,7 @@ BlockPos stand = findStand(newLevel,
                     && b.isAlive()) {
                 return b;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
         return null;
     }
@@ -1843,7 +1843,7 @@ BlockPos stand = findStand(newLevel,
             }
             return rideRiderTo(maid, dest, stand, owner.getYRot(), owner.getXRot());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -1862,7 +1862,7 @@ BlockPos stand = findStand(newLevel,
             }
             return rideRiderTo(maid, dest, stand, maid.getYRot(), maid.getXRot());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -1881,12 +1881,12 @@ BlockPos stand = findStand(newLevel,
             java.util.UUID mountId = mount.getUUID();
             try {
                 maid.stopRiding(); // 先解开乘客关系（teleportTo 内部也会 unRide，这里给后续一个干净前提）
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
             try {
                 mount.teleportTo(dest, stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5,
                         java.util.Collections.emptySet(), mount.getYRot(), mount.getXRot());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
             if (!teleportCoreTo(maid, dest, stand, yRot, xRot)) {
                 return false;
@@ -1896,12 +1896,12 @@ BlockPos stand = findStand(newLevel,
                 try {
                     at.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
                     maid.startRiding(at, true); // force 落座：与 RideBindManager.bind 同一支
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
                 }
             }
             return true;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -1909,7 +1909,7 @@ BlockPos stand = findStand(newLevel,
     private static net.minecraft.world.entity.Entity entityAt(ServerLevel dest, java.util.UUID id) {
         try {
             return dest.getEntity(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             return null;
         }
     }
@@ -1936,7 +1936,7 @@ BlockPos stand = findStand(newLevel,
             }
             return teleportCoreTo(maid, dest, stand, owner.getYRot(), owner.getXRot());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -2024,7 +2024,7 @@ BlockPos stand = findStand(newLevel,
             com.maidsmart.follow.MaidTeleportRebuild.schedule(live);
             return true;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
         }
     }
 
@@ -2045,7 +2045,7 @@ BlockPos stand = findStand(newLevel,
             }
             SKIP_LOG_SINCE.put(key, now);
             com.maidsmart.tool.PromaidLog.log("跨维", msg);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 
@@ -2217,7 +2217,7 @@ BlockPos stand = findStand(newLevel,
                         + " 格需拉回，但主人身边 16 格内无安全落点——不传（有落点后再试）"
                         : " 同维度距离 " + blocks + " 格需拉回，但主人身边 16 格内无可站立点（高空/虚空）——等落地后再拉"));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
         }
     }
 }

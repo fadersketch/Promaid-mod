@@ -85,7 +85,7 @@ public final class PatrolRevocation extends SavedData {
             }
             // 1.20.1 的参数顺序是 (loader, factory, name)（见 FarmlandMarkStore），别与 1.21.1 弄反
             return ow.m_8895_().m_164861_(LOADER, SUPPLIER, DATA_NAME);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
             return null;
         }
     }
@@ -100,7 +100,7 @@ public final class PatrolRevocation extends SavedData {
         try {
             PatrolRevocation s = get(server);
             return s != null && s.revoked.contains(routeId);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
             return false;
         }
     }
@@ -115,7 +115,7 @@ public final class PatrolRevocation extends SavedData {
                 return false;
             }
             return revoked(maid.m_9236_().m_7654_(), routeId);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
             return false;
         }
     }
@@ -137,7 +137,7 @@ public final class PatrolRevocation extends SavedData {
             if (s != null && s.revoked.add(routeId)) {
                 s.m_77762_();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
         }
         return unbindLoaded(server, routeId);
     }
@@ -150,7 +150,7 @@ public final class PatrolRevocation extends SavedData {
                 return 0;
             }
             for (ServerLevel lvl : server.m_129785_()) {
-                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }
@@ -167,7 +167,7 @@ public final class PatrolRevocation extends SavedData {
                                     + "」已被玩家删除 → 就地解绑，她回到默认状态");
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRevocation", ignored);
         }
         return n;
     }

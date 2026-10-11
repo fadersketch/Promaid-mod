@@ -89,13 +89,12 @@ public final class FarmTillDriver {
         try {
             for (ServerLevel level : server.m_129785_()) {
                 // v1.1.0 实测三百三十（反馈："只有跟随的时候才会锄地，home 模式下
-                // 不会"）：EntityMaid.class 全图扫描改用 Entity.class 全量 + instanceof
-                // 过滤——与宰杀 Animal.class 同构的 ClassInstanceMultiMap 桶 bug：
-                // m_13533_(Class) 按请求 Class 精确建桶，未预建的 key 返回空桶 →
-                // EntitySection.m_188348_ 直接跳过整个 section。跟随模式女仆所在的
-                // section 被 TLM 感知系统预建了 EntityMaid 桶 → 能扫到 → 会锄地；
-                // home 女仆单独站的 section 没预建 → 空桶 → 永远找不到 → 不锄地。
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+                // 不会"）：EntityMaid.class 全图扫描改用 Entity.class 全量 + instanceof 过滤。
+                // 【归因更正·实测八百三十九】旧注把原因写成"未预建的类桶被整段跳过"——javap 实证
+                // ClassInstanceMultiMap.m_13533_(Class) 是 byClass.computeIfAbsent(...)，类桶【按需补建】，
+                // 不存在"没预建就跳过"；真因是无限 AABB 溢出（见 HomeWorkMovementDriver 同款说明）。
+                // 结论不变：走 Entity.class + 有限范围 + instanceof 过滤最稳（见 MaidRoster 注释）。
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_() || !isFarmTask(maid)) {
                         continue;
                     }
@@ -111,7 +110,7 @@ public final class FarmTillDriver {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FarmTillDriver", ignored);
         }
     }
 
@@ -120,7 +119,7 @@ public final class FarmTillDriver {
             return maid.getTask() != null
                     && "touhou_little_maid:farm".equals(maid.getTask().getUid().toString());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("FarmTillDriver", t); return false;
         }
     }
 
@@ -132,7 +131,7 @@ public final class FarmTillDriver {
         try {
             return maid.m_6274_().m_21952_(MemoryModuleType.f_26370_).isPresent();
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("FarmTillDriver", t); return false;
         }
     }
 
@@ -208,7 +207,7 @@ public final class FarmTillDriver {
                 return true;
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FarmTillDriver", ignored);
             return false;
         }
     }
@@ -394,7 +393,7 @@ public final class FarmTillDriver {
                 });
             }
             return true; // 本轮锄了地 = 耕地工作中
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FarmTillDriver", ignored);
             return false;
         }
     }

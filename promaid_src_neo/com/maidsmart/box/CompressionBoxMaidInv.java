@@ -308,7 +308,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
                     net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
             return (id == null ? String.valueOf(stack.getItem()) : id.toString())
                     + " ×" + stack.getCount();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxMaidInv", ignored);
             return String.valueOf(stack.getItem()) + " ×" + stack.getCount();
         }
     }

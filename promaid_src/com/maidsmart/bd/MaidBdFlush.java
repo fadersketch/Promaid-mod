@@ -80,7 +80,7 @@ public final class MaidBdFlush {
     public void onMaidTick(MaidTickEvent event) {
         try {
             tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdFlush", ignored);
         }
     }
 
@@ -113,7 +113,7 @@ public final class MaidBdFlush {
         try {
             return com.maidsmart.tool.MaidExtraContainer.hasAny(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidBdFlush", t); return false;
         }
     }
 

@@ -107,7 +107,7 @@ public final class MaidShellHoming {
             // 按"女仆"记：一辆车上就她一名炮手，下一发覆盖上一发即可
             // （弹体在下一拍就出现，覆盖窗口只有那 1 拍）。
             PENDING.put(maid.getUUID(), target.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
         }
     }
 
@@ -170,7 +170,7 @@ public final class MaidShellHoming {
                     it.remove(); // ② 逐发纠向；返回 false = 该放手了
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
         }
     }
 
@@ -225,7 +225,7 @@ public final class MaidShellHoming {
                             + describe(server, lvl, target));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
         }
     }
 
@@ -300,7 +300,7 @@ public final class MaidShellHoming {
             log(t.maid, "纠向 " + String.valueOf(target.getType()).replace("entity.minecraft.", "")
                     + " 偏角=" + (long) deg + "° 距离=" + (long) dist + "格");
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
             return false;
         }
     }
@@ -311,7 +311,7 @@ public final class MaidShellHoming {
         try {
             Entity e = findIn(server, id);
             return e;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
             return null;
         }
     }
@@ -335,7 +335,7 @@ public final class MaidShellHoming {
                     return le;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
         }
         return null;
     }
@@ -346,7 +346,7 @@ public final class MaidShellHoming {
             if (e != null) {
                 return String.valueOf(e.getType()).replace("entity.minecraft.", "");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
         }
         return "?";
     }
@@ -363,7 +363,7 @@ public final class MaidShellHoming {
                 HOMING_AT.clear();
             }
             com.maidsmart.tool.PromaidLog.log("模组坐骑·制导", msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
         }
     }
 
@@ -373,7 +373,7 @@ public final class MaidShellHoming {
             TRACKED.clear();
             PENDING.clear();
             HOMING_AT.clear();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidShellHoming", ignored);
         }
     }
 

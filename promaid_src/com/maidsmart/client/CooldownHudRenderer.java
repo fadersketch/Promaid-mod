@@ -103,7 +103,7 @@ public final class CooldownHudRenderer {
             com.mojang.logging.LogUtils.getLogger().info(
                     "cooldown hud: SKIP[{}] entries={} staleMs={} screen={} f3={} font={} y={} h={}",
                     reason, entries, staleMs, screenOpen, f3, fontOk, y, h);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CooldownHudRenderer", ignored);
         }
     }
 
@@ -267,7 +267,7 @@ public final class CooldownHudRenderer {
     private static long parse(String s) {
         try {
             return Long.parseLong(s);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("CooldownHudRenderer", ignored);
             return 0L;
         }
     }

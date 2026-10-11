@@ -433,7 +433,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     private static double followDistCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_FOLLOW_START.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
             return 6.0; // 【实测六百七十五】与配置默认值对齐（默认 25 → 6，这个兜底也得跟）
         }
     }
@@ -441,7 +441,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     private static double followEndDistCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_FOLLOW_END.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
             return 3.0; // 【实测六百七十五】同上（默认 5 → 3）
         }
     }
@@ -472,7 +472,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             HOME_LOGGED.put(maid, gameTime);
             com.maidsmart.tool.PromaidLog.log("扫帚守家",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + now);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
     }
 
@@ -535,11 +535,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
                     return t;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
         try {
             return maid.m_5448_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
             return null;
         }
     }
@@ -551,7 +551,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             // ——否则 forge 树的 --release 17 会以"无条件模式"直接编译失败。
             net.minecraft.world.entity.Entity o = maid.m_269323_();
             return o instanceof LivingEntity le ? le : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
             return null;
         }
     }
@@ -580,7 +580,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             float pitch = (float) (-Math.atan2(dy, Math.max(horiz, 1.0E-4)) * 57.295776F);
             maid.m_146922_(yaw);
             maid.m_146926_(pitch);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
     }
 
@@ -636,7 +636,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 扫帚模式缺件：" + missing + "（原地待命中）");
             maid.getChatBubbleManager().addTextChatBubble("扫帚模式还差" + missing + "，先待着不动");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
     }
 
@@ -690,7 +690,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 这一拍弹匣里没弹（缺件：" + MaidBroomKit.missingParts(maid)
                     + "）→ **不下鞍**，留在扫帚上等换弹（换弹由开火链路自己触发）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
     }
 
@@ -746,7 +746,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
                     + " 双就绪：空袭三件套齐 + 已骑扫帚持远程武器 → 播报「我已经准备好了」（本轮只说一次，"
                     + "扫帚条件解除或空袭条件断开后才会再说）");
             maid.getChatBubbleManager().addTextChatBubble("空袭和扫帚都齐了，我已经准备好了！");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
     }
 
@@ -764,7 +764,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
                 com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " 双就绪解除（" + why + "）→ 文本 CD 已刷新，下次两套都齐时她会再说一次");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
     }
 
@@ -784,7 +784,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             PLAYER_DRIVE_LOGGED.put(maid, gameTime + NOTIFY_COOLDOWN);
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 玩家在驾驶这把扫帚 → 扫帚模式只负责开火、不接管飞行（想让她自己飞，请让玩家下扫帚）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
         }
     }
 
@@ -795,7 +795,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     private static boolean followEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_FOLLOW.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomBehavior", ignored);
             return true;
         }
     }

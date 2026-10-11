@@ -54,7 +54,7 @@ public abstract class EntityBatonMountGateMixin {
                 return;
             }
             cir.setReturnValue(false); // 与"这只坐骑不让你骑"同一条原版返回
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBatonMountGateMixin", ignored);
         }
     }
 }

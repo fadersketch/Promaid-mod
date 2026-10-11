@@ -174,7 +174,7 @@ public final class RideBindManager {
     private static boolean batonExclusive() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_BATON_EXCLUSIVE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return true;
         }
     }
@@ -322,7 +322,7 @@ public final class RideBindManager {
                 ViewSnapshot.pin(player, ViewSnapshot.capture(player));
                 event.setCanceled(true);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -358,7 +358,7 @@ public final class RideBindManager {
                                           + " 仍在驾驶位" : "") + "）");
             } else {
                 deny(sp, maid, "这辆车没有能坐的副驾～"); // maid 允许为 null（deny 会发系统消息）
-            }        } catch (Throwable ignored) {
+            }        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -373,7 +373,7 @@ public final class RideBindManager {
             ViewSnapshot.pin(player, ViewSnapshot.capture(player)); // 顺带抹掉 SWB 本地那一拍转视角
             event.setCanceled(true);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -443,7 +443,7 @@ public final class RideBindManager {
                     + "，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 已下鞍，本档不吞右击）");
             // 【关键】不 event.setCanceled：这一下继续走到 Goety 的 mobInteract → doPlayerRide。
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -472,7 +472,7 @@ public final class RideBindManager {
             try {
                 return new float[]{p.m_146908_(), p.m_146909_(), p.m_6080_(),
                         p.f_19859_, p.f_19860_, p.f_20886_};
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                 return null;
             }
         }
@@ -490,7 +490,7 @@ public final class RideBindManager {
                     p.f_19860_ = snap[4];
                     p.f_20886_ = snap[5];
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
         }
 
@@ -508,7 +508,7 @@ public final class RideBindManager {
                 if (PINS.size() > 64) {
                     PINS.clear();
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
         }
     }
@@ -535,7 +535,7 @@ public final class RideBindManager {
                     Float.intBitsToFloat((int) v[5]), Float.intBitsToFloat((int) v[6])};
             ViewSnapshot.restoreIfChanged(player, snap);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -629,7 +629,7 @@ public final class RideBindManager {
             // 空手坐副驾那条路不受影响（handlePassengerSeat 里不查手里拿什么）。
             event.setCanceled(true);
             PlayerMountLog.throttled(player);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -638,7 +638,7 @@ public final class RideBindManager {
         try {
             return player.m_21205_().m_41720_() instanceof RideBatonItem
                     || player.m_21206_().m_41720_() instanceof RideBatonItem;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -676,7 +676,7 @@ public final class RideBindManager {
                 }
                 REMOUNT_PERMIT.put(player.m_20148_(), vehicle.m_20148_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -689,7 +689,7 @@ public final class RideBindManager {
             synchronized (REMOUNT_PERMIT) {
                 REMOUNT_PERMIT.remove(player.m_20148_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -723,7 +723,7 @@ public final class RideBindManager {
                     && System.currentTimeMillis() < CLIENT_REMOUNT_UNTIL_MS) {
                 return true; // 客户端：服务端刚发过"这一辆车放行"
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         return false;
     }
@@ -743,7 +743,7 @@ public final class RideBindManager {
     public static boolean isModVehicleClient(Entity e) {
         try {
             return MaidMountCompat.kindOf(e) == MaidMountCompat.Kind.VEHICLE;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -791,7 +791,7 @@ public final class RideBindManager {
             com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "左击换座：主人=" + name(player)
                     + " 车=" + MaidRideKit.describe(mount) + "（女仆="
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -856,7 +856,7 @@ public final class RideBindManager {
             }
             PlayerMountLog.throttled(player);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -889,7 +889,7 @@ public final class RideBindManager {
                 return false;
             }
             return MaidMountCompat.firstFreeSeatExcept(vehicle, rider) >= 0; // 还有副驾空座
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -915,7 +915,7 @@ public final class RideBindManager {
                 AT.put(id, now);
                 com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", name(sp)
                         + " 手里拿着指挥棒 → 不登乘（独占右击：这一下只归棍子）");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
         }
     }
@@ -1009,7 +1009,7 @@ public final class RideBindManager {
                     + MaidRideKit.describe(target) + "\u00a7a → 再右击自己的女仆即可配对"));
             com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "选中坐骑："
                     + MaidRideKit.describe(target) + "（玩家=" + name(player) + "，等女仆）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1056,7 +1056,7 @@ public final class RideBindManager {
     private static boolean isOurRider(EntityMaid maid) {
         try {
             return MaidRideKit.isRideRider(maid) || isDragonChairRider(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -1144,7 +1144,7 @@ public final class RideBindManager {
                     }
                     ok = maid.m_7998_(mount, true);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
             if (!ok) {
                 deny(player, maid, "没能坐上去……再试一次？");
@@ -1158,7 +1158,7 @@ public final class RideBindManager {
                     com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "座位修正失败："
                             + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 不在驾驶位（下一拍重试）");
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
         }
         LINKS.put(maid.m_20148_(), new Link(maid, mount, player, chair, prevCmd, prevSitting));
@@ -1170,7 +1170,7 @@ public final class RideBindManager {
         try {
             maid.getPersistentData().m_128359_(TAG_RIDE_MOUNT, maid.m_20148_() + "|"
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "|" + mount.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         // 【实测七百二十九·点2·必补】坐骑侧也要留痕——**旧版从来没有写过它**（全树只有 remove、
         // 没有 put）。后果不只是"留痕白写"：重启后 {@link #restore} 只认"她还在马/车上"这一条
@@ -1182,7 +1182,7 @@ public final class RideBindManager {
         try {
             mount.getPersistentData().m_128359_(TAG_RIDE_MAID, mount.m_20148_() + "|"
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "|" + maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         mark(maid);
         mark(mount);
@@ -1240,16 +1240,16 @@ public final class RideBindManager {
         // 点3：解绑时顺手把"待选光标"痕迹也清掉（若还留着）
         try {
             maid.getPersistentData().m_128473_(TAG_PENDING_MARK);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         try {
             maid.getPersistentData().m_128473_(TAG_RIDE_MOUNT);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         if (mount != null) {
             try {
                 mount.getPersistentData().m_128473_(TAG_RIDE_MAID);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
             // 【实测七百七十】模组仆从坐骑：把"她的速度"修改器摘掉，还它原本的移速。
             MaidRideKit.clearRiddenSpeed(mount);
@@ -1259,7 +1259,7 @@ public final class RideBindManager {
             if (maid.m_20202_() != null) {
                 maid.m_8127_();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         if (!natural) {
             bubble(maid, "好，我自己走～");
@@ -1369,7 +1369,7 @@ public final class RideBindManager {
             if (mount != null) {
                 try {
                     mount.getPersistentData().m_128473_(TAG_RIDE_MAID);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                 }
             }
         }
@@ -1393,7 +1393,7 @@ public final class RideBindManager {
             }
             Link link = LINKS.get(maid.m_20148_());
             return link != null && link.chair;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -1436,7 +1436,7 @@ public final class RideBindManager {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -1488,7 +1488,7 @@ public final class RideBindManager {
             }
             Entity v = maid.m_20202_();
             return v != null && MaidMountCompat.kindOf(v) == MaidMountCompat.Kind.VEHICLE;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -1511,7 +1511,7 @@ public final class RideBindManager {
                     + " → 先请她下来再单独传人（" + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
             maid.m_8127_();
             return maid.m_20202_() == null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -1536,7 +1536,7 @@ public final class RideBindManager {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         return null;
     }
@@ -1574,7 +1574,7 @@ public final class RideBindManager {
             MaidMountCompat.setGravity(maid, false);
             MaidMountCompat.freezeOnSeat(maid);
             MaidMountCompat.seatOnDragon(mount, maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1649,7 +1649,7 @@ public final class RideBindManager {
                 MaidMountCompat.freezeOnSeat(rider);
                 MaidMountCompat.seatOnDragon(e, rider);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1706,7 +1706,7 @@ public final class RideBindManager {
                 MaidMountCompat.freezeOnSeat(maid);
                 MaidMountCompat.seatOnDragon(e, maid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1720,7 +1720,7 @@ public final class RideBindManager {
             // 留痕（每只女仆 5 秒一条上限）：排查"龙一飞就错乱"时先看这一行有没有写出来
             // ——有 = 配对已同步给客户端；日志搜「骑行同步」。
             logSeatSync(maid, mountId);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1741,7 +1741,7 @@ public final class RideBindManager {
             com.maidsmart.tool.PromaidLog.log("骑行同步", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + (mountId < 0 ? " 悬空鞍位配对解除（客户端停止同行摆位）"
                             : " 悬空鞍位配对已同步给客户端（龙 id=" + mountId + "，客户端按同一算式同行）"));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1756,7 +1756,7 @@ public final class RideBindManager {
             } else {
                 SYNCED_CHAIRS.put(maidId, mountId);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1764,7 +1764,7 @@ public final class RideBindManager {
     public static void clearSyncedSeats() {
         try {
             SYNCED_CHAIRS.clear();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1788,7 +1788,7 @@ public final class RideBindManager {
             } else {
                 MaidSeatNetworking.sendTo(watcher, maid.m_19879_(), -1);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1870,7 +1870,7 @@ public final class RideBindManager {
                 housekeepTimer = 0;
                 restore(server);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -1896,12 +1896,12 @@ public final class RideBindManager {
         unmark(mount);
         try {
             maid.getPersistentData().m_128473_(TAG_RIDE_MOUNT);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         if (mount != null) {
             try {
                 mount.getPersistentData().m_128473_(TAG_RIDE_MAID);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
             // 【实测七百七十】模组仆从坐骑：把"她的速度"修改器摘掉，还它原本的移速。
             MaidRideKit.clearRiddenSpeed(mount);
@@ -2321,7 +2321,7 @@ public final class RideBindManager {
                             target = t;
                         }
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                 }
             }
             // ③ 【实测七百五十二更正】模式这一拍**没有**给出走位点（站桩活贴方块 / 农田暂时
@@ -2366,7 +2366,7 @@ public final class RideBindManager {
             MaidRideKit.feedNavigation(mount, target, mod, maid);
             // 【实测七百二十四·点5】主动索敌已前移到本方法开头（见那里"749 前移"的说明）——
             // 749 给默认档加了"够近就 return"，留在这里会被那条提前返回吃掉。
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2466,7 +2466,7 @@ public final class RideBindManager {
                 return;
             }
             MaidRideKit.feedNavigation(mount, target, MaidRideKit.speedModifierFor(mount, maid), maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2496,7 +2496,7 @@ public final class RideBindManager {
             } else {
                 MaidRideKit.stopNavigation(mount); // 进了近身距离 → 停下，交给她的攻击/战术
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2513,7 +2513,7 @@ public final class RideBindManager {
             if (MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE) {
                 return Math.max(MaidMountCompat.stopSlackFor(mount), MaidRideKit.followDist());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         return STOP_SLACK;
     }
@@ -2588,7 +2588,7 @@ public final class RideBindManager {
                     maid.getPersistentData().m_128473_(TAG_RIDE_MOUNT);
                     unmark(maid);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
             // ③ "待选光标"（只点了她 / 只点了坐骑、还没配对就收符）也要撤
             clearPendingMark(maid);
@@ -2599,7 +2599,7 @@ public final class RideBindManager {
             if (mount != null) {
                 try {
                     mount.getPersistentData().m_128473_(TAG_RIDE_MAID);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                 }
                 unmark(mount);
                 com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "收进魂符：坐骑侧光标已撤："
@@ -2614,7 +2614,7 @@ public final class RideBindManager {
             //    她自己中了光灵箭那份不在此列（只改 {@code "Glowing"} 这一个键，
             //    放出来时 load 会重新求值，见 {@code Entity.isCurrentlyGlowing}）。
             clearGlowInStoredData(event.getData());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2631,7 +2631,7 @@ public final class RideBindManager {
             if (data != null && data.m_128441_("Glowing")) {
                 data.m_128379_("Glowing", false);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2659,7 +2659,7 @@ public final class RideBindManager {
                 if (mount.m_6688_() != null) {
                     return;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
             double dx = owner.m_20185_() - mount.m_20185_();
             double dz = owner.m_20189_() - mount.m_20189_();
@@ -2677,9 +2677,9 @@ public final class RideBindManager {
                     first.m_146922_(yaw);
                     first.m_5618_(yaw);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2726,7 +2726,7 @@ public final class RideBindManager {
                 peers.add(other.m_20182_());
             }
             return MaidRideKit.separateAim(aim, MaidRideKit.ridePhase(maid.m_20148_()), peers, want, cap);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return aim;
         }
     }
@@ -2747,7 +2747,7 @@ public final class RideBindManager {
                 return true; // 悬空鞍位（龙）：链路表说这条龙驮着谁
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -2836,7 +2836,7 @@ public final class RideBindManager {
                 other.m_6034_(other.m_20185_() + nx * k, other.m_20186_(), other.m_20189_() + nz * k);
                 logRepel(mount, other, d, r, k);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2860,7 +2860,7 @@ public final class RideBindManager {
                     + " 距离 " + String.format(java.util.Locale.ROOT, "%.1f", d)
                     + " 格 < 要求 " + String.format(java.util.Locale.ROOT, "%.1f", r)
                     + " 格 → 弹开 " + String.format(java.util.Locale.ROOT, "%.2f", k) + " 格/拍");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2887,7 +2887,7 @@ public final class RideBindManager {
             }
             AMMO_FEED_AT.put(mount.m_20148_(), now);
             MaidMountCompat.feedVehicleAmmo(mount, maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2903,7 +2903,7 @@ public final class RideBindManager {
             }
             ENGAGE_AT.put(maid.m_20148_(), now);
             com.maidsmart.combat.AutoCombatSwitch.tryEngagePublic(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -2928,7 +2928,7 @@ public final class RideBindManager {
             if (tracker instanceof net.minecraft.world.entity.ai.behavior.EntityTracker et) {
                 return et.m_147481_() != null && et.m_147481_().m_20148_().equals(owner.m_20148_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         return false;
     }
@@ -2954,7 +2954,7 @@ public final class RideBindManager {
             double dx = navTarget.f_82479_ - owner.m_20185_();
             double dz = navTarget.f_82481_ - owner.m_20189_();
             return Math.sqrt(dx * dx + dz * dz) <= NAV_OWNER_EPS;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -2973,7 +2973,7 @@ public final class RideBindManager {
         try {
             LivingEntity t = targetOf(maid);
             return (t != null && com.maidsmart.combat.LiveThreat.live(maid, t)) ? t : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return null;
         }
     }
@@ -2989,11 +2989,11 @@ public final class RideBindManager {
                     return le;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         try {
             return maid.m_5448_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return null;
         }
     }
@@ -3010,7 +3010,7 @@ public final class RideBindManager {
                 String tag;
                 try {
                     tag = maid.getPersistentData().m_128461_(TAG_RIDE_MOUNT);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                     continue;
                 }
                 if (tag == null || tag.isEmpty()) {
@@ -3020,7 +3020,7 @@ public final class RideBindManager {
                 if (mount == null || mount instanceof EntityMaid) {
                     try {
                         maid.getPersistentData().m_128473_(TAG_RIDE_MOUNT);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                     }
                     continue;
                 }
@@ -3038,7 +3038,7 @@ public final class RideBindManager {
                 } else {
                     try {
                         maid.getPersistentData().m_128473_(TAG_RIDE_MOUNT);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                     }
                 }
             }
@@ -3057,7 +3057,7 @@ public final class RideBindManager {
         }
         try {
             e.m_146915_(true);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3068,7 +3068,7 @@ public final class RideBindManager {
         }
         try {
             e.m_146915_(false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3084,7 +3084,7 @@ public final class RideBindManager {
         try {
             e.m_146915_(true);
             e.getPersistentData().m_128359_(TAG_PENDING_MARK, "1");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3104,14 +3104,14 @@ public final class RideBindManager {
                 return;
             }
             e.m_146915_(false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
     private static void bubble(EntityMaid maid, String msg) {
         try {
             maid.getChatBubbleManager().addTextChatBubble(msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3128,7 +3128,7 @@ public final class RideBindManager {
             } else {
                 player.m_213846_(Component.m_237113_("\u00a7c" + msg));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3138,7 +3138,7 @@ public final class RideBindManager {
         try {
             LivingEntity owner = maid.m_269323_();
             return owner != null && owner.m_20148_().equals(player.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return false;
         }
     }
@@ -3148,7 +3148,7 @@ public final class RideBindManager {
             double dx = a.m_20185_() - b.m_20185_();
             double dz = a.m_20189_() - b.m_20189_();
             return Math.sqrt(dx * dx + dz * dz);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return 0.0;
         }
     }
@@ -3158,7 +3158,7 @@ public final class RideBindManager {
             double dx = a.m_20185_() - b.f_82479_;
             double dz = a.m_20189_() - b.f_82481_;
             return Math.sqrt(dx * dx + dz * dz);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return 0.0;
         }
     }
@@ -3166,7 +3166,7 @@ public final class RideBindManager {
     private static String name(ServerPlayer p) {
         try {
             return p.m_5446_() != null ? p.m_5446_().getString() : p.m_20148_().toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return "?";
         }
     }
@@ -3179,7 +3179,7 @@ public final class RideBindManager {
             com.maidsmart.tool.StateTables.cap("骑乘.DENY_LOG", DENY_LOG);
             com.maidsmart.tool.StateTables.cap("骑乘.ENGAGE_AT", ENGAGE_AT); // 实测七百二十六·点6
             com.maidsmart.tool.StateTables.cap("骑乘.AMMO_FEED_AT", AMMO_FEED_AT); // 实测七百二十六·点6
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3231,7 +3231,7 @@ public final class RideBindManager {
                             + MaidRideKit.describe(e));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3281,7 +3281,7 @@ public final class RideBindManager {
                         pendingTag = e.getPersistentData().m_128471_(TAG_PENDING_MARK);
                         ourTag = pendingTag
                                 || !e.getPersistentData().m_128461_(TAG_RIDE_MAID).isEmpty();
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                         continue;
                     }
                     if (!ourTag) {
@@ -3303,7 +3303,7 @@ public final class RideBindManager {
                     }
                     try {
                         e.getPersistentData().m_128473_(TAG_RIDE_MAID);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
                     }
                     if (e.m_142038_()) {
                         unmark(e);
@@ -3312,7 +3312,7 @@ public final class RideBindManager {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
     }
 
@@ -3325,7 +3325,7 @@ public final class RideBindManager {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         return false;
     }
@@ -3342,7 +3342,7 @@ public final class RideBindManager {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         return false;
     }

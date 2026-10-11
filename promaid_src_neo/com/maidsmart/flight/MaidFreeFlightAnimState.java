@@ -41,7 +41,7 @@ public final class MaidFreeFlightAnimState {
             }
             // 实测八百一十二：模型没这条动画 → 本档不生效（否则她掉回绑定姿势）
             return MaidGlideAnimSupport.hasElytraFly(m);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightAnimState", ignored);
             return false;
         }
     }
@@ -63,7 +63,7 @@ public final class MaidFreeFlightAnimState {
                 return false;   // 挨打时优先播受击动画（attacked 在 priority 2，我们不想把它盖掉）
             }
             return MaidFreeFlightKit.isModeActive(m);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightAnimState", ignored);
             return false;
         }
     }

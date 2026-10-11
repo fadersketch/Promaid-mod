@@ -98,7 +98,7 @@ public final class BombTntTick {
             LivingEntity target = null;
             try {
                 target = maid.getBrain().getMemory(MemoryModuleType.ATTACK_TARGET).orElse(null);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombTntTick", ignored);
             }
             if (!BombThrow.legalThrowTarget(maid, target)) {
                 target = BombThrow.findThrowTarget(level, maid); // 记忆里的目标不合法（友军/非敌人）再按半径找

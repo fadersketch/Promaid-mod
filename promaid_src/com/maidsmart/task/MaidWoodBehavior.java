@@ -145,12 +145,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     if (b != null) {
                         WOOD_VALUE.put(b, v);
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
                 }
             }
             customOresLoaded = true;
             WOOD_CACHE.clear(); // v1.5.113：矿表变化 → 缓存失效，强制重建
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
     }
 
@@ -659,7 +659,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             LAST_PROGRESS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十九
             WATCH_SAMPLE.keySet().removeIf(id -> !alive.contains(id));
             RESET_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
     }
 
@@ -739,7 +739,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     Block.m_49840_(level, pos, remain); // 背包满：落地（原版 popResource）
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
     }
 
@@ -774,7 +774,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         try {
             return Float.parseFloat(maid.getPersistentData().m_128461_(PROGRESS_TAG));
         } catch (Exception e) {
-            return 0.0f;
+             com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", e); return 0.0f;
         }
     }
 
@@ -1170,7 +1170,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 try {
                     ((net.minecraftforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
                             .setStackInSlot(0, ItemStack.f_41583_);
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
                 }
             });
         }
@@ -1271,7 +1271,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
             Block b = ((net.minecraft.world.item.ItemNameBlockItem) stack.m_41720_()).m_40614_();
             return b != null && b.m_49966_().m_204336_(SAPLINGS_TAG);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
             return false;
         }
     }
@@ -1327,7 +1327,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 LOGGER.info("wood leaves burst: maid={} broken={}", maid.m_20148_(), broken);
                 markProgress(maid, level.m_46467_()); // 实测六十九：清树叶也算活动
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
     }
 
@@ -1353,7 +1353,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     p.f_8906_.m_9829_(pkt); // ServerGamePacketListenerImpl.send(Packet)
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
     }
 
@@ -2231,7 +2231,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
         return false;
     }
@@ -2253,7 +2253,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 if (b != null) {
                     list.add(b);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
             }
         }
         return list.toArray(new net.minecraft.world.level.block.Block[0]);
@@ -2287,7 +2287,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
         return false;
     }
@@ -2300,7 +2300,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
         return false;
     }

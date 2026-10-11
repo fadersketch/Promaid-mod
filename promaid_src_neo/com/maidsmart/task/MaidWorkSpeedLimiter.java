@@ -84,7 +84,7 @@ public final class MaidWorkSpeedLimiter {
             } else {
                 clearLimit(inst);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkSpeedLimiter", ignored);
         }
     }
 

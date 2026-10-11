@@ -58,7 +58,7 @@ public final class AiMemoryContinuityStore {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryContinuityStore", ignored);
         }
     }
 
@@ -69,7 +69,7 @@ public final class AiMemoryContinuityStore {
             st.pending = new ArrayList<>(this.pending);
             st.processed = new ArrayList<>(this.processed);
             Files.writeString(this.file, AiMemoryModels.GSON.toJson(st), StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryContinuityStore", ignored);
         }
     }
 
@@ -127,7 +127,7 @@ public final class AiMemoryContinuityStore {
         this.processed.clear();
         try {
             Files.deleteIfExists(this.file);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryContinuityStore", ignored);
         }
     }
 

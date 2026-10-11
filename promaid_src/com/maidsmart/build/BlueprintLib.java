@@ -278,7 +278,7 @@ public final class BlueprintLib {
             }
             return steps;
         } catch (Exception e) {
-            // v1.5.26：记录真实异常（之前静默吞掉 → 日志只有"解析返回 null"看不到原因）
+             com.maidsmart.diag.Diag.swallow("BlueprintLib", e); // v1.5.26：记录真实异常（之前静默吞掉 → 日志只有"解析返回 null"看不到原因）
             LOGGER.warn("parseStructure: 解析结构异常 -> {}", e.toString());
             return null;
         }

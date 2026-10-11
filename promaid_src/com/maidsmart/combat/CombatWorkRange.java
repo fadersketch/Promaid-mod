@@ -62,7 +62,7 @@ public final class CombatWorkRange {
     public static int expandRadius() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_WORK_RANGE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatWorkRange", ignored);
             return 0;
         }
     }
@@ -83,7 +83,7 @@ public final class CombatWorkRange {
                 return normal;
             }
             return inCombat(maid) ? Math.max(normal, expandRadius()) : normal;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatWorkRange", ignored);
             return normal;
         }
     }
@@ -131,7 +131,7 @@ public final class CombatWorkRange {
             int lastAttack = maid.m_21215_(); // 最近打人
             return (lastHurt > 0 && now - lastHurt < RECENT_COMBAT_TICKS)
                     || (lastAttack > 0 && now - lastAttack < RECENT_COMBAT_TICKS);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatWorkRange", ignored);
             return false;
         }
     }
@@ -177,7 +177,7 @@ public final class CombatWorkRange {
                 return "最近打人";
             }
             return "无";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatWorkRange", ignored);
             return "?";
         }
     }

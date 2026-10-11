@@ -45,7 +45,7 @@ public abstract class PuppetModeLlmGuardMixin {
             cir.setReturnValue(callback.addToolResult("「" + uid + "」是第三方玩法模式（"
                     + MaidModeCompat.descriptionOfUid(uid)
                     + "），已列入黑名单、不参与自主切换——要她去这个模式请玩家手动切换。", toolId));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PuppetModeLlmGuardMixin", ignored);
         }
     }
 }

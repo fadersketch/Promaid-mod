@@ -45,7 +45,7 @@ public abstract class BuildHomeInertMixin {
             if (MaidBuildBehavior.homeInert(maid)) {
                 cir.setReturnValue(true); // 视为"在圈内"= 无圈：出圈传送/走回/等圈逻辑全部落空
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildHomeInertMixin", ignored);
         }
     }
 
@@ -60,7 +60,7 @@ public abstract class BuildHomeInertMixin {
             if (MaidBuildBehavior.homeInert(maid)) {
                 cir.setReturnValue(maid.m_20183_()); // blockPosition()
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildHomeInertMixin", ignored);
         }
     }
 }

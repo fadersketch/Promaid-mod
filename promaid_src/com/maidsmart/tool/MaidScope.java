@@ -55,7 +55,7 @@ public final class MaidScope {
     public static boolean owned(EntityMaid maid) {
         try {
             return maid != null && maid.m_21805_() != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidScope", ignored);
             return false;
         }
     }
@@ -84,7 +84,7 @@ public final class MaidScope {
     public static boolean promaidBehavior(Object behavior) {
         try {
             return behavior != null && Boolean.TRUE.equals(PROMAID_CLASS.get(behavior.getClass()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidScope", ignored);
             return false;
         }
     }
@@ -119,7 +119,7 @@ public final class MaidScope {
             }
             PromaidLog.log("降级", PromaidLog.nameOf(maid)
                     + " 是无主女仆（没有主人）→ promid 的全部改动对她不生效，保持 TLM 原版行为");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidScope", ignored);
         }
     }
 

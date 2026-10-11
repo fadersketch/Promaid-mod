@@ -113,12 +113,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     if (b != null) {
                         ORE_VALUE.put(b, v);
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
                 }
             }
             customOresLoaded = true;
             ORE_CACHE.clear(); // v1.5.113：矿表变化 → 缓存失效，强制重建
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
     }
 
@@ -387,6 +387,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static final Map<Integer, java.util.Set<BlockPos>> ABANDONED = new HashMap<>();
     /** v1.5.113：搭方块材料耗尽播报限频（实体 ID → 上次播报 tick） */
     private static final Map<Integer, Long> NO_BLOCK_REPORT_SINCE = new HashMap<>();
+    /** 实测八百六十九：没镐不启动的气泡提示限频（实体 ID → 上次提示 tick） */
+    private static final Map<Integer, Long> NO_PICK_REPORT_SINCE = new HashMap<>();
     /** v1.1.0 实测六十九：发呆看门狗——最近一次"真实进展"时刻（挖掉/垫了方块）。长时间零进展
      *  且原地不动 = 发呆/死循环，自动整体重置该女仆的全部行为状态（等效收回魂符再放下去）。 */
     private static final Map<Integer, Long> LAST_PROGRESS = new HashMap<>();
@@ -442,6 +444,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         RECENT_DISCARD.remove(maidEntityId);
         ABANDONED.remove(maidEntityId); // 实测八百六十八：本锚点排除表一并清
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
+        NO_PICK_REPORT_SINCE.remove(maidEntityId); // 实测八百六十九
         ORE_CACHE.remove(maidEntityId);
         MINE_SCANS.remove(maidEntityId); // 实测六十一：分帧扫描游标一并清
         LAST_PROGRESS.remove(maidEntityId); // 实测六十九：看门狗三表一并清
@@ -501,6 +504,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static final String PROGRESS_TAG = "maid_smart_mine_progress";
     /** 目标扫描节流：找不到矿时每 20 tick 才扫一次，避免每 tick 全量查询 */
     private int scanCooldown = 0;
+    /** 实测八百六十九【锁定期间的重挑间隔】（tick，100 = 5 秒）：见 tick() 的持续重挑块 */
+    private static final int MINE_REPICK_INTERVAL = 100;
+    /** 实测八百六十九：锁定目标期间的重挑倒计时（见 {@link #MINE_REPICK_INTERVAL}） */
+    private int repickCooldown = 0;
     /** v1.5.113：上一次 findOre 是否做了全量重建（缓存轮=false）——只有全量重建
      *  确认框空才滑动锚点迁移（缓存轮空不迁移，等 5 秒重建再判） */
     private boolean lastScanWasFull = true;
@@ -595,6 +602,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             ids.addAll(RECENT_DISCARD.keySet());
             ids.addAll(ABANDONED.keySet()); // 实测八百六十八：本锚点排除表
             ids.addAll(NO_BLOCK_REPORT_SINCE.keySet());
+            ids.addAll(NO_PICK_REPORT_SINCE.keySet()); // 实测八百六十九
             ids.addAll(ORE_CACHE.keySet());
             ids.addAll(LAST_PROGRESS.keySet()); // 实测六十九
             ids.addAll(WATCH_SAMPLE.keySet());
@@ -618,12 +626,13 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             BLOCKED_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             RECENT_DISCARD.keySet().removeIf(id -> !alive.contains(id));
             NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
+            NO_PICK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id)); // 实测八百六十九
             ORE_CACHE.keySet().removeIf(id -> !alive.contains(id));
             MINE_SCANS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十一
             LAST_PROGRESS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十九
             WATCH_SAMPLE.keySet().removeIf(id -> !alive.contains(id));
             RESET_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
     }
 
@@ -703,7 +712,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     Block.popResource(level, pos, remain); // 背包满：落地（原版 popResource）
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
     }
 
@@ -738,7 +747,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         try {
             return Float.parseFloat(((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getString(PROGRESS_TAG));
         } catch (Exception e) {
-            return 0.0f;
+             com.maidsmart.diag.Diag.swallow("MaidMineBehavior", e); return 0.0f;
         }
     }
 
@@ -748,8 +757,18 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 换镐、滑动迁移全部收敛到 doTick 统一处理。旧版 canStart 无矿即返回
         // false → 行为停止 → doTick 不再运行 → 空框时女仆原地发呆、永不迁移
         // （"矿挖完就站住不动"根因）。
-        return maid.getTask() != null
-                && ResourceLocation.parse("maid_smart:mine").equals(maid.getTask().getUid());
+        if (maid.getTask() == null
+                || !ResourceLocation.parse("maid_smart:mine").equals(maid.getTask().getUid())) {
+            return false;
+        }
+        // 实测八百六十九【没镐不启动，对齐参考 mod 官方流程图「身上有镐子吗」】：手/背包
+        // 一把镐都没有 → 挖矿任务不启动 + 限频气泡提示；给了镐下一 tick 自动开工。
+        if (com.maidsmart.config.MaidSmartConfig.MINE_REQUIRE_PICK.get()
+                && !MaidToolAutoEquip.hasAnyPickaxe(maid)) {
+            this.hintNoPickaxe(maid, level);
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -893,9 +912,21 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             MINING.add(maid.getUUID());
             }
         }
-        // 实测八百六十八【锁定期间不再周期性重挑】：旧版每 5 秒 findOre 重挑一次、换目标就重置超时
-        // （两块矿分数接近时 A→B→A 抖动、够不着的矿永远等不到弃置 = "锁定能力差"主因）。现在锁上的
-        // 目标一直保留，只在下面三条里释放：①目标不再是矿/开路石 ②锁定超时 ③判不可达（走路卡死）。
+        // 实测八百六十九【锁定期间持续重挑，对齐参考 mod 官方流程图「持续检测」】：每
+        // MINE_REPICK_INTERVAL（5 秒）从缓存里廉价重挑一次，发现更优的矿就切过去；挖掘进行中
+        //（destroyProgress>0）不打扰。关键：切换【不】重置 TARGET_SINCE——旧版换目标就重置，
+        // 两块分数接近的矿抖动时超时永远清零（"锁定能力差"根因）；不重置则抖动时钟继续走，
+        // 够不着的矿终会超时弃置。目标仍在下述三条里释放：①失效 ②锁定超时 ③判不可达。
+        if (this.targetPos != null && this.destroyProgress <= 0.0f
+                && com.maidsmart.config.MaidSmartConfig.MINE_REPICK.get()
+                && --this.repickCooldown <= 0) {
+            this.repickCooldown = MINE_REPICK_INTERVAL;
+            BlockPos repicked = this.findOre(level, maid, anchor);
+            if (repicked != null && !repicked.equals(this.targetPos)) {
+                this.targetPos = repicked;
+                MaidToolAutoEquip.ensureForTarget(maid, level.getBlockState(this.targetPos));
+            }
+        }
         // v1.5.47：弃置检查——够不着且无任何破坏进度、且已超过"挖完这块要多久"的估算时长 → 弃置重选。
         // 实测八百六十八：超时从固定 15 秒改成按破坏速度放大（见 targetTimeoutTicks）——深板岩钻石
         // 这类硬矿不再还没挖完就被当"够不着"弃掉；弃置同时记本锚点排除表（ABANDONED），不再回头啃。
@@ -1337,7 +1368,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     p.connection.send(pkt); // ServerGamePacketListenerImpl.send(Packet)
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
     }
 
@@ -1861,6 +1892,18 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 "背包里没有能搭的方块了（圆石/泥土等），够不着高处的矿……请给我一些方块～");
     }
 
+    /** 实测八百六十九【没镐不启动】：挖矿任务因没镐不启动时气泡提示（限频 30 秒，不刷屏） */
+    private void hintNoPickaxe(EntityMaid maid, ServerLevel level) {
+        long now = level.getGameTime();
+        Long last = NO_PICK_REPORT_SINCE.get(maid.getId());
+        if (last != null && now - last < com.maidsmart.config.MaidSmartConfig.MINE_SKIP_REPORT_INTERVAL.get()) {
+            return;
+        }
+        NO_PICK_REPORT_SINCE.put(maid.getId(), now);
+        maid.getChatBubbleManager().addTextChatBubble(
+                "我身上一把镐子都没有，挖不了矿呀～先给我一把镐子再让我开工吧！");
+    }
+
     /**
      * v1.5.25 斜坡逼近：目标在斜上方（水平 2.5~4.5、垂直差 ≥1）时，
      * 在朝目标方向的前方 1 格脚下垫方块形成台阶——女仆走上去后水平+垂直同时接近，
@@ -2118,7 +2161,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
         return false;
     }
@@ -2147,7 +2190,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(st.getBlock());
             return key != null && isBreakable(key.getPath());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidMineBehavior", e); return false;
         }
     }
 
@@ -2168,7 +2211,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
         return false;
     }
@@ -2181,7 +2224,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
         return false;
     }
@@ -2484,7 +2527,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             }
             int limit = (int) Math.ceil(3.0 / delta);
             return Math.max(floor, Math.min(limit, 1200));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
             return floor;
         }
     }

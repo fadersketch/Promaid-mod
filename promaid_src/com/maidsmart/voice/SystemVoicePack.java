@@ -123,7 +123,7 @@ public final class SystemVoicePack {
                 BYTES_CACHE.put(file, data);
                 return data;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemVoicePack", ignored);
         }
         return null;
     }
@@ -190,7 +190,7 @@ public final class SystemVoicePack {
             return "语音包导入完成：复制 " + copied + " 个文件（manifest + ogg），当前已加载 "
                     + entryCount() + " 条文本映射。";
         } catch (Exception e) {
-            return "语音包导入失败：" + e.getClass().getSimpleName() + " " + e.getMessage();
+             com.maidsmart.diag.Diag.swallow("SystemVoicePack", e); return "语音包导入失败：" + e.getClass().getSimpleName() + " " + e.getMessage();
         }
     }
 

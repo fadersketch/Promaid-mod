@@ -128,7 +128,7 @@ public abstract class ChatBubbleLimitMixin {
                                 : net.minecraft.ChatFormatting.LIGHT_PURPLE));
                 mgr.forceUpdateChatBubble();
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ChatBubbleLimitMixin", ignored);
         }
     }
 }

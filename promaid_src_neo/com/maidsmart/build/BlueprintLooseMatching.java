@@ -91,7 +91,7 @@ public final class BlueprintLooseMatching {
                             + "内容判据：{}；要放宽请把文件名加上机器关键词（{}），"
                             + "或把配置 build.looseMaterials 改成 always",
                     scope, bucket, desc, BlueprintMachineDetect.machineKeywordHint());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BlueprintLooseMatching", ignored);
         }
     }
 

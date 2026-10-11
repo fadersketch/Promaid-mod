@@ -101,7 +101,7 @@ public final class MaidGlideAnimSupport {
                 noteMissing(modelId);
             }
             return has;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGlideAnimSupport", ignored);
             return false;
         }
     }
@@ -121,7 +121,7 @@ public final class MaidGlideAnimSupport {
         try {
             ResourceLocation rl = ResourceLocation.tryParse(s);
             return rl;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGlideAnimSupport", ignored);
             return null;
         }
     }

@@ -174,7 +174,7 @@ public class PerceptionManager {
             }
             return false;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("PerceptionManager", e); return false;
         }
     }
 
@@ -206,7 +206,7 @@ public class PerceptionManager {
             }
             return active;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("PerceptionManager", e); return false;
         }
     }
 

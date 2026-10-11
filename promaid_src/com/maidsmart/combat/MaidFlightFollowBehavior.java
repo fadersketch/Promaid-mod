@@ -478,7 +478,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     private static boolean cfgTrident() {
         try {
             return MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return true; // 读不到配置时按"照原版扣"处理（与默认值一致，绝不放纵）
         }
     }
@@ -502,7 +502,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     public static boolean isFollowing(EntityMaid maid) {
         try {
             return maid != null && FOLLOWING.contains(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false;
         }
     }
@@ -517,7 +517,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     public static boolean isSettling(EntityMaid maid) {
         try {
             return maid != null && SETTLING.contains(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false;
         }
     }
@@ -534,7 +534,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return false;
             }
             return !cfgElytra() && (isFollowing(maid) || isSettling(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false;
         }
     }
@@ -550,7 +550,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             } else {
                 DEBUG_TARGET.put(maid, target);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -558,7 +558,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     public static void clearDebugTargets() {
         try {
             DEBUG_TARGET.clear();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -576,7 +576,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         try {
             GOTO.put(maid.m_20148_(), pos);
             GOTO_DIM.put(maid.m_20148_(), dim);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -588,7 +588,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         try {
             GOTO.remove(maid.m_20148_());
             GOTO_DIM.remove(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -596,7 +596,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     private static boolean isGoto(EntityMaid maid) {
         try {
             return maid != null && GOTO.containsKey(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false;
         }
     }
@@ -623,7 +623,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         GOTO_DIM.remove(maidId);
         try {
             DEBUG_TARGET.keySet().removeIf(m -> maidId.equals(m.m_20148_()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -727,7 +727,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             }
             return true;
         } catch (Throwable t) {
-            return skip(maid, now, "判定抛异常：" + t);
+             com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", t); return skip(maid, now, "判定抛异常：" + t);
         }
     }
 
@@ -748,7 +748,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 com.maidsmart.tool.PromaidLog.log("飞行跟随跳过",
                         com.maidsmart.tool.PromaidLog.nameOf(maid) + " 不起飞：" + why);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
         return false;
     }
@@ -807,7 +807,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return "自推鞘翅（不烧烟花）";
             }
             return "位移法术";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return "烟花火箭";
         }
     }
@@ -819,7 +819,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return "?";
             }
             return String.format("%.1f", aim.dist(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return "?";
         }
     }
@@ -997,7 +997,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             MaidFlightKit.setGliding(maid, false);
             com.maidsmart.tool.PromaidLog.log("飞行跟随",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 已落地，把胸甲还回去");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1097,7 +1097,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                     + (hadRiptide ? "收掉激流推进剂，" : "")
                     + (hadSelfWings ? "收掉自推鞘翅推力，" : "")
                     + "水平速度 " + String.format("%.2f", speed) + " → 0），改自然滑翔");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1284,7 +1284,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
             logThrottled(maid, id, gameTime, "放位移法术追主人（" + spell + " Lv" + lvl + "）");
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false; // 任何异常都当"这一口没有"（canContinue 的燃料门禁会自己收手）
         }
     }
@@ -1298,7 +1298,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             LAST_LOG.put(id, gameTime);
             com.maidsmart.tool.PromaidLog.log("飞行跟随",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + what);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1320,7 +1320,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             table.put(id, gameTime);
             com.maidsmart.tool.PromaidLog.log("飞行跟随",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + what);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1372,7 +1372,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             } else {
                 maid.m_21563_().m_24950_(aim.x, aim.y, aim.z, 360.0f, 360.0f);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1400,7 +1400,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (!old.m_41619_()) {
                 com.maidsmart.tool.MaidGiveBack.give(maid, old, "飞行跟随换下胸甲");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1422,7 +1422,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (!now.m_41619_()) {
                 com.maidsmart.tool.MaidGiveBack.give(maid, now, "飞行跟随结束，还回鞘翅");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1518,7 +1518,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return null;
             }
             return Aim.ofEntity(e);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return null;
         }
     }
@@ -1577,7 +1577,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                         + rider.m_7755_().getString() + "（抬头=爬升、低头=下降、平视=平飞）");
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false;
         }
     }
@@ -1609,7 +1609,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             maid.m_146926_(0.0f); // 俯仰摆平（setXRot）：低着头滑翔会被原版物理往地里拽
             Vec3 cur = maid.m_20184_();
             maid.m_20256_(new Vec3(cur.f_82479_ * 0.72, cur.f_82480_, cur.f_82481_ * 0.72));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1620,7 +1620,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return SelfPreservationBehavior.hasSight(maid, aim.entity);
             }
             return SelfPreservationBehavior.hasSight(maid, aim.pos());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return true; // 与 hasSight 的兜底一致：判不出来就当她看得见（宁可不飞也不误判）
         }
     }
@@ -1658,13 +1658,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (com.maidsmart.combat.MaidFlightCombatBehavior.isEngaged(maid)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
         try {
             var mem = maid.m_6274_().m_21952_(
                     net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
             return mem.isPresent() && mem.get().m_6084_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false; // 读不到记忆时按"没接敌"处理（宁可让她飞，也不误杀她的空袭）
         }
     }

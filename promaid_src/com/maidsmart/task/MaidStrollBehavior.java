@@ -90,13 +90,13 @@ public class MaidStrollBehavior extends Behavior<EntityMaid> {
             try {
                 var atk = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_);
                 g[5] = atk.isPresent() && atk.get().m_6084_();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidStrollBehavior", ignored);
             }
             // 坐姿/乘骑不散步（getVehicle 实测为 m_20202_——MaidRunOne 字节码实证）
             g[6] = maid.isMaidInSittingPose() || maid.m_20202_() != null;
             // 任务实质占用（挖矿/伐木锁定目标、烹饪/酿造站桩、建造未暂停、战斗任务）不散步
             g[7] = BridgeUpBehavior.isTaskOccupied(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidStrollBehavior", ignored);
         }
         return g;
     }

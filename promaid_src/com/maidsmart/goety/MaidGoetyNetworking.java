@@ -94,7 +94,7 @@ public final class MaidGoetyNetworking {
                     EntityMaid maid = null;
                     try {
                         maid = (EntityMaid) level.m_8791_(UUID.fromString(pkt.maidUuid));
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyNetworking", ignored);
                     }
                     if (maid == null) {
                         player.m_5661_(Component.m_237113_("\u00a7c她不在加载范围内（走近一点再试）。"), false);
@@ -124,7 +124,7 @@ public final class MaidGoetyNetworking {
                     boolean on = MaidGoetyAuto.isAuto(maid);
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                             new StatePacket(pkt.maidUuid, on));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyNetworking", ignored);
                 }
             });
             ctx.setPacketHandled(true);

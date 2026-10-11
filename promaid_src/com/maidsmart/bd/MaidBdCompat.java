@@ -85,6 +85,10 @@ public final class MaidBdCompat {
             return;
         }
         inited = true;
+        // TD-15：先在场地判断（ModList，零异常）；两个 ROOTS 是同一个模组的两种类路径，modid 唯一。
+        if (!net.minecraftforge.fml.ModList.get().isLoaded(MOD_ID)) {
+            return;
+        }
         for (String root : ROOTS) {
             try {
                 Class<?> net = Class.forName(root + ".dimensionnet.DimensionsNet");
@@ -110,7 +114,7 @@ public final class MaidBdCompat {
                 mKey = keyAmount.getMethod("key");
                 ok = true;
                 return;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdCompat", ignored);
                 // 换下一个包根
             }
         }
@@ -128,7 +132,7 @@ public final class MaidBdCompat {
         try {
             return com.maidsmart.config.MaidSmartConfig.MISC_BD_STORAGE.get();
         } catch (Throwable t) {
-            return false;   // 读不到就当关（宁可不动）
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return false;   // 读不到就当关（宁可不动）
         }
     }
 
@@ -151,7 +155,7 @@ public final class MaidBdCompat {
             ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             return rl == null ? "" : rl.toString();
         } catch (Throwable t) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return "";
         }
     }
 
@@ -161,7 +165,7 @@ public final class MaidBdCompat {
             LivingEntity owner = maid == null ? null : maid.m_269323_();
             return owner instanceof Player p ? p : null;
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return null;
         }
     }
 
@@ -174,7 +178,7 @@ public final class MaidBdCompat {
         try {
             return Boolean.TRUE.equals(mHasAnyNet.invoke(null, player));
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return false;
         }
     }
 
@@ -187,7 +191,7 @@ public final class MaidBdCompat {
         try {
             return mGetPrimary.invoke(null, player);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return null;
         }
     }
 
@@ -201,7 +205,7 @@ public final class MaidBdCompat {
             Object list = mGetAllNets.invoke(null, player);
             return list instanceof java.util.Collection<?> c ? c.size() : 0;
         } catch (Throwable t) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return 0;
         }
     }
 
@@ -212,7 +216,7 @@ public final class MaidBdCompat {
         try {
             return mGetUnifiedStorage.invoke(net);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return null;
         }
     }
 
@@ -226,7 +230,7 @@ public final class MaidBdCompat {
             Object name = cNet.getMethod("getNetworkName").invoke(net);
             return "#" + id + "（" + name + "）";
         } catch (Throwable t) {
-            return "（读取失败）";
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return "（读取失败）";
         }
     }
 
@@ -255,7 +259,7 @@ public final class MaidBdCompat {
                     out.add(new Line(id, amount));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdCompat", ignored);
         }
         return out;
     }
@@ -279,7 +283,7 @@ public final class MaidBdCompat {
             }
             return n;
         } catch (Throwable t) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return 0;
         }
     }
 
@@ -294,13 +298,13 @@ public final class MaidBdCompat {
                 String id = MaidBdCompat.itemId(st);
                 return id.isEmpty() ? String.valueOf(key) : id;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdCompat", ignored);
         }
         try {
             Object t = cKey.getMethod("getTypeId").invoke(key);
             return String.valueOf(t);
         } catch (Throwable t) {
-            return String.valueOf(key);
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return String.valueOf(key);
         }
     }
 
@@ -315,7 +319,7 @@ public final class MaidBdCompat {
             Object ka = mExtractKey.invoke(storageOf(net), key, Long.MAX_VALUE, true, false);
             return ((Number) mAmount.invoke(ka)).longValue();
         } catch (Throwable t) {
-            return -1;   // -1 = 查询失败（与"0 个"区分开）
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return -1;   // -1 = 查询失败（与"0 个"区分开）
         }
     }
 
@@ -333,7 +337,7 @@ public final class MaidBdCompat {
             }
             return new ItemStack(ForgeRegistries.ITEMS.getValue(rl));
         } catch (Throwable t) {
-            return ItemStack.f_41583_;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return ItemStack.f_41583_;
         }
     }
 
@@ -342,7 +346,7 @@ public final class MaidBdCompat {
         try {
             return new ResourceLocation(s);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return null;
         }
     }
 
@@ -369,7 +373,7 @@ public final class MaidBdCompat {
             copy.m_41721_((int) Math.min(Integer.MAX_VALUE, amount));
             return new Taken(copy, amount);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return null;
         }
     }
 
@@ -379,7 +383,7 @@ public final class MaidBdCompat {
                 Object o = mReadOnlyStack.invoke(key);
                 return o instanceof ItemStack s ? s : null;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdCompat", ignored);
         }
         return null;
     }
@@ -395,7 +399,7 @@ public final class MaidBdCompat {
             Object ka = mExtractKey.invoke(storageOf(net), key, want, false, false);
             return ((Number) mAmount.invoke(ka)).longValue();
         } catch (Throwable t) {
-            return -1;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return -1;
         }
     }
 
@@ -410,7 +414,7 @@ public final class MaidBdCompat {
             Object ka = mInsert.invoke(storageOf(net), key, amount, false);
             return ((Number) mAmount.invoke(ka)).longValue();
         } catch (Throwable t) {
-            return -1;
+             com.maidsmart.diag.Diag.swallow("MaidBdCompat", t); return -1;
         }
     }
 }

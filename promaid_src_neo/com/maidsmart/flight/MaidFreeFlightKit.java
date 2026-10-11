@@ -66,7 +66,7 @@ public final class MaidFreeFlightKit {
                 return false;
             }
             return hasFlightItem(maid) || hasFlightEffect(maid) || gravityFreed(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -94,7 +94,7 @@ public final class MaidFreeFlightKit {
                         return true;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             }
             // TLM 饰品栏（curios 类物品真正待的地方——戒指/挂坠这类飞行物品多半在这）
             try {
@@ -104,17 +104,17 @@ public final class MaidFreeFlightKit {
                         return true;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             }
             // 额外容器（精妙背包 / 旅行者背包）——没有饰品栏时它们至少还认背包
             try {
                 if (com.maidsmart.tool.MaidExtraContainer.contains(maid, s -> matchesAny(s, ids))) {
                     return true;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -133,7 +133,7 @@ public final class MaidFreeFlightKit {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -151,7 +151,7 @@ public final class MaidFreeFlightKit {
             }
             double g = maid.getAttributeValue(Attributes.GRAVITY);
             return g <= 0.001;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -163,7 +163,7 @@ public final class MaidFreeFlightKit {
                     + " 重力=" + String.format("%.3f", maid.getAttributeValue(Attributes.GRAVITY))
                     + " 判定=" + gravityFreed(maid);
         } catch (Throwable t) {
-            return "诊断异常：" + t;
+             com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", t); return "诊断异常：" + t;
         }
     }
 
@@ -212,7 +212,7 @@ public final class MaidFreeFlightKit {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -248,7 +248,7 @@ public final class MaidFreeFlightKit {
                 return true;   // 只要求"有这个组件"
             }
             return String.valueOf(stack.get(type)).contains(needle);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -257,7 +257,7 @@ public final class MaidFreeFlightKit {
     private static List<String> itemIds() {
         try {
             return (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return List.of();
         }
     }
@@ -266,7 +266,7 @@ public final class MaidFreeFlightKit {
     private static List<String> effectIds() {
         try {
             return (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return List.of();
         }
     }

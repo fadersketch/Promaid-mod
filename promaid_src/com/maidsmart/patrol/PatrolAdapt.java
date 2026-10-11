@@ -99,7 +99,7 @@ public final class PatrolAdapt {
                     return q;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolAdapt", ignored);
         }
         return p;
     }
@@ -200,7 +200,7 @@ public final class PatrolAdapt {
             }
             route.setLift(triples);
             return route.liftMax();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolAdapt", ignored);
             return 0.0;
         }
     }
@@ -254,7 +254,7 @@ public final class PatrolAdapt {
         try {
             BlockPos feet = BlockPos.m_274561_(p.f_82479_, p.f_82480_, p.f_82481_);
             return clear(level, feet) && clear(level, feet.m_7494_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolAdapt", ignored);
             return true;
         }
     }
@@ -266,7 +266,7 @@ public final class PatrolAdapt {
                 return true;
             }
             return level.m_8055_(pos).m_60812_(level, pos).m_83281_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolAdapt", ignored);
             return true; // 判不出来就放行：宁可她自己脱困，也别把航线挪歪
         }
     }

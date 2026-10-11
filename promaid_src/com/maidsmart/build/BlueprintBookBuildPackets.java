@@ -785,7 +785,7 @@ public final class BlueprintBookBuildPackets {
                 com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager
                         .findTask(net.minecraft.resources.ResourceLocation.parse(uidStr))
                         .ifPresent(maid::setTask);
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookBuildPackets", ignored);
             }
         }
     }

@@ -43,7 +43,7 @@ public final class ApiQuotaManager {
                     count = 0;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ApiQuotaManager", ignored);
         }
         // v1.5.191：0 = 不限（配额改革——原"count>=0 恒 false"把填 0 变成永远禁言）
         int limit = dailyApiLimit();

@@ -125,7 +125,7 @@ public final class MaidBdRuleCommand {
         java.util.List<String> list = new java.util.ArrayList<>();
         try {
             st.m_204131_().forEach(t -> list.add(t.f_203868_().toString()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdRuleCommand", ignored);
         }
         java.util.Collections.sort(list);
         src.m_288197_(() -> Component.m_237113_(itemId + " 属于 " + list.size() + " 个物品标签："), false);

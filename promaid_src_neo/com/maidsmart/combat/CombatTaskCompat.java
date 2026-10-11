@@ -52,7 +52,7 @@ public final class CombatTaskCompat {
         try {
             return attackTask.isWeapon(maid, stack);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("CombatTaskCompat", t); return false;
         }
     }
 
@@ -75,7 +75,7 @@ public final class CombatTaskCompat {
         try {
             return task.onFunctionCallSwitch(maid);
         } catch (Throwable t) {
-            return FunctionCallSwitchResult.MISSING_REQUIRED_ITEM;
+             com.maidsmart.diag.Diag.swallow("CombatTaskCompat", t); return FunctionCallSwitchResult.MISSING_REQUIRED_ITEM;
         }
     }
 
@@ -83,7 +83,7 @@ public final class CombatTaskCompat {
         try {
             return task != null && EPIC_FIGHT_TASK.equals(task.getUid());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("CombatTaskCompat", t); return false;
         }
     }
 
@@ -98,7 +98,7 @@ public final class CombatTaskCompat {
             Object result = method.get().invoke(task, stack);
             return result instanceof Boolean b && b;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("CombatTaskCompat", t); return false;
         }
     }
 

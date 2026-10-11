@@ -141,7 +141,7 @@ public final class BombPlacement {
                         && cur.m_61143_(net.minecraft.world.level.block.RespawnAnchorBlock.f_55833_) < 4) {
                     net.minecraft.world.level.block.RespawnAnchorBlock.m_269573_(maid, level, base, cur);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPlacement", ignored);
             }
             maid.m_6674_(InteractionHand.MAIN_HAND);
             if (glow.m_41619_()) {
@@ -243,7 +243,7 @@ public final class BombPlacement {
                 maid.m_5552_(left, 0.5f); // 背包满 → 掉在她脚下（实测五百九十三）
                 MaidBombing.log("回收的炸弹底座塞不进背包（背包满）→ 掉在她脚下");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPlacement", ignored);
         }
     }
 
@@ -317,7 +317,7 @@ public final class BombPlacement {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPlacement", ignored);
         }
         return false;
     }
@@ -394,7 +394,7 @@ public final class BombPlacement {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPlacement", ignored);
         }
         return false;
     }
@@ -404,7 +404,7 @@ public final class BombPlacement {
             if (stack.m_41720_() instanceof BlockItem bi) {
                 return bi.m_40614_();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPlacement", ignored);
         }
         return level.m_8055_(spot).m_60734_();
     }

@@ -160,7 +160,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                         }
                     }
                     handed = true;
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
                 }
             }
             if (!handed && !drops.isEmpty()) {
@@ -526,7 +526,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                                 net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()
                                 || wl.m_8055_(wcell.m_7495_()).m_60742_(wl, wcell.m_7495_(),
                                 net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_();
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
                         wGuard = true;
                     }
                     if (wGuard) {
@@ -1100,7 +1100,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                     "bridge no-block diag: maid={} blocks={}",
                     maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
                     counts);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
         }
         maid.getChatBubbleManager().addTextChatBubble(
                 "主人就在上面……可我背包里没有能搭的方块了（圆石/泥土等），够不着呀……");
@@ -1215,7 +1215,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
         }
         try {
             var target = maid.m_6274_().m_21952_(
@@ -1223,7 +1223,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             if (target.isPresent() && target.get().m_6084_()) {
                 return true; // 脑内有存活攻击目标 = 正在接战（战斗模式的"真占用"）
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
         }
         // v1.1.0 实测四百零九：宰杀任务正在追牲畜（WALK_TARGET 在途）也算接战——
         // 无目标闲逛时（行为内 wander）WALK_TARGET 短暂存在会被这里拦住 1~2 秒，
@@ -1236,19 +1236,19 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                     net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_).isPresent()) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
         }
         try {
             if (com.maidsmart.task.MaidMineBehavior.isMining(maid)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
         }
         try {
             if (com.maidsmart.task.MaidWoodBehavior.isWooding(maid)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
         }
         try {
             if (com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(maid)
@@ -1256,7 +1256,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                     && !com.maidsmart.build.BuildPlan.isMaidPaused(maid)) {
                 return true; // 建造任务且未暂停（暂停 = 玩家叫停，视为空闲可追）
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BridgeUpBehavior", ignored);
         }
         return maid.getPersistentData().m_128471_(MaidWorkTags.WORK_STILL_TAG);
     }

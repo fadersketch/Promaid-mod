@@ -52,7 +52,7 @@ public final class MaidFlightKit {
     public static boolean isFlightTask(EntityMaid maid) {
         try {
             return maid != null && maid.getTask() != null && isFlightUid(maid.getTask().getUid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -84,7 +84,7 @@ public final class MaidFlightKit {
         try {
             return ((com.maidsmart.mixin.EntityFlagInvoker) (Object) maid)
                     .promaid$getSharedFlag(FLAG_FALL_FLYING);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -97,7 +97,7 @@ public final class MaidFlightKit {
         try {
             ((com.maidsmart.mixin.EntityFlagInvoker) (Object) maid)
                     .promaid$setSharedFlag(FLAG_FALL_FLYING, gliding);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
     }
 
@@ -119,7 +119,7 @@ public final class MaidFlightKit {
         }
         try {
             return com.maidsmart.combat.MaidFlightCombatBehavior.isEngaged(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -211,7 +211,7 @@ public final class MaidFlightKit {
         try {
             return maid != null && maid.getTask() != null
                     && isManualOnlyCombatUid(maid.getTask().getUid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -220,7 +220,7 @@ public final class MaidFlightKit {
     public static boolean isRangedTask(EntityMaid maid) {
         try {
             return maid != null && maid.getTask() != null && UID_RANGED.equals(maid.getTask().getUid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -283,7 +283,7 @@ public final class MaidFlightKit {
         }
         try {
             return net.minecraft.world.item.enchantment.EnchantmentHelper.m_44932_(stack) > 0;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -436,7 +436,7 @@ public final class MaidFlightKit {
             }
             // 其它：不消耗弹药 → 放行
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return true; // 判据异常时放行，宁可起飞也不要卡死（旧行为）
         }
     }
@@ -452,7 +452,7 @@ public final class MaidFlightKit {
         }
         try {
             return com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei.isGohei(stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -495,7 +495,7 @@ public final class MaidFlightKit {
                     return s;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return ItemStack.f_41583_;
     }
@@ -536,7 +536,7 @@ public final class MaidFlightKit {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return false;
     }
@@ -578,7 +578,7 @@ public final class MaidFlightKit {
             }
             // 背包也没有能用的：保持现状（主手仍是那把打不响的 → 缺件提示照旧报）
             return isRangedWeapon(main) && hasAmmoForWeapon(maid, main);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -595,7 +595,7 @@ public final class MaidFlightKit {
             net.minecraft.resources.ResourceLocation key =
                     net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_());
             return key != null && "minecraft".equals(key.m_135827_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -616,14 +616,14 @@ public final class MaidFlightKit {
             String oldId = old.m_41619_() ? "空" : itemIdOf(old);
             com.maidsmart.tool.PromaidLog.log("空袭装备", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 主手换武器（原 " + oldId + " 打不响）→ " + nowId);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
     }
 
     private static String itemIdOf(ItemStack stack) {
         try {
             return String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return String.valueOf(stack.m_41720_());
         }
     }
@@ -643,7 +643,7 @@ public final class MaidFlightKit {
             if (maid.m_21206_().m_41720_() instanceof net.minecraft.world.item.ArrowItem) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         try {
             java.util.function.Predicate<ItemStack> supported = null;
@@ -667,7 +667,7 @@ public final class MaidFlightKit {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return false;
     }
@@ -719,7 +719,7 @@ public final class MaidFlightKit {
             if (isRiptide(maid.m_21206_())) {
                 return maid.m_21206_(); // 副手
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
@@ -728,7 +728,7 @@ public final class MaidFlightKit {
                     return inv.getStackInSlot(i);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return ItemStack.f_41583_;
     }
@@ -871,7 +871,7 @@ public final class MaidFlightKit {
             try {
                 ids = com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()
                         .toArray(new String[0]);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
                 ids = com.maidsmart.combat.MaidSpellCastCompat.DEFAULT_CLIMB_SPELLS;
             }
             boolean has = com.maidsmart.combat.MaidSpellCastCompat.hasDashSpell(maid, ids);
@@ -880,7 +880,7 @@ public final class MaidFlightKit {
             // 若把那一拍的 false 缓存满 20 tick，缺件提示会在这段时间里一直误报（同 NOTIFY_GRACE_TICKS）。
             DASH_KIT_CACHE_TICK.put(maid.m_20148_(), has ? now : now - (DASH_KIT_CACHE_INTERVAL - 5L));
             return has;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false;
         }
     }
@@ -928,7 +928,7 @@ public final class MaidFlightKit {
             }
             return hasAmmoForWeapon(maid, resolveRangedWeaponAny(maid)) || hasUsableRangedWeaponAny(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidFlightKit", t); return false;
         }
     }
 
@@ -1228,12 +1228,12 @@ public final class MaidFlightKit {
                     bestBagSlot = i;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         if (bestBagSlot >= 0) {
             try {
                 return maid.getAvailableBackpackInv().extractItem(bestBagSlot, 1, false);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
                 return ItemStack.f_41583_;
             }
         }
@@ -1289,7 +1289,7 @@ public final class MaidFlightKit {
         }
         try {
             return stack.canElytraFly(entity);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return false; // 模组实现抛异常不能把她的空袭整段带崩
         }
     }
@@ -1360,14 +1360,14 @@ public final class MaidFlightKit {
             String id;
             try {
                 id = String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(chest.m_41720_()));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
                 id = chest.m_41720_().toString();
             }
             com.maidsmart.tool.PromaidLog.log("鞘翅渲染", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 胸甲槽=" + id + "：它能滑翔，但我们没能查到它自己的翅膀贴图 → 用原版"
                     + " textures/entity/elytra.png（要它自己的样子：该模组公开 getType().getTexture() / "
                     + "getElytraTexture() 就自动画对，否则往 MaidWingSkins 静态表补一行）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
     }
 
@@ -1387,7 +1387,7 @@ public final class MaidFlightKit {
             String nowId;
             try {
                 nowId = String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(now.m_41720_()));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
                 nowId = now.m_41720_().toString();
             }
             String oldId = "空";
@@ -1395,13 +1395,13 @@ public final class MaidFlightKit {
                 try {
                     oldId = String.valueOf(
                             net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(old.m_41720_()));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
                     oldId = old.m_41720_().toString();
                 }
             }
             com.maidsmart.tool.PromaidLog.log("空袭装备", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 胸甲槽换装：" + nowId + "（原 " + oldId + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
     }
 
@@ -1425,7 +1425,7 @@ public final class MaidFlightKit {
             if (maid.m_269323_() instanceof net.minecraft.world.entity.player.Player p) {
                 owner = p;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return "鞘翅判定: 胸甲=" + describeElytraCandidate(maid.m_6844_(EquipmentSlot.CHEST), maid, owner)
                 + " 主手=" + describeElytraCandidate(maid.m_21205_(), maid, owner)
@@ -1443,14 +1443,14 @@ public final class MaidFlightKit {
         String id;
         try {
             id = String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             id = stack.m_41720_().toString();
         }
         boolean vanilla = isUsableElytra(stack);
         boolean hook;
         try {
             hook = stack.canElytraFly(entity);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             hook = false;
         }
         String text = id + "(原版鞘翅=" + vanilla + "，canElytraFly=" + hook + ")";
@@ -1459,7 +1459,7 @@ public final class MaidFlightKit {
                 if (stack.canElytraFly(owner)) {
                     text += "← 它对玩家返回 true、对女仆 false：这个物品的滑翔是写死给玩家的，女仆用不了";
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             }
         }
         return text;
@@ -1487,7 +1487,7 @@ public final class MaidFlightKit {
         boolean extra = false;
         try {
             extra = com.maidsmart.tool.MaidExtraContainer.contains(maid, MaidFlightKit::isRiptide);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return "燃料判定: 主手=" + describeStack(maid.m_21205_())
                 + " 副手=" + describeStack(maid.m_21206_())
@@ -1506,7 +1506,7 @@ public final class MaidFlightKit {
         String id;
         try {
             id = String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             id = stack.m_41720_().toString();
         }
         return stack.m_41613_() + "x" + id;
@@ -1583,7 +1583,7 @@ public final class MaidFlightKit {
             net.minecraft.nbt.ListTag explosions =
                     tag.m_128469_("Fireworks").m_128437_("Explosions", 10);
             return explosions.size();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return 0;
         }
     }
@@ -1631,7 +1631,7 @@ public final class MaidFlightKit {
             if (fromCurios != null) {
                 return fromCurios;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return ItemStack.f_41583_;
     }
@@ -1680,7 +1680,7 @@ public final class MaidFlightKit {
                 level.m_5594_(null, maid.m_20183_(), launch, net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.0f);
             }
             return rocket;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
             return null;
         }
     }
@@ -1697,7 +1697,7 @@ public final class MaidFlightKit {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         // v1.2.4 实测六百三十九：她自己的背包没有 → 再看精妙背包/旅行者背包（只读探针）
         return com.maidsmart.tool.MaidExtraContainer.contains(maid, filter::test);
@@ -1716,7 +1716,7 @@ public final class MaidFlightKit {
                     return inv.extractItem(i, s.m_41613_(), false);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return ItemStack.f_41583_;
     }
@@ -1733,7 +1733,7 @@ public final class MaidFlightKit {
                     return inv.extractItem(i, 1, false);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return ItemStack.f_41583_;
     }

@@ -25,7 +25,7 @@ public class PromaidVoiceSoundInstance extends MaidAISoundInstance {
         this.appliedVolume = volume;
         try {
             this.volume = Math.max(0.0f, volume);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidVoiceSoundInstance", ignored);
         }
     }
 
@@ -62,7 +62,7 @@ public class PromaidVoiceSoundInstance extends MaidAISoundInstance {
             float vol = (float) (double) com.maidsmart.config.MaidSmartConfig.TTS_VOLUME_MULTIPLIER.get()
                     * (float) (double) com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_VOLUME.get();
             mc.getSoundManager().play(new PromaidVoiceSoundInstance(maid, data, vol));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidVoiceSoundInstance", ignored);
         }
     }
 }

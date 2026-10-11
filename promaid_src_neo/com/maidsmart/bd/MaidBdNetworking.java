@@ -80,7 +80,7 @@ public final class MaidBdNetworking {
     public static void sendRule(byte op, String entry, int n) {
         try {
             PacketDistributor.sendToServer(new BdRulePacket(op, entry, n));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
         }
     }
 
@@ -88,7 +88,7 @@ public final class MaidBdNetworking {
     public static void togglePerMaid(String maidUuid, boolean on) {
         try {
             PacketDistributor.sendToServer(new BdPerMaidPacket(maidUuid == null ? "" : maidUuid, on));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
         }
     }
 
@@ -101,7 +101,7 @@ public final class MaidBdNetworking {
                     MaidBdRules.describeMatches((byte) 2),
                     MaidBdRules.describeKeepN(),
                     MaidBdRules.describeAtLeast()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
         }
     }
 
@@ -219,7 +219,7 @@ public final class MaidBdNetworking {
                     if (cur instanceof com.maidsmart.config.PromaidConfigScreen s) {
                         s.onBdRulesState();
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
                 }
             });
         }
@@ -275,7 +275,7 @@ public final class MaidBdNetworking {
                                 .min(java.util.Comparator.comparingDouble(sp::distanceToSqr))
                                 .orElse(null);
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
                 }
                 if (maid == null) {
                     sp.sendSystemMessage(net.minecraft.network.chat.Component.literal(
@@ -298,7 +298,7 @@ public final class MaidBdNetworking {
                             maid.getUUID().toString(),
                             maid.getDisplayName() == null ? "女仆" : maid.getDisplayName().getString(),
                             MaidBdDeposit.isOn(maid)));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
                 }
             });
         }
@@ -344,7 +344,7 @@ public final class MaidBdNetworking {
                     if (cur instanceof com.maidsmart.config.PromaidConfigScreen s) {
                         s.onBdPerMaidState();
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
                 }
             });
         }

@@ -126,7 +126,7 @@ public final class MaidBdDeposit {
             return maid != null && ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
                     .getPersistentData().getBoolean(TAG);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidBdDeposit", t); return false;
         }
     }
 
@@ -134,7 +134,7 @@ public final class MaidBdDeposit {
         try {
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
                     .getPersistentData().putBoolean(TAG, on);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdDeposit", ignored);
         }
         PromaidLog.log("超越维度存入", (maid == null ? "?" : maid.getName().getString())
                 + " 产出回收 = " + on);
@@ -267,7 +267,7 @@ public final class MaidBdDeposit {
             }
             return "未命中白名单";
         } catch (Throwable t) {
-            return "判定异常";
+             com.maidsmart.diag.Diag.swallow("MaidBdDeposit", t); return "判定异常";
         }
     }
 
@@ -297,7 +297,7 @@ public final class MaidBdDeposit {
                     return "内置标签 " + t.location();
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdDeposit", ignored);
         }
         return "内置名单";
     }
@@ -306,7 +306,7 @@ public final class MaidBdDeposit {
         try {
             return maid == null ? null : maid.getAvailableBackpackInv();
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdDeposit", t); return null;
         }
     }
 
@@ -314,7 +314,7 @@ public final class MaidBdDeposit {
     public void onMaidTick(MaidTickEvent event) {
         try {
             tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdDeposit", ignored);
         }
     }
 

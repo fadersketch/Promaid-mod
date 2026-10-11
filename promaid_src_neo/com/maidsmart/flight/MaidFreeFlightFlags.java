@@ -48,7 +48,7 @@ public final class MaidFreeFlightFlags {
     public static boolean globalOn() {
         try {
             return MaidSmartConfig.MISC_FREE_FLIGHT.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightFlags", ignored);
             return false;
         }
     }
@@ -70,7 +70,7 @@ public final class MaidFreeFlightFlags {
             if (data.contains(PERSIST_TAG)) {
                 return data.getBoolean(PERSIST_TAG);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightFlags", ignored);
         }
         loadDisk();
         return DISK.get(maid.getUUID().toString());
@@ -81,7 +81,7 @@ public final class MaidFreeFlightFlags {
         try {
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
                     .getPersistentData().putBoolean(PERSIST_TAG, value);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightFlags", ignored);
         }
         loadDisk();
         DISK.put(maid.getUUID().toString(), value);
@@ -107,7 +107,7 @@ public final class MaidFreeFlightFlags {
     private static Path diskPath() {
         try {
             return FMLPaths.GAMEDIR.get().resolve("promaid_free_flight_toggles.json");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightFlags", ignored);
             return null;
         }
     }
@@ -140,7 +140,7 @@ public final class MaidFreeFlightFlags {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightFlags", ignored);
         }
     }
 
@@ -161,7 +161,7 @@ public final class MaidFreeFlightFlags {
             }
             sb.append('}');
             Files.writeString(p, sb.toString());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightFlags", ignored);
         }
     }
 }

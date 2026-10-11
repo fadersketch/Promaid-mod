@@ -68,7 +68,7 @@ public final class MaidAirCombat {
     public static double followAltCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return 3.0;
         }
     }
@@ -80,7 +80,7 @@ public final class MaidAirCombat {
     public static double fightAltCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_FIGHT_ALT.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return 15.0;
         }
     }
@@ -107,7 +107,7 @@ public final class MaidAirCombat {
     public static double bombStandoffCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_BOMB_STANDOFF.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return 20.0;
         }
     }
@@ -144,7 +144,7 @@ public final class MaidAirCombat {
             }
             BOMB_INTENT_CACHE.put(id, new long[]{hit ? 1L : 0L, now});
             return hit;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -164,7 +164,7 @@ public final class MaidAirCombat {
             }
             String gun = MaidMountCompat.gunNameFor(mount, maid);
             return gun != null && gun.toLowerCase(java.util.Locale.ROOT).contains("bomb");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -176,7 +176,7 @@ public final class MaidAirCombat {
                     || BombItems.has(maid, BombItems.ID_END_CRYSTAL)
                     || BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR)
                     || BombItems.hasBed(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -222,7 +222,7 @@ public final class MaidAirCombat {
             if (radius > 0.0) {
                 return Math.max(cfg, radius + BOMB_BLAST_MARGIN);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
         }
         return cfg;
     }
@@ -276,7 +276,7 @@ public final class MaidAirCombat {
                         + " 格 = " + fmt(want) + "；该高度 = 炸弹爆炸半径 + 余量）→ 先爬升、这一发按住");
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -288,7 +288,7 @@ public final class MaidAirCombat {
     private static boolean firstHold(UUID id) {
         try {
             return HOLD_FIRST.add(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -300,7 +300,7 @@ public final class MaidAirCombat {
     public static double orbitRadiusCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return 4.0;
         }
     }
@@ -309,7 +309,7 @@ public final class MaidAirCombat {
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_COMBAT.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -328,7 +328,7 @@ public final class MaidAirCombat {
             }
             LivingEntity foe = targetOf(maid);
             return foe != null && foe.isAlive() && foe.level() == maid.level();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -337,7 +337,7 @@ public final class MaidAirCombat {
     private static LivingEntity targetOf(EntityMaid maid) {
         try {
             return maid.getTarget();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return null;
         }
     }
@@ -365,7 +365,7 @@ public final class MaidAirCombat {
                 return null;
             }
             return new Vec3(x, baseY + followAltCfg(), z);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return null;
         }
     }
@@ -394,7 +394,7 @@ public final class MaidAirCombat {
                 return climbPoint(maid, target);
             }
             return orbitPoint(maid, target);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return null;
         }
     }
@@ -421,7 +421,7 @@ public final class MaidAirCombat {
         }
         try {
             return new Vec3(target.getX(), target.getY() + requiredAbove(maid), target.getZ());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return null;
         }
     }
@@ -434,7 +434,7 @@ public final class MaidAirCombat {
         try {
             double want = target.getY() + requiredAbove(maid);
             return Math.abs(maid.getY() - want) <= CLIMB_TOL;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return true; // 拿不到就当作已就位，退回旧行为
         }
     }
@@ -458,7 +458,7 @@ public final class MaidAirCombat {
     private static boolean firstClimb(UUID id) {
         try {
             return CLIMB_FIRST.add(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -570,7 +570,7 @@ public final class MaidAirCombat {
                         + (dir > 0 ? "逆时针" : "顺时针") + "）");
             }
             return new Vec3(target.getX() + Math.cos(ang) * r, y, target.getZ() + Math.sin(ang) * r);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return null;
         }
     }
@@ -616,7 +616,7 @@ public final class MaidAirCombat {
                 return null;
             }
             return new Vec3(mount.getX(), mount.getY(), mount.getZ());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return null;
         }
     }
@@ -625,7 +625,7 @@ public final class MaidAirCombat {
     private static boolean firstOrbit(UUID id) {
         try {
             return ORBIT_FIRST.add(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
             return false;
         }
     }
@@ -669,7 +669,7 @@ public final class MaidAirCombat {
             }
             LOG_AT.put(maid.getUUID(), now);
             com.maidsmart.tool.PromaidLog.log("空战", com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
         }
     }
 }

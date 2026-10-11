@@ -81,7 +81,7 @@ public final class PatrolMarkerClient {
             }
             PatrolNetworking.CHANNEL.sendToServer(
                     new PatrolNetworking.MarkPatrolPointPacket());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolMarkerClient", ignored);
         }
     }
 
@@ -93,7 +93,7 @@ public final class PatrolMarkerClient {
                     + " onGround=" + mc.f_91074_.m_20096_()
                     + " riding=" + (mc.f_91074_.m_20202_() == null ? "否" : "是")
                     + " 手上=" + (PatrolChartKit.isChart(mc.f_91074_.m_21205_()) ? "主手" : "副手"));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolMarkerClient", ignored);
         }
     }
 
@@ -110,7 +110,7 @@ public final class PatrolMarkerClient {
         try {
             return PatrolChartKit.isChart(mc.f_91074_.m_21205_())
                     || PatrolChartKit.isChart(mc.f_91074_.m_21206_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolMarkerClient", ignored);
             return false;
         }
     }

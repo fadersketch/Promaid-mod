@@ -23,7 +23,7 @@ public final class MaidWorkSpeedHandler {
     public void onMaidTick(MaidTickEvent event) {
         try {
             MaidWorkSpeedLimiter.tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkSpeedHandler", ignored);
         }
     }
 }

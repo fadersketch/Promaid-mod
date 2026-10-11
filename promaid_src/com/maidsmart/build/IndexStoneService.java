@@ -85,7 +85,7 @@ public final class IndexStoneService {
     public static boolean isEnabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.BUILD_INDEX_STONE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
             return true;
         }
     }
@@ -313,7 +313,7 @@ public final class IndexStoneService {
                 }
             }
             s.ticketedBox = new int[]{minCx, maxCx, minCz, maxCz};
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
 
@@ -338,7 +338,7 @@ public final class IndexStoneService {
                     level.m_7726_().m_8438_(forced, cp, 0, cp); // removeRegionTicket
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
 
@@ -353,7 +353,7 @@ public final class IndexStoneService {
             if (maid.getTask() != null && maid.getTask().getUid() != null) {
                 prev = maid.getTask().getUid().toString();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
         nbt.m_128359_(TAG_INDEX_PREV_TASK, prev);
         nbt.m_128359_(TAG_INDEX_OWNER, player.m_20148_().toString());
@@ -361,7 +361,7 @@ public final class IndexStoneService {
         try {
             nbt.m_128359_(TAG_INDEX_PREV_SCHEDULE,
                     maid.getSchedule() == null ? "" : maid.getSchedule().name());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
         nbt.m_128356_(TAG_INDEX_TOTAL, s.cells.size());
         nbt.m_128379_(TAG_INDEX_ACTIVE, true);
@@ -409,7 +409,7 @@ public final class IndexStoneService {
                 com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
                         maid.m_20148_(), target.getUid(), () -> maid.setTask(target));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
         // 还原 home/作息（排班关闭时；排班开启交给排班接管）
         try {
@@ -424,7 +424,7 @@ public final class IndexStoneService {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
         if (completed && player != null) {
             msg(player, "\u00a7a【指标石】" + name(maid) + " 搭好了，共 " + total
@@ -443,7 +443,7 @@ public final class IndexStoneService {
         UUID playerId = null;
         try {
             playerId = UUID.fromString(nbt.m_128461_(TAG_INDEX_OWNER));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
         ServerPlayer player = playerId == null ? null : findPlayer(playerId);
         Session s = playerId == null ? null : SESSIONS.get(playerId);
@@ -487,7 +487,7 @@ public final class IndexStoneService {
         UUID playerId = null;
         try {
             playerId = UUID.fromString(nbt.m_128461_(TAG_INDEX_OWNER));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
         ServerPlayer player = playerId == null ? null : findPlayer(playerId);
         int total = (int) nbt.m_128454_(TAG_INDEX_TOTAL);
@@ -540,7 +540,7 @@ public final class IndexStoneService {
             UUID playerId = null;
             try {
                 playerId = UUID.fromString(nbt.m_128461_(TAG_INDEX_OWNER));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
             }
             ServerPlayer player = playerId == null ? null : findPlayer(playerId);
             Session s = playerId == null ? null : SESSIONS.get(playerId);
@@ -550,7 +550,7 @@ public final class IndexStoneService {
             releaseMaid(player, maid, false); // 还原原任务/作息 + 清标记
             com.maidsmart.tool.PromaidLog.log("指标石",
                     name(maid) + " 残留临时建造标记自愈（无对应会话，已还原任务）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
 
@@ -565,7 +565,7 @@ public final class IndexStoneService {
             nbt.m_128473_(TAG_INDEX_PREV_SCHEDULE);
             nbt.m_128473_(TAG_INDEX_TOTAL);
             MAID_TO_PLAYER.remove(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
 
@@ -597,7 +597,7 @@ public final class IndexStoneService {
             boolean dead = reason == net.minecraft.world.entity.Entity.RemovalReason.KILLED
                     || !maid.m_6084_();
             failSession(maid, dead ? "女仆死亡" : "女仆被收回", false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
 
@@ -615,7 +615,7 @@ public final class IndexStoneService {
                 return;
             }
             failSession(maid, "女仆死亡", false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
 
@@ -660,13 +660,13 @@ public final class IndexStoneService {
         boolean building = false;
         try {
             building = maid.getPersistentData().m_128471_(TAG_INDEX_ACTIVE);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
         if (soulSlab && building) {
             try {
                 // 实体马上就被 TLM discard，所以这里不还原任务、只清标记（原任务改在快照里）
                 failSession(maid, "女仆被收回", false);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
             }
         }
         sanitizeSnapshot(maid, snapshot);
@@ -710,7 +710,7 @@ public final class IndexStoneService {
             }
             com.maidsmart.tool.PromaidLog.log("指标石", name(maid)
                     + " 魂符快照残留已清洗：任务还原为 " + prev);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
 
@@ -763,7 +763,7 @@ public final class IndexStoneService {
         if (level == null) {
             return null;
         }
-        for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+        for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
             if (e instanceof EntityMaid m && m.m_20148_().equals(maidId)) {
                 return m;
             }

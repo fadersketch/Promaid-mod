@@ -1,6 +1,7 @@
 package com.maidsmart.goety;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.maidsmart.combat.CuriosElytraCompat;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -99,6 +100,8 @@ public final class MaidGoetyCompat {
         inited = true;
         // 【两套包名都要试】官方 Forge 版是 com.Polarice3.Goety；《万法皆通》那套是
         // za.co.infernos.goety。同一份 Promaid 要能同时吃这两种发行，所以按顺序试。
+        // 【TD-15：这里**有意**不用 ModList.get().isLoaded("goety")】两种发行的 modid 未必相同，
+        // 单 id 判断会误伤其中一套 → 保留"按包根探针 + 一次性缓存"的写法（探测已只跑一次，非每 tick）。
         for (String root : ROOTS) {
             try {
                 Class<?> iwand = Class.forName(root + ".api.items.magic.IWand");
@@ -110,7 +113,7 @@ public final class MaidGoetyCompat {
                 rootHit = root; // 记下命中包根：thrustPower 的 WandUtil 也按它解析
                 ok = true;
                 return;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
                 // 换下一个包名
             }
         }
@@ -132,7 +135,7 @@ public final class MaidGoetyCompat {
             ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             return rl == null ? "" : rl.toString();
         } catch (Throwable t) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", t); return "";
         }
     }
 
@@ -149,7 +152,7 @@ public final class MaidGoetyCompat {
             Object o = mGetFocus.invoke(null, staff);
             return o instanceof ItemStack s ? s : ItemStack.f_41583_;
         } catch (Throwable t) {
-            return ItemStack.f_41583_;
+             com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", t); return ItemStack.f_41583_;
         }
     }
 
@@ -170,7 +173,7 @@ public final class MaidGoetyCompat {
         try {
             out.put("主手", maid.m_21205_());
             out.put("副手", maid.m_21206_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
         }
         try {
             IItemHandler inv = maid.getAvailableBackpackInv();
@@ -179,7 +182,7 @@ public final class MaidGoetyCompat {
                     out.put("背包槽" + i, inv.getStackInSlot(i));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
         }
         try {
             // 【1.20.1】TLM 的 getMaidBauble() 直接返回 IItemHandler（1.21.1 才要 instanceof 一次）
@@ -189,7 +192,7 @@ public final class MaidGoetyCompat {
                     out.put("女仆饰品" + i, h.getStackInSlot(i));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
         }
         out.putAll(curios(maid));
         return out;
@@ -210,52 +213,17 @@ public final class MaidGoetyCompat {
         }
     }
 
-    /** 女仆饰品栏（Curios）里的全部物品：槽位名 → 栈（自包含反射，不依赖别的兼容层）。 */
+    /** 女仆饰品栏（Curios）里的全部物品：槽位名 → 栈（收敛到 {@link CuriosElytraCompat} 的缓存反射，TD-15）。 */
     public static Map<String, ItemStack> curios(EntityMaid maid) {
         Map<String, ItemStack> out = new LinkedHashMap<>();
         if (maid == null) {
             return out;
         }
-        try {
-            Class<?> api = Class.forName("top.theillusivec4.curios.api.CuriosApi");
-            Object inv0 = api.getMethod("getCuriosInventory", LivingEntity.class).invoke(null, maid);
-            if (inv0 == null) {
-                return out;
+        CuriosElytraCompat.collectAll(maid, (where, stack) -> {
+            if (stack != null && !stack.m_41619_()) {
+                out.put(where, stack);
             }
-            // 【两版壳】1.20.1 curios-5.x 是 LazyOptional、1.21.1 是 Optional；两者都有
-            // orElse(T)，所以统一反射调 orElse(null) 拆壳（不认具体类型）。
-            Object handler;
-            try {
-                handler = inv0.getClass().getMethod("orElse", Object.class).invoke(inv0, (Object) null);
-            } catch (Throwable t) {
-                handler = inv0;
-            }
-            if (handler == null) {
-                handler = inv0;
-            }
-            Object mapObj = handler.getClass().getMethod("getCurios").invoke(handler);
-            if (!(mapObj instanceof Map<?, ?> map)) {
-                return out;
-            }
-            for (Map.Entry<?, ?> e : map.entrySet()) {
-                Object stacksHandler = e.getValue();
-                if (stacksHandler == null) {
-                    continue;
-                }
-                Object stacks = stacksHandler.getClass().getMethod("getStacks").invoke(stacksHandler);
-                if (stacks == null) {
-                    continue;
-                }
-                int n = (Integer) stacks.getClass().getMethod("getSlots").invoke(stacks);
-                for (int i = 0; i < n; i++) {
-                    Object o = stacks.getClass().getMethod("getStackInSlot", int.class).invoke(stacks, i);
-                    if (o instanceof ItemStack s && !s.m_41619_()) {
-                        out.put("饰品[" + e.getKey() + "]" + i, s);
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
+        });
         return out;
     }
 
@@ -341,7 +309,7 @@ public final class MaidGoetyCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
         }
         return out;
     }
@@ -383,12 +351,12 @@ public final class MaidGoetyCompat {
                     }
                     potency = ((Number) mGetPotency.invoke(stat)).doubleValue() / 2.0;   // 与 Goety 一致：整数除法后转 double
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
                 // 拿不到加成就算 0（基准速度），不影响方向
             }
             return power + potency;
         } catch (Throwable t) {
-            return 0.5;
+             com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", t); return 0.5;
         }
     }
 
@@ -417,7 +385,7 @@ public final class MaidGoetyCompat {
                 }
                 c = c.getSuperclass();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
         }
         return null;
     }
@@ -465,7 +433,7 @@ public final class MaidGoetyCompat {
                 m.invoke(e, 100);
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
         }
         return false;
     }
@@ -483,7 +451,7 @@ public final class MaidGoetyCompat {
                 return m;
             } catch (NoSuchMethodException ignored) {
                 // 往上找（Summoned / IServant 默认实现都可能有）
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", ignored);
                 return GATE_NONE;
             }
         }
@@ -520,7 +488,7 @@ public final class MaidGoetyCompat {
             mMobSpellResult.invoke(spell, maid, use);
             return null;
         } catch (Throwable t) {
-            // 【只回一行】调用方（MaidGoetyFlight）在失败时**每 tick** 会把它写进日志——
+             com.maidsmart.diag.Diag.swallow("MaidGoetyCompat", t); // 【只回一行】调用方（MaidGoetyFlight）在失败时**每 tick** 会把它写进日志——
             // 一场飞行就是几万行堆栈。这里压缩成"异常类: 首行消息"，够定位就够了。
             String msg = t.getClass().getName();
             String m = t.getMessage();

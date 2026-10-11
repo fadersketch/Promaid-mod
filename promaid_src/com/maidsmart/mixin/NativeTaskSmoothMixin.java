@@ -66,7 +66,7 @@ public abstract class NativeTaskSmoothMixin {
             java.lang.reflect.Field f = Behavior.class.getDeclaredField(name);
             f.setAccessible(true);
             return f;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("NativeTaskSmoothMixin", ignored);
             return null;
         }
     }
@@ -126,7 +126,7 @@ public abstract class NativeTaskSmoothMixin {
             if (MAX_DURATION_FIELD != null) {
                 MAX_DURATION_FIELD.setInt(behavior, Integer.MAX_VALUE);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("NativeTaskSmoothMixin", ignored);
         }
     }
 }

@@ -74,7 +74,7 @@ if (++throttle < 100) {
         // 收敛到同一值 → 扫描恒空，同 HomePatrolHandler）
         for (ServerLevel level : event.getServer().getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
             // 实测八百三十九：来源改 MaidRoster（只收女仆、按 20 tick 复用）；零女仆时零成本
             for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(event.getServer(), level)) {
@@ -95,7 +95,7 @@ if (++throttle < 100) {
                 float v = (on && danger.contains(t)) ? -1.0F : t.getMalus();
                 maid.setPathfindingMalus(t, v);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidDangerMalusHandler", ignored);
         }
     }
 

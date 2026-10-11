@@ -109,7 +109,7 @@ public final class CompressionBoxCheck {
             CompoundTag tag = new CompoundTag();
             tag.putInt("probe", 645);
             probe.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxCheck", ignored);
         }
         return probe;
     }
@@ -347,7 +347,7 @@ public final class CompressionBoxCheck {
         String notice5 = CompressionBoxService.noticeOf(fp);
         out.add(!c5 && carry5.isEmpty() && boxStillThere
                 && CompressionBoxFilter.MSG_BOX.equals(notice5)
-                ? pass("鼠标取放⑤（六百二十，用户要的那条）：左键点背包里的压缩盒（第 15 格）"
+                ? pass("鼠标取放⑤（用户要的那条）：左键点背包里的压缩盒（第 15 格）"
                 + " → **拿不起来**（鼠标仍空、那一格还是盒子），服务端回了一句「" + notice5 + "」"
                 + "—— 这个界面里鼠标选不中压缩盒")
                 : fail("鼠标取放⑤：压缩盒还是被拿到鼠标上了（changed=" + c5 + "，鼠标上 "
@@ -498,7 +498,7 @@ public final class CompressionBoxCheck {
                         return true;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxCheck", ignored);
             }
             return false;
         };
@@ -737,7 +737,7 @@ public final class CompressionBoxCheck {
             return false;
         } catch (NoSuchFieldException e) {
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxCheck", ignored);
             return false;
         }
     }
@@ -771,7 +771,7 @@ public final class CompressionBoxCheck {
             CompoundTag probe = new CompoundTag();
             probe.putInt("probe", 618);
             book.set(DataComponents.CUSTOM_DATA, CustomData.of(probe));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxCheck", ignored);
         }
         return book;
     }

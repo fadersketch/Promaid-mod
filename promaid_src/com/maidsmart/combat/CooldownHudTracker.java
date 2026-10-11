@@ -140,7 +140,7 @@ public final class CooldownHudTracker {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CooldownHudTracker", ignored);
             // HUD 广播失败不影响任何游戏逻辑
         }
     }
@@ -156,7 +156,7 @@ public final class CooldownHudTracker {
         try {
             return com.maidsmart.config.MaidSmartConfig.MISC_COOLDOWN_HUD.get();
         } catch (Throwable t) {
-            return false; // 读不到配置就按旧行为（关）——这里宁可少算，也不能凭空刷包
+             com.maidsmart.diag.Diag.swallow("CooldownHudTracker", t); return false; // 读不到配置就按旧行为（关）——这里宁可少算，也不能凭空刷包
         }
     }
 }

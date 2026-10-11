@@ -192,7 +192,7 @@ public final class AiMemoryModels {
             return java.time.Instant.ofEpochMilli(millis)
                     .atZone(java.time.ZoneId.systemDefault()).format(fmt);
         } catch (Exception e) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("AiMemoryModels", e); return "";
         }
     }
 

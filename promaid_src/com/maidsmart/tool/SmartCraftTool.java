@@ -92,7 +92,7 @@ public class SmartCraftTool implements ITool<SmartCraftTool.Result> {
         try {
             outId = ResourceLocation.m_135820_(itemStr); // parse（非法 id 抛异常→兜底）
         } catch (Exception ex) {
-            return callback.addToolResult("物品 id 格式不对：" + itemStr, toolId);
+             com.maidsmart.diag.Diag.swallow("SmartCraftTool", ex); return callback.addToolResult("物品 id 格式不对：" + itemStr, toolId);
         }
         if (outId == null) {
             return callback.addToolResult("物品 id 格式不对：" + itemStr, toolId);

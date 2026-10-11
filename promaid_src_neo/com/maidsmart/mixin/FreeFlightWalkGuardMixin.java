@@ -52,7 +52,7 @@ public abstract class FreeFlightWalkGuardMixin {
             if (com.maidsmart.flight.MaidFreeFlightController.takeOverWalk(maid, x, y, z)) {
                 cir.setReturnValue(false); // 这一发地面寻路不生效：她改用飞的（不走路、也不搭路）
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FreeFlightWalkGuardMixin", ignored);
         }
     }
 }

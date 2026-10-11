@@ -52,7 +52,7 @@ public class MaidBroomTask implements IRangedAttackTask {
             if (broom != null) {
                 return new ItemStack(broom);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomTask", ignored);
         }
         return ItemStack.EMPTY;
     }

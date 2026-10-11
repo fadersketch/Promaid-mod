@@ -126,7 +126,7 @@ public final class MaidTntBlastGuard {
         }
         try {
             TRACKED.put(tnt.m_19879_(), new Tracked(maid, expireAt));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
         }
     }
 
@@ -164,7 +164,7 @@ public final class MaidTntBlastGuard {
             int n = blocks.size();
             blocks.clear(); // 活表（= getToBlow()）：清掉即"这一炸不拆方块"，伤害照旧
             log(maid, n, ex);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
         }
     }
 
@@ -186,7 +186,7 @@ public final class MaidTntBlastGuard {
             // 直系是 TNT 但两条都不中：再看一眼间系（个别模组把点火者放在别处）
             Entity indirect = ex.m_252906_();  // getIndirectSourceEntity
             return indirect instanceof EntityMaid m ? m : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
             return null;
         }
     }
@@ -215,7 +215,7 @@ public final class MaidTntBlastGuard {
             if (owner instanceof EntityMaid m) {
                 return m;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
         }
         Tracked t = tracked(tnt);
         return t == null ? null : t.maid;
@@ -241,7 +241,7 @@ public final class MaidTntBlastGuard {
             }
             Tracked t = TRACKED.get(e.m_19879_());
             return (t != null && t.expireAt >= now) ? t : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
             return null;
         }
     }
@@ -259,7 +259,7 @@ public final class MaidTntBlastGuard {
             com.maidsmart.tool.PromaidLog.log("空袭轰炸", who
                     + " 模组 TNT 那一炸按「不破坏方块」处理（清掉 " + n + " 个方块；"
                     + "威力与伤害照它自己的）；" + attribution(ex));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
         }
     }
 
@@ -280,7 +280,7 @@ public final class MaidTntBlastGuard {
                     + " 伤害源{造成者=" + who(cause) + " 直接=" + who(direct)
                     + " 类型=" + (ds == null ? "无" : String.valueOf(ds.m_19385_())) + "}"
                     + " 我方登记=" + (tracked(ex.m_253049_()) != null) + "]";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
             return "归因[读不到]";
         }
     }
@@ -295,7 +295,7 @@ public final class MaidTntBlastGuard {
                 return "女仆(" + com.maidsmart.tool.PromaidLog.nameOf(m) + ")";
             }
             return e.getClass().getSimpleName();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
             return "?";
         }
     }

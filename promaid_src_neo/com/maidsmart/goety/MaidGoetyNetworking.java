@@ -91,7 +91,7 @@ public final class MaidGoetyNetworking {
                 EntityMaid maid = null;
                 try {
                     maid = (EntityMaid) level.getEntity(UUID.fromString(pkt.maidUuid));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyNetworking", ignored);
                 }
                 if (maid == null) {
                     player.sendSystemMessage(Component.literal("\u00a7c她不在加载范围内（走近一点再试）。"));

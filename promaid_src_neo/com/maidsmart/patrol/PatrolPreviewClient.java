@@ -284,7 +284,7 @@ public final class PatrolPreviewClient {
             if (CACHE.size() > 32) {
                 CACHE.clear();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolPreviewClient", ignored);
         }
     }
 

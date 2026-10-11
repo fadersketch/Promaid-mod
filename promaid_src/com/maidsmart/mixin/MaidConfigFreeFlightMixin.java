@@ -67,7 +67,7 @@ public abstract class MaidConfigFreeFlightMixin {
                     });
             this.promaid$freeFlightBtn = btn;
             promaid$addRenderable(screen, btn);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigFreeFlightMixin", ignored);
         }
     }
 
@@ -87,7 +87,7 @@ public abstract class MaidConfigFreeFlightMixin {
             btn.m_93666_(com.maidsmart.client.MaidConfigRowLayout.text(
                     com.maidsmart.client.MaidConfigRowLayout.LABELS[1],
                     promaid$value(maid.m_20148_().toString())));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigFreeFlightMixin", ignored);
         }
     }
 
@@ -113,7 +113,7 @@ public abstract class MaidConfigFreeFlightMixin {
                     net.minecraft.client.gui.components.events.GuiEventListener.class);
             m.setAccessible(true);
             m.invoke(screen, widget);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigFreeFlightMixin", ignored);
         }
     }
 }

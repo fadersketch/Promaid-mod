@@ -89,7 +89,7 @@ public final class PatrolFlight {
                 String now;
                 try {
                     now = maid.m_9236_().m_46472_().m_135782_().toString();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
                     now = dim;
                 }
                 if (!dim.equals(now)) {
@@ -97,7 +97,7 @@ public final class PatrolFlight {
                 }
             }
             return route;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
             return null;
         }
     }
@@ -106,7 +106,7 @@ public final class PatrolFlight {
     public static PatrolRoute boundRoute(EntityMaid maid) {
         try {
             return maid == null || maid.m_9236_().m_5776_() ? null : PatrolChartData.readMaid(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
             return null;
         }
     }
@@ -155,7 +155,7 @@ public final class PatrolFlight {
             // （见 PatrolAdapt.nudge；避让不改存档，只改这一拍往哪儿飞）。
             // 【v1.3.9.3】从"只往上抬"扩成三维（上/左右/下）——头顶整片封死时也能绕。
             return PatrolAdapt.nudge(maid.m_9236_(), aim, PatrolAdapt.MAX_LIFT);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
             return null;
         }
     }
@@ -190,7 +190,7 @@ public final class PatrolFlight {
                 return;
             }
             CACHE.remove(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
         }
     }
 
@@ -205,7 +205,7 @@ public final class PatrolFlight {
             }
             Vec3 v = broom.m_20184_();
             return Math.sqrt(v.f_82479_ * v.f_82479_ + v.f_82480_ * v.f_82480_ + v.f_82481_ * v.f_82481_);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
             return 0.0;
         }
     }
@@ -234,7 +234,7 @@ public final class PatrolFlight {
             }
             return sb.toString();
         } catch (Throwable t) {
-            return "读取异常：" + t;
+             com.maidsmart.diag.Diag.swallow("PatrolFlight", t); return "读取异常：" + t;
         }
     }
 }

@@ -76,7 +76,7 @@ public final class MaidBdOverflow {
     public void onMaidPickup(MaidPickupEvent.ItemResultPre event) {
         try {
             handle(event);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdOverflow", ignored);
         }
     }
 
@@ -158,7 +158,7 @@ public final class MaidBdOverflow {
             }
             return rest;
         } catch (Throwable t) {
-            return stack;   // 判定不了就当"她放不下"，让上一层去处理（保守）
+             com.maidsmart.diag.Diag.swallow("MaidBdOverflow", t); return stack;   // 判定不了就当"她放不下"，让上一层去处理（保守）
         }
     }
 
@@ -175,7 +175,7 @@ public final class MaidBdOverflow {
             }
             return sb.toString();
         } catch (Throwable t) {
-            return "额外容器查询失败：" + t.getClass().getSimpleName();
+             com.maidsmart.diag.Diag.swallow("MaidBdOverflow", t); return "额外容器查询失败：" + t.getClass().getSimpleName();
         }
     }
 

@@ -261,7 +261,7 @@ public class BrewManualScreen extends Screen {
             if (p != null) {
                 PotionUtils.m_43549_(stack, p);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewManualScreen", ignored);
         }
         return stack;
     }
@@ -471,7 +471,7 @@ public class BrewManualScreen extends Screen {
                 mats.add(new Object[]{new ItemStack(BrewRecipeResolver.formReagent(BrewConfig.FORM_SPLASH)), 1});
                 mats.add(new Object[]{new ItemStack(BrewRecipeResolver.formReagent(BrewConfig.FORM_LINGERING)), 1});
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewManualScreen", ignored);
         }
         return mats;
     }
@@ -503,7 +503,7 @@ public class BrewManualScreen extends Screen {
             }
             return name;
         } catch (Throwable t) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("BrewManualScreen", t); return "";
         }
     }
 
@@ -521,7 +521,7 @@ public class BrewManualScreen extends Screen {
             ItemStack stack = makePotionStack(ForgeRegistries.POTIONS.getKey(p).toString(), 0);
             return stack.m_41611_().getString();
         } catch (Throwable t) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("BrewManualScreen", t); return "?";
         }
     }
 
@@ -533,7 +533,7 @@ public class BrewManualScreen extends Screen {
             }
             return new ItemStack(item).m_41611_().getString();
         } catch (Throwable t) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("BrewManualScreen", t); return "?";
         }
     }
 

@@ -44,7 +44,7 @@ public final class ElytraSpread {
             right.f_104203_ = SPREAD_X;
             right.f_104204_ = 0.0f;
             right.f_104205_ = -SPREAD_Z;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ElytraSpread", ignored);
         }
     }
 }

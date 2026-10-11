@@ -90,7 +90,7 @@ public final class MaidPlaceGuard {
                 return false;
             }
             return isSeated(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidPlaceGuard", ignored);
             return false;
         }
     }
@@ -107,7 +107,7 @@ public final class MaidPlaceGuard {
                 return false;
             }
             return maid.isPassenger() || maid.isMaidInSittingPose();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidPlaceGuard", ignored);
             return false;
         }
     }
@@ -184,7 +184,7 @@ public final class MaidPlaceGuard {
             // (d) 真·悬空 = 脚下 3 格内没有可站立面（实测五百五十把"下落中"换成这条）
             //     浅跳/被击飞/搭高自身"放块→顶起→落回"都落在 1 格以内 → 放行
             return !hasStandableGroundBelow(maid, 3);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidPlaceGuard", ignored);
             return false;
         }
     }
@@ -261,7 +261,7 @@ public final class MaidPlaceGuard {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidPlaceGuard", ignored);
             return false;
         }
     }

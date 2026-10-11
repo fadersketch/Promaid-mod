@@ -65,7 +65,7 @@ public abstract class MaidContainerRemoteOpenMixin {
                 return; // 死了 / 正在睡 / 不再属于他：距离之外的条件照旧把关
             }
             cir.setReturnValue(true);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidContainerRemoteOpenMixin", ignored);
             // 这一处出任何问题都退回 TLM 的结论（就是"按 4 格算"），绝不把界面留成不该留的样子
         }
     }
@@ -78,7 +78,7 @@ public abstract class MaidContainerRemoteOpenMixin {
             if (maid != null && player != null) {
                 com.maidsmart.schedule.RemoteMaidGui.disable(player, maid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidContainerRemoteOpenMixin", ignored);
         }
     }
 }

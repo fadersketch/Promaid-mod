@@ -224,7 +224,7 @@ public class ProMaidMod {
                 double before = -1.0;
                 try {
                     before = com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
                 }
                 com.maidsmart.config.MaidSmartConfig.STROLL_SPEED_MIGRATED.set(true);
                 changed = true;
@@ -294,7 +294,7 @@ public class ProMaidMod {
                     repaired++;
                 }
                 com.maidsmart.tool.PromaidLog.log("配置迁移",
-                        "默认值修复：把 679 误当默认的 12 项搬回真默认，本次改了 " + repaired + " 项");
+                        "默认值修复：把误当默认的 12 项搬回真默认，本次改了 " + repaired + " 项");
             }
             // v1.3.0(beta) 实测六百八十二：扫帚接敌爬升高度默认 10 → 15（一次性标记）。
             // 【为什么必须迁】只改 defineInRange 的默认值对老档毫无作用（老 toml 里已经写着 10）；
@@ -304,7 +304,7 @@ public class ProMaidMod {
                 double broomClimbBefore = -1.0;
                 try {
                     broomClimbBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.get();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
                 }
                 com.maidsmart.config.MaidSmartConfig.BROOM_CLIMB_MIGRATED.set(true);
                 changed = true;
@@ -324,7 +324,7 @@ public class ProMaidMod {
                 double broomClimb12Before = -1.0;
                 try {
                     broomClimb12Before = com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.get();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
                 }
                 com.maidsmart.config.MaidSmartConfig.BROOM_CLIMB_12_MIGRATED.set(true);
                 changed = true;
@@ -337,6 +337,25 @@ public class ProMaidMod {
                             "扫帚接敌爬升高度不需要第二次迁移（现值 " + broomClimb12Before + "）");
                 }
             }
+            // TD-08（实测八百八十二）：巡逻总开关原先与扫帚总开关**撞同一个 TOML 路径 broom.enable**
+            //（后定义者覆盖前者，两个控件实为同一个值）→ 已拆到 broom.patrolEnable。老档把撞键里
+            // 那个值原样搬到巡逻那一侧（两边与从前一致）；一次性标记钉死只迁一次。
+            if (!com.maidsmart.config.MaidSmartConfig.PATROL_ENABLE_MIGRATED.get()) {
+                boolean readOk = false;
+                boolean patrolBefore = true;
+                try {
+                    patrolBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_ENABLE.get();
+                    readOk = true;
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
+                }
+                if (readOk) { // 读不到（配置还没挂上）就不动标记，下次启动还能再迁
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_PATROL_ENABLE.set(patrolBefore);
+                    com.maidsmart.config.MaidSmartConfig.PATROL_ENABLE_MIGRATED.set(true);
+                    changed = true;
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "巡逻总开关拆键：broom.enable → broom.patrolEnable（沿用原值 " + patrolBefore + "）");
+                }
+            }
             // 【实测七百二十七·点1】骑飞行载具的 airAlt **语义**变了：726 是「爬到敌人**上方**
             // 多少格」（默认 15），727 起是「**离地**多少格」（默认 3）。老档 toml 里存着 15，
             // 不迁的话她会离地 15 格悬停（玩家要的是 3）。判据与扫帚那两次同款：只搬**还停在
@@ -345,7 +364,7 @@ public class ProMaidMod {
                 double airAltBefore = -1.0;
                 try {
                     airAltBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
                 }
                 com.maidsmart.config.MaidSmartConfig.AIR_ALT_MIGRATED.set(true);
                 changed = true;
@@ -364,7 +383,7 @@ public class ProMaidMod {
                 double orbitBefore = -1.0;
                 try {
                     orbitBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.get();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
                 }
                 com.maidsmart.config.MaidSmartConfig.ORBIT_RADIUS_MIGRATED.set(true);
                 changed = true;
@@ -379,7 +398,7 @@ public class ProMaidMod {
             }
             changed |= migrateDangerCampfire();
             changed |= migrateOreTable();
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
         }
         return changed;
     }
@@ -409,7 +428,7 @@ public class ProMaidMod {
                 return;
             }
             COMMON_CONFIG = event.getConfig();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
         } finally {
             inConfigEvent = false;
         }
@@ -431,11 +450,11 @@ public class ProMaidMod {
                 COMMON_CONFIG.getLoadedConfig().save();
                 return;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
         }
         try {
             com.maidsmart.config.MaidSmartConfig.SPEC.save();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
         }
     }
 

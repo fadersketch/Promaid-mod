@@ -38,7 +38,7 @@ public final class ThirstCompat {
     public static boolean available() {
         try {
             return net.neoforged.fml.ModList.get().isLoaded("thirst");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
             return false;
         }
     }
@@ -107,7 +107,7 @@ public final class ThirstCompat {
             Object data = owner.getData(
                     (net.neoforged.neoforge.attachment.AttachmentType<?>) type);
             return (Integer) ((java.lang.reflect.Method) api[5]).invoke(data);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
             return null;
         }
     }
@@ -119,7 +119,7 @@ public final class ThirstCompat {
         }
         try {
             return (Boolean) ((java.lang.reflect.Method) api[0]).invoke(null, stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
             return false;
         }
     }
@@ -133,7 +133,7 @@ public final class ThirstCompat {
             net.minecraft.world.item.alchemy.PotionContents contents =
                     stack.get(net.minecraft.core.component.DataComponents.POTION_CONTENTS);
             return contents != null && contents.is(net.minecraft.world.item.alchemy.Potions.WATER);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
             return false;
         }
     }
@@ -146,7 +146,7 @@ public final class ThirstCompat {
         }
         try {
             return (Integer) ((java.lang.reflect.Method) api[1]).invoke(null, stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
             return -1;
         }
     }
@@ -159,7 +159,7 @@ public final class ThirstCompat {
         }
         try {
             return (Integer) ((java.lang.reflect.Method) api[2]).invoke(null, stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
             return -1;
         }
     }
@@ -188,7 +188,7 @@ public final class ThirstCompat {
                 return; // 可食用饮品：eat → FoodData 路径加过（1.21.1 判"能吃" = FOOD 组件）
             }
             ((java.lang.reflect.Method) api[3]).invoke(null, stack, owner);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
         }
     }
 
@@ -213,7 +213,7 @@ public final class ThirstCompat {
             }
             Object p = ((java.lang.reflect.Method) api[8]).invoke(null, stack);
             return p instanceof Integer i ? i : -1;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ThirstCompat", ignored);
             return -1;
         }
     }

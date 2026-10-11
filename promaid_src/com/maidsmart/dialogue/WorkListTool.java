@@ -124,7 +124,7 @@ public class WorkListTool implements ITool<WorkListTool.Result> {
                 }
             }
         } catch (Exception e) {
-            return callback.addToolResult("work_list 操作失败: " + e.getMessage(), toolId);
+             com.maidsmart.diag.Diag.swallow("WorkListTool", e); return callback.addToolResult("work_list 操作失败: " + e.getMessage(), toolId);
         }
     }
 

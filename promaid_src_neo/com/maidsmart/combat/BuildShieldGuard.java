@@ -65,7 +65,7 @@ public final class BuildShieldGuard {
                     ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData();
             return nbt.getBoolean(AutoCombatSwitch.COMBAT_ACTIVE_TAG)
                     && BUILD_TASK_UID.equals(nbt.getString(AutoCombatSwitch.PREV_TASK_TAG));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
             return false;
         }
     }
@@ -99,7 +99,7 @@ public final class BuildShieldGuard {
                     && event.getEntity() instanceof EntityMaid maid && isBuilding(maid)) {
                 event.setCanceled(true);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
         }
     }
 
@@ -111,7 +111,7 @@ public final class BuildShieldGuard {
                     && event.getNewAboutToBeSetTarget() instanceof EntityMaid maid && isBuilding(maid)) {
                 event.setNewAboutToBeSetTarget(null);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
         }
     }
 
@@ -138,7 +138,7 @@ public final class BuildShieldGuard {
                     maid.removeEffect(MobEffects.DAMAGE_RESISTANCE);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
         }
     }
 }

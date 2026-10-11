@@ -201,7 +201,7 @@ public final class GunCompat {
                             cls,
                             cls.getMethod("isAmmoBoxOfGun", ItemStack.class, ItemStack.class),
                             cls.getMethod("getAmmoCount", ItemStack.class)};
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
                     TACZ_BOX_API = new Object[0];
                 }
             }
@@ -238,7 +238,7 @@ public final class GunCompat {
                                     ItemStack.class, boolean.class),
                             cls.getMethod("getCurrentAmmoCount", ItemStack.class),
                             cls.getMethod("hasBulletInBarrel", ItemStack.class)};
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
                     TACZ_FEED_API = new Object[0];
                 }
             }
@@ -269,7 +269,7 @@ public final class GunCompat {
                             cls.getMethod("canReload",
                                     net.minecraft.world.entity.LivingEntity.class,
                                     ItemStack.class)};
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
                     TACZ_RELOAD_API = new Object[0];
                 }
             }
@@ -290,7 +290,7 @@ public final class GunCompat {
         try {
             Object item = ((Class<?>) api[0]).cast(gun.m_41720_());
             return (Boolean) ((java.lang.reflect.Method) api[1]).invoke(item, maid, gun);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return null;
         }
     }
@@ -314,7 +314,7 @@ public final class GunCompat {
                             cls.getMethod("from", ItemStack.class),
                             cls.getMethod("hasEnoughAmmoToShoot",
                                     net.minecraft.world.entity.Entity.class)};
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
                     SBW_FEED_API = new Object[0];
                 }
             }
@@ -344,7 +344,7 @@ public final class GunCompat {
             }
             return (Boolean) ((java.lang.reflect.Method) api[2])
                     .invoke(item, maid, gun, Boolean.TRUE);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return null;
         }
     }
@@ -361,7 +361,7 @@ public final class GunCompat {
                 return Boolean.FALSE; // GunData 读不出来 = 这把枪没有枪包数据（同 canShoot 的 100）
             }
             return (Boolean) ((java.lang.reflect.Method) api[2]).invoke(data, maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return null;
         }
     }
@@ -392,7 +392,7 @@ public final class GunCompat {
                             cls.getMethod("from", ItemStack.class),
                             cls.getMethod("shouldStartReloading",
                                     net.minecraft.world.entity.Entity.class)};
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
                     SBW_RELOAD_API = new Object[0];
                 }
             }
@@ -415,7 +415,7 @@ public final class GunCompat {
                 return Boolean.FALSE; // GunData 读不出来 = 没有枪包数据（同 canShoot 的 100）
             }
             return (Boolean) ((java.lang.reflect.Method) api[2]).invoke(data, maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return null;
         }
     }
@@ -431,7 +431,7 @@ public final class GunCompat {
         }
         try {
             return ((Class<?>) api[0]).isInstance(stack.m_41720_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return false;
         }
     }
@@ -448,7 +448,7 @@ public final class GunCompat {
                 return false;
             }
             return (Integer) ((java.lang.reflect.Method) api[2]).invoke(boxItem, box) > 0;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return false;
         }
     }
@@ -461,7 +461,7 @@ public final class GunCompat {
             }
             return net.minecraftforge.fml.ModList.get().isLoaded("superbwarfare");
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunCompat", e); return false;
         }
     }
 
@@ -475,7 +475,7 @@ public final class GunCompat {
             if (com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil.isGun(stack)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             // TLM 兼容层异常（版本变化/未初始化）→ 走注册名兜底
         }
         return isGunById(stack);
@@ -496,7 +496,7 @@ public final class GunCompat {
             if (com.github.tartaricacid.touhoulittlemaid.compat.gun.swarfare.SWarfareCompat.isGun(stack)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             // 交回命名空间兜底
         }
         ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
@@ -538,7 +538,7 @@ public final class GunCompat {
         Boolean r;
         try {
             r = isSbwGun(gun) ? sbwCanFeed(maid, gun) : taczCanFeed(maid, gun);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             r = null;
         }
         return r != null ? r : looseAmmoScan(maid, gun);
@@ -607,7 +607,7 @@ public final class GunCompat {
         Boolean r;
         try {
             r = isSbwGun(gun) ? sbwCanReload(maid, gun) : taczCanReload(maid, gun);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             r = null;
         }
         if (r != null) {
@@ -639,7 +639,7 @@ public final class GunCompat {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
         }
         return false;
     }
@@ -662,7 +662,7 @@ public final class GunCompat {
                     guns.add(s);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
         }
         return guns;
     }
@@ -688,7 +688,7 @@ public final class GunCompat {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return false;
         }
         return false;
@@ -709,7 +709,7 @@ public final class GunCompat {
         try {
             return com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig
                     .MAID_GUN_MEDIUM_DISTANCE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
             return 12.0;
         }
     }

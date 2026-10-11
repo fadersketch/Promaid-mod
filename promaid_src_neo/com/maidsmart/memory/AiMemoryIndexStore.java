@@ -63,7 +63,7 @@ public final class AiMemoryIndexStore {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryIndexStore", ignored);
         }
     }
 

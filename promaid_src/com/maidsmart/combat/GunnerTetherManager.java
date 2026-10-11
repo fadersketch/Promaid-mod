@@ -279,7 +279,7 @@ public final class GunnerTetherManager {
             if (ridesMount(maid)) {
                 return "mount";
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         return "none";
     }
@@ -293,7 +293,7 @@ public final class GunnerTetherManager {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_ENABLE.get();
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -302,7 +302,7 @@ public final class GunnerTetherManager {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_HANG.get();
         } catch (Throwable t) {
-            return 2.6; // 【实测六百七十二】与配置默认值对齐（671 把默认改成 2.6，这里忘了跟）
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return 2.6; // 【实测六百七十二】与配置默认值对齐（671 把默认改成 2.6，这里忘了跟）
         }
     }
 
@@ -311,7 +311,7 @@ public final class GunnerTetherManager {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_BROOM_EXTRA.get();
         } catch (Throwable t) {
-            return 0.3;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return 0.3;
         }
     }
 
@@ -332,7 +332,7 @@ public final class GunnerTetherManager {
             if (isBroomRelated(maid)) {
                 h += broomExtra();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         return h;
     }
@@ -346,7 +346,7 @@ public final class GunnerTetherManager {
         try {
             return maid != null && LINKS.containsKey(maid.m_20148_());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -366,7 +366,7 @@ public final class GunnerTetherManager {
             Link link = LINKS.get(maid.m_20148_());
             return link != null && !link.leash;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -388,7 +388,7 @@ public final class GunnerTetherManager {
             net.minecraft.server.level.ServerPlayer p = link.player.get();
             return p != null && p.m_6084_() ? p : null;
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return null;
         }
     }
 
@@ -407,7 +407,7 @@ public final class GunnerTetherManager {
             return leash != null
                     && (player.m_21205_().m_150930_(leash) || player.m_21206_().m_150930_(leash));
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -482,7 +482,7 @@ public final class GunnerTetherManager {
             }
             return lvl.m_8055_(feet).m_60795_() && lvl.m_8055_(feet.m_7494_()).m_60795_();
         } catch (Throwable t) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return true;
         }
     }
 
@@ -497,7 +497,7 @@ public final class GunnerTetherManager {
             }
             return 0.0; // 贴着她脚底都没空间（钻进方块里飞）：用 0 兜底，绝不再退回原版头顶位（那会横跳）
         } catch (Throwable t) {
-            return Math.max(0.0, hang);
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return Math.max(0.0, hang);
         }
     }
 
@@ -536,7 +536,7 @@ public final class GunnerTetherManager {
             SEAT_NOW.put(id, cur);
             return cur;
         } catch (Throwable t) {
-            return new Vec3(0.0, -Math.max(0.0, hang), 0.0);
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return new Vec3(0.0, -Math.max(0.0, hang), 0.0);
         }
     }
 
@@ -595,7 +595,7 @@ public final class GunnerTetherManager {
                 SEAT_NOW.remove(passenger.m_20148_());
                 SEAT_SIDE.remove(passenger.m_20148_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -614,7 +614,7 @@ public final class GunnerTetherManager {
             ServerPlayer p = link == null ? null : link.player.get();
             return p != null && p.m_20148_().equals(passenger.m_20148_());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -637,7 +637,7 @@ public final class GunnerTetherManager {
             Link link = maid == null ? null : LINKS.get(maid.m_20148_());
             return link == null ? ST_NONE : (link.leash ? ST_LEASH : ST_HANG);
         } catch (Throwable t) {
-            return ST_NONE;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return ST_NONE;
         }
     }
 
@@ -648,7 +648,7 @@ public final class GunnerTetherManager {
             ServerPlayer p = link == null ? null : link.player.get();
             return p == null ? -1 : p.m_19879_();
         } catch (Throwable t) {
-            return -1;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return -1;
         }
     }
 
@@ -684,7 +684,7 @@ public final class GunnerTetherManager {
                 return new String[] { com.maidsmart.tool.PromaidLog.nameOf(m),
                         link.leash ? "leash" : "hang" };
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         return null;
     }
@@ -703,7 +703,7 @@ public final class GunnerTetherManager {
     private static void sync(EntityMaid maid) {
         try {
             GunnerTetherNetworking.send(maid, phaseOf(maid), riderIdOf(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -725,7 +725,7 @@ public final class GunnerTetherManager {
             maid.getPersistentData().m_128359_(TAG_LEASH_MARK, "1");
             com.maidsmart.tool.PromaidLog.log("武装拴绳", "标记：女仆="
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "（金色描边，她正式起飞时解除）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -742,7 +742,7 @@ public final class GunnerTetherManager {
             }
             maid.m_146915_(false);
             maid.getPersistentData().m_128473_(TAG_LEASH_MARK);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -844,7 +844,7 @@ public final class GunnerTetherManager {
         GROUND_TICKS.remove(maid.m_20148_());
         try {
             maid.getPersistentData().m_128359_(TAG_GUNNER, player.m_20148_().toString());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         sync(maid);
         bubble(maid, leash ? "先跟着我走，等你起飞我再挂上去～" : "上来吧！抓好绳子，我们一起飞～");
@@ -883,7 +883,7 @@ public final class GunnerTetherManager {
         PULL_LOGGED.remove(maid.m_20148_()); // 【实测六百七十七】拉力日志节流跟着解绑一起清
         try {
             maid.getPersistentData().m_128473_(TAG_GUNNER);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         ServerPlayer player = link == null ? null : link.player.get();
         sync(maid);
@@ -894,7 +894,7 @@ public final class GunnerTetherManager {
                 try {
                     DISMOUNT_GRACE.put(player.m_20148_(),
                             player.m_9236_().m_46467_() + DISMOUNT_GRACE_TICKS);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
                 }
             }
             if (player.m_20202_() == maid) {
@@ -947,7 +947,7 @@ public final class GunnerTetherManager {
                 com.maidsmart.tool.PromaidLog.log("武装拴绳", "换绑：先松开女仆="
                         + com.maidsmart.tool.PromaidLog.nameOf(m) + "（主人=" + playerName(player) + "）");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -956,7 +956,7 @@ public final class GunnerTetherManager {
         try {
             return player.m_5446_() != null ? player.m_5446_().getString() : player.m_20148_().toString();
         } catch (Throwable t) {
-            return player.m_20148_().toString();
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return player.m_20148_().toString();
         }
     }
 
@@ -1055,14 +1055,14 @@ public final class GunnerTetherManager {
                 for (Entity e : broom.m_20197_()) {
                     order = order.isEmpty() ? entityKind(e) : (order + "," + entityKind(e));
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
             }
             com.maidsmart.tool.PromaidLog.log("武装拴绳", "换座：玩家=" + playerName(player)
                     + " 坐回扫帚驾驶位，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 在第二乘客（她全程没下鞍；乘客顺序=" + order + "）");
             return true;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -1075,7 +1075,7 @@ public final class GunnerTetherManager {
             if (e instanceof EntityMaid) {
                 return "女仆";
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         return "其它";
     }
@@ -1093,7 +1093,7 @@ public final class GunnerTetherManager {
         try {
             return !maid.m_20096_() && com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -1104,7 +1104,7 @@ public final class GunnerTetherManager {
             return com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)
                     || com.maidsmart.combat.MaidBroomKit.isRidingBroom(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -1118,7 +1118,7 @@ public final class GunnerTetherManager {
         try {
             return maid != null && com.maidsmart.combat.MaidRideKit.ridingMount(maid) != null;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -1127,7 +1127,7 @@ public final class GunnerTetherManager {
         try {
             return maid == null ? null : com.maidsmart.combat.MaidRideKit.ridingMount(maid);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return null;
         }
     }
 
@@ -1147,7 +1147,7 @@ public final class GunnerTetherManager {
             Entity mount = mountOf(maid);
             return mount != null ? mount : maid;
         } catch (Throwable t) {
-            return maid;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return maid;
         }
     }
 
@@ -1192,7 +1192,7 @@ public final class GunnerTetherManager {
                 DISMOUNT_GRACE.put(player.m_20148_(),
                         player.m_9236_().m_46467_() + DISMOUNT_GRACE_TICKS);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         forgetHang(player);
         bubble(maid, "先落地歇会儿，你牵着绳子等我起飞～");
@@ -1228,7 +1228,7 @@ public final class GunnerTetherManager {
                         PULL_LOGGED.remove(maid.m_20148_()); // 【实测六百七十七】拉力日志节流一起清
                         try {
                             maid.getPersistentData().m_128473_(TAG_GUNNER);
-                        } catch (Throwable ignored) {
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
                         }
                         sync(maid);
                     }
@@ -1273,7 +1273,7 @@ public final class GunnerTetherManager {
                     forgetHang(player); // 【实测六百七十一】玩家离鞍：滑变状态一起清
                     try {
                         maid.getPersistentData().m_128473_(TAG_GUNNER);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
                     }
                     if (!player.m_20096_()) {
                         DISMOUNT_GRACE.put(player.m_20148_(),
@@ -1344,7 +1344,7 @@ public final class GunnerTetherManager {
                 restoreTimer = 0;
                 restore(server);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -1383,7 +1383,7 @@ public final class GunnerTetherManager {
                 try {
                     MinecraftServer srv = maid.m_9236_().m_7654_();
                     p = srv == null ? null : srv.m_6846_().m_11259_(UUID.fromString(pid));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
                 }
             }
             // 她 NBT 里带着"我们打过发光标记"的证据——下面所有清理动作都以它为准，
@@ -1411,16 +1411,16 @@ public final class GunnerTetherManager {
             }
             try {
                 maid.getPersistentData().m_128473_(TAG_GUNNER);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
     /** 存档重载/玩家重进后，从女仆 persistentData 的标记重建挂载（必须真的还骑着才恢复） */
     private static void restore(MinecraftServer server) {
         for (ServerLevel lvl : server.m_129785_()) {
-            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+            for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                     continue;
                 }
@@ -1458,7 +1458,7 @@ public final class GunnerTetherManager {
                     // 骑乘关系没被存档带回来（被拽下去等）——标记清掉，别每 30 秒白扫
                     try {
                         maid.getPersistentData().m_128473_(TAG_GUNNER);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
                     }
                 }
             }
@@ -1500,7 +1500,7 @@ public final class GunnerTetherManager {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         return null;
     }
@@ -1558,7 +1558,7 @@ public final class GunnerTetherManager {
                 return;
             }
             pullTick(maid, player);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -1567,7 +1567,7 @@ public final class GunnerTetherManager {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_PULL.get();
         } catch (Throwable t) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return true;
         }
     }
 
@@ -1624,7 +1624,7 @@ public final class GunnerTetherManager {
             double add = want - have;
             maid.m_20256_(new Vec3(dm.f_82479_ + hx * add, dm.f_82480_, dm.f_82481_ + hz * add));
             maid.m_245125_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -1641,7 +1641,7 @@ public final class GunnerTetherManager {
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 离主人 " + String.format("%.1f", dist)
                     + " 格（原版拴绳到 10 格就撒手，我们的绳子不撒手：照旧按原版那一记冲量拉，"
                     + "再远由她自己的牵引绳连人带扫帚传回来）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 
@@ -1737,7 +1737,7 @@ public final class GunnerTetherManager {
             if (rider != null && rider.m_20148_().equals(player.m_20148_())) {
                 return maid;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         return null;
     }
@@ -1757,7 +1757,7 @@ public final class GunnerTetherManager {
                     return maid;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
         return null;
     }
@@ -1811,7 +1811,7 @@ public final class GunnerTetherManager {
             Long until = DISMOUNT_GRACE.get(player.m_20148_());
             return until != null && "fall".equals(msgId);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -1821,7 +1821,7 @@ public final class GunnerTetherManager {
             Entity vehicle = player.m_20202_();
             return vehicle instanceof EntityMaid maid && isGunner(maid, player);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return false;
         }
     }
 
@@ -1844,7 +1844,7 @@ public final class GunnerTetherManager {
     private static void bubble(EntityMaid maid, String msg) {
         try {
             maid.getChatBubbleManager().addTextChatBubble(msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
 }

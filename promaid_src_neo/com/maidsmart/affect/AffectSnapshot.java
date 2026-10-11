@@ -48,7 +48,7 @@ public record AffectSnapshot(
             AffectManager.AffectProfile p = com.maidsmart.memory.AiMemoryModels.GSON.fromJson(
                     Files.readString(f), AffectManager.AffectProfile.class);
             return p == null ? null : from(p);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AffectSnapshot", ignored);
             return null;
         }
     }
@@ -74,7 +74,7 @@ public record AffectSnapshot(
                     num(m.get("v")), num(m.get("a")), num(m.get("d")),
                     num(m.get("i")), num(m.get("c")), num(m.get("l")),
                     num(m.get("hurt")), num(m.get("repair")));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AffectSnapshot", ignored);
             return null;
         }
     }
@@ -86,7 +86,7 @@ public record AffectSnapshot(
         if (o instanceof String s) {
             try {
                 return Double.parseDouble(s);
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AffectSnapshot", ignored);
             }
         }
         return 0.0;

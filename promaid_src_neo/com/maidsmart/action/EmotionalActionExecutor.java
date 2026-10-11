@@ -78,7 +78,7 @@ public final class EmotionalActionExecutor {
                 }
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EmotionalActionExecutor", ignored);
             return false; // 任何判定异常一律视为"不可喂"（保守）
         }
     }
@@ -276,7 +276,7 @@ public final class EmotionalActionExecutor {
                 }
             }
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("EmotionalActionExecutor", ignored);
             return false;
         }
     }
@@ -294,7 +294,7 @@ public final class EmotionalActionExecutor {
             }
             return food.nutrition() * food.saturation() * 2.0;
         } catch (Exception e) {
-            return 0.0;
+             com.maidsmart.diag.Diag.swallow("EmotionalActionExecutor", e); return 0.0;
         }
     }
 }

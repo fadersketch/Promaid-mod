@@ -40,7 +40,7 @@ public final class MaidRenderGuard {
             Object v = f.get(poseStack);
             return v instanceof java.util.Deque<?> deque ? deque.size() : -1;
         } catch (Throwable t) {
-            return -1;
+             com.maidsmart.diag.Diag.swallow("MaidRenderGuard", t); return -1;
         }
     }
 
@@ -57,7 +57,7 @@ public final class MaidRenderGuard {
                 }
                 poseStack.m_85849_();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRenderGuard", ignored);
         }
     }
 
@@ -70,7 +70,7 @@ public final class MaidRenderGuard {
             com.maidsmart.tool.PromaidLog.log("渲染护栏", where
                     + " 内部抛了异常、已吞掉（姿态栈已补回，不会崩游戏）："
                     + t.getClass().getName() + " / " + t.getMessage());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRenderGuard", ignored);
         }
     }
 
@@ -87,7 +87,7 @@ public final class MaidRenderGuard {
                         }
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRenderGuard", ignored);
             }
         }
         return stackField;

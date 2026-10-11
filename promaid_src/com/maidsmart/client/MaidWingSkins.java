@@ -119,7 +119,7 @@ public final class MaidWingSkins {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_WING_RENDER.get();
         } catch (Throwable t) {
-            return false; // 配置没加载等异常：按旧行为（宁可不画错）
+             com.maidsmart.diag.Diag.swallow("MaidWingSkins", t); return false; // 配置没加载等异常：按旧行为（宁可不画错）
         }
     }
 
@@ -162,7 +162,7 @@ public final class MaidWingSkins {
             ResourceLocation t = table(id, gliding);
             // 第 3 档：原版
             return t != null ? t : VANILLA;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWingSkins", ignored);
             return VANILLA; // 认不出来就用原版贴图——绝不能因为贴图查表而让整层渲染抛掉
         }
     }
@@ -208,7 +208,7 @@ public final class MaidWingSkins {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWingSkins", ignored);
         }
         // 档 1b：物品自身公开的 getElytraTexture(ItemStack[, LivingEntity])
         Method e1 = findMethod(c, "getElytraTexture",
@@ -238,10 +238,10 @@ public final class MaidWingSkins {
             }
             try {
                 m.setAccessible(true); // 实现类可能不是 public；能开就开
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWingSkins", ignored);
             }
             return m;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWingSkins", ignored);
             return null;
         }
     }
@@ -271,7 +271,7 @@ public final class MaidWingSkins {
                 // 所以这里直接调它是安全的）
                 Object r = (gliding && reversed != null) ? reversed.invoke(type) : texture.invoke(type);
                 return r instanceof ResourceLocation rl ? rl : null;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWingSkins", ignored);
                 return null;
             }
         }
@@ -292,7 +292,7 @@ public final class MaidWingSkins {
                         ? method.invoke(chest.m_41720_(), chest)
                         : method.invoke(chest.m_41720_(), chest, maid);
                 return r instanceof ResourceLocation rl ? rl : null;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWingSkins", ignored);
                 return null;
             }
         }
@@ -335,7 +335,7 @@ public final class MaidWingSkins {
         try {
             return MaidFlightKit.isGliding(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidWingSkins", t); return false;
         }
     }
 
@@ -345,7 +345,7 @@ public final class MaidWingSkins {
             ResourceLocation key = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             return key == null ? null : key.toString();
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidWingSkins", t); return null;
         }
     }
 }

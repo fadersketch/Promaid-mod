@@ -35,7 +35,7 @@ public abstract class EntitySetDeltaMovementMixin {
             if (FriendlyWindGuard.shouldBlockTick((Entity) (Object) this, vec)) {
                 ci.cancel(); // 保持原速度：等于这一下没推
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntitySetDeltaMovementMixin", ignored);
         }
     }
 }

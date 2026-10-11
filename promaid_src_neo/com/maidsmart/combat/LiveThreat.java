@@ -75,7 +75,7 @@ public final class LiveThreat {
                 return true;
             }
             return recent(maid, e) || targetsUs(maid, e);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
             return false;
         }
     }
@@ -99,7 +99,7 @@ public final class LiveThreat {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
             return false;
         }
     }
@@ -118,7 +118,7 @@ public final class LiveThreat {
             // 鸡蛋这类娱乐弹射物）照样把他写进"最近打我的人"。只看旧账字段的话，
             // "A 朝我们扔了个雪球" 会被读成 "A 在打我们"。这里再要一条正伤害台账记录兜住。
             return positiveHitFresh(victim, attacker);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
             return false;
         }
     }
@@ -172,7 +172,7 @@ public final class LiveThreat {
                 POSITIVE_HITS.values().removeIf(v -> now - v[2] >= WINDOW);
             }
             POSITIVE_HITS.put(vid, new long[]{aid.getMostSignificantBits(), aid.getLeastSignificantBits(), now});
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
         }
     }
 
@@ -188,7 +188,7 @@ public final class LiveThreat {
                 return false;
             }
             return victim.tickCount - rec[2] < WINDOW;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
             return false;
         }
     }
@@ -213,7 +213,7 @@ public final class LiveThreat {
             }
             Entity d = source.getDirectEntity();
             return d instanceof LivingEntity le ? le : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
             return null;
         }
     }
@@ -275,7 +275,7 @@ public final class LiveThreat {
             }
             LivingEntity owner = maid.getOwner();
             return owner != null && hurtFresh(e, owner); // 它刚打过主人（护主）
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
             return false;
         }
     }
@@ -288,7 +288,7 @@ public final class LiveThreat {
             }
             LivingEntity t = mob.getTarget();
             return t == maid || (maid.getOwner() != null && t == maid.getOwner());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LiveThreat", ignored);
             return false;
         }
     }

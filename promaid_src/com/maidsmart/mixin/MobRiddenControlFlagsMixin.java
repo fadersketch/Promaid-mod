@@ -43,7 +43,7 @@ public abstract class MobRiddenControlFlagsMixin {
             if ((Object) this instanceof Mob self) {
                 com.maidsmart.combat.MaidRideKit.reopenRiddenCombatGoals(self);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MobRiddenControlFlagsMixin", ignored);
         }
     }
 }

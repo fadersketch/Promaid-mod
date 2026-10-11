@@ -110,7 +110,7 @@ public class PatrolChartScreen extends Screen {
     private static void diag(String msg) {
         try {
             com.maidsmart.tool.PromaidLog.log("巡逻航图", msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartScreen", ignored);
         }
     }
 
@@ -210,7 +210,7 @@ public class PatrolChartScreen extends Screen {
                     s.rebuild();
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartScreen", ignored);
         }
     }
 

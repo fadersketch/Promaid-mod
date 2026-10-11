@@ -215,7 +215,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                         .append(matName)
                         .append(net.minecraft.network.chat.Component.literal(" \u00a7e×1\u00a7f，放进她背包后会自动继续")));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBrewBehavior", ignored);
         }
     }
 
@@ -223,7 +223,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     private static void swing(EntityMaid maid) {
         try {
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBrewBehavior", ignored);
         }
     }
 
@@ -354,7 +354,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (maid.isMaidInSittingPose()) {
                 maid.setPose(net.minecraft.world.entity.Pose.STANDING);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidBrewBehavior", ignored);
         }
     }
 
@@ -387,7 +387,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
                     new WalkTarget(new BlockPosTracker(spot),
                             (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 1)); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBrewBehavior", ignored);
         }
     }
 
@@ -508,7 +508,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             try {
                 this.appendPotions(invS, maid.getHandsInvWrapper());
                 this.appendPotions(invS, maid.getAvailableBackpackInv());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBrewBehavior", ignored);
             }
             com.maidsmart.tool.PromaidLog.log("酿造",
                     com.maidsmart.tool.PromaidLog.nameOf(maid)
@@ -516,7 +516,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                             + " 槽位 " + slots.toString().trim()
                             + " 燃料[" + fuelS + ']'
                             + (invS.length() == 0 ? " 背包无药水" : " 背包药水: " + invS.toString().trim()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBrewBehavior", ignored);
         }
     }
 

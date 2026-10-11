@@ -93,7 +93,7 @@ public abstract class EntityGunnerHangMixin {
                     com.maidsmart.combat.GunnerTetherManager.seatOffset(self, passenger, hang);
             fn.accept(passenger, anchor.getX() + off.x, anchor.getY() + off.y, anchor.getZ() + off.z);
             ci.cancel();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityGunnerHangMixin", ignored);
         }
     }
 

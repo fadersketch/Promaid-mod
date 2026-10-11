@@ -46,7 +46,7 @@ public final class MaidBroomKit {
     public static boolean isBroomTask(EntityMaid maid) {
         try {
             return maid != null && maid.getTask() != null && isBroomUid(maid.getTask().getUid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return false;
         }
     }
@@ -55,7 +55,7 @@ public final class MaidBroomKit {
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_ENABLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return false;
         }
     }
@@ -75,7 +75,7 @@ public final class MaidBroomKit {
         }
         try {
             return stack.m_41720_() instanceof com.github.tartaricacid.touhoulittlemaid.item.ItemBroom;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return false;
         }
     }
@@ -92,7 +92,7 @@ public final class MaidBroomKit {
             if (isBroomItem(maid.m_21205_()) || isBroomItem(maid.m_21206_())) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
         }
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
@@ -101,11 +101,11 @@ public final class MaidBroomKit {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
         }
         try {
             return com.maidsmart.tool.MaidExtraContainer.contains(maid, MaidBroomKit::isBroomItem);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return false;
         }
     }
@@ -117,7 +117,7 @@ public final class MaidBroomKit {
                 return null;
             }
             return maid.m_20202_() instanceof EntityBroom b ? b : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return null;
         }
     }
@@ -132,7 +132,7 @@ public final class MaidBroomKit {
     public static boolean hasRangedWeapon(EntityMaid maid) {
         try {
             return MaidFlightKit.hasRangedWeaponOnly(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return false;
         }
     }
@@ -147,7 +147,7 @@ public final class MaidBroomKit {
             // {@link MaidFlightKit#ensureUsableRangedWeapon} 的换装口径同源（门禁与换装同一句话）。
             return MaidFlightKit.hasAmmoForWeapon(maid, MaidFlightKit.resolveRangedWeaponAny(maid))
                     || MaidFlightKit.hasUsableRangedWeaponAny(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return true; // 判据异常时放行：宁可起飞也不要卡死（与 hasAmmoForRanged 的兜底同款）
         }
     }
@@ -312,7 +312,7 @@ public final class MaidBroomKit {
             }
             double k = r / h;
             return new Vec3(cx + dx * k, desired.f_82480_, cz + dz * k);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return desired;
         }
     }
@@ -331,7 +331,7 @@ public final class MaidBroomKit {
     public static boolean isBroomAirborne(EntityMaid maid) {
         try {
             return isBroomTask(maid) && isRidingBroom(maid) && !maid.m_9236_().m_5776_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return false;
         }
     }
@@ -354,7 +354,7 @@ public final class MaidBroomKit {
             }
             return maid != null && maid.m_21536_()
                     && com.maidsmart.follow.WorkAreaClamp.circleCenter(maid) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
             return false;
         }
     }

@@ -195,7 +195,7 @@ public final class BlueprintFileIo {
                     if (java.nio.file.Files.deleteIfExists(out)) {
                         BlueprintLib.LOGGER.info("cleanupLegacyBuiltinFiles: 已删除内置预制残留 {}", out);
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
                 }
             }
             // 清理后同步内存注册（增量扫描会在下次触发时自然移除；此处主动清）
@@ -207,7 +207,7 @@ public final class BlueprintFileIo {
             BlueprintMaterials.NEEDS_MTIME.clear();
             BlueprintCatalog.DESCRIBE_CACHE.clear();
             BlueprintStepMath.SIZE_CACHE.clear();
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
         }
     }
 
@@ -233,7 +233,7 @@ public final class BlueprintFileIo {
                     BlueprintLib.LOGGER.warn("ensureBundledBlueprints: 复制失败 {}: {}", file, e.getMessage());
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
         }
     }
 
@@ -286,13 +286,13 @@ public final class BlueprintFileIo {
             } catch (Exception e) {
                 try {
                     java.nio.file.Files.deleteIfExists(dst.toPath());
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
                 }
                 return "导入失败: 文件无法解析（" + e.getClass().getSimpleName()
                         + "——可能是版本不兼容，蓝图需与当前 MC 1.20.1 一致；已删除无效副本）";
             }
         } catch (Exception e) {
-            return "导入失败: " + e.getMessage();
+             com.maidsmart.diag.Diag.swallow("BlueprintFileIo", e); return "导入失败: " + e.getMessage();
         }
     }
 
@@ -344,7 +344,7 @@ public final class BlueprintFileIo {
                     + "尺寸 " + size[0] + "×" + size[1] + "×" + size[2]
                     + "，已注册，可在手册建造目录找到）";
         } catch (Exception e) {
-            return "导入失败: " + e.getMessage();
+             com.maidsmart.diag.Diag.swallow("BlueprintFileIo", e); return "导入失败: " + e.getMessage();
         }
     }
 
@@ -365,7 +365,7 @@ public final class BlueprintFileIo {
             if (java.nio.file.Files.isDirectory(cfg)) {
                 dirs.add(cfg);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
         }
         if (SERVER != null) {
             try {
@@ -373,7 +373,7 @@ public final class BlueprintFileIo {
                 if (java.nio.file.Files.isDirectory(sched)) {
                     dirs.add(sched);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
             }
         }
         // v1.5.25 诊断日志：确认扫描到的目录与文件数（帮助排查"手册看不到蓝图"）
@@ -430,10 +430,10 @@ public final class BlueprintFileIo {
                             BlueprintCatalog.DESCRIBE_CACHE.remove(id);
                             BlueprintStepMath.SIZE_CACHE.remove(id);
                         }
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
                     }
                 });
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
             }
         }
         // 删除的文件：移除缓存
@@ -470,7 +470,7 @@ public final class BlueprintFileIo {
                 try {
                     zf0 = new java.util.zip.ZipFile(p.toFile());
                 } catch (Exception utf8Fail) {
-                    // v1.5.313：中文 Windows 工具/百度网盘压缩的 zip 条目名是 GBK 编码，
+                     com.maidsmart.diag.Diag.swallow("BlueprintFileIo", utf8Fail); // v1.5.313：中文 Windows 工具/百度网盘压缩的 zip 条目名是 GBK 编码，
                     // Java 默认按 UTF-8 解码 → "invalid CEN header (bad entry name or
                     // comment)" 打不开（豪华大别墅.zip 实测）；GBK 兜底重试。
                     try {
@@ -616,7 +616,7 @@ public final class BlueprintFileIo {
             }
             return steps;
         } catch (Exception e) {
-            // v1.5.25f 诊断：记录具体异常（LogUtils → 进 latest.log）
+             com.maidsmart.diag.Diag.swallow("BlueprintFileIo", e); // v1.5.25f 诊断：记录具体异常（LogUtils → 进 latest.log）
             String fname = p.getFileName() != null ? p.getFileName().toString() : p.toString();
             if (BlueprintLib.WARNED_PARSE_FAIL.add(fname)) {
                 BlueprintLib.LOGGER.warn("loadExternalFile: {} 异常 -> {}（仅提示一次）", fname, e.toString());
@@ -633,7 +633,7 @@ public final class BlueprintFileIo {
                 if (name != null && !name.getAsString().isEmpty()) {
                     return name.getAsString();
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
             }
         }
         // v1.5.28：.snbt 文件名 → 中文显示名（litematic/schem 文件名本身多为中文，直接返回原名）
@@ -651,7 +651,7 @@ public final class BlueprintFileIo {
             safe = safe.replaceAll("[\\\\/:*?\"<>|]", "_");
             java.nio.file.Path out = dir.resolve(safe + ".json");
             java.nio.file.Files.writeString(out, json);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
         }
     }
 
@@ -676,7 +676,7 @@ public final class BlueprintFileIo {
                 if (java.nio.file.Files.isDirectory(cfg)) {
                     dirs.add(cfg);
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
             }
             try {
                 if (SERVER != null) {
@@ -685,7 +685,7 @@ public final class BlueprintFileIo {
                         dirs.add(sched);
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
             }
             // 在所有扫描目录里清除同名副本（去扩展名、大小写不敏感——RRR/rrr 都删）
             for (java.nio.file.Path dir : dirs) {
@@ -702,7 +702,7 @@ public final class BlueprintFileIo {
                         deletedAny = true;
                         BlueprintLib.LOGGER.info("deleteBlueprint: 清理副本 {}", hit);
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
                 }
             }
             if (!deletedAny) {

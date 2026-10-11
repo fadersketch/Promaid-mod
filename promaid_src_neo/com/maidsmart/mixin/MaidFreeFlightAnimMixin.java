@@ -34,7 +34,7 @@ public abstract class MaidFreeFlightAnimMixin {
                     (maid, event) -> MaidFreeFlightAnimState.shouldPlayElytraFly(maid));
             MaidFreeFlightAnimInvoker.promaid$registerState("fly", 1,
                     (maid, event) -> MaidFreeFlightAnimState.shouldPlayFly(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightAnimMixin", ignored);
         }
     }
 }

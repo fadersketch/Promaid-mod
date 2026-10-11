@@ -59,21 +59,21 @@ public abstract class ChunkMapRemotePumpMixin {
     private void promaid$pumpRemoteGui(CallbackInfo ci) {
         try {
             RemoteMaidGui.pump(level, entityMap);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ChunkMapRemotePumpMixin", ignored);
             // 远程开界面是"锦上添花"的功能：这里出任何问题都不该影响真正在跑的区块 tick
         }
         // 实测六百九十八【可见性自愈】：同一个注入点顺手做一次"主人客户端认不认得她"的巡检
         // （只扫本模组持票的那几只女仆，空表零成本）——见 MaidVisibilityGuard 的类注释。
         try {
             com.maidsmart.follow.MaidChunkLoadManager.visibilitySweep(level, entityMap);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ChunkMapRemotePumpMixin", ignored);
         }
         // 实测七百九十九【issue #36 传送后看不见】：传送大跳变的**延迟补包**在这里到点执行
         // （同样是空队列零成本）。放这个注入点是刻意的——它本来就是"原版刚扫完一遍实体同步
         // 之后"的那个时刻，补包发出去的生成包会带她此刻的真实坐标。
         try {
             com.maidsmart.follow.MaidTeleportRebuild.pump(level, entityMap);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ChunkMapRemotePumpMixin", ignored);
         }
     }
 }

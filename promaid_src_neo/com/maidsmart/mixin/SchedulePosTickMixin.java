@@ -58,7 +58,7 @@ public abstract class SchedulePosTickMixin {
                 if (sp != null && sp.isConfigured()) {
                     sp.restrictTo(maid);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SchedulePosTickMixin", ignored);
             }
         }
         ci.cancel(); // 干活中：跳过本 tick 的传送/走回（restrictTo 已在上面补过）
@@ -82,7 +82,7 @@ public abstract class SchedulePosTickMixin {
             }
             double r = (double) ((int) maid.getRestrictRadius() + 4);
             return center.distSqr(maid.blockPosition()) > r * r;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SchedulePosTickMixin", ignored);
             return false; // 读不到就照旧豁免（保守：不改变既有行为）
         }
     }

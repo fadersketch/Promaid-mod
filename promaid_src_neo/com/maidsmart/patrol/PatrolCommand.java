@@ -43,7 +43,7 @@ public final class PatrolCommand {
     public static double defaultClearance() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_PATROL_CLEARANCE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolCommand", ignored);
             return PatrolRoute.DEFAULT_CLEARANCE;
         }
     }
@@ -53,7 +53,7 @@ public final class PatrolCommand {
         try {
             int max = com.maidsmart.config.MaidSmartConfig.COMBAT_PATROL_MAX_RADIUS.get();
             return max <= 0 || radius <= (double) max;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolCommand", ignored);
             return true;
         }
     }
@@ -115,7 +115,7 @@ public final class PatrolCommand {
                 return null; // 这一拍摘掉，下一拍回航迹
             }
             return t;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolCommand", ignored);
             return null;
         }
     }
@@ -125,7 +125,7 @@ public final class PatrolCommand {
             if (maid != null) {
                 GOTO.remove(maid.getUUID());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolCommand", ignored);
         }
     }
 

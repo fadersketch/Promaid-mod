@@ -347,7 +347,7 @@ public final class MaidStrollCheck {
     private static double attribute(EntityMaid maid) {
         try {
             return maid.getAttributeValue(Attributes.MOVEMENT_SPEED);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidStrollCheck", ignored);
             return -1.0;
         }
     }
@@ -378,7 +378,7 @@ public final class MaidStrollCheck {
                     + "\u3001\u901f\u5ea6\u4fee\u6b63=\u00a7f" + w.getSpeedModifier()
                     + "\u00a7r\uff08= \u5199\u8fdb walkTarget \u7684\u90a3\u4e2a\u500d\u7387\uff09";
         } catch (Throwable t) {
-            return "\u5f53\u524d\u79fb\u52a8\u76ee\u6807\uff1a\u8bfb\u4e0d\u5230\uff08" + t + "\uff09";
+             com.maidsmart.diag.Diag.swallow("MaidStrollCheck", t); return "\u5f53\u524d\u79fb\u52a8\u76ee\u6807\uff1a\u8bfb\u4e0d\u5230\uff08" + t + "\uff09";
         }
     }
 

@@ -92,7 +92,7 @@ public abstract class PlayerMaceRideFallMixin {
                 self.fallDistance = ride;
             }
             noteSmash(self, ride, min, smash);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlayerMaceRideFallMixin", ignored);
         }
     }
 
@@ -114,7 +114,7 @@ public abstract class PlayerMaceRideFallMixin {
                             ? "写回 fallDistance=" + f(ride) + " 格：这一锤按猛击算，"
                                     + "增伤与下落类附魔（密度/破甲/风爆）都按这个数生效"
                             : "不到门槛 → 这一锤只是普通挥击，没有猛击增伤"));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlayerMaceRideFallMixin", ignored);
         }
     }
 

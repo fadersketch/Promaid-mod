@@ -52,7 +52,7 @@ public final class PromaidLog {
                     try {
                         java.nio.file.Files.move(f, dir.resolve("promaid.log.old"),
                                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PromaidLog", ignored);
                         // 轮换失败（文件被占用等）就继续追加原文件
                     }
                 }
@@ -65,7 +65,7 @@ public final class PromaidLog {
             }
             SLF.info("[promaid/{}] {}", category, message);
         } catch (Throwable t) {
-            // 日志系统自身的故障绝不外溢
+             com.maidsmart.diag.Diag.swallow("PromaidLog", t); // 日志系统自身的故障绝不外溢
         }
     }
 }

@@ -164,7 +164,7 @@ public final class MaidSelfPropelledWings {
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_WINGS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return false;
         }
     }
@@ -178,7 +178,7 @@ public final class MaidSelfPropelledWings {
                 return DEFAULT_ITEMS;
             }
             return ids;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return DEFAULT_ITEMS;
         }
     }
@@ -211,7 +211,7 @@ public final class MaidSelfPropelledWings {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return false;
         }
     }
@@ -229,7 +229,7 @@ public final class MaidSelfPropelledWings {
             net.minecraft.tags.TagKey<net.minecraft.world.item.Item> tag =
                     net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.ITEM, loc);
             return stack.is(tag);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return false;
         }
     }
@@ -245,7 +245,7 @@ public final class MaidSelfPropelledWings {
             }
             ItemStack chest = maid.getItemBySlot(EquipmentSlot.CHEST);
             return isSelfPropelled(chest) ? chest : ItemStack.EMPTY;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return ItemStack.EMPTY;
         }
     }
@@ -265,7 +265,7 @@ public final class MaidSelfPropelledWings {
                     return p;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
         }
         return FALLBACK;
     }
@@ -274,7 +274,7 @@ public final class MaidSelfPropelledWings {
     public static double scale() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_WINGS_SCALE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return 1.0;
         }
     }
@@ -305,7 +305,7 @@ public final class MaidSelfPropelledWings {
                     + fmt(p.add * scale()) + "，收敛约 " + fmt(p.cruise() * scale()) + " 格/tick，推 "
                     + WINDOW_TICKS + " tick）");
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return false;
         }
     }
@@ -330,7 +330,7 @@ public final class MaidSelfPropelledWings {
             }
             pushOnce(maid, w.params);
             w.left--;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
         }
     }
 
@@ -351,7 +351,7 @@ public final class MaidSelfPropelledWings {
     public static boolean clear(EntityMaid maid) {
         try {
             return maid != null && WINDOWS.remove(maid.getUUID()) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return false;
         }
     }
@@ -360,7 +360,7 @@ public final class MaidSelfPropelledWings {
     public static boolean isThrusting(EntityMaid maid) {
         try {
             return maid != null && WINDOWS.containsKey(maid.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             return false;
         }
     }
@@ -393,7 +393,7 @@ public final class MaidSelfPropelledWings {
             }
             return sb.toString();
         } catch (Throwable t) {
-            return "自推鞘翅: 诊断异常 " + t;
+             com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", t); return "自推鞘翅: 诊断异常 " + t;
         }
     }
 
@@ -406,7 +406,7 @@ public final class MaidSelfPropelledWings {
         try {
             ResourceLocation key = BuiltInRegistries.ITEM.getKey(stack.getItem());
             id = key == null ? stack.getItem().toString() : key.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSelfPropelledWings", ignored);
             id = stack.getItem().toString();
         }
         return stack.getCount() + "x" + id;

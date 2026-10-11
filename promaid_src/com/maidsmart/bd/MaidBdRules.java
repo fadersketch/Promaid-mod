@@ -121,7 +121,7 @@ public final class MaidBdRules {
                     out.add(x.getAsString());
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdRules", ignored);
         }
         return out;
     }
@@ -139,7 +139,7 @@ public final class MaidBdRules {
                     out.add(new KeepRule(r.get("match").getAsString(), r.get("keep").getAsLong()));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdRules", ignored);
         }
         return out;
     }
@@ -158,7 +158,7 @@ public final class MaidBdRules {
                     out.add(new AtLeastRule(r.get("match").getAsString(), r.get("count").getAsLong()));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdRules", ignored);
         }
         return out;
     }
@@ -350,7 +350,7 @@ public final class MaidBdRules {
             ResourceLocation id = ForgeRegistries.ITEMS.getKey(s.m_41720_());
             return id != null && id.toString().equals(e);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidBdRules", t); return false;
         }
     }
 

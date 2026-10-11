@@ -314,7 +314,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
                     net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             return (id == null ? String.valueOf(stack.m_41720_()) : id.toString())
                     + " ×" + stack.m_41613_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxMaidInv", ignored);
             return String.valueOf(stack.m_41720_()) + " ×" + stack.m_41613_();
         }
     }

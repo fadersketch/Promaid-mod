@@ -70,7 +70,7 @@ public final class MaidGoetyAuto {
             return maid != null && ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
                     .getPersistentData().getBoolean(TAG);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", t); return false;
         }
     }
 
@@ -79,7 +79,7 @@ public final class MaidGoetyAuto {
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
                     .getPersistentData().putBoolean(TAG, on);
             PromaidLog.log("Goety自动", maid.getName().getString() + " 自动推进 = " + on);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         if (!on) {
             MaidGoetyFlight.stop(maid, "自动已关");
@@ -115,7 +115,7 @@ public final class MaidGoetyAuto {
             if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
                 return "上游的飞行跟随正在带她飞";
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         return null;
     }
@@ -128,7 +128,7 @@ public final class MaidGoetyAuto {
             if (mem != null && mem.isPresent()) {
                 return mem.get();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         return maid.getTarget();
     }
@@ -137,7 +137,7 @@ public final class MaidGoetyAuto {
     public void onMaidTick(MaidTickEvent event) {
         try {
             tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
     }
 
@@ -192,7 +192,7 @@ public final class MaidGoetyAuto {
         LivingEntity owner = null;
         try {
             owner = maid.getOwner();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         if (owner == null || !owner.isAlive()) {
             if (ours) {

@@ -88,7 +88,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     public static void markClutch(EntityMaid maid, ServerLevel level) {
         try {
             LAST_CLUTCH.put(maid.m_20148_(), level.m_46467_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WaterClutchBehavior", ignored);
             // 记账失败不影响落地水本身：最坏只是这一轮的搭路闸没生效
         }
     }
@@ -98,7 +98,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         try {
             Long t = LAST_CLUTCH.get(maid.m_20148_());
             return t != null && gameTime - t >= 0 && gameTime - t < window;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WaterClutchBehavior", ignored);
             return false;
         }
     }
@@ -162,7 +162,9 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean m_6737_(ServerLevel level, EntityMaid maid, long gameTime) {
-        return true;
+        // TD-10：总开关也在 canStillUse 里问——两个开关都关掉时正在跑的这轮即刻停。
+        return com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
+                || com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_CLUTCH.get();
     }
 
     @Override

@@ -137,7 +137,7 @@ public final class BuildHudRenderer {
                 return -1;
             }
             return line(gg, font, line2, x, y, w, h);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BuildHudRenderer", ignored);
             return y;
         }
     }

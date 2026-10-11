@@ -165,7 +165,7 @@ public final class ScheduleData {
             int m = Integer.parseInt(t.substring(idx + 1).trim());
             return Math.max(0, Math.min(1440, h * 60 + m));
         } catch (Exception e) {
-            return -1;
+             com.maidsmart.diag.Diag.swallow("ScheduleData", e); return -1;
         }
     }
 

@@ -186,7 +186,7 @@ public final class IndexStonePreviewClient {
                 double d = cam.position().distanceTo(bhr.getBlockPos().getCenter());
                 return d > NEAR_REACH ? p : null;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return null;
     }
@@ -210,7 +210,7 @@ public final class IndexStonePreviewClient {
                     return p;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return null;
     }
@@ -222,7 +222,7 @@ public final class IndexStonePreviewClient {
             if (hit instanceof BlockHitResult bhr && bhr.getType() == HitResult.Type.BLOCK) {
                 return cam.position().distanceTo(bhr.getBlockPos().getCenter());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return Double.MAX_VALUE;
     }
@@ -304,7 +304,7 @@ public final class IndexStonePreviewClient {
                 }
                 return p;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return null;
     }
@@ -369,7 +369,7 @@ public final class IndexStonePreviewClient {
             Vec3 to = camera.add(lx + 0.5, ly + 0.5, lz + 0.5);
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, edge,
                     from, to, 1.0f, 0.65f, 0.25f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
     }
 

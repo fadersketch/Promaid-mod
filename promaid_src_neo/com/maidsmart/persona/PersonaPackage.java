@@ -64,7 +64,7 @@ public final class PersonaPackage {
                         m.get("text").trim(),
                         Math.max(1, Math.min(10, s)),
                         m.getOrDefault("tags", ""));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PersonaPackage", ignored);
                 return null;
             }
         }
@@ -84,7 +84,7 @@ public final class PersonaPackage {
             writeIfMissing(maidDir.resolve(PERSONA_FILE), PERSONA_FILE);
             writeIfMissing(maidDir.resolve(TRAITS_FILE), TRAITS_FILE);
             writeIfMissing(maidDir.resolve(CORE_MEMORY_FILE), CORE_MEMORY_FILE);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PersonaPackage", ignored);
         }
     }
 
@@ -134,7 +134,7 @@ public final class PersonaPackage {
                     out.add(c);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PersonaPackage", ignored);
             return new ArrayList<>();
         }
         out.sort(Comparator.comparingInt(CoreMemory::salience).reversed());
@@ -193,7 +193,7 @@ public final class PersonaPackage {
                 sb.append(l).append('\n');
             }
             Files.writeString(f, sb.toString(), StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PersonaPackage", ignored);
         }
     }
 
@@ -312,7 +312,7 @@ public final class PersonaPackage {
             }
             PROPS_CACHE.put(key, new Object[]{mtime, p});
             return p;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PersonaPackage", ignored);
             return null;
         }
     }
@@ -338,7 +338,7 @@ public final class PersonaPackage {
                 String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
                 Files.writeString(target, text, StandardCharsets.UTF_8);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PersonaPackage", ignored);
         }
     }
 }

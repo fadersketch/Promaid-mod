@@ -119,7 +119,7 @@ public final class MaidFreeFlightController {
             return maid != null
                     && MaidFreeFlightKit.isModeActive(maid)
                     && MaidFreeFlightFlags.effective(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -129,7 +129,7 @@ public final class MaidFreeFlightController {
         try {
             return maid != null && maid.m_6084_() && MaidFreeFlightKit.isModeActive(maid)
                     && MaidFreeFlightFlags.effective(maid) && !blocked(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -143,7 +143,7 @@ public final class MaidFreeFlightController {
                     + " 飞行任务=" + com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)
                     + " 扫帚任务=" + com.maidsmart.combat.MaidBroomKit.isBroomTask(maid);
         } catch (Throwable t) {
-            return "状态异常：" + t;
+             com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", t); return "状态异常：" + t;
         }
     }
 
@@ -159,7 +159,7 @@ public final class MaidFreeFlightController {
                 return true;   // 空袭/远战自己管飞行
             }
             return com.maidsmart.combat.MaidBroomKit.isBroomTask(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return true;
         }
     }
@@ -219,7 +219,7 @@ public final class MaidFreeFlightController {
             TRAVEL.put(id, new double[]{x, y, z, (double) maid.m_9236_().m_46467_()});
             logTravel(maid, hd, vd);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -227,7 +227,7 @@ public final class MaidFreeFlightController {
     private static boolean walkTravelOn() {
         try {
             return com.maidsmart.config.MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -235,7 +235,7 @@ public final class MaidFreeFlightController {
     private static double walkTravelDist() {
         try {
             return Math.max(0.0, com.maidsmart.config.MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL_DIST.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return 8.0;
         }
     }
@@ -256,7 +256,7 @@ public final class MaidFreeFlightController {
                 return false;
             }
             return !com.maidsmart.task.MaidWorkTags.isStill(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -267,7 +267,7 @@ public final class MaidFreeFlightController {
             net.minecraft.core.BlockPos from =
                     net.minecraft.core.BlockPos.m_274561_(x, y + 1.0, z);
             return findGroundBelow(maid.m_9236_(), from, TRAVEL_LANDING_SCAN) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -280,7 +280,7 @@ public final class MaidFreeFlightController {
         }
         try {
             return maid.m_9236_().m_46467_() - (long) t[3] <= TRAVEL_TTL;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -304,7 +304,7 @@ public final class MaidFreeFlightController {
             UUID id = maid.m_20148_();
             TRAVEL.remove(id);
             TRAVEL_FLIGHT.remove(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -342,7 +342,7 @@ public final class MaidFreeFlightController {
             PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid)
                     + " 赶路：飞去她本来要走过去的地方（直线 " + String.format("%.1f", hd)
                     + " 格 / 高差 " + String.format("%.1f", vd) + " 格）——有飞行能力就不走路、也不搭路");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -354,7 +354,7 @@ public final class MaidFreeFlightController {
             }
             return horizontalDist(maid, owner) <= WORK_NEAR_OWNER
                     && Math.abs(maid.m_20186_() - owner.m_20186_()) <= WORK_NEAR_OWNER_Y;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -398,7 +398,7 @@ public final class MaidFreeFlightController {
             if (sub != null && sub.m_6084_() && sub.m_9236_() == maid.m_9236_()) {
                 return sub;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
         return maid.m_269323_();
     }
@@ -427,7 +427,7 @@ public final class MaidFreeFlightController {
                 lastPurge = now;
                 purge(now);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -458,7 +458,7 @@ public final class MaidFreeFlightController {
                 TRAVEL_FLIGHT.remove(id);
                 TRAVEL_LOGGED.remove(id);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -470,7 +470,7 @@ public final class MaidFreeFlightController {
     private static void markAirborne(EntityMaid maid, boolean on) {
         try {
             maid.getPersistentData().m_128379_(PERSIST_AIRBORNE, on);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -497,7 +497,7 @@ public final class MaidFreeFlightController {
             }
             PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid)
                     + " 交还重力（上次存档/卸载时她还在飞，重载后不该继续飘着）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -602,14 +602,14 @@ public final class MaidFreeFlightController {
                 takeOff(maid, enemyTooFar ? "起飞追击敌人" : "起飞");
             }
         } catch (Throwable t) {
-            // 异常兜底：只在"飞行中"才强行保持悬停；落地待命时就当她不存在
+             com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", t); // 异常兜底：只在"飞行中"才强行保持悬停；落地待命时就当她不存在
             try {
                 int st = STATE.getOrDefault(maid.m_20148_(), ST_OFF);
                 if (st == ST_FLYING || st == ST_SOFT_LAND) {
                     maid.m_20242_(true);
                     maid.m_20256_(Vec3.f_82478_);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             }
         }
     }
@@ -621,7 +621,7 @@ public final class MaidFreeFlightController {
             markAirborne(maid, true);
             PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid) + " " + why
                     + "（" + takeOffReason(maid) + "；" + MaidFreeFlightKit.diag(maid) + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -660,7 +660,7 @@ public final class MaidFreeFlightController {
                 return "高差 " + String.format("%.1f", Math.abs(maid.m_20186_() - owner.m_20186_())) + " > 2";
             }
             return "主人可能在空中";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return "诊断异常";
         }
     }
@@ -810,7 +810,7 @@ public final class MaidFreeFlightController {
                 return true;
             }
             return owner instanceof net.minecraft.world.entity.player.Player p && p.m_150110_().f_35937_;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -860,7 +860,7 @@ public final class MaidFreeFlightController {
                 return "落点比主人低太多（他在高处/她悬在悬崖外）";
             }
             return null;   // 可以落
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return "判定异常";
         }
     }
@@ -878,7 +878,7 @@ public final class MaidFreeFlightController {
             // m_83281_ = VoxelShape.isEmpty（两处 SRG 均由 javap 实证，与本树既有写法一致）
             return !below.m_60742_(level, pos.m_7495_(),
                     net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -914,7 +914,7 @@ public final class MaidFreeFlightController {
                 p = p.m_7495_();
             }
             return null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return null;
         }
     }
@@ -935,7 +935,7 @@ public final class MaidFreeFlightController {
             NO_LAND_LAST.put(id, reason);
             NO_LAND_AT.put(id, t);
             PromaidLog.log("仿创造飞行·待命", PromaidLog.nameOf(maid) + " 还没落地：" + reason);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -967,7 +967,7 @@ public final class MaidFreeFlightController {
     private static boolean idleMode() {
         try {
             return com.maidsmart.config.MaidSmartConfig.MISC_FREE_FLIGHT_IDLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return true;
         }
     }
@@ -975,7 +975,7 @@ public final class MaidFreeFlightController {
     private static int idleSeconds() {
         try {
             return Math.max(1, com.maidsmart.config.MaidSmartConfig.MISC_FREE_FLIGHT_IDLE_SECONDS.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return 3;
         }
     }
@@ -983,7 +983,7 @@ public final class MaidFreeFlightController {
     private static double nearDist() {
         try {
             return Math.max(1, com.maidsmart.config.MaidSmartConfig.MISC_FREE_FLIGHT_NEAR_DIST.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return 2.0;
         }
     }
@@ -1006,7 +1006,7 @@ public final class MaidFreeFlightController {
     private static boolean softLandGiveUp(EntityMaid maid) {
         try {
             return maid.m_20186_() < maid.m_9236_().m_141937_() - 8;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
             return false;
         }
     }
@@ -1021,7 +1021,7 @@ public final class MaidFreeFlightController {
                 markAirborne(maid, true);
                 PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid) + " 开始软着陆（" + why + "）");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -1047,7 +1047,7 @@ public final class MaidFreeFlightController {
             SUB_OWNER.remove(maid);
             markAirborne(maid, false);
             maid.m_20242_(false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -1078,7 +1078,7 @@ public final class MaidFreeFlightController {
             if (was || reason != null && !"她没了".equals(reason)) {
                 PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid) + " 收工（" + reason + "）");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -1106,7 +1106,7 @@ public final class MaidFreeFlightController {
             if (t != null && t.m_6084_() && t.m_9236_() == maid.m_9236_()) {
                 return t;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
         return null;
     }
@@ -1143,7 +1143,7 @@ public final class MaidFreeFlightController {
             steer(maid, aim, true, enemy.m_20182_());
             maid.m_20242_(true);
             suppressWalk(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -1236,7 +1236,7 @@ public final class MaidFreeFlightController {
             double fz = Math.cos(Math.toRadians(next));
             maid.m_21563_().m_24950_(maid.m_20185_() + fx * 4.0, maid.m_20188_(),
                     maid.m_20189_() + fz * 4.0, 360.0f, 360.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 
@@ -1255,7 +1255,7 @@ public final class MaidFreeFlightController {
             maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
             maid.m_6274_().m_21936_(MemoryModuleType.f_26371_);
             maid.getNavigationManager().resetNavigation();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightController", ignored);
         }
     }
 }

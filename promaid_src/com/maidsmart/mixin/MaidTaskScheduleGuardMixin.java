@@ -37,7 +37,7 @@ public abstract class MaidTaskScheduleGuardMixin {
                 reject((EntityMaid) (Object) this, "任务", "目标 " + uid);
                 ci.cancel();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTaskScheduleGuardMixin", ignored);
         }
     }
 
@@ -51,7 +51,7 @@ public abstract class MaidTaskScheduleGuardMixin {
                         schedule == null ? "null" : schedule.toString());
                 ci.cancel();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTaskScheduleGuardMixin", ignored);
         }
     }
 
@@ -79,12 +79,12 @@ public abstract class MaidTaskScheduleGuardMixin {
             if (maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer sp) {
                 com.maidsmart.schedule.ScheduleNetworking.sendResync(sp, maid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTaskScheduleGuardMixin", ignored);
         }
         try {
             maid.getChatBubbleManager().addTextChatBubble(
                     "排班中呢，工作模式和任务都由日程表管理~想手动调整，先关闭我的排班吧");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTaskScheduleGuardMixin", ignored);
         }
     }
 }

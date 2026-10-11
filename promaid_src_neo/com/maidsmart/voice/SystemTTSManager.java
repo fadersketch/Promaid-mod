@@ -152,7 +152,7 @@ public final class SystemTTSManager {
                         sendToOwner(owner, maid, data);
                         return;
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
                 }
             }
             // ③ 未命中 → 调 TLM TTS 站点合成（SystemTtsCallback 落盘缓存 + 播放）
@@ -164,7 +164,7 @@ public final class SystemTTSManager {
             } else {
                 client.play(text, config, new SystemTtsCallback(maid, text, 0L, cache));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
         }
     }
 
@@ -196,7 +196,7 @@ public final class SystemTTSManager {
                 return (int) list.filter(Files::isRegularFile).count();
             }
         } catch (Exception e) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("SystemTTSManager", e); return 0;
         }
     }
 
@@ -220,7 +220,7 @@ public final class SystemTTSManager {
             }
             return sb.toString();
         } catch (Exception e) {
-            return Integer.toHexString(s.hashCode());
+             com.maidsmart.diag.Diag.swallow("SystemTTSManager", e); return Integer.toHexString(s.hashCode());
         }
     }
 
@@ -228,7 +228,7 @@ public final class SystemTTSManager {
     private static void sendToOwner(ServerPlayer owner, EntityMaid maid, byte[] data) {
         try {
             NetworkHandler.sendToClientPlayer(new TTSAudioToClientPackage(maid.getId(), data), owner);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
         }
     }
 
@@ -238,7 +238,7 @@ public final class SystemTTSManager {
             net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(owner,
                     new com.maidsmart.build.BlueprintBookBuildPackets.PlayJarVoicePacket(
                             maid.getId(), file));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
         }
     }
 
@@ -263,17 +263,17 @@ public final class SystemTTSManager {
                     try {
                         return Files.getLastModifiedTime(p).toMillis();
                     } catch (Exception e) {
-                        return 0L;
+                         com.maidsmart.diag.Diag.swallow("SystemTTSManager", e); return 0L;
                     }
                 }));
                 for (int i = 0; i < files.size() - max; i++) {
                     try {
                         Files.deleteIfExists(files.get(i));
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
         }
     }
 
@@ -308,10 +308,10 @@ public final class SystemTTSManager {
                     try {
                         saveToCache(cacheFile, data);
                         sendToOwner(owner, maid, data);
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
                     }
                 });
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
             }
         }
 

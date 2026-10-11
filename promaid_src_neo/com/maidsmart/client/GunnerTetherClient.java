@@ -244,7 +244,7 @@ public final class GunnerTetherClient {
                             || !com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.containsKey(m2.getId());
                 });
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherClient", ignored);
         }
     }
 
@@ -318,7 +318,7 @@ public final class GunnerTetherClient {
                             ROPE_WIDTH, 0.0f, ox, oz, drag, i, true);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherClient", ignored);
         } finally {
             pose.popPose();
         }
@@ -411,7 +411,7 @@ public final class GunnerTetherClient {
             BlockPos pos = new BlockPos((int) Math.floor(p.x), (int) Math.floor(p.y), (int) Math.floor(p.z));
             return lvl.getBrightness(block ? LightLayer.BLOCK : LightLayer.SKY, pos);
         } catch (Throwable t) {
-            return 15;
+             com.maidsmart.diag.Diag.swallow("GunnerTetherClient", t); return 15;
         }
     }
 

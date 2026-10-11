@@ -83,6 +83,11 @@ public final class MaidTeleportRebuild {
     /** 冷却表：女仆 UUID → 上次重建的 gameTime。 */
     private static final java.util.Map<UUID, Long> LAST_REBUILD = new ConcurrentHashMap<>();
 
+    /** Sable 子关卡豁免的反射句柄：只解析一次，别每 tick 再 Class.forName/getMethod（TD-15）。 */
+    private static volatile boolean sableInited = false;
+    private static volatile Object sableHelper = null;
+    private static volatile java.lang.reflect.Method mSableGetContaining = null;
+
     private MaidTeleportRebuild() {
     }
 
@@ -132,7 +137,7 @@ public final class MaidTeleportRebuild {
                 DEFERRED.clear();
             }
             DEFERRED.put(maid.getUUID(), now + DEFERRED_DELAY_TICKS);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportRebuild", ignored);
         }
     }
 
@@ -182,7 +187,7 @@ public final class MaidTeleportRebuild {
                     try {
                         MaidResyncCommand.resyncToViewer(player, maid);
                         sent++;
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportRebuild", ignored);
                     }
                 }
                 if (sent > 0) {
@@ -191,7 +196,7 @@ public final class MaidTeleportRebuild {
                             + sent + " 个客户端");
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportRebuild", ignored);
         }
     }
 
@@ -219,7 +224,7 @@ public final class MaidTeleportRebuild {
                 return false;
             }
             return entity.broadcastToPlayer(player);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportRebuild", ignored);
             return false;
         }
     }
@@ -234,22 +239,36 @@ public final class MaidTeleportRebuild {
      * 不豁免就会每 tick 重建一次，表现为女仆持续抖动抽搐。
      */
     public static boolean inSubLevel(Entity entity) {
+        if (!initSable()) {
+            return false;
+        }
+        try {
+            Object sub = mSableGetContaining.invoke(sableHelper, entity.level(), entity.position());
+            return sub != null;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportRebuild", ignored);
+            return false;
+        }
+    }
+
+    /** 解析 Sable 反射句柄（只做一次）。Sable 不在场 / 版本不符 → false，inSubLevel 恒 false。 */
+    private static synchronized boolean initSable() {
+        if (sableInited) {
+            return sableHelper != null && mSableGetContaining != null;
+        }
+        sableInited = true;
         try {
             if (!net.neoforged.fml.ModList.get().isLoaded("sable")) {
                 return false;
             }
             Class<?> sableCls = Class.forName("dev.ryanhcode.sable.Sable");
-            Object helper = sableCls.getField("HELPER").get(null);
-            if (helper == null) {
-                return false;
+            sableHelper = sableCls.getField("HELPER").get(null);
+            if (sableHelper != null) {
+                mSableGetContaining = sableHelper.getClass().getMethod("getContaining",
+                        net.minecraft.world.level.Level.class, net.minecraft.core.Position.class);
             }
-            java.lang.reflect.Method getContaining = helper.getClass().getMethod("getContaining",
-                    net.minecraft.world.level.Level.class, net.minecraft.core.Position.class);
-            Object sub = getContaining.invoke(helper, entity.level(), entity.position());
-            return sub != null;
-        } catch (Throwable ignored) {
-            return false;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportRebuild", ignored);
         }
+        return sableHelper != null && mSableGetContaining != null;
     }
 
     /** 供 {@code EntityMoveToMarkMixin} 算位移（避免在 mixin 里再写一遍世界坐标相减）。 */
@@ -257,7 +276,7 @@ public final class MaidTeleportRebuild {
         try {
             Vec3 p = entity.position();
             return Math.sqrt(p.distanceToSqr(x, y, z));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportRebuild", ignored);
             return 0.0D;
         }
     }

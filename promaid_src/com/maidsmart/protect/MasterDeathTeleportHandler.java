@@ -61,7 +61,7 @@ public class MasterDeathTeleportHandler {
             }
             MAID_TRACK.put(maid.m_20148_(), new MaidTrack(owner.m_20148_(),
                     maid.m_9236_().m_46472_(), maid.m_20185_(), maid.m_20186_(), maid.m_20189_(), true));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
     }
 
@@ -287,7 +287,7 @@ public class MasterDeathTeleportHandler {
                     // 防止之后每次主人都死都白加载这个区块
                     MAID_TRACK.remove(e.getKey());
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
             }
         }
         if (closest != null) {
@@ -342,12 +342,12 @@ public class MasterDeathTeleportHandler {
             if (com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
         try {
             return com.maidsmart.schedule.ScheduleData.isOn(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", t); return false;
         }
     }
 
@@ -444,7 +444,7 @@ public class MasterDeathTeleportHandler {
                         MAID_TRACK.remove(e.getKey());
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
             }
         }
     }
@@ -475,7 +475,7 @@ public class MasterDeathTeleportHandler {
                         st.m_61143_(net.minecraft.world.level.block.BedBlock.f_54117_), 0.0f).isPresent();
             }
             return false;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
             return false;
         }
     }
@@ -515,7 +515,7 @@ public class MasterDeathTeleportHandler {
                     return new double[]{v.f_82479_, v.f_82480_, v.f_82481_};
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
         // 非床/非锚（/spawnpoint 空地、床边无站位）：退回柱状扫描
         return findSafeLanding(level, respawn.m_123341_() + 0.5,
@@ -541,7 +541,7 @@ public class MasterDeathTeleportHandler {
                 nbt.m_128473_(k);
             }
             nbt.m_128350_("FallDistance", 0.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
     }
 
@@ -573,7 +573,7 @@ public class MasterDeathTeleportHandler {
                     net.minecraft.world.effect.MobEffects.f_19606_, 40, 4));
             maid.m_7292_(new net.minecraft.world.effect.MobEffectInstance(
                     net.minecraft.world.effect.MobEffects.f_19607_, 40, 0));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MasterDeathTeleportHandler", ignored);
         }
     }
 

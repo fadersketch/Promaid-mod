@@ -35,7 +35,7 @@ public abstract class MaidShearDropMixin {
                     maid.pickupItem(e, false);
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidShearDropMixin", ignored);
         }
     }
 }

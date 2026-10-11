@@ -101,7 +101,7 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportPreserveMixin", ignored);
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区
         // 由建造行为强制 home 模式从 TLM 源头保证（见 MaidBuildBehavior），不再需要
@@ -130,7 +130,7 @@ public abstract class MaidTeleportPreserveMixin {
             if (Boolean.TRUE.equals(cir.getReturnValue())) {
                 com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend((EntityMaid) (Object) this);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTeleportPreserveMixin", ignored);
         }
     }
 }

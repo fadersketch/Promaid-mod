@@ -37,7 +37,7 @@ public abstract class SchedulePullbackMixin {
             return (com.maidsmart.config.MaidSmartConfig.MISC_WORK_UNINTERRUPTED.get()
                     && MaidWorkTags.isNonCombatWork(maid))
                     || com.maidsmart.combat.MaidBroomKit.isBroomTask(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SchedulePullbackMixin", ignored);
             return false;
         }
     }

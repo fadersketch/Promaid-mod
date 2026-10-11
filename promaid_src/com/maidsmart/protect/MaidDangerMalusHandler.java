@@ -76,7 +76,7 @@ public final class MaidDangerMalusHandler {
         // 收敛到同一值 → 扫描恒空，同 HomePatrolHandler）
         for (ServerLevel level : event.getServer().m_129785_()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
             // 实测八百三十九：来源改 MaidRoster（只收女仆、按 20 tick 复用）；零女仆时零成本
             for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(event.getServer(), level)) {
                 apply(maid);
@@ -96,7 +96,7 @@ public final class MaidDangerMalusHandler {
                 float v = (on && danger.contains(t)) ? -1.0F : t.m_77124_();
                 maid.m_21441_(t, v);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidDangerMalusHandler", ignored);
         }
     }
 

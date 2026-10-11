@@ -104,7 +104,7 @@ public abstract class PotionAnimTrackMixin {
             double vh = v / Math.sqrt(1 + u * u);
             double vy = v * u / Math.sqrt(1 + u * u);
             self.m_20256_(new Vec3(dx / len * vh, vy, dz / len * vh));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PotionAnimTrackMixin", ignored);
         }
     }
 }

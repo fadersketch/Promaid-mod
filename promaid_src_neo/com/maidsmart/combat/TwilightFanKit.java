@@ -88,7 +88,7 @@ public final class TwilightFanKit {
             ResourceLocation key = BuiltInRegistries.ITEM.getKey(stack.getItem());
             return key != null && FAN_ID.equals(key.toString());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("TwilightFanKit", t); return false;
         }
     }
 
@@ -110,7 +110,7 @@ public final class TwilightFanKit {
                     return inv.getStackInSlot(i);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
         return ItemStack.EMPTY;
     }
@@ -162,7 +162,7 @@ public final class TwilightFanKit {
             playWhoosh(level, maid);
             fanParticles(level, maid, look);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
             return false;
         }
     }
@@ -201,7 +201,7 @@ public final class TwilightFanKit {
             playWhoosh(level, maid);
             fanParticles(level, maid, look);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
             return false;
         }
     }
@@ -228,7 +228,7 @@ public final class TwilightFanKit {
             }
             return fanned;
         } catch (Throwable t) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("TwilightFanKit", t); return 0;
         }
     }
 
@@ -236,7 +236,7 @@ public final class TwilightFanKit {
     private static void damageFan(EntityMaid maid, ItemStack fan, int fanned) {
         try {
             fan.hurtAndBreak(fanned + 1, maid, EquipmentSlot.MAINHAND);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
     }
 
@@ -248,7 +248,7 @@ public final class TwilightFanKit {
             if (snd != null) {
                 level.playSound(null, maid.blockPosition(), snd, SoundSource.NEUTRAL, 1.0f, 1.0f);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
     }
 
@@ -258,7 +258,7 @@ public final class TwilightFanKit {
             level.sendParticles(ParticleTypes.CLOUD, maid.getX(),
                     maid.getY() + maid.getEyeHeight(), maid.getZ(),
                     10, look.x * 1.5, look.y * 1.5, look.z * 1.5, 0.02);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("TwilightFanKit", ignored);
         }
     }
 }

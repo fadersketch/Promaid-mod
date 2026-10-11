@@ -326,7 +326,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             if (maid.isMaidInSittingPose()) {
                 maid.m_20124_(net.minecraft.world.entity.Pose.STANDING);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
         }
     }
 
@@ -376,7 +376,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             maid.m_6274_().m_21879_(MemoryModuleType.f_26370_,
                     new WalkTarget(new BlockPosTracker(spot),
                             (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 1)); // 实测八百一十六：闲逛速度走「散步速度倍率」（默认 0.4）
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
         }
     }
 
@@ -553,7 +553,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 String path = t.f_203868_().m_135815_();
                 return path.contains("ores") || path.contains("raw_materials");
             });
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             return false;
         }
     }
@@ -600,7 +600,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             fillCookList(FUEL_ALLOW, com.maidsmart.config.MaidSmartConfig.MISC_COOK_FUEL_ALLOW::get);
             fillCookList(FUEL_DENY, com.maidsmart.config.MaidSmartConfig.MISC_COOK_FUEL_DENY::get);
             cookListsLoaded = true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             // 配置尚未就绪：四张表保持空（= 全自动判定），下次用到再试
         }
     }
@@ -624,7 +624,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     out.add(it);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
         }
     }
 
@@ -670,7 +670,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.Container probe = new net.minecraft.world.SimpleContainer(1);
             probe.m_6836_(0, stack);
             return level.m_7465_().m_44015_(type, probe, level).isPresent();
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             return false;
         }
     }
@@ -719,7 +719,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     continue; // 当前世界没配方 → 不进面板（也不该被填进名单）
                 }
                 out.add(key.toString());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             }
         }
         java.util.Collections.sort(out);
@@ -730,7 +730,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     public static boolean isBuiltinFood(ItemStack stack) {
         try {
             return stack != null && !stack.m_41619_() && FOODS.contains(stack.m_41720_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             return false;
         }
     }
@@ -743,7 +743,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         try {
             return level != null && hasRecipeRaw(level, stack,
                     net.minecraft.world.item.crafting.RecipeType.f_44109_);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             return false;
         }
     }
@@ -778,7 +778,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
         try {
             return net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.m_58399_(stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             return false;
         }
     }
@@ -1008,7 +1008,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             }
             LOGGER.info("cook no-feed diag: maid={} be={} inv=[{}]",
                     com.maidsmart.tool.PromaidLog.nameOf(maid), beName, sb);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
         }
     }
 
@@ -1031,7 +1031,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     s -> !s.m_41619_() && isSafeToFeed(s) && fuelListed(s)
                             && net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
                             .m_58399_(s), -1);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
         }
         Map<Item, Integer> burnTicks = new HashMap<>();
         Map<Item, Integer> counts = new HashMap<>();
@@ -1216,7 +1216,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 anySmeltable = true;
             }
             return anySmeltable ? FurnaceKind.ANY : FurnaceKind.NONE;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
             return FurnaceKind.NONE;
         }
     }
@@ -1311,7 +1311,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                             && !isWood(s.m_41720_()) && isSmeltable(level, s))) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCookBehavior", ignored);
         }
         return false;
     }

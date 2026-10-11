@@ -73,7 +73,7 @@ public final class BombExplosion {
         try {
             java.util.UUID caster = selfImmuneMaidId;
             return caster != null && caster.equals(victim.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombExplosion", ignored);
             return false;
         }
     }
@@ -138,7 +138,7 @@ public final class BombExplosion {
             try {
                 level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
                         x, y, z, 1, 0.0, 0.0, 0.0, 0.0);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombExplosion", ignored);
             }
         }
         // v1.2.2 实测五百九十七【粉色火焰】：原版这一炸会**自己点火**——javap 实证

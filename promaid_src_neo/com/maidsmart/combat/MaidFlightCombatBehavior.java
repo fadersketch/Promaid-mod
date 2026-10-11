@@ -455,6 +455,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (maid.isSleeping() || maid.isPassenger()) {
             return false;
         }
+        // TD-10：总开关也在 canStillUse 里问——关掉空战模式时正在跑的这一轮即刻停。
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_MODE.get()) {
+            return false;
+        }
         return currentTarget(maid) != null;
     }
 
@@ -601,7 +605,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     ? "（烟花火箭 / 孔雀羽扇 / 位移类法术 / 激流三叉戟 / 自推鞘翅任一）" : "";
             maid.getChatBubbleManager().addTextChatBubble(
                     "空战装备不齐，没有" + missing + hint + "，先按普通战斗来");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1008,16 +1012,16 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         try {
             maid.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
             maid.getNavigation().stop();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
         try {
             Vec3 dm = maid.getDeltaMovement();
             maid.setDeltaMovement(dm.x, 0.42, dm.z);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
         try {
             maid.hasImpulse = true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1036,7 +1040,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             com.maidsmart.tool.PromaidLog.log("起飞受阻",
                     com.maidsmart.tool.PromaidLog.nameOf(maid)
                             + " 起跳窗走完仍未离地（低矮空间 / 被同 tick 移动源吃掉），本轮起跳放弃");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1219,7 +1223,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             level.addFreshEntity(rocket);
             level.playSound(null, maid.getX(), maid.getY(), maid.getZ(),
                     SoundEvents.FIREWORK_ROCKET_LAUNCH, SoundSource.NEUTRAL, 1.0f, 1.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1274,7 +1278,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 Vec3 look = r.getLookAngle();
                 Vec3 v = r.getDeltaMovement();
                 r.setDeltaMovement(v.add(look.x * add, look.y * add, look.z * add));
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             }
         }
     }
@@ -1462,7 +1466,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                                 + "，距敌 " + String.format(java.util.Locale.ROOT, "%.1f", Math.sqrt(d2))
                                 + " 格）");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1578,7 +1582,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     hitOne(level, maid, other);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
         ItemStack weapon = maid.getMainHandItem();
         weapon.hurtAndBreak(1, maid, EquipmentSlot.MAINHAND);
@@ -1826,7 +1830,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             maid.getLookControl().setLookAt(
                     maid.getX() + Math.cos(yawRad), maid.getEyeY() + climbTan,
                     maid.getZ() + Math.sin(yawRad), 360.0f, 360.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1859,7 +1863,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             maid.getLookControl().setLookAt(
                     maid.getX() + Math.cos(yawRad), maid.getEyeY(),
                     maid.getZ() + Math.sin(yawRad), 360.0f, 360.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1882,7 +1886,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 高度地板：只比敌人高 " + fmt2(above)
                             + " 格 < airRaid.minAboveHeight " + fmt2(airMinAboveHeightCfg())
                             + " 格 → 俯仰钉成最大抬头并立即补推（不再继续下沉）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1917,7 +1921,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 拉开距离：距敌 " + fmt2(dist)
                             + " 格 < airRaid.minStandoff " + fmt2(airMinStandoffCfg())
                             + " 格 → 先背离平飞，拉开了再俯冲（本轮只拉开这一次；瞄准与命中判定不变）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1933,7 +1937,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             com.maidsmart.tool.PromaidLog.log("近战空袭",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放弃拉开：拉开这么久仍只有 "
                             + fmt2(dist) + " 格（墙角 / 目标同速）→ 本轮直接俯冲，不再横飞");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -1966,7 +1970,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             double t = lenSqr < 1.0E-6 ? 0.0 : Math.max(0.0, Math.min(1.0, rel.dot(seg) / lenSqr));
             Vec3 closest = from.add(seg.scale(t));
             return p.distanceToSqr(closest) <= range * range;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return maid.distanceToSqr(target) <= range * range;
         }
     }
@@ -1987,7 +1991,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         applyRotation(maid, yaw, pitch);
         try {
             maid.getLookControl().setLookAt(target, 360.0f, 360.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -2043,14 +2047,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             double atkSpeed = maid.getAttributeValue(Attributes.ATTACK_SPEED);
             long cd = atkSpeed > 0.0 ? (long) (20.0 / atkSpeed) : 20L;
             maid.getBrain().setMemoryWithExpiry(MemoryModuleType.ATTACK_COOLING_DOWN, true, cd);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
     private static void suppressVanillaMelee(EntityMaid maid) {
         try {
             maid.getBrain().setMemoryWithExpiry(MemoryModuleType.ATTACK_COOLING_DOWN, true, 40L);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -2062,7 +2066,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             }
             return maid.isHolding(s -> s.getItem() instanceof net.minecraft.world.item.ProjectileWeaponItem
                     && maid.canFireProjectileWeapon((net.minecraft.world.item.ProjectileWeaponItem) s.getItem()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return false;
         }
     }
@@ -2082,7 +2086,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         try {
             double speed = maid.getAttributeValue(Attributes.ATTACK_SPEED);
             return speed > 0.0 ? Math.max(1L, (long) (20.0 / speed)) : 20L;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return 20L;
         }
     }
@@ -2168,7 +2172,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static double rangedFireRange() {
         try {
             return MaidSmartConfig.AIR_RAID_RANGED_FIRE_RANGE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return 24.0;
         }
     }
@@ -2234,7 +2238,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             quickCharge = com.github.tartaricacid.touhoulittlemaid.datagen.EnchantmentKeys
                     .getEnchantmentLevel(maid.level().registryAccess(),
                             net.minecraft.world.item.enchantment.Enchantments.QUICK_CHARGE, weapon);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }        if (quickCharge <= 0) {
             return rangedShotCooldown();
         }
@@ -2267,7 +2271,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             RANGED_FIRE_LAST_LOG.put(id, gameTime);
             com.maidsmart.tool.PromaidLog.log("远程开火",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
     /** 退出模式时交给 TLM 收枪用的一次性 task 实例（见 stopGunAim） */
@@ -2505,7 +2509,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 }
             }
             return best;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return null;
         }
     }
@@ -2524,7 +2528,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     if (nm.isAngry()) {
                         return true; // 记仇中（蜜蜂/狼/北极熊等）
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
                 }
             }
             // 行为化口径：正在锁定本女仆或她主人的任意 Mob
@@ -2537,7 +2541,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return false;
         }
     }
@@ -2569,7 +2573,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     ux * rangedPushSpeed(),
                     Math.max(v.y, 0.0) + rangedPushUp(),
                     uz * rangedPushSpeed());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -2589,7 +2593,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 近身弹开（"
                             + String.format(java.util.Locale.ROOT, "%.1f", dist) + " 格："
                             + threatName + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -2761,7 +2765,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 return ours;
             }
             return Math.max(ours, com.maidsmart.combat.MaidSpellCastCompat.spellCooldownTicks(spellId));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return ours;
         }
     }
@@ -2968,7 +2972,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 RANGED_NEXT_SHOT.put(id, gameTime + rangedShotCooldown(maid, main));
                 logFireThrottled(maid, id, gameTime, "主手=" + itemName(main) + " 距敌 "
                         + fmt2(dist) + " 格 → 开火");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             }
         }
     }
@@ -3061,7 +3065,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                             ? "；SBW：50=canShoot 假（没打出去）100=不是枪 5=换弹/拉栓 10/20=开镜"
                             : "；TACZ：≥20 = 装填/开镜/抽枪/拉栓，没打出去")
                             : "") + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             cd = 100;
             logFireThrottled(maid, id, gameTime, "主手=" + itemName(gun)
                     + " → 枪械开火抛异常（按 100 tick 冷却处理）");
@@ -3113,7 +3117,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         try {
             com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
                     .tick(maid, target, main);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
         // 【实测六百八十二：枪械冷却也在这里走一步】与上面 GunCommonUtil.tick 同一条理由——
         // 这里在 fireRanged 的**所有门之前**（射程 / 视线 / 冷却），而且是幂等的（同一个 gameTime
@@ -3134,7 +3138,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             net.minecraft.resources.ResourceLocation key =
                     net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
             return key == null ? String.valueOf(stack.getItem()) : key.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return "?";
         }
     }
@@ -3159,12 +3163,16 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
         synchronized (TACZ_OP_LOCK) {
             if (TACZ_OP_API == null) {
+                if (!net.neoforged.fml.ModList.get().isLoaded("tacz")) { // TD-15：到场判断先于探针
+                    TACZ_OP_API = new Object[0];
+                    return TACZ_OP_API;
+                }
                 try {
                     Class<?> cls = Class.forName("com.tacz.guns.api.entity.IGunOperator");
                     TACZ_OP_API = new Object[]{cls,
                             cls.getMethod("fromLivingEntity", net.minecraft.world.entity.LivingEntity.class),
                             cls.getMethod("getSynIsAiming")};
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
                     TACZ_OP_API = new Object[0];
                 }
             }
@@ -3181,7 +3189,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             }
             Object op = ((java.lang.reflect.Method) api[1]).invoke(null, maid);
             return op != null && (Boolean) ((java.lang.reflect.Method) api[2]).invoke(op);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return false;
         }
     }
@@ -3194,7 +3202,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         try {
             return com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
                     .canSee(maid, target).orElse(false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return false;
         }
     }
@@ -3203,7 +3211,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static String propellant(EntityMaid maid) {
         try {
             return MaidRiptideBoost.isThrusting(maid) ? "激流推进中" : "-";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return "?";
         }
     }
@@ -3219,7 +3227,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
                         .onStop(maid, GUN_STOP_TASK);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -3257,7 +3265,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             maid.getLookControl().setLookAt(
                     maid.getX() + dx / dh, maid.getEyeY() + tan, maid.getZ() + dz / dh,
                     360.0f, 360.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -3389,7 +3397,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     maid.getEyeY() + Math.tan(Math.toRadians(-pitch)) * h,
                     maid.getZ() + oz,
                     360.0f, 360.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
         }
     }
 
@@ -3413,7 +3421,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static boolean airSeparationEnabled() {
         try {
             return MaidSmartConfig.COMBAT_AIR_SEPARATION.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return true;
         }
     }
@@ -3422,7 +3430,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static double airSeparationRadiusCfg() {
         try {
             return MaidSmartConfig.COMBAT_AIR_SEPARATION_RADIUS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return 2.0;
         }
     }
@@ -3431,7 +3439,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static boolean maneuverEnabled() {
         try {
             return MaidSmartConfig.COMBAT_MANEUVER_ENABLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return true;
         }
     }
@@ -3440,7 +3448,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static double yoyoAmpCfg() {
         try {
             return MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return 4.0;
         }
     }
@@ -3457,7 +3465,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static double airMinAboveHeightCfg() {
         try {
             return MaidSmartConfig.AIR_RAID_MIN_ABOVE_HEIGHT.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return 8.0;
         }
     }
@@ -3472,7 +3480,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static double airMinStandoffCfg() {
         try {
             return MaidSmartConfig.AIR_RAID_MIN_STANDOFF.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return 6.0;
         }
     }
@@ -3486,7 +3494,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static double orbitMaxCfg() {
         try {
             return MaidSmartConfig.AIR_RAID_ORBIT_MAX.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
             return 12.0;
         }
     }

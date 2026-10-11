@@ -43,7 +43,7 @@ public final class BrewManualNetworking {
         try {
             BrewConfig cfg = BrewConfig.load(maid);
             PacketDistributor.sendToPlayer(player, new OpenBrewManualPacket(maid.getUUID().toString(), cfg));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewManualNetworking", ignored);
         }
     }
 

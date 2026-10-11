@@ -216,7 +216,7 @@ public final class RemoteMaidGui {
     private static String nameOf(EntityMaid maid) {
         try {
             return maid.m_5446_() == null ? "女仆" : maid.m_5446_().getString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RemoteMaidGui", ignored);
             return "女仆";
         }
     }
@@ -227,7 +227,7 @@ public final class RemoteMaidGui {
         }
         try {
             player.m_213846_(net.minecraft.network.chat.Component.m_237113_(msg));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RemoteMaidGui", ignored);
         }
     }
 
@@ -237,7 +237,7 @@ public final class RemoteMaidGui {
         }
         try {
             return player.m_20148_() + "|" + maid.m_20148_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RemoteMaidGui", ignored);
             return null;
         }
     }
@@ -246,7 +246,7 @@ public final class RemoteMaidGui {
     private static void prune(long now) {
         try {
             SESSIONS.values().removeIf(s -> now - s.lastHit > TTL_MS);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RemoteMaidGui", ignored);
         }
     }
 }

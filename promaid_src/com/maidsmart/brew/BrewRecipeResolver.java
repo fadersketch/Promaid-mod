@@ -103,7 +103,7 @@ public final class BrewRecipeResolver {
                 built = true;
                 lastError = REVERSE.isEmpty() ? "table empty" : "";
             } catch (Throwable t) {
-                // 反射失败（版本不匹配等）：定向模式不可用，批量模式不受影响
+                 com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); // 反射失败（版本不匹配等）：定向模式不可用，批量模式不受影响
                 built = true;
                 lastError = t.toString();
             }
@@ -140,7 +140,7 @@ public final class BrewRecipeResolver {
                     lastError = "";
                 }
             } catch (Throwable t) {
-                // Forge 表读取失败不影响 vanilla 表已建成的部分
+                 com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); // Forge 表读取失败不影响 vanilla 表已建成的部分
             }
         }
     }
@@ -152,7 +152,7 @@ public final class BrewRecipeResolver {
             if (stacks != null && stacks.length > 0) {
                 return stacks[0];
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", ignored);
         }
         return ItemStack.f_41583_;
     }
@@ -164,7 +164,7 @@ public final class BrewRecipeResolver {
             try {
                 return h.m_203334_();
             } catch (Throwable t) {
-                return null;
+                 com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); return null;
             }
         }
         return o;
@@ -177,7 +177,7 @@ public final class BrewRecipeResolver {
             if (stacks != null && stacks.length > 0 && !stacks[0].m_41619_()) {
                 return stacks[0].m_41720_();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", ignored);
         }
         return null;
     }
@@ -279,7 +279,7 @@ public final class BrewRecipeResolver {
             Potion p = ForgeRegistries.POTIONS.getValue(ResourceLocation.parse(potionId));
             return p == null ? new Chain(null, Collections.emptyList()) : resolveChain(p);
         } catch (Throwable t) {
-            return new Chain(null, Collections.emptyList());
+             com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); return new Chain(null, Collections.emptyList());
         }
     }
 
@@ -317,7 +317,7 @@ public final class BrewRecipeResolver {
         try {
             return ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(id));
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("BrewRecipeResolver", t); return null;
         }
     }
 

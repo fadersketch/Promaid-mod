@@ -76,7 +76,7 @@ public final class FarmSweepCache {
             }
             FarmlandMarkStore.get((net.minecraft.server.level.ServerLevel) event.getLevel())
                     .mark(event.getPos());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FarmSweepCache", ignored);
         }
     }
 
@@ -123,7 +123,7 @@ public final class FarmSweepCache {
                 FarmlandMarkStore.get((net.minecraft.server.level.ServerLevel) event.getLevel())
                         .markAll(found);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FarmSweepCache", ignored);
         }
     }
 

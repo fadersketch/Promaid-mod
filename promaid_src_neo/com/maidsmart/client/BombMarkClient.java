@@ -149,7 +149,7 @@ public final class BombMarkClient {
             AABB box = e.getBoundingBox().move(camera);
             drawFilled(pose, box, 0.38f);
             drawEdges(pose, mc, camera, box);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombMarkClient", ignored);
         }
     }
 
@@ -175,7 +175,7 @@ public final class BombMarkClient {
             drawBoxEdges(pose, buf,
                     box.minX - camera.x, box.minY - camera.y, box.minZ - camera.z,
                     box.maxX - camera.x, box.maxY - camera.y, box.maxZ - camera.z);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombMarkClient", ignored);
         }
     }
 
@@ -212,7 +212,7 @@ public final class BombMarkClient {
         try {
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
                     PINK_LABEL, x, y, z, 0xFF88CC, 0.12f, true, -5.0f, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombMarkClient", ignored);
         }
     }
 

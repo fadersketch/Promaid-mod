@@ -29,7 +29,8 @@ public final class MaidConfigPreset {
     private static final java.util.Set<String> SKIP = java.util.Set.of(
             "build.speedMigrated", "build.scheduleRangeMigrated", "build.strollSpeedMigrated",
             "build.defaultRepairMigrated", "broom.climbMigrated", "broom.climb12Migrated",
-            "broom.airAltMigrated", "broom.orbitRadiusMigrated", "misc.dangerCampfireMigrated");
+            "broom.airAltMigrated", "broom.orbitRadiusMigrated", "misc.dangerCampfireMigrated",
+            "broom.patrolEnableMigrated");
 
     /**
      * DIY 不动的项：纯附加子系统、护栏、修复，以及"关掉反而更危险 / 只是把 bug 放回来"的那些。
@@ -143,7 +144,7 @@ public final class MaidConfigPreset {
             if (v != null && MODE_DIY.equalsIgnoreCase(v.trim())) {
                 return MODE_DIY;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigPreset", ignored);
         }
         return MODE_DEFAULT;
     }
@@ -256,19 +257,19 @@ public final class MaidConfigPreset {
     private static void persistAndRefresh() {
         try {
             com.maidsmart.ProMaidMod.persistConfigQuietly();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigPreset", ignored);
         }
         try {
             com.maidsmart.task.MaidMineBehavior.loadCustomOres();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigPreset", ignored);
         }
         try {
             com.maidsmart.task.MaidWoodBehavior.loadCustomWoods();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigPreset", ignored);
         }
         try {
             com.maidsmart.task.MaidCookBehavior.loadCookLists();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigPreset", ignored);
         }
     }
 
@@ -289,7 +290,7 @@ public final class MaidConfigPreset {
         try {
             return ((ModConfigSpec.ConfigValue) cv).get();
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidConfigPreset", t); return null;
         }
     }
 
@@ -298,7 +299,7 @@ public final class MaidConfigPreset {
         try {
             return ((ModConfigSpec.ConfigValue) cv).getDefault();
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidConfigPreset", t); return null;
         }
     }
 

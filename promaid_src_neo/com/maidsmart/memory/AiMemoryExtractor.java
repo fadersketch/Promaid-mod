@@ -72,7 +72,7 @@ public final class AiMemoryExtractor {
             if (!java.nio.file.Files.exists(dir) && java.nio.file.Files.isDirectory(legacy)) {
                 try {
                     java.nio.file.Files.move(legacy, dir, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
                 }
             }
             if (java.nio.file.Files.exists(dir)) {
@@ -81,7 +81,7 @@ public final class AiMemoryExtractor {
             if (java.nio.file.Files.isDirectory(legacy)) {
                 return legacy; // 迁移失败——回退旧位置，数据不丢
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
         }
         return dir;
     }
@@ -314,7 +314,7 @@ public final class AiMemoryExtractor {
                         }
                     }));
         } catch (Exception e) {
-            // 构造请求失败（URL 非法等）——同样推进位置，防卡死
+             com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e); // 构造请求失败（URL 非法等）——同样推进位置，防卡死
             EXTRACTING.remove(maid.getUUID());
         }
     }
@@ -354,7 +354,7 @@ public final class AiMemoryExtractor {
                         }
                     }));
         } catch (Exception e) {
-            // 构造请求失败（URL 非法等）——同样计入完成计数
+             com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e); // 构造请求失败（URL 非法等）——同样计入完成计数
             done(store, newestTime, id, remaining);
         }
     }
@@ -387,7 +387,7 @@ public final class AiMemoryExtractor {
                     ? null : parsed.getFirstChoice().getContent();
             return (content == null || content.isBlank()) ? null : content;
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e); return null;
         }
     }
 
@@ -434,7 +434,7 @@ public final class AiMemoryExtractor {
             }
             store.continuity().enqueue(turns);
             INFLIGHT.put(id, turns);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
         }
     }
 
@@ -445,7 +445,7 @@ public final class AiMemoryExtractor {
             if (turns != null) {
                 store.continuity().complete(turns);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
         }
     }
 
@@ -493,10 +493,10 @@ public final class AiMemoryExtractor {
                             store.continuity().complete(pending);
                             LOGGER.info("AiMemoryExtractor: 补发未总结对话 {} 条 maid={}",
                                     pending.size(), id);
-                        } catch (Exception ignored) {
+                        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
                         }
                     }));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
         }
     }
 

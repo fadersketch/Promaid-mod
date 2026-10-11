@@ -134,7 +134,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             return (net.minecraft.nbt.CompoundTag) ItemStack.SINGLE_ITEM_CODEC
                     .encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, stack.copyWithCount(1))
                     .getOrThrow();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return new net.minecraft.nbt.CompoundTag();
         }
     }
@@ -143,7 +143,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         try {
             return ItemStack.SINGLE_ITEM_CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, tag)
                     .result().orElse(ItemStack.EMPTY);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return ItemStack.EMPTY;
         }
     }
@@ -163,7 +163,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 pd.put(SAVED_OFFHAND_TAG, nbtOf(stack));
                 pd.putInt(SAVED_OFFHAND_COUNT, stack.getCount());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
     }
 
@@ -185,7 +185,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             int n = pd.contains(SAVED_OFFHAND_COUNT) ? pd.getInt(SAVED_OFFHAND_COUNT) : 1;
             one.setCount(Math.max(1, n));
             return one;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return ItemStack.EMPTY;
         }
     }
@@ -241,7 +241,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             SELF_NAV = true;
             maid.getNavigation().moveTo(pos.getX() + 0.5, pos.getY() + 0.5,
                     pos.getZ() + 0.5, speed);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         } finally {
             SELF_NAV = false;
         }
@@ -267,7 +267,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             aim.skipLogged = gameTime;
             com.maidsmart.tool.PromaidLog.log("刷怪笼",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
     }
 
@@ -294,7 +294,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 }
             }
             noteOnce(aim, maid, level.getGameTime(), "被挡：" + why + stateOf(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
     }
 
@@ -311,7 +311,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                                     com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)
                     + " 任务=" + (com.maidsmart.task.MaidWorkTags.isAttackTask(maid) ? "战斗" : "非战斗")
                     + "]";
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return "";
         }
     }
@@ -371,7 +371,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 noteBlocked(level, maid, "她正在自保（自保 250 最高，一票否决）");
                 return false; // 自保逃跑中：别去插火把/拆笼（自保 250 永远最高）
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         return true;
     }
@@ -651,7 +651,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             Aim aim = AIM.get(maid);
             return aim != null && aim.breaking && aim.spawner != null
                     && maid.level().getGameTime() - aim.since <= GIVE_UP_TICKS;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -683,7 +683,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 }
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -706,7 +706,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.phys.BlockHitResult hit = level.clip(ctx); // Level.clip
             return hit.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK
                     && spawner.equals(hit.getBlockPos()); // BlockHitResult.getBlockPos
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -763,7 +763,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             // 读配置/读 NBT 出任何岔子都按"没命中"处理：黑名单失败不该让整条链路停摆
         }
         return null;
@@ -940,7 +940,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         return false;
     }
@@ -974,7 +974,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 sb.append(id);
             }
             return sb.append("）").toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return ""; // 纯诊断串：读不到就少写一段，不影响"拆不拆"的判定
         }
     }
@@ -1009,7 +1009,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             // 只剩 MISC：原版落在这里的只有村民 / 游商 / 铁傀儡 / 雪傀儡这类和平生物；
             // 模组实体也落进来时就说不准了 → 未知（交给"直接证据"与保守拆除）。
             return id.startsWith("minecraft:") ? Boolean.FALSE : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return null; // 解析失败 = 未知，**不当成和平生物**
         }
     }
@@ -1059,7 +1059,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 }
             }
             return null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return null;
         }
     }
@@ -1072,7 +1072,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                     spawner.getX() + 0.5 + r, spawner.getY() + 0.5 + r, spawner.getZ() + 0.5 + r);
             return !level.getEntitiesOfClass(net.minecraft.world.entity.monster.Monster.class, box,
                     e -> e.isAlive()).isEmpty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1090,7 +1090,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         return false;
     }
@@ -1116,7 +1116,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             //  SpawnerTorchNavGuardMixin 掐掉，于是"走去插火把"这段路上谁都抢不走她的路。
             try {
                 maid.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             }
             navTo(maid, spawner, WALK_SPEED);
             return true;
@@ -1206,7 +1206,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             // 还没到：清 WALK_TARGET + 直连导航（走位所有权与插火把同款）
             try {
                 maid.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             }
             navTo(maid, spawner, WALK_SPEED);
             return true;
@@ -1258,7 +1258,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             if (!isPickaxeFor(main, state)) {
                 try {
                     com.maidsmart.task.MaidToolAutoEquip.ensureForTarget(maid, state); // 从背包装备一把镐
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
                 }
                 main = maid.getMainHandItem();
                 if (!isPickaxeFor(main, state) && pickaxeMode()) {
@@ -1293,7 +1293,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                     digSpeed += lv * lv + 1;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         float delta = digSpeed / hardness / (correctNow ? 30.0f : 100.0f)
                 * (float) (double) com.maidsmart.config.MaidSmartConfig.MINE_SPEED_FACTOR.get();
@@ -1318,7 +1318,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             // 刷怪笼**没有掉落物**（空 loot table），这里只是把"破坏"走全：掉落表为空，
             // 但会自然掉经验球（spawnAfterBreak）——与玩家手拆完全一致。
             Block.dropResources(state, level, spawner, be, maid, tool);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         level.setBlock(spawner, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3); // 置为空气
         if (!tool.isEmpty()) { // 用的那把镐耗 1 点耐久（与 MaidMineBehavior 同款三参重载）
@@ -1349,7 +1349,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             }
             Aim aim = AIM.get(maid);
             return aim != null && aim.borrowedOffhand;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1365,7 +1365,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                     p.connection.send(pkt);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
     }
 
@@ -1378,7 +1378,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         try {
             return com.maidsmart.task.MaidToolAutoEquip.canHarvestWithHandOrBackpack(
                     maid, net.minecraft.world.level.block.Blocks.SPAWNER.defaultBlockState());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1410,7 +1410,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 aim.digToolCacheAt = gameTime;
             }
             return aim.digToolCache;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return hasDigToolSomewhere(maid);
         }
     }
@@ -1443,7 +1443,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             // 实测八百二十七：战斗中拆笼、还没借到副手 → 也要借副手（主手留给武器）。
             // 空闲 / 跟随保持 826 口径（主手空闲，直接主手换镐，不折腾副手）。
             return com.maidsmart.task.MaidWorkTags.isAttackTask(maid) && isBreakingSpawner(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1457,7 +1457,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             }
             return stack.getItem() instanceof net.minecraft.world.item.DiggerItem dg
                     && dg.isCorrectToolForDrops(stack, state);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1527,7 +1527,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             aim.borrowedOffhand = true;
             hands.setStackInSlot(1, picked); // 镐进副手
             return picked;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return ItemStack.EMPTY;
         }
     }
@@ -1558,7 +1558,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 hands.setStackInSlot(1, saved); // 原物品（盾牌/食物/火把）原样回到副手
             }
             stashOffhand(maid, ItemStack.EMPTY); // 放好之后才清 NBT（半路抛异常就留着重试）
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
     }
 
@@ -1595,7 +1595,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 }
             }
             stashOffhand(maid, ItemStack.EMPTY);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
     }
 
@@ -1608,7 +1608,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         stashOffhand(maid, ItemStack.EMPTY); // 先清 NBT 再落地（复活若从 NBT 重建，不会多出一份）
         try {
             maid.spawnAtLocation(saved, 0.5f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
     }
 
@@ -1687,7 +1687,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 }
             }
             return best;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return null;
         }
     }
@@ -1711,7 +1711,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             }
             String id = key.toString();
             return id.endsWith("spawner");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1736,7 +1736,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             double dx = pos.getX() + 0.5 - (c.getX() + 0.5);
             double dz = pos.getZ() + 0.5 - (c.getZ() + 0.5);
             return dx * dx + dz * dz <= r * r;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return true;
         }
     }
@@ -1749,7 +1749,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             if (isLightItem(maid.getMainHandItem()) || isLightItem(maid.getOffhandItem())) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         return findLight(maid) >= 0;
     }
@@ -1763,7 +1763,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             if (isLightItem(maid.getOffhandItem())) {
                 return maid.getOffhandItem();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         return ItemStack.EMPTY;
     }
@@ -1777,7 +1777,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         try {
             com.maidsmart.tool.MaidExtraContainer.pull(maid,
                     s -> !s.isEmpty() && isLightItem(s), 1);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
         }
         try {
             net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
@@ -1795,7 +1795,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 }
             }
             return first;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return -1;
         }
     }
@@ -1808,7 +1808,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             }
             String id = key.toString();
             return "minecraft:torch".equals(id) || "minecraft:soul_torch".equals(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1846,7 +1846,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 return false;
             }
             return bi.getBlock().defaultBlockState().getLightEmission() >= LIGHT_ENOUGH;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1859,7 +1859,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 return null;
             }
             return bi.getBlock();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return null;
         }
     }
@@ -1881,7 +1881,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             return com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(
                     (net.neoforged.neoforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper(),
                     isLightItem(maid.getMainHandItem()) ? 0 : 1);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return false;
         }
     }
@@ -1891,7 +1891,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     private static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_TORCH_ENABLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return true;
         }
     }
@@ -1899,7 +1899,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     private static double radiusCfg() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_TORCH_RADIUS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return 12.0;
         }
     }
@@ -1908,7 +1908,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     private static boolean breakMode() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_BREAK.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return true;
         }
     }
@@ -1917,7 +1917,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     private static boolean pickaxeMode() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_BREAK_PICKAXE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return true;
         }
     }
@@ -1927,7 +1927,7 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     private static boolean activeOnly() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_BREAK_ACTIVE_ONLY.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpawnerTorchBehavior", ignored);
             return true;
         }
     }

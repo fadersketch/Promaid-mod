@@ -62,7 +62,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return false;
     }
@@ -122,7 +122,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 base = base.substring(7);
             }
             return ns + base; // minecraft:swiftness
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return "unknown";
         }
     }
@@ -186,7 +186,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      */
     @Override
     protected boolean m_6737_(ServerLevel level, EntityMaid maid, long gameTime) {
-        return true;
+        // 重写为 true 的原因见上（1.20.1 默认 false 会让行为立刻 stop）；
+        // TD-10：把总开关也问一遍——关掉开关时正在跑的这轮即刻停，不用等它自己跑完。
+        return com.maidsmart.config.MaidSmartConfig.AID_OWNER_ENABLE.get();
     }
 
     @Override
@@ -476,7 +478,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     return; // 每轮最多救一个
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
     }
 
@@ -503,7 +505,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
             }
             return maid.m_7307_(target); // isAlliedTo：同队 / 同盟
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return false;
         }
     }
@@ -523,7 +525,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             return isFriendlyAidItem(maid.m_21205_()) || isFriendlyAidItem(maid.m_21206_())
                     || com.maidsmart.tool.MaidExtraContainer.contains(maid,
                             MaidAidOwnerBehavior::isFriendlyAidItem);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return false;
         }
     }
@@ -621,7 +623,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 com.maidsmart.combat.BombPose.showGated(maid, honeyShow); // 副手举一下这瓶蜂蜜
                 return "喂了蜂蜜瓶（解中毒+回饱食）";
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return null;
     }
@@ -670,7 +672,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             com.maidsmart.combat.BombPose.showGated(maid, appleShow);
             playSoundAt(ally, "minecraft:entity.generic.eat");
             return enchanted ? "喂了附魔金苹果" : "喂了金苹果";
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return null;
         }
     }
@@ -715,7 +717,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             com.maidsmart.combat.BombPose.showGated(maid, appleShow);
             playSoundAt(ally, "minecraft:entity.generic.eat");
             return enchanted ? "喂了附魔金苹果（亡灵专供）" : "喂了金苹果（亡灵专供）";
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return null;
         }
     }
@@ -776,7 +778,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 playSoundAt(ally, "minecraft:entity.generic.drink");
                 return "喂了" + label + "药水";
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return null;
     }
@@ -915,7 +917,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     return; // 每轮最多救一个
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
     }
 
@@ -929,7 +931,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return false;
     }
@@ -1029,7 +1031,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     com.maidsmart.combat.BombPose.showGated(maid, honeyFed); // 副手举一下这瓶蜂蜜
                     return "喂了蜂蜜瓶（解中毒+回饱食）";
                 }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return null;
     }
@@ -1044,7 +1046,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 at.m_9236_().m_5594_(null, at.m_20183_(), snd,
                         net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.0f);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
     }
 
@@ -1093,7 +1095,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // v1.1.0 实测三十二：吃金苹果音效（旧版手搓效果路径无声）
             playSoundAt(sister, "minecraft:entity.generic.eat");
             return enchanted ? "喂了附魔金苹果" : "喂了金苹果";
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return null;
         }
     }
@@ -1135,7 +1137,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             com.maidsmart.combat.BombPose.showGated(maid, appleShow);
             playSoundAt(sister, "minecraft:entity.generic.eat");
             return enchanted ? "喂了附魔金苹果（亡灵专供）" : "喂了金苹果（亡灵专供）";
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return null;
         }
     }
@@ -1242,7 +1244,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             com.maidsmart.combat.BombPose.showGated(maid, fed); // 副手举一下这份食物
             return consumed > 0 ? "喂了" + foodName : "喂了" + foodName + "（遗物类食物，用完不消失）";
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return null;
     }
@@ -1312,7 +1314,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 playSoundAt(sister, "minecraft:entity.generic.drink");
                 return "喂了" + label + "药水";
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return null;
     }
@@ -1321,7 +1323,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private static boolean sisterFighting(EntityMaid sister) {
         try {
             return sister.m_6274_().m_21952_(MemoryModuleType.f_26372_).isPresent();
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return false;
         }
     }
@@ -1436,7 +1438,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             LOGGER.info("aid-maid cast: label={} potion={} target={} lingering={}",
                     label, potionKey(potionStack), target.m_20148_(), lingering);
             return Math.max(60, Math.min(maxDur > 0 ? maxDur : 60, 12000));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return -1;
     }
@@ -1478,7 +1480,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             return false;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", e); return false;
         }
     }
 
@@ -1601,7 +1603,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     label, potionKey(potionStack),
                     String.format("%.1f", maid.m_20238_(owner.m_20182_())), lingering);
             return Math.max(60, Math.min(maxDur > 0 ? maxDur : 60, 12000));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return -1;
     }
@@ -1627,7 +1629,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 score++;
             }
             return score;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return 0;
         }
     }
@@ -1648,7 +1650,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (!toGive.m_41619_()) {
                 toGive = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(mainInv, toGive, false);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return toGive;
     }
@@ -1717,7 +1719,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                         label, potionKey(stack));
                 return Math.max(60, Math.min(maxDur2 > 0 ? maxDur2 : 60, 12000));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return -1;
     }
@@ -1749,7 +1751,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 maid.getChatBubbleManager().addTextChatBubble(bubble);
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return false;
     }
@@ -1821,7 +1823,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             double vy = v * u / Math.sqrt(1 + u * u);
             potion.m_6686_(dx / len * vh, vy, dz / len * vh, 1.0f, 0.0f);
             level.m_7967_(potion);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
     }
 
@@ -1844,7 +1846,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 out.addAll(p.m_43488_()); // Potion.getEffects（标准药水的效果所在）
             }
             out.addAll(net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)); // CustomPotionEffects
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return out;
     }
@@ -1877,7 +1879,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
             }
             return false;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return false;
         }
     }
@@ -1893,7 +1895,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return false;
     }
@@ -1916,7 +1918,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return n;
     }
@@ -1932,7 +1934,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     n += s.m_41613_();
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return n;
     }
@@ -1961,7 +1963,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     // 精妙背包里"的女仆会一声不吭（各分支里的 pull 根本没机会跑）。
                     || com.maidsmart.tool.MaidExtraContainer.contains(maid,
                             MaidAidOwnerBehavior::isAidItem);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return false;
         }
     }
@@ -2055,7 +2057,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                 + "（吸收/再生等效果已加成）"));
             }
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return false;
         }
     }
@@ -2069,7 +2071,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (effect != null) {
                 target.m_7292_(new net.minecraft.world.effect.MobEffectInstance(effect, duration, amplifier));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
     }
 
@@ -2090,7 +2092,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private static boolean isInvertedHeal(net.minecraft.world.entity.LivingEntity target) {
         try {
             return target.m_21222_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return false;
         }
     }
@@ -2127,7 +2129,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             } else {
                 target.m_21221_().put(effect, inst); // 被拒（亡灵拒再生/中毒）→ 走后门
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
     }
 
@@ -2244,7 +2246,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             maid.getChatBubbleManager().addTextChatBubble("主人快吃点东西补补！");
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return false;
     }
@@ -2351,7 +2353,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
                 return false;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return false;
     }
@@ -2484,7 +2486,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                 new net.minecraft.world.entity.item.ItemEntity(maid.m_9236_(),
                                         maid.m_20185_(), maid.m_20186_() + 0.5, maid.m_20189_(), remain);
                         maid.m_9236_().m_7967_(drop);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
                     }
                 }
             }
@@ -2501,7 +2503,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                         "\u00a7a[maid_smart] 女仆喂你喝了 " + drinkName));
             }
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
         }
         return false;
     }
@@ -2554,7 +2556,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             int quenched = com.maidsmart.action.ThirstCompat.drinkQuenched(stack);
             return hydration * 100.0 + Math.max(0, quenched);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
             return 0.0;
         }
     }

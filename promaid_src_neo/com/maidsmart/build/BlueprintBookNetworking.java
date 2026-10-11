@@ -73,7 +73,7 @@ public final class BlueprintBookNetworking {
     public static void sendCooldownHud(ServerPlayer player, java.util.List<String[]> entries) {
         try {
             PacketDistributor.sendToPlayer(player, new BlueprintBookBuildPackets.CooldownHudPacket(entries));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
         }
     }
 
@@ -87,7 +87,7 @@ public final class BlueprintBookNetworking {
         java.nio.file.Path memRoot = com.maidsmart.memory.AiMemoryExtractor.memoryRoot(level.getServer());
         // v1.5.180：绑定显示名按【女仆绑定的区块】查（多区块共存）
         java.util.Map<String, Integer> counts = nameCounts(level.getServer());
-        for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+        for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
             if (!(e instanceof EntityMaid m) || !m.isAlive()) {
                 continue;
             }
@@ -96,7 +96,7 @@ public final class BlueprintBookNetworking {
             String count = "?";
             try {
                 count = String.valueOf(com.maidsmart.soul.SoulBindingService.storeFor(m, level).paragraphs().size());
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
             }
             // v1.5.178：任务 UID + 绑定区块显示名 + 建筑状态（女仆管理页绑定/解绑用）
             String taskUid = m.getTask() == null || m.getTask().getUid() == null
@@ -630,7 +630,7 @@ public final class BlueprintBookNetworking {
                         }
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
             }
             lines.add("状态: 血量=" + String.format(java.util.Locale.ROOT, "%.0f", maid.getHealth())
                     + "/" + String.format(java.util.Locale.ROOT, "%.0f", maid.getMaxHealth())
@@ -640,7 +640,7 @@ public final class BlueprintBookNetworking {
             // 情绪（PAD + 关系维度 + 修复债）
             try {
                 lines.add("情绪: " + com.maidsmart.affect.AffectManager.render(maid));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
             }
             // 记忆统计
             com.maidsmart.memory.AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
@@ -678,7 +678,7 @@ public final class BlueprintBookNetworking {
                     }
                 }
                 lines.add(pLine.toString());
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
             }
             // v1.1.0：双 agent 提取 + 每日关心点
             try {
@@ -688,7 +688,7 @@ public final class BlueprintBookNetworking {
                         com.maidsmart.affect.AffectManager.load(maid)).size();
                 lines.add("双agent: " + (dual ? "开" : "关") + " · 提取中=" + (extracting ? "是" : "否")
                         + " · 关心点" + cares + "条");
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
             }
             // 工作笔记
             String note = com.maidsmart.memory.WorkingNoteTool.readNote(maid);
@@ -735,7 +735,7 @@ public final class BlueprintBookNetworking {
                         "置信度" + String.format(java.util.Locale.ROOT, "%.1f", r.confidence()),
                         r.subject() + r.predicate() + r.object()});
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
         }
         return rows;
     }
@@ -778,7 +778,7 @@ public final class BlueprintBookNetworking {
                 }
                 PacketDistributor.sendToPlayer(p,
                         new BlueprintBookBuildPackets.RegionSyncPacket(mine));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
             }
         }
     }
@@ -816,7 +816,7 @@ public final class BlueprintBookNetworking {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
         }
         return false;
     }

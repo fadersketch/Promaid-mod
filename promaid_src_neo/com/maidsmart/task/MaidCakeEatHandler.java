@@ -69,7 +69,7 @@ public class MaidCakeEatHandler {
         boolean enabled;
         try {
             enabled = com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCakeEatHandler", ignored);
             enabled = true; // 配置尚未挂上 → 按默认（开）走
         }
         if (!enabled) {

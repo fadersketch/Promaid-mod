@@ -38,7 +38,7 @@ public final class PatrolChartData {
             }
             CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
             return PatrolBook.load(tag);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return new PatrolBook();
         }
     }
@@ -53,7 +53,7 @@ public final class PatrolChartData {
             tag.put(PatrolBook.TAG_ROOT, book.save());
             tag.remove(PatrolBook.TAG_LEGACY_SINGLE); // 旧结构已迁走，别留着占地方
             stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
         }
     }
 
@@ -79,7 +79,7 @@ public final class PatrolChartData {
             int idx = book.routes().indexOf(existing);
             book.routes().set(idx, route);
             writeBook(stack, book);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
         }
     }
 
@@ -136,7 +136,7 @@ public final class PatrolChartData {
                 return null;
             }
             return PatrolRoute.load(data.getCompound(PatrolRoute.TAG_ROOT));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return null;
         }
     }
@@ -155,7 +155,7 @@ public final class PatrolChartData {
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
                     .getPersistentData().put(PatrolRoute.TAG_ROOT, copy.save());
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return false;
         }
     }
@@ -168,7 +168,7 @@ public final class PatrolChartData {
             }
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
                     .getPersistentData().remove(PatrolRoute.TAG_ROOT);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
         }
     }
 
@@ -179,7 +179,7 @@ public final class PatrolChartData {
     private static String dimensionOf(EntityMaid maid) {
         try {
             return maid.level().dimension().location().toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return "";
         }
     }

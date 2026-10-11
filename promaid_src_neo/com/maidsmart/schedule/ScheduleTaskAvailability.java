@@ -65,7 +65,7 @@ public final class ScheduleTaskAvailability {
         try {
             return task.isEnable(maid);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("ScheduleTaskAvailability", t); return false;
         }
     }
 
@@ -83,7 +83,7 @@ public final class ScheduleTaskAvailability {
                 return false;
             }
         } catch (Throwable t) {
-            return false; // isEnable 抛异常视为不可用（未知任务宁可不切）
+             com.maidsmart.diag.Diag.swallow("ScheduleTaskAvailability", t); return false; // isEnable 抛异常视为不可用（未知任务宁可不切）
         }
         ResourceLocation uid = task.getUid();
         if (uid == null) {
@@ -111,7 +111,7 @@ public final class ScheduleTaskAvailability {
                 return hasFarmWork(maid, farm);
             }
         } catch (Throwable t) {
-            return true; // 探测异常视为"无法判定"，保守放行
+             com.maidsmart.diag.Diag.swallow("ScheduleTaskAvailability", t); return true; // 探测异常视为"无法判定"，保守放行
         }
         return true; // 战斗/待机/跟随/第三方任务：只查 isEnable
     }
@@ -237,7 +237,7 @@ public final class ScheduleTaskAvailability {
                                 }
                             }
                         }
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleTaskAvailability", ignored);
                         // 单格异常不影响继续扫
                     }
                 }
@@ -256,7 +256,7 @@ public final class ScheduleTaskAvailability {
                     seeds.add(stack.copy()); // 副本，防后续同刻被清
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleTaskAvailability", ignored);
         }
         return seeds;
     }
@@ -290,7 +290,7 @@ public final class ScheduleTaskAvailability {
             ResourceLocation rl = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(b);
             return rl == null ? "" : rl.toString();
         } catch (Throwable t) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("ScheduleTaskAvailability", t); return "";
         }
     }
 }

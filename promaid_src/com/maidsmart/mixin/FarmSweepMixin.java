@@ -203,7 +203,7 @@ public abstract class FarmSweepMixin {
             } else {
                 e.m_32045_(rest);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FarmSweepMixin", ignored);
         }
     }
 
@@ -268,7 +268,7 @@ public abstract class FarmSweepMixin {
                 maid.m_6674_(InteractionHand.MAIN_HAND);
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("FarmSweepMixin", ignored);
         }
         return false;
     }
@@ -278,7 +278,7 @@ public abstract class FarmSweepMixin {
     private boolean plantBack(EntityMaid maid, BlockPos basePos, ServerLevel world) {
         try {
             return this.plantWith(maid.getAvailableInv(true), maid, basePos, world);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("FarmSweepMixin", ignored);
             return false;
         }
     }

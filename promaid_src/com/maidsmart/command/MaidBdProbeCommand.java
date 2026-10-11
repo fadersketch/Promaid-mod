@@ -349,7 +349,7 @@ public final class MaidBdProbeCommand {
                             src.m_81371_().f_82479_ + 64, src.m_81371_().f_82480_ + 64, src.m_81371_().f_82481_ + 64);
             return src.m_81372_().m_45976_(EntityMaid.class, box).stream().findFirst().orElse(null);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdProbeCommand", t); return null;
         }
     }
 }

@@ -116,7 +116,7 @@ public final class MaidWorkList {
             out.add(new Item(content, status, priority));
             return out;
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidWorkList", e); return null;
         }
     }
 }

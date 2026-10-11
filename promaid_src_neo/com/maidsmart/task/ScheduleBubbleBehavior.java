@@ -120,7 +120,7 @@ public class ScheduleBubbleBehavior extends Behavior<EntityMaid> {
             if (atk.isPresent() && atk.get().isAlive()) {
                 return false;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleBubbleBehavior", ignored);
         }
         // 自保中不聊
         if (((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(
@@ -152,13 +152,13 @@ public class ScheduleBubbleBehavior extends Behavior<EntityMaid> {
         String text = TEXTS[RNG.nextInt(TEXTS.length)];
         try {
             maid.getChatBubbleManager().addTextChatBubble(text);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleBubbleBehavior", ignored);
         }
         // 实测四百二十八：排班气泡也接入语音（内置日语语音包命中即播放并压制原生；
         // 未命中则按 SystemTTSManager 原有链路走磁盘包/缓存/TTS 合成）
         try {
             com.maidsmart.voice.SystemTTSManager.speak(maid, text);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ScheduleBubbleBehavior", ignored);
         }
         NEXT_ALLOWED.put(maid.getUUID(), gameTime + COOLDOWN_TICKS);
         com.maidsmart.tool.StateTables.cap("ScheduleBubbleBehavior.NEXT_ALLOWED", NEXT_ALLOWED);

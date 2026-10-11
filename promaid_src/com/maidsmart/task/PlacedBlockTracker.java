@@ -340,7 +340,7 @@ public final class PlacedBlockTracker {
         net.minecraft.world.entity.LivingEntity master;
         try {
             master = maid.m_269323_(); // 绑定女仆的主人（玩家）
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlacedBlockTracker", ignored);
             return null;
         }
         if (master == null || !master.m_6084_() || master.m_9236_() != level) {
@@ -394,7 +394,7 @@ public final class PlacedBlockTracker {
                     }
                 }
                 handed = true;
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("PlacedBlockTracker", ignored);
             }
         }
         if (!handed && !drops.isEmpty()) {
@@ -426,7 +426,7 @@ public final class PlacedBlockTracker {
             if (item != null && item != net.minecraft.world.item.Items.f_41852_) {
                 return java.util.List.of(new ItemStack(item));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PlacedBlockTracker", ignored);
         }
         return Block.m_49869_(state, level, pos, null);
     }

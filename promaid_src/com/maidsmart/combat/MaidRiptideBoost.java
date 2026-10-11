@@ -239,7 +239,7 @@ public final class MaidRiptideBoost {
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.RIPTIDE_DASH_ENABLE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return false;
         }
     }
@@ -248,7 +248,7 @@ public final class MaidRiptideBoost {
     private static double scale() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIPTIDE_FLIGHT_SCALE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return FALLBACK_SCALE;
         }
     }
@@ -271,7 +271,7 @@ public final class MaidRiptideBoost {
             }
             aimUpForward(maid, target, pitch);
             return ignite(level, maid, "空袭·激流", "掉高抬升", target, true);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return false;
         }
     }
@@ -287,7 +287,7 @@ public final class MaidRiptideBoost {
                 return false;
             }
             return ignite(level, maid, "空袭·激流", "俯冲下扎", null, true);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return false;
         }
     }
@@ -346,7 +346,7 @@ public final class MaidRiptideBoost {
                         : (lvl == 2 ? net.minecraft.sounds.SoundEvents.f_12518_
                                     : net.minecraft.sounds.SoundEvents.f_12517_);
                 level.m_5594_(null, maid.m_20183_(), snd, net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             }
             // ④ 耐久 −1（原版与投掷共用那一条；飞行跟随的省料开关走 consumeDurability = false）
             if (consumeDurability) {
@@ -362,7 +362,7 @@ public final class MaidRiptideBoost {
                     + (consumeDurability ? "" : "，不消耗耐久")
                     + (target == null ? "" : "，距敌 " + fmt(maid.m_20270_(target)) + " 格") + "）");
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return false;
         }
     }
@@ -399,7 +399,7 @@ public final class MaidRiptideBoost {
             }
             pushOnce(maid, t);
             t.step++;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
         }
     }
 
@@ -417,7 +417,7 @@ public final class MaidRiptideBoost {
     public static boolean clear(EntityMaid maid) {
         try {
             return maid != null && THRUST.remove(maid.m_20148_()) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return false;
         }
     }
@@ -432,7 +432,7 @@ public final class MaidRiptideBoost {
     public static boolean isThrusting(EntityMaid maid) {
         try {
             return maid != null && THRUST.containsKey(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return false;
         }
     }
@@ -475,7 +475,7 @@ public final class MaidRiptideBoost {
             }
             int k = (int) Math.ceil(Math.log(DECAY_UNTIL / power0) / Math.log(WATER_DRAG));
             return Math.max(1, Math.min(MAX_THRUST_TICKS, k));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return 1;
         }
     }
@@ -499,7 +499,7 @@ public final class MaidRiptideBoost {
                 sum += v;
             }
             return sum;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return power0;
         }
     }
@@ -539,7 +539,7 @@ public final class MaidRiptideBoost {
             maid.m_21563_().m_24950_(
                     maid.m_20185_() + dx / dh, maid.m_20188_() + tan, maid.m_20189_() + dz / dh,
                     360.0f, 360.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
         }
     }
 
@@ -547,7 +547,7 @@ public final class MaidRiptideBoost {
     private static int riptideLevel(ItemStack stack) {
         try {
             return net.minecraft.world.item.enchantment.EnchantmentHelper.m_44932_(stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRiptideBoost", ignored);
             return 1;
         }
     }

@@ -50,7 +50,7 @@ public final class StateTables {
                         + "）→ 整表清空。这张表里都是日志限频/启发式计时/短暂宽限，清空只是让它们重算一次；"
                         + "若这条日志频繁出现，说明有地方在无界地记东西，请报给作者");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("StateTables", ignored);
         }
     }
 }

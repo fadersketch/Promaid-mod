@@ -120,7 +120,7 @@ public final class FriendlyWindGuard {
                     return m;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyWindGuard", ignored);
         }
         return null;
     }
@@ -155,7 +155,7 @@ public final class FriendlyWindGuard {
             }
             // 无来源实体的爆炸（原版风爆）：退回"当前 tick 实体"归因（与总闸同一口径）
             return maidOf(ticking);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyWindGuard", ignored);
             return null;
         }
     }
@@ -217,7 +217,7 @@ public final class FriendlyWindGuard {
             }
             log(maid, victim, dv);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyWindGuard", ignored);
             return false; // 任何意外都不拦（宁可漏一次，不可误伤正常位移）
         }
     }
@@ -254,7 +254,7 @@ public final class FriendlyWindGuard {
             org.slf4j.LoggerFactory.getLogger("promaid").info(
                     "friendly-wind-immune: maid={} victim={} dv={} · 女仆的法术/风弹不再震开主人与同主女仆",
                     com.maidsmart.tool.PromaidLog.nameOf(maid), victimName(victim), String.format("%.2f", dv));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyWindGuard", ignored);
         }
     }
 
@@ -263,7 +263,7 @@ public final class FriendlyWindGuard {
             if (victim instanceof EntityMaid m) {
                 return com.maidsmart.tool.PromaidLog.nameOf(m);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyWindGuard", ignored);
         }
         return victim.getClass().getSimpleName();
     }

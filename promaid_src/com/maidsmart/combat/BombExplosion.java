@@ -73,7 +73,7 @@ public final class BombExplosion {
         try {
             java.util.UUID caster = selfImmuneMaidId;
             return caster != null && caster.equals(victim.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombExplosion", ignored);
             return false;
         }
     }
@@ -150,7 +150,7 @@ public final class BombExplosion {
             try {
                 level.m_8767_(net.minecraft.core.particles.ParticleTypes.f_123812_,
                         x, y, z, 1, 0.0, 0.0, 0.0, 0.0);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombExplosion", ignored);
             }
         }
         // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人

@@ -56,11 +56,11 @@ if (++throttle < 80) {
         // 保留了 ±∞，home 巡逻因此失效——"home 模式又不会动了"）
         for (ServerLevel level : event.getServer().getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
-            // 未预建 EntityMaid 桶的 section 被整段跳过，home 女仆单独站的 section
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）：
+            // 光靠类查询会漏扫 home 女仆单独站的 section
             // 扫不到 → 巡逻驱动失效（"home 女仆呆立"的另一重根因）
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                 if (e instanceof EntityMaid maid) {
                     patrol(maid);
                 }
@@ -114,7 +114,7 @@ if (++throttle < 80) {
                     maid.blockPosition().getY(), center.getZ() + dz);
             brain.setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(target,
                     (float) (double) com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get(), 2)); // 实测八百一十六：漫游速度走「散步速度倍率」（默认 0.4）
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("HomePatrolHandler", ignored);
         }
     }
 }

@@ -64,7 +64,7 @@ public final class BuildShieldGuard {
             net.minecraft.nbt.CompoundTag nbt = maid.getPersistentData();
             return nbt.m_128471_(AutoCombatSwitch.COMBAT_ACTIVE_TAG)
                     && BUILD_TASK_UID.equals(nbt.m_128461_(AutoCombatSwitch.PREV_TASK_TAG));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
             return false;
         }
     }
@@ -98,7 +98,7 @@ public final class BuildShieldGuard {
                     && event.getEntity() instanceof EntityMaid maid && isBuilding(maid)) {
                 event.setCanceled(true);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
         }
     }
 
@@ -110,7 +110,7 @@ public final class BuildShieldGuard {
                     && event.getNewTarget() instanceof EntityMaid maid && isBuilding(maid)) {
                 event.setNewTarget(null);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
         }
     }
 
@@ -137,7 +137,7 @@ public final class BuildShieldGuard {
                     maid.m_21195_(MobEffects.f_19606_);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildShieldGuard", ignored);
         }
     }
 }

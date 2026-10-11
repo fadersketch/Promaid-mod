@@ -85,7 +85,7 @@ public final class MaidFlightWallGuard {
                 com.maidsmart.tool.PromaidLog.log("空袭免摔",
                         com.maidsmart.tool.PromaidLog.nameOf(maid) + " 拦下摔落伤害");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightWallGuard", ignored);
         }
     }
 
@@ -118,10 +118,10 @@ public final class MaidFlightWallGuard {
                 // 日志自己一层 try：写日志失败不该把已经做出的取消再吐回去
                 com.maidsmart.tool.PromaidLog.log("大运免疫冲撞",
                         daYunNameOf(entity) + " 拦下鞘翅撞击伤害");
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightWallGuard", ignored);
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightWallGuard", ignored);
             return false;
         }
     }

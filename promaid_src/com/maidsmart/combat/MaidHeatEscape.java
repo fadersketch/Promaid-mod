@@ -77,7 +77,7 @@ public final class MaidHeatEscape {
         try {
             return MaidSmartConfig.COMBAT_HEAT_ESCAPE.get();
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidHeatEscape", t); return false;
         }
     }
 
@@ -145,7 +145,7 @@ public final class MaidHeatEscape {
                             + (riding ? "（连人带扫帚）" : "")
                             + (doused ? "（应急灭火）" : ""));
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeatEscape", ignored);
             return false;
         }
     }
@@ -166,7 +166,7 @@ public final class MaidHeatEscape {
             }
             return maid.m_20077_() || maid.m_6060_();
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidHeatEscape", t); return false;
         }
     }
 
@@ -182,7 +182,7 @@ public final class MaidHeatEscape {
             // 实测七百一十七【issue #27】：跨维传送后补属性表包（客户端血上限只来自那一包）
             com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeatEscape", ignored);
             return false;
         }
     }
@@ -236,7 +236,7 @@ public final class MaidHeatEscape {
                 }
             }
             return best;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidHeatEscape", ignored);
             return null;
         }
     }

@@ -55,7 +55,7 @@ public final class GuideIcons {
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(rl);
                 out = it == null ? ItemStack.f_41583_ : new ItemStack(it);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GuideIcons", ignored);
             // 认不出就是空栈，绝不外溢
         }
         CACHE.put(id, out);
@@ -73,7 +73,7 @@ public final class GuideIcons {
                 return null;
             }
             return new ResourceLocation(ns, path);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GuideIcons", ignored);
             return null;
         }
     }
@@ -87,7 +87,7 @@ public final class GuideIcons {
         }
         try {
             return s.m_41786_().getString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GuideIcons", ignored);
             return id;
         }
     }

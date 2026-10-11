@@ -68,7 +68,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
                 cir.setReturnValue(BlockPathTypes.BLOCKED);
             }
         } catch (Exception e) {
-            // v1.1.0 实测一百零二：不再静默吞异常——若 DangerBlocks 或寻路判定抛异常，
+             com.maidsmart.diag.Diag.swallow("MaidDangerPathMixin", e); // v1.1.0 实测一百零二：不再静默吞异常——若 DangerBlocks 或寻路判定抛异常，
             // 危险回避系统会静默失效导致女仆走入岩浆。改为记日志便于排查。
             com.mojang.logging.LogUtils.getLogger().warn("maidsmart: danger path mixin error", e);
         }

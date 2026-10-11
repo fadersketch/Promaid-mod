@@ -81,9 +81,9 @@ if (++this.throttle < 10) {
         long now = server.getTickCount();
         for (ServerLevel level : server.getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.isAlive()
                         || maid.getOwner() == null) {
                     continue; // 无主不处理
@@ -173,7 +173,7 @@ if (++this.throttle < 10) {
         try {
             net.minecraft.world.phys.AABB box = new AABB(c).inflate(-0.05);
             return !level.getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class, box).isEmpty();
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("DangerEscapeHandler", ignored);
             return false;
         }
     }

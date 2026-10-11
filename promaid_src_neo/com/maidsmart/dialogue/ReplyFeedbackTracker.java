@@ -131,7 +131,7 @@ public class ReplyFeedbackTracker {
         try {
             nowTick = maid.level().getGameTime();
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", e); return false;
         }
         List<String[]> list = TOPIC_BLACKLIST.get(id);
         if (list == null) {
@@ -304,7 +304,7 @@ MinecraftServer server = event.getServer();
             AiMemoryModels.Paragraph p = AiMemoryModels.Paragraph.create("dialogue", "user", content,
                     "error_mark,feedback", 5, false, now, level.getGameTime());
             store.addParagraph(p);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", ignored);
         }
     }
 
@@ -319,7 +319,7 @@ MinecraftServer server = event.getServer();
             // v1.1.0：统一走灵魂路由（同 writeErrorMark）
             AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
             store.reinforceByTopic(last);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", ignored);
         }
     }
 

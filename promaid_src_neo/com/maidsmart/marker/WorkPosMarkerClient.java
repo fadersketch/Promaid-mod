@@ -84,7 +84,7 @@ public final class WorkPosMarkerClient {
                 return false;
             }
             return mc.player.getMainHandItem().is(compass) || mc.player.getOffhandItem().is(compass);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkPosMarkerClient", ignored);
             return false;
         }
     }
@@ -97,7 +97,7 @@ public final class WorkPosMarkerClient {
         try {
             return com.maidsmart.patrol.PatrolChartKit.isChart(mc.player.getMainHandItem())
                     || com.maidsmart.patrol.PatrolChartKit.isChart(mc.player.getOffhandItem());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkPosMarkerClient", ignored);
             return false;
         }
     }
@@ -115,7 +115,7 @@ public final class WorkPosMarkerClient {
                     return p;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkPosMarkerClient", ignored);
         }
         return null;
     }

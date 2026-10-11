@@ -94,7 +94,7 @@ public final class FriendlyFireGuard {
                 return null; // 玩家要原版口径 → 这一层让位
             }
             return MaidTntBlastGuard.maidOfTnt(direct != null ? direct : cause);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
             return null;
         }
     }
@@ -112,7 +112,7 @@ public final class FriendlyFireGuard {
                 return;
             }
             for (ServerLevel lvl : server.getAllLevels()) {
-                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                for (Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                         continue;
                     }
@@ -140,7 +140,7 @@ public final class FriendlyFireGuard {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
         }
     }
 
@@ -168,7 +168,7 @@ public final class FriendlyFireGuard {
         }
         try {
             return maid.isAlliedTo(target);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
             return false;
         }
     }
@@ -188,7 +188,7 @@ public final class FriendlyFireGuard {
             }
             LivingEntity mem = maid.getBrain().getMemory(MemoryModuleType.ATTACK_TARGET).orElse(null);
             return isHostileTarget(maid, mem);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
             return false;
         }
     }

@@ -80,7 +80,7 @@ public final class ServantMountDamageTransfer {
             event.setCanceled(true);            // 她这一下不受伤
             mount.m_6469_(source, amount);      // m_6469_ = hurt：转给身下的仆从（同源，仇恨也落到它身上）
             logTransfer(maid, mount, amount, msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ServantMountDamageTransfer", ignored);
         }
     }
 
@@ -100,7 +100,7 @@ public final class ServantMountDamageTransfer {
                             + String.valueOf(mount.m_6095_()).replace("entity.minecraft.", "")
                             + "：" + String.format(java.util.Locale.ROOT, "%.1f", amount)
                             + (msg == null || msg.isEmpty() ? "" : " (" + msg + ")"));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ServantMountDamageTransfer", ignored);
         }
     }
 }

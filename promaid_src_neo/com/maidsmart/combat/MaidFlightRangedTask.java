@@ -194,7 +194,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                 return;
             }
             shootArrow(shooter, target, weapon, pwi);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
     }
 
@@ -202,7 +202,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
     private static boolean isGohei(ItemStack stack) {
         try {
             return com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei.isGohei(stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             return false;
         }
     }
@@ -251,7 +251,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                     net.minecraft.world.item.enchantment.EnchantmentHelper.updateEnchantments(
                             stack, m -> m.set(loyalty, 0));
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             }
             net.minecraft.world.entity.projectile.ThrownTrident trident =
                     new net.minecraft.world.entity.projectile.ThrownTrident(shooter.level(), shooter, stack);
@@ -268,7 +268,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             shooter.level().addFreshEntity(trident);
             shooter.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             shooter.playSound(SoundEvents.TRIDENT_THROW.value(), 1.0f, 1.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
     }
 
@@ -320,7 +320,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             try {
                 dmg = (float) shooter.getAttributeValue(
                         net.minecraft.world.entity.ai.attributes.Attributes.ATTACK_DAMAGE);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             }
             dmg = Math.max(1.0f, dmg);
 
@@ -334,7 +334,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                             .filter(e -> enemyEntityTest(shooter, target, e))
                             .count();
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             }
 
             // 多重射击附魔（TLM 口径：EnchantmentKeys.getEnchantmentLevel(registryAccess, MULTISHOT, stack)）
@@ -344,7 +344,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                         .getEnchantmentLevel(shooter.level().registryAccess(),
                                 net.minecraft.world.item.enchantment.Enchantments.MULTISHOT,
                                 shooter.getMainHandItem());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             }
             // v1.2.0 实测四百九十二【御币三个专属附魔补齐】——TLM 的阻碍/神速/末影杀手注册在
             // GOHEI 类别上，自身没有行为，作用全靠 TaskDanmakuAttack 读等级后传给弹幕 API。
@@ -367,7 +367,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                         .getEnchantmentLevel(shooter.level().registryAccess(),
                                 com.github.tartaricacid.touhoulittlemaid.datagen.EnchantmentKeys.ENDERS_ENDER,
                                 shooter.getMainHandItem()) > 0;
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             }
 
             float distance = shooter.distanceTo(target);
@@ -424,7 +424,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
 
             shooter.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             shooter.getMainHandItem().hurtAndBreak(1, shooter, EquipmentSlot.MAINHAND);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
     }
 
@@ -434,7 +434,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             return shooter.canAttack(test)
                     && target.getType().equals(test.getType())
                     && shooter.hasLineOfSight(test);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             return false;
         }
     }
@@ -520,7 +520,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
         try {
             return com.github.tartaricacid.touhoulittlemaid.datagen.EnchantmentKeys
                     .getEnchantmentLevel(maid.level().registryAccess(), key, stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             return 0;
         }
     }
@@ -566,7 +566,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                     .getEnchantmentLevel(shooter.level().registryAccess(),
                             net.minecraft.world.item.enchantment.Enchantments.INFINITY,
                             weapon) > 0;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
         if (!infinity) {
             arrowStack.shrink(1);
@@ -588,7 +588,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             if (!held.isEmpty()) {
                 return held;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
         try {
             java.util.function.Predicate<ItemStack> supported = pwi.getAllSupportedProjectiles();
@@ -599,7 +599,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                     return s;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
         try {
             net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
@@ -609,7 +609,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                     return s;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
         return ItemStack.EMPTY;
     }
@@ -700,7 +700,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
                     SoundSource.PLAYERS, 1.0f,
                     1.0f / (shooter.getRandom().nextFloat() * 0.4f + 0.8f));
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
             return false;
         }
     }

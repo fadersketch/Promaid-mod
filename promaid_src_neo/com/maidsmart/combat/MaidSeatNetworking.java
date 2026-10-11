@@ -79,7 +79,7 @@ public final class MaidSeatNetworking {
         }
         try {
             PacketDistributor.sendToPlayer(player, new ArmRemountPacket(vehicleId));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSeatNetworking", ignored);
         }
     }
 
@@ -156,7 +156,7 @@ public final class MaidSeatNetworking {
     public static void requestSwapSeat(int vehicleId) {
         try {
             PacketDistributor.sendToServer(new SwapSeatPacket(vehicleId));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSeatNetworking", ignored);
         }
     }
 
@@ -167,7 +167,7 @@ public final class MaidSeatNetworking {
         }
         try {
             PacketDistributor.sendToPlayersTrackingEntityAndSelf(maid, new SyncPacket(maid.getId(), mountId));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSeatNetworking", ignored);
         }
     }
 
@@ -178,7 +178,7 @@ public final class MaidSeatNetworking {
         }
         try {
             PacketDistributor.sendToPlayer(watcher, new SyncPacket(maidId, mountId));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSeatNetworking", ignored);
         }
     }
 

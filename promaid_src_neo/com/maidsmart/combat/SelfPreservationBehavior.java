@@ -77,7 +77,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     public static boolean isSelfPreserving(EntityMaid maid) {
         try {
             return ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(PRESERVE_TAG);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -150,7 +150,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             BUILD_REFUSE_SINCE.put(maid.getUUID(), now);
             com.maidsmart.tool.PromaidLog.log("自保搭高",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 这次没搭成：" + reason);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -210,7 +210,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         }
                     }
                     handed = true;
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
                 }
             }
             if (!handed && !drops.isEmpty()) {
@@ -368,7 +368,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     if (src0.scalesWithDifficulty()) {
                         extra = " [弹射物]";
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
                 }
                 net.minecraft.world.entity.Entity srcEnt = src0.getDirectEntity();
                 String srcName = srcEnt == null ? "无来源实体"
@@ -384,7 +384,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         maid.getX(), maid.getY(), maid.getZ(),
                         maid.blockPosition().getY()));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         // v1.2.4 实测六百四十七：窒息伤害入账（「我卡住了，快喘不过气了！」的播报门槛，
         // 见 SUFFOCATE_DAMAGE 的注释）——只记真的走伤害结算的 in_wall，不记几何判定
@@ -405,7 +405,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     });
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         net.minecraft.world.damagesource.DamageSource src = event.getSource();
         if (src == null || !(src.getEntity() instanceof LivingEntity attacker)) {
@@ -678,7 +678,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         try {
             long now = maid.level().getGameTime();
             return maid.getPersistentData().getLong(GOLDEN_APPLE_CD_TAG) <= now;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return true;
         }
     }
@@ -688,7 +688,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         try {
             long now = maid.level().getGameTime();
             maid.getPersistentData().putLong(GOLDEN_APPLE_CD_TAG, now + (enchanted ? 6000L : 2400L));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -702,7 +702,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         try {
             long until = maid.getPersistentData().getLong(GOLDEN_APPLE_CD_TAG);
             return Math.max(0L, until - maid.level().getGameTime());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return 0L;
         }
     }
@@ -733,7 +733,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 base = base.substring(7);
             }
             return ns + base; // minecraft:swiftness
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return "unknown";
         }
     }
@@ -1080,7 +1080,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 至少不低于兜底高度；再按玩家的总上限封顶
             want = Math.max(want, base);
             return Math.max(1, Math.min(want, pillarMax()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return base; // 判定异常 → 按旧口径安全高度走
         }
     }
@@ -1191,7 +1191,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 }
                 return;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -1264,7 +1264,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     .setImpedingLevel(0)
                     .aimedShot();
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -1293,7 +1293,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             level.addFreshEntity(arrow);
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND, true); // 挥臂
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -2024,7 +2024,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                                     }
                                 }
                                 handed = true;
-                            } catch (Exception ignored) {
+                            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
                             }
                         }
                         if (!handed && !drops.isEmpty()) {
@@ -2042,7 +2042,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     broke = true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return broke;
     }
@@ -2056,7 +2056,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     protected boolean canStillUse(ServerLevel level, EntityMaid maid, long gameTime) {
         // v1.5.202（轻量级自保，落地水格式）：常驻检查器永不停止——会话进出
         // 由 tick 内部维护（sessionActive + PRESERVE_TAG），非会话 tick 零干预
-        return true;
+        // TD-10：总开关也在 canStillUse 里问——关掉开关即刻停（默认开，行为不变）。
+        return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE.get();
     }
 
     /**
@@ -2155,7 +2156,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             LOGGER.info("self preserve exit teleport: maid={} -> owner dist={}",
                     maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
                     String.format("%.1f", Math.sqrt(dx * dx + dz * dz)));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -2305,7 +2306,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 }
             }
             return best;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return null;
         }
     }
@@ -2358,7 +2359,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return t instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid tm
                     && tm.getOwner() == center;
         } catch (Throwable ex) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ex); return false;
         }
     }
 
@@ -2383,7 +2384,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return com.maidsmart.accessory.DaYunWallPhase.active(from)
                     && com.maidsmart.accessory.DaYunWallPhase.canSeeThrough(from, to);
         } catch (Exception e) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", e); return true;
         }
     }
 
@@ -2408,7 +2409,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.phys.BlockHitResult hit = from.level().clip(ctx);
             return hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS;
         } catch (Exception e) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", e); return true;
         }
     }
 
@@ -2604,7 +2605,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     this.canPourWaterAt(level, pos),
                     this.canPourWaterAt(level, pos.offset(0, 2, 0)));
         } catch (Exception e) {
-            // v1.5.246：放水异常诊断（不再静默吞）
+             com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", e); // v1.5.246：放水异常诊断（不再静默吞）
             LOGGER.info("placeClutchWater error: {} {}",
                     e.getClass().getSimpleName(),
                     e.getMessage() != null ? e.getMessage() : "");
@@ -2626,7 +2627,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 level.setBlock(this.waterPos,
                         air != null ? air.defaultBlockState() : net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         this.waterPos = null;
     }
@@ -2651,7 +2652,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         air != null ? air.defaultBlockState() : net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
             }
             this.waterPos = null;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -2791,7 +2792,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                             maid.level().dimension().location().getPath(),
                             this.hasWaterBucket(maid), buildBlocks, hasFirePot, hasPearl,
                             String.format("%.0f", this.hpRatio(maid) * 100.0f));
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
                 }
             }
             // v1.5.232：垫方块在第二步（玩家规范）——垫成功 = 脱离液面 = 本链路
@@ -2963,7 +2964,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     LOGGER.info("fire escape resources: maid={} hand={} bucket(getKey)={} getValueNotNull={} fireResist={}",
                             maid.getDisplayName() != null ? maid.getDisplayName().getString() : "?",
                             hand, this.hasWaterBucket(maid), wb != null, hasFireResist(maid));
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
                 }
             }
             // v1.5.211：灭火手段全失败后的贴脸反击兜底——延续"边打边保命"：
@@ -3117,7 +3118,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             this.resourceUsed = true; // v1.5.232：用过自救资源，链路不算全失败
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -3203,7 +3204,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             level.addFreshEntity(pearl);
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -3243,7 +3244,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -3265,7 +3266,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return hasFireResist(maid)
                     || (com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
                             && hasFireProtectBauble(maid));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false; // 判不出来当"会疼"——宁可多救一次，也不让她在岩浆里白挨
         }
     }
@@ -3301,7 +3302,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -3342,7 +3343,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         String.format("%.0f", this.hpRatio(maid) * 100.0f));
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -3386,7 +3387,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.resourceUsed = true; // v1.5.232：用过自救资源
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -3405,7 +3406,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             String id = key.toString();
             return "minecraft:fire_resistance".equals(id) || "minecraft:long_fire_resistance".equals(id);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -3467,7 +3468,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             markGoldenAppleUsed(maid, enchanted);
             this.resourceUsed = true; // v1.5.232：用过自救资源
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -3482,7 +3483,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 target.addEffect(new net.minecraft.world.effect.MobEffectInstance(
                             net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.wrapAsHolder(effect), duration, amplifier));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -3999,7 +4000,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             // 与搭高共享冷却：本次调用不重置（buildUp 成功后已置 buildCd），
             // 下一轮 4 tick 后照常搭高/封头交替
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -4083,7 +4084,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (pearl != null && com.maidsmart.tool.MaidExtraContainer.contains(maid, s -> s.getItem() == pearl)) {
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -4098,7 +4099,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             BlockPos feet = maid.blockPosition();
             return PlacedBlockTracker.trackedBlockId(maid.level(), feet.offset(0, -1, 0)) != null
                     || PlacedBlockTracker.trackedBlockId(maid.level(), feet.offset(0, -2, 0)) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -4122,7 +4123,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 这个门禁必须跟着放宽——否则"背包空、精妙背包里一堆方块"的女仆连试都不试。
             return com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(s, null, null));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -4162,7 +4163,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (com.maidsmart.tool.MaidExtraContainer.contains(maid, s -> healResourceName(s) != null)) {
                 return "（精妙背包/旅行者背包）";
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return null;
     }
@@ -4266,7 +4267,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             //  一种。判据只有一处，将来漏判也只会漏在这一格。
             return com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)
                     || com.maidsmart.combat.RideBindManager.isRideRider(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -4519,7 +4520,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.markPotionUsed(potionKey(stack), maid.level().getGameTime(), maxDur > 0 ? maxDur : 40);
                 return Math.max(40, Math.min(maxDur > 0 ? maxDur : 40, 12000));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return -1;
     }
@@ -4575,7 +4576,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.markPotionUsed(potionKey(stack), level.getGameTime(), maxDur > 0 ? maxDur : 40);
                 return Math.max(40, Math.min(maxDur > 0 ? maxDur : 40, 12000));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return -1;
     }
@@ -4594,7 +4595,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 out.addAll(p.getEffects());
             }
             out.addAll(com.maidsmart.brew.PotionCompat.customEffects(stack));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return out;
     }
@@ -4612,7 +4613,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -4641,7 +4642,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.resourceUsed = true;
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -4777,7 +4778,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         String.format("%.0f", this.hpRatio(maid) * 100.0f), effects.size());
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
         return false;
     }
@@ -4837,7 +4838,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 但没有任何地方读那个键（死写）——改成两条路共用的持久化冷却（= 效果时长）
             markGoldenAppleUsed(maid, enchanted);
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
             return false;
         }
     }
@@ -4871,7 +4872,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                             net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.wrapAsHolder(fire), 6000, 0));
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 
@@ -4998,7 +4999,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 level.sendParticles(angry, maid.getX(), maid.getY() + 2.2, maid.getZ(),
                         4, 0.2, 0.3, 0.2, 0.0);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
     }
 

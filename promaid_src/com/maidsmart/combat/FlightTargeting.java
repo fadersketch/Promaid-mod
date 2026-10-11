@@ -329,7 +329,7 @@ public final class FlightTargeting {
                 logAircraft(maid, "附近没有活敌人（新锁定以主人为圆心、水平 " + (long) AIRCRAFT_RANGE + " 格）");
             }
             return null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             return null;
         }
     }
@@ -350,7 +350,7 @@ public final class FlightTargeting {
             }
             net.minecraft.world.entity.Entity v = maid.m_20202_();
             return v != null && MaidMountCompat.isFlyingVehicle(v);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             return false;
         }
     }
@@ -375,7 +375,7 @@ public final class FlightTargeting {
             }
             net.minecraft.world.entity.Entity v = maid.m_20202_();
             return v != null && MaidMountCompat.kindOf(v) == MaidMountCompat.Kind.VEHICLE;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             return false;
         }
     }
@@ -396,7 +396,7 @@ public final class FlightTargeting {
             }
             net.minecraft.world.entity.Entity v = maid.m_20202_();
             return v != null && MaidMountCompat.isAircraft(v);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             return false;
         }
     }
@@ -412,7 +412,7 @@ public final class FlightTargeting {
                 if (owner != null && owner.m_9236_() == maid.m_9236_()) {
                     return owner;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             }
         }
         return maid;
@@ -467,7 +467,7 @@ public final class FlightTargeting {
             // 【实测七百八十五】固定翼按**水平**距离维持（高度差不该算进"还愿不愿意打"的预算）。
             return aircraft ? horizontalDistSqr(maid, e) <= HOLD_RANGE_SQR
                     : maid.m_20280_(e) <= HOLD_RANGE_SQR;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             return false;
         }
     }
@@ -479,7 +479,7 @@ public final class FlightTargeting {
             if (mem.isPresent() && mem.get().m_6084_()) {
                 return mem.get();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
         }
         LivingEntity t = maid.m_5448_();
         return t != null && t.m_6084_() ? t : null;
@@ -556,7 +556,7 @@ public final class FlightTargeting {
                 }
             }
             return best;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             return null;
         }
     }
@@ -577,7 +577,7 @@ public final class FlightTargeting {
             maid.m_6274_().m_21886_(MemoryModuleType.f_26372_, java.util.Optional.of(target));
             maid.m_6274_().m_21886_(MemoryModuleType.f_26371_,
                     java.util.Optional.of(new EntityTracker(target, true)));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
         }
     }
 
@@ -601,7 +601,7 @@ public final class FlightTargeting {
             }
             com.maidsmart.tool.PromaidLog.log("固定翼索敌",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
         }
     }
 }

@@ -64,7 +64,7 @@ public final class AiMemoryVectorIndex {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryVectorIndex", ignored);
         }
     }
 
@@ -76,7 +76,7 @@ public final class AiMemoryVectorIndex {
                 sb.append(AiMemoryModels.GSON.toJson(e)).append('\n');
             }
             Files.writeString(this.file, sb.toString(), StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryVectorIndex", ignored);
         }
     }
 
@@ -143,7 +143,7 @@ public final class AiMemoryVectorIndex {
         this.entries.clear();
         try {
             Files.deleteIfExists(this.file);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryVectorIndex", ignored);
         }
     }
 

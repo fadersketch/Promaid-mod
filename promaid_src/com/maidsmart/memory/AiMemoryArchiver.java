@@ -427,7 +427,7 @@ public final class AiMemoryArchiver {
                             }
                             handleIndexResponse(store, content, lv, startTick, endTick);
                         } catch (Exception e) {
-                            // 审计S2修复：解析异常（LLM偶发坏JSON）不再静默丢边界——
+                             com.maidsmart.diag.Diag.swallow("AiMemoryArchiver", e); // 审计S2修复：解析异常（LLM偶发坏JSON）不再静默丢边界——
                             // 挂入 pending 由周期 tick 重试（对齐 Sphantosis 重试语义）
                             LOGGER.info("AiMemoryArchiver: {}索引解析异常 {}（待重试）", lv, id, e);
                             addPending(store, lv, startTick, endTick);
@@ -436,7 +436,7 @@ public final class AiMemoryArchiver {
                         }
                     }));
         } catch (Exception e) {
-            // 审计 P-7：同步构造/发送失败不再静默，记录日志并挂入持久 pending 重试
+             com.maidsmart.diag.Diag.swallow("AiMemoryArchiver", e); // 审计 P-7：同步构造/发送失败不再静默，记录日志并挂入持久 pending 重试
             UUID id = maid.m_20148_();
             LOGGER.info("AiMemoryArchiver: 索引请求构造失败 {}（待重试）", id, e);
             ARCHIVING.remove(id);
@@ -576,7 +576,7 @@ public final class AiMemoryArchiver {
                     return s;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryArchiver", ignored);
         }
         return ArchiverState.initial();
     }
@@ -587,7 +587,7 @@ public final class AiMemoryArchiver {
             java.nio.file.Files.createDirectories(store.dir());
             java.nio.file.Files.writeString(stateFile(store),
                     AiMemoryModels.GSON.toJson(state), java.nio.charset.StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryArchiver", ignored);
         }
     }
 

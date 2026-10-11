@@ -97,7 +97,7 @@ public final class FlightFireworkPose {
             //  的链路当真物品收走 → 净 +1，见类注释）
             ACTIVE.put(id, new Object[]{HOLD_TICKS, display});
             syncOffhand(maid, display);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightFireworkPose", ignored);
         }
     }
 
@@ -119,7 +119,7 @@ public final class FlightFireworkPose {
             }
             restore(maid, cur);
             ACTIVE.remove(id);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightFireworkPose", ignored);
         }
     }
 
@@ -132,7 +132,7 @@ public final class FlightFireworkPose {
     public static boolean isShowing(EntityMaid maid) {
         try {
             return maid != null && ACTIVE.containsKey(maid.getUUID());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightFireworkPose", ignored);
             return false;
         }
     }
@@ -162,7 +162,7 @@ public final class FlightFireworkPose {
             if (cur != null) {
                 restore(maid, cur);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightFireworkPose", ignored);
         }
     }
 
@@ -202,7 +202,7 @@ public final class FlightFireworkPose {
                         java.util.List.of(com.mojang.datafixers.util.Pair.of(
                                 net.minecraft.world.entity.EquipmentSlot.OFFHAND, send))));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightFireworkPose", ignored);
         }
     }
 }

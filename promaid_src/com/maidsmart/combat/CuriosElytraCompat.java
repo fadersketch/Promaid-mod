@@ -57,6 +57,11 @@ public final class CuriosElytraCompat {
     /** 反射句柄解析失败过就不再反复试（版本不符时别每 tick 抛异常） */
     private static volatile boolean gaveUp = false;
 
+    /** Optional/LazyOptional 拆壳用的两个方法：按"第一次见到的那个类"缓存一次，别每 tick 再 getMethod。 */
+    private static volatile Class<?> optionalSeenClass = null;
+    private static volatile Method mOptionalOrElse;   // Optional.orElse(Object) / LazyOptional.orElse(Object)
+    private static volatile Method mOptionalResolve;  // LazyOptional.resolve()
+
     private static Method mGetInventory;   // CuriosApi.getCuriosInventory(LivingEntity)
     private static Method mGetCurios;      // ICuriosItemHandler.getCurios()
     private static Method mGetStacks;      // ICurioStacksHandler.getStacks()
@@ -64,7 +69,9 @@ public final class CuriosElytraCompat {
     private static Method mGetStackInSlot; // IDynamicStackHandler.getStackInSlot(int)
     private static Method mSetStackInSlot; // IDynamicStackHandler.setStackInSlot(int, ItemStack)
 
-    /** Curios 是否在场（Class.forName 一次，之后走缓存）。 */
+    /** Curios 是否在场（Class.forName 一次，之后走缓存）。
+     *  【TD-15：这里**有意**不用 ModList.get().isLoaded("curios")】本类要两树**逐字相同**
+     *  （不碰任何加载器专有类型，见类注释），而 ModList 的包名两树不同；探测已只跑一次、失败即缓存。 */
     public static boolean available() {
         Boolean l = loaded;
         if (l != null) {
@@ -160,23 +167,84 @@ public final class CuriosElytraCompat {
         }
     }
 
-    /** Optional / LazyOptional 都拆成里面的那个对象（都没有 → null）。 */
+    /** Optional / LazyOptional 都拆成里面的那个对象（都没有 → null）。句柄按类缓存一次。 */
     private static Object unwrap(Object optionalLike) {
         if (optionalLike == null) {
             return null;
         }
-        try {
-            Method orElse = optionalLike.getClass().getMethod("orElse", Object.class);
-            return orElse.invoke(optionalLike, (Object) null);
-        } catch (Throwable ignored) {
+        Class<?> c = optionalLike.getClass();
+        if (optionalSeenClass != c) {
+            synchronized (LOCK) {
+                if (optionalSeenClass != c) {
+                    optionalSeenClass = c;
+                    mOptionalOrElse = null;
+                    mOptionalResolve = null;
+                    try {
+                        mOptionalOrElse = c.getMethod("orElse", Object.class);
+                    } catch (Throwable t) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", t);
+                    }
+                    try {
+                        mOptionalResolve = c.getMethod("resolve");
+                    } catch (Throwable t) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", t);
+                    }
+                }
+            }
         }
-        try {
-            Method resolve = optionalLike.getClass().getMethod("resolve");
-            return resolve.invoke(optionalLike);
-        } catch (Throwable ignored) {
+        if (mOptionalOrElse != null) {
+            try {
+                return mOptionalOrElse.invoke(optionalLike, (Object) null);
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", ignored);
+            }
+        }
+        if (mOptionalResolve != null) {
+            try {
+                return mOptionalResolve.invoke(optionalLike);
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", ignored);
+            }
         }
         return null;
     }
+
+    /** 扫任意实体饰品栏的**所有**槽位，逐件回调（槽位显示名, 物品栈）——
+     * 给"找法杖 / 聚晶"这类要看全部槽位的场景用，与本类其余方法共用同一套缓存的反射句柄
+     * （TD-15：{@code MaidGoetyCompat.curios()} 原有的一份未缓存反射收敛到这里）。
+     * **不做空栈过滤**：那要调 {@code ItemStack.isEmpty()}，两树名字不同，由调用方过滤；
+     * Curios 不在场 / 反射失败 → 一个都不回调（安全兜底）。 */
+    public static void collectAll(net.minecraft.world.entity.LivingEntity entity,
+                                  java.util.function.BiConsumer<String, ItemStack> sink) {
+        if (entity == null || sink == null || !handlesForApi()) {
+            return;
+        }
+        try {
+            Object handler = unwrap(mGetInventory.invoke(null, entity));
+            if (handler == null || !handlesForHandler(handler)) {
+                return;
+            }
+            Object mapObj = mGetCurios.invoke(handler);
+            if (!(mapObj instanceof Map<?, ?> map)) {
+                return;
+            }
+            for (Map.Entry<?, ?> e : map.entrySet()) {
+                Object stacksHandler = e.getValue();
+                if (stacksHandler == null || !handlesForStacksHandler(stacksHandler)) {
+                    continue;
+                }
+                Object stacks = mGetStacks.invoke(stacksHandler);
+                if (stacks == null || !handlesForStacks(stacks)) {
+                    continue;
+                }
+                int n = (Integer) mGetSlots.invoke(stacks);
+                for (int i = 0; i < n; i++) {
+                    Object o = mGetStackInSlot.invoke(stacks, i);
+                    if (o instanceof ItemStack s) {
+                        sink.accept("饰品[" + e.getKey() + "]" + i, s);
+                    }
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", ignored);
+        }
+    }
+
 
     /**
      * 饰品栏里第一件满足 {@code filter} 的物品（**只读**，不取走）；没有 → {@code null}。
@@ -237,7 +305,7 @@ public final class CuriosElytraCompat {
         }
         try {
             return scan(entity, filter, null) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", ignored);
             return false;
         }
     }
@@ -274,7 +342,7 @@ public final class CuriosElytraCompat {
                     return hit;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", ignored);
         }
         return null;
     }
@@ -303,7 +371,7 @@ public final class CuriosElytraCompat {
                 mSetStackInSlot.invoke(stacks, i, emptyMarker);
                 return s;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CuriosElytraCompat", ignored);
         }
         return null;
     }

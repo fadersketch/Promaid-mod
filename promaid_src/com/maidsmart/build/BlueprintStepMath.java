@@ -292,7 +292,7 @@ public final class BlueprintStepMath {
                                 net.minecraft.nbt.NbtUtils.m_247651_(holder, full).m_60717_(rotationOf(q));
                         step.append('|').append(net.minecraft.nbt.NbtUtils.m_178057_(
                                 net.minecraft.nbt.NbtUtils.m_129202_(st)));
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStepMath", ignored);
                         step.append('|').append(statePart);
                     }
                 }

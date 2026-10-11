@@ -65,7 +65,7 @@ public abstract class MaidConfigMemoryMixin {
                     net.minecraft.client.gui.components.events.GuiEventListener.class);
             m.setAccessible(true);
             m.invoke(screen, widget);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigMemoryMixin", ignored);
         }
     }
 
@@ -86,7 +86,7 @@ public abstract class MaidConfigMemoryMixin {
                 } catch (NoSuchFieldException ignored) {
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigMemoryMixin", ignored);
         }
         return 0;
     }
@@ -163,7 +163,7 @@ public abstract class MaidConfigMemoryMixin {
                     });
             this.maidsmart$memoryBtn = btn;
             addRenderable(screen, btn);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigMemoryMixin", ignored);
         }
     }
 
@@ -196,7 +196,7 @@ public abstract class MaidConfigMemoryMixin {
                         com.maidsmart.client.MaidConfigRowLayout.LABELS[0],
                         e ? "\u00a7a\u5f00" : "\u00a77\u5173"));
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidConfigMemoryMixin", ignored);
         }
     }
 }

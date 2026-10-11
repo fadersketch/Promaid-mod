@@ -158,7 +158,7 @@ public class AiMemoryManager {
                         DISK_TOGGLES.putAll(loaded);
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
             }
         }
         return togglesFile;
@@ -169,7 +169,7 @@ public class AiMemoryManager {
             java.nio.file.Files.writeString(togglesFile(level),
                     AiMemoryModels.GSON.toJson(DISK_TOGGLES),
                     java.nio.charset.StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
         }
     }
 
@@ -238,10 +238,10 @@ public class AiMemoryManager {
                             store.vector().put(missing.get(i).hash(), r.vectors().get(i));
                         }
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
                 }
             });
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
         }
     }
 
@@ -392,7 +392,7 @@ MinecraftServer server = event.getServer();
         }
         try {
             com.maidsmart.soul.SoulBindingService.storeFor(maid, level).saveNow();
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
         }
         java.util.UUID maidUuid = maid.getUUID();
         AiMemoryContext.forget(maidUuid); // 实测八百二十九c：清召回闸门缓存
@@ -470,7 +470,7 @@ MinecraftServer server = event.getServer();
             if (event.getEntity() instanceof ServerPlayer sp) {
                 com.maidsmart.build.IndexStoneService.onPlayerLeave(sp);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
         }
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
                 || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_LOGOUT.get()) {

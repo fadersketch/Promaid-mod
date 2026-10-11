@@ -152,10 +152,10 @@ public class ProMaidExtension implements ILittleMaid {
         // 启动时全量清除（任何女仆此刻都不可能在搭路——行为刚初始化）。
         for (net.minecraft.server.level.ServerLevel level : event.getServer().m_129785_()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
             // 实测五百六十四（PR #9 移植）：全世界 AABB → getAllEntities()——
             // Sable 会拒查超大 AABB 并静默返回空（下同）
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                 if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
                     continue;
                 }
@@ -205,13 +205,13 @@ public class ProMaidExtension implements ILittleMaid {
                 com.maidsmart.task.PlacedBlockTracker.reclaimAllFor(
                         maid.m_9236_().m_7654_(), maid.m_20148_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         // 实测八百三十三：她 NBT 里若还压着"拆笼借镐时摘下的那件原副手物品"，人一死就落地
         // （先清 NBT 再掉落——复活若从 NBT 重建，不会多出一份）
         try {
             com.maidsmart.combat.MaidSpawnerTorchBehavior.dropSavedOffhand(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
     }
 
@@ -432,7 +432,7 @@ public class ProMaidExtension implements ILittleMaid {
                 com.maidsmart.schedule.ScheduleManager.clearAppliedForJoin(maid);
                 com.maidsmart.schedule.ScheduleManager.applyNow(maid, sl);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         // 【实测六百七十五】武装拴绳：女仆重新入世界（魂符放出的**最后一步** / 区块重载 / 跨维度）
         //  —— 他还挂在她身上就把链路当场重建，否则把残留的金色描边标记与拴绳键清掉。
@@ -460,7 +460,7 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.tool.PromaidLog.log("离场", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 离开世界（id " + maid.m_19879_() + "，reason=" + maid.m_146911_()
                     + "，维度=" + maid.m_9236_().m_46472_().m_135782_() + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
         // 实测六百九十八【幽灵建模的第二道门】：**她活着**却离场 = 这不是死亡，是区块被拆
@@ -534,7 +534,7 @@ public class ProMaidExtension implements ILittleMaid {
                 return;
             }
             registerEscrow(maid, event.getSlot(), from);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
     }
 
@@ -585,7 +585,7 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.tool.PromaidLog.log("装备托管", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 槽=" + slot + " 她拿走了 " + from.m_41613_() + "x" + from.m_41720_()
                     + "，盯着它落定");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
     }
 
@@ -705,7 +705,7 @@ public class ProMaidExtension implements ILittleMaid {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         return LOC_NONE;
     }
@@ -736,7 +736,7 @@ public class ProMaidExtension implements ILittleMaid {
                 return false; // 耐久见底 / 已用坏（例：挡到 0 的盾）
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return false;
         }
     }
@@ -751,7 +751,7 @@ public class ProMaidExtension implements ILittleMaid {
                     // 实测八百四十三：还要查她的两只手 —— 本模组自己的"主手⇄副手换手"（如 MaidPlanting）
                     // 会把副手原物挪到主手再腾空副手，"挪到另一只手"不是丢，否则一样会被救回成复制。
                     || hasSame(maid.getHandsInvWrapper(), want);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return false;
         }
     }
@@ -771,7 +771,7 @@ public class ProMaidExtension implements ILittleMaid {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         return false;
     }
@@ -798,7 +798,7 @@ public class ProMaidExtension implements ILittleMaid {
             a.m_41721_(0); // setDamageValue(0)：只把耐久对齐，别的 NBT 不动
             b.m_41721_(0);
             return net.minecraftforge.items.ItemHandlerHelper.canItemStacksStack(a, b);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return false;
         }
     }
@@ -817,7 +817,7 @@ public class ProMaidExtension implements ILittleMaid {
             }
             return net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
                     maid.getAvailableBackpackInv(), lost, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return lost;
         }
     }

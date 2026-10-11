@@ -57,7 +57,7 @@ public abstract class MaidGhostBroomMixin {
             ((LivingEntityRenderer<EntityBroom, ?>) (Object) this).m_7392_(broom, entityYaw, partialTicks,
                     poseStack, com.maidsmart.client.MaidGhostRender.wrapBroom(bufferIn), packedLightIn);
         } catch (Throwable t) {
-            // 幽灵化这一遍失败：这一帧就当它没画（下一帧照常试）；把姿态栈补回、并留一行痕
+             com.maidsmart.diag.Diag.swallow("MaidGhostBroomMixin", t); // 幽灵化这一遍失败：这一帧就当它没画（下一帧照常试）；把姿态栈补回、并留一行痕
             com.maidsmart.client.MaidRenderGuard.noteSwallowed("武装拴绳半透明重绘（扫帚）", t);
         } finally {
             com.maidsmart.client.MaidGhostRender.end();

@@ -80,7 +80,7 @@ public final class CombatSenseCheck {
             if (zombie != null) {
                 try {
                     zombie.discard();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatSenseCheck", ignored);
                 }
             }
             // 僵尸走了之后再复位"给它腾地方"清掉的格子（留着它站在实心方块里会窒息）
@@ -189,7 +189,7 @@ public final class CombatSenseCheck {
         try {
             targetBefore = maid.getBrain().getMemory(MemoryModuleType.ATTACK_TARGET).orElse(null);
             mobTargetBefore = maid.getTarget();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatSenseCheck", ignored);
         }
         BlockPos center = maid.blockPosition();
         BlockPos outside = center.offset(10, 0, 0); // 常态 8 格圈外、落在扩圈半径（配置值，默认 15）之内的取样点
@@ -255,7 +255,7 @@ public final class CombatSenseCheck {
                 if (mobTargetBefore != null) {
                     maid.setTarget(mobTargetBefore);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatSenseCheck", ignored);
             }
         }
     }
@@ -289,14 +289,14 @@ public final class CombatSenseCheck {
             level.addFreshEntity(mob);
             return mob;
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("CombatSenseCheck", t); return null;
         }
     }
 
     private static void place(ServerLevel level, BlockPos pos, BlockState state) {
         try {
             level.setBlock(pos, state, 3);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CombatSenseCheck", ignored);
         }
     }
 
@@ -307,7 +307,7 @@ public final class CombatSenseCheck {
         try {
             return String.valueOf(BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()));
         } catch (Throwable t) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("CombatSenseCheck", t); return "?";
         }
     }
 

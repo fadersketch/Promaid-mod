@@ -287,7 +287,7 @@ public final class DaYunBreaker {
         try {
             float hardness = state.getDestroySpeed(level, pos);
             return hardness >= 0.0f && hardness < maxHardness;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBreaker", ignored);
             return false;
         }
     }
@@ -322,7 +322,7 @@ public final class DaYunBreaker {
                 return false; // 容器：配置里说了不破坏 → 她也撞不开
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBreaker", ignored);
             return false;
         }
     }

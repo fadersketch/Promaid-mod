@@ -161,7 +161,7 @@ public final class MaidSpellCastCompat {
             }
             return false;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", t); return false;
         }
     }
 
@@ -180,7 +180,7 @@ public final class MaidSpellCastCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
         }
         return false;
     }
@@ -233,7 +233,7 @@ public final class MaidSpellCastCompat {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()
                     .toArray(new String[0]);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
             return DEFAULT_CLIMB_SPELLS;
         }
     }
@@ -260,7 +260,7 @@ public final class MaidSpellCastCompat {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_SPELLS.get()
                     .toArray(new String[0]);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
             return DEFAULT_BOOST_SPELLS;
         }
     }
@@ -299,7 +299,7 @@ public final class MaidSpellCastCompat {
                             "配置里的法术 id 认不出来，已被跳过：" + id
                                     + "（检查拼写；ISS 的命名空间是 irons_spellbooks:，复数 s）");
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
                 WARNED_IDS.add(id);
                 com.maidsmart.tool.PromaidLog.log("法术兼容",
                         "配置里的法术 id 认不出来，已被跳过：" + id + "（检查拼写）");
@@ -467,7 +467,7 @@ public final class MaidSpellCastCompat {
                 return Math.max(0, i);
             }
             return 0;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
             return 0;
         }
     }
@@ -512,7 +512,7 @@ public final class MaidSpellCastCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
         }
         return 0;
     }
@@ -604,7 +604,7 @@ public final class MaidSpellCastCompat {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
         }
         return null;
     }
@@ -652,10 +652,10 @@ public final class MaidSpellCastCompat {
             mDataResetCastingState.invoke(data);
             try {
                 mDataSetSpellCooldown.invoke(data, spellId, cooldownTicks, maid);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
             return false;
         }
     }
@@ -676,7 +676,7 @@ public final class MaidSpellCastCompat {
                 }
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
         }
         return false;
     }
@@ -702,7 +702,7 @@ public final class MaidSpellCastCompat {
                     mStopAllCasting.invoke(manager, maid);      // 1.20.1：stopAllCasting(maid)
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCastCompat", ignored);
         }
     }
 }

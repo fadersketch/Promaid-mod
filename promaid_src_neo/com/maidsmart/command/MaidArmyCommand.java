@@ -652,7 +652,7 @@ public final class MaidArmyCommand {
         for (int i = 0; i < total; i++) {
             try {
                 cap.add();
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidArmyCommand", ignored);
             }
         }
         player.sendSystemMessage(Component.literal(

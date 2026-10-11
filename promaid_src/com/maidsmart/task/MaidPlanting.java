@@ -57,7 +57,7 @@ public final class MaidPlanting {
         try {
             LOGGER.info("plant scan: maid={} result={} bagSaplings={} handSaplings={} spots={} pos={}",
                     maid.m_20148_(), result, bagSaplings, handSaplings, spots, maid.m_20183_());
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
         }
     }
 
@@ -111,7 +111,7 @@ public final class MaidPlanting {
                 if (lvl == null) {
                     continue;
                 }
-                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                     if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
                             || !maid.m_6084_()) {
                         continue;
@@ -197,7 +197,7 @@ public final class MaidPlanting {
                         handCount += hs.m_41613_();
                     }
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
             }
             // 1) 树苗：主手 → 副手 → 背包；都没有才捡身边掉落物
             // 实测二百三十（反馈："女仆手中拿的是云杉树苗"）：旧版只扫背包
@@ -227,7 +227,7 @@ public final class MaidPlanting {
                             break;
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
                 }
             }
             if (sapling == null) {
@@ -242,7 +242,7 @@ public final class MaidPlanting {
                             break;
                         }
                     }
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
                 }
             }
             if (sapling == null) {
@@ -327,7 +327,7 @@ public final class MaidPlanting {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
         }
         return false;
     }
@@ -528,7 +528,7 @@ public final class MaidPlanting {
             try {
                 BONE_MEAL_CACHE = ForgeRegistries.ITEMS.getValue(
                         net.minecraft.resources.ResourceLocation.parse("minecraft:bone_meal"));
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
             }
             BONE_MEAL_RESOLVED = true;
         }
@@ -636,7 +636,7 @@ public final class MaidPlanting {
             }
             hands.setStackInSlot(0, pulled);
             return true;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
             return false;
         }
     }
@@ -697,7 +697,7 @@ public final class MaidPlanting {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
         }
     }
 
@@ -721,11 +721,11 @@ public final class MaidPlanting {
                 if (isSaplingItem(e.m_32055_())) {
                     try {
                         maid.pickupItem(e, false);
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
         }
     }
 
@@ -759,7 +759,7 @@ public final class MaidPlanting {
             }
             return stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem
                     && b.m_49966_().m_204336_(SAPLINGS_TAG);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidPlanting", ignored);
             return false;
         }
     }

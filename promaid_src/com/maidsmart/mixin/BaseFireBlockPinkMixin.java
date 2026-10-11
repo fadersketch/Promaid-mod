@@ -52,7 +52,7 @@ public abstract class BaseFireBlockPinkMixin {
                 PinkFireSweep.track(level, pos);
                 cir.setReturnValue(pink);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BaseFireBlockPinkMixin", ignored);
             // 翻译失败就保持原版火——宁可橙一点，也不能让爆炸链断在这里
         }
     }

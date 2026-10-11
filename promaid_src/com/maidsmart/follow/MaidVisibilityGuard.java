@@ -96,7 +96,7 @@ public final class MaidVisibilityGuard {
             }
             LAST_FIX.put(id, now);
             log(now, id, maid, "主人客户端没有她 → 已当场重建（防「建模卡掉、幽灵状态」）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidVisibilityGuard", ignored);
             // 自愈是兜底：这里出任何问题都不该影响区块 tick
         }
     }

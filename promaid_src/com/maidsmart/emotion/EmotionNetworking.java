@@ -162,7 +162,7 @@ public final class EmotionNetworking {
                                     + "：" + line));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EmotionNetworking", ignored);
         }
     }
 

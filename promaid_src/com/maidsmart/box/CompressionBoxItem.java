@@ -109,7 +109,7 @@ public class CompressionBoxItem extends Item {
             }
             tooltip.add(Component.m_237113_("\u00a78每格上限 \u00a7e" + cap
                     + "\u00a78；右键打开；放进女仆背包时视作她背包的延伸（她一次最多拿 64）"));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxItem", ignored);
             // 描述只是好看，任何异常都不该影响物品本身
         }
     }

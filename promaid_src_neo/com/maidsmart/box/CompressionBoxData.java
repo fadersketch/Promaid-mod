@@ -80,7 +80,7 @@ public final class CompressionBoxData {
         }
         try {
             return Math.max(1, Math.min(MAID_VIEW_CAP, stack.getMaxStackSize()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxData", ignored);
             return MAID_VIEW_CAP;
         }
     }
@@ -98,7 +98,7 @@ public final class CompressionBoxData {
     public static int maxStack() {
         try {
             return Math.max(1, MaidSmartConfig.COMPRESSION_BOX_MAX_STACK.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxData", ignored);
             return DEFAULT_MAX_STACK;
         }
     }
@@ -124,7 +124,7 @@ public final class CompressionBoxData {
             return (CompoundTag) ItemStack.SINGLE_ITEM_CODEC
                     .encodeStart(NbtOps.INSTANCE, stack.copyWithCount(1))
                     .getOrThrow();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxData", ignored);
             return new CompoundTag();
         }
     }
@@ -132,7 +132,7 @@ public final class CompressionBoxData {
     private static ItemStack loadOne(CompoundTag tag) {
         try {
             return ItemStack.SINGLE_ITEM_CODEC.parse(NbtOps.INSTANCE, tag).result().orElse(ItemStack.EMPTY);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxData", ignored);
             return ItemStack.EMPTY;
         }
     }

@@ -216,7 +216,7 @@ public class SwitchTaskTool implements ITool<SwitchTaskTool.Result> {
             }
             sb.append("已切到「").append(taskName(task)).append("」(").append(task.getUid()).append(")");
         } catch (Throwable t) {
-            return callback.addToolResult("切换任务失败：" + t, toolId);
+             com.maidsmart.diag.Diag.swallow("SwitchTaskTool", t); return callback.addToolResult("切换任务失败：" + t, toolId);
         }
         // 安全口径②：空袭任务顺手报"缺件"，让模型能转告玩家
         try {
@@ -228,7 +228,7 @@ public class SwitchTaskTool implements ITool<SwitchTaskTool.Result> {
                     sb.append("；注意她缺「").append(missing).append("」，缺件时空袭会退回地面战斗");
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SwitchTaskTool", ignored);
         }
         // 可选目标（仅战斗类任务有意义；取不到就如实说明，不假装锁上了）
         String target = result.target() == null ? "" : result.target().trim();
@@ -321,7 +321,7 @@ public class SwitchTaskTool implements ITool<SwitchTaskTool.Result> {
     static String taskName(IMaidTask task) {
         try {
             return task.getName().getString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SwitchTaskTool", ignored);
             return String.valueOf(task.getUid());
         }
     }
@@ -345,7 +345,7 @@ public class SwitchTaskTool implements ITool<SwitchTaskTool.Result> {
                 }
                 sb.append(t.getUid());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SwitchTaskTool", ignored);
         }
         return sb.toString();
     }

@@ -69,7 +69,7 @@ public final class MaidFreeFlightKit {
                 return false;
             }
             return hasFlightItem(maid) || hasFlightEffect(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -98,7 +98,7 @@ public final class MaidFreeFlightKit {
                         return true;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             }
             // TLM 饰品栏（戒指/挂坠这类飞行物品多半在这）
             try {
@@ -108,17 +108,17 @@ public final class MaidFreeFlightKit {
                         return true;
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             }
             // 额外容器（精妙背包 / 旅行者背包）——没有饰品栏时它们至少还认背包
             try {
                 if (com.maidsmart.tool.MaidExtraContainer.contains(maid, s -> matchesAny(s, ids))) {
                     return true;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -137,7 +137,7 @@ public final class MaidFreeFlightKit {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -147,7 +147,7 @@ public final class MaidFreeFlightKit {
         try {
             return "物品=" + hasFlightItem(maid) + " 效果=" + hasFlightEffect(maid);
         } catch (Throwable t) {
-            return "诊断异常：" + t;
+             com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", t); return "诊断异常：" + t;
         }
     }
 
@@ -182,7 +182,7 @@ public final class MaidFreeFlightKit {
                 }
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -202,7 +202,7 @@ public final class MaidFreeFlightKit {
             }
             TagKey<net.minecraft.world.item.Item> tag = tags.createTagKey(loc);
             return stack.m_204117_(tag);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return false;
         }
     }
@@ -211,7 +211,7 @@ public final class MaidFreeFlightKit {
     private static List<String> itemIds() {
         try {
             return (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return List.of();
         }
     }
@@ -220,7 +220,7 @@ public final class MaidFreeFlightKit {
     private static List<String> effectIds() {
         try {
             return (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFreeFlightKit", ignored);
             return List.of();
         }
     }

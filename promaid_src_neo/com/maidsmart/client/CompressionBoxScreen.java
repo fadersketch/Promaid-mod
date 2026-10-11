@@ -129,7 +129,7 @@ public class CompressionBoxScreen extends Screen {
                 box.carry = carry == null ? ItemStack.EMPTY : carry;
                 box.acceptNotice(notice);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxScreen", ignored);
         }
     }
 
@@ -260,7 +260,7 @@ public class CompressionBoxScreen extends Screen {
             Minecraft mc = Minecraft.getInstance();
             return mc == null || mc.player == null
                     ? null : new PlayerMainInvWrapper(mc.player.getInventory());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxScreen", ignored);
             return null;
         }
     }
@@ -300,7 +300,7 @@ public class CompressionBoxScreen extends Screen {
                 hint("\u624b\u4e0a\u7684\u4e1c\u897f\u5df2\u8fd8\u56de\u80cc\u5305");
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxScreen", ignored);
         }
         return super.mouseClicked(mx, my, button);
     }

@@ -152,7 +152,7 @@ public final class MaidFlightRecall {
                               + " §f格（空袭牵引绳），已先回到你身边。"));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRecall", ignored);
         }
     }
 }

@@ -291,7 +291,7 @@ public final class BlueprintStepMath {
                                 net.minecraft.nbt.NbtUtils.readBlockState(holder, full).rotate(rotationOf(q));
                         step.append('|').append(net.minecraft.nbt.NbtUtils.prettyPrint(
                                 net.minecraft.nbt.NbtUtils.writeBlockState(st)));
-                    } catch (Exception ignored) {
+                    } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStepMath", ignored);
                         step.append('|').append(statePart);
                     }
                 }

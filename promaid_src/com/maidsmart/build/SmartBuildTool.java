@@ -136,7 +136,7 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
         int quarters = 0;
         try {
             quarters = (int) (Math.floorMod((long) Double.parseDouble(result.rotation().trim()), 360L) / 90L);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SmartBuildTool", ignored);
         }
         List<String> steps = BlueprintLib.getBlueprintRotated(blueprint, quarters,
                 maid.m_9236_().m_246945_(net.minecraft.core.registries.Registries.f_256747_));
@@ -193,7 +193,7 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
                             + exPs.origin.m_123342_() + "," + exPs.origin.m_123343_()
                             + "——走到该区块内即可看到手册控制按钮）";
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SmartBuildTool", ignored);
             }
             return callback.addToolResult("女仆已经绑定了建造区块。" + where
                     + "请先在手册女仆管理里解绑，或取消该区块后再开始新的。", toolId);
@@ -374,7 +374,7 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
         }
         try {
             maid.m_6274_().m_21889_(net.minecraft.world.entity.schedule.Activity.f_37980_);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SmartBuildTool", ignored);
         }
         String result = "区块「" + name + "」已创建并绑定给女仆（" + desc + "，共 " + steps.size() + " 块）。她开始建造了。";
         if (notice != null) {

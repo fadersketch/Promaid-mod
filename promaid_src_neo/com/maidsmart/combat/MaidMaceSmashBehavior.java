@@ -186,7 +186,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
                     + " 目标=" + (t == null ? "无" : Math.round(maid.distanceTo(t)) + "格")
                     + " 地面=" + maid.onGround()
                     + " 冷却剩=" + (next == null ? 0 : Math.max(0, next - gameTime)) + "t");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMaceSmashBehavior", ignored);
         }
     }
 

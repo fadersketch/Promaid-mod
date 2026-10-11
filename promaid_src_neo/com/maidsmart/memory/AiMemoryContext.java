@@ -262,7 +262,7 @@ public class AiMemoryContext extends AbstractMaidContext {
                     return true;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryContext", ignored);
         }
         try {
             Class<?> sr = Class.forName("com.github.tartaricacid.touhoulittlemaid.ai.manager.setting.SettingReader");
@@ -271,7 +271,7 @@ public class AiMemoryContext extends AbstractMaidContext {
             if (opt instanceof java.util.Optional<?> o) {
                 return o.isPresent();
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryContext", ignored);
         }
         return false;
     }

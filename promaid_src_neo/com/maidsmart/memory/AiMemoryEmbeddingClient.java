@@ -92,7 +92,7 @@ public final class AiMemoryEmbeddingClient {
                 }
             }
         } catch (Exception e) {
-            return Result.fail(e.toString());
+             com.maidsmart.diag.Diag.swallow("AiMemoryEmbeddingClient", e); return Result.fail(e.toString());
         }
         List<float[]> out = new ArrayList<>(rows.size());
         for (JsonArray a : rows) {
@@ -121,7 +121,7 @@ public final class AiMemoryEmbeddingClient {
             }
             return parse(resp.body(), texts.size());
         } catch (Exception e) {
-            return Result.fail(e.toString());
+             com.maidsmart.diag.Diag.swallow("AiMemoryEmbeddingClient", e); return Result.fail(e.toString());
         }
     }
 
@@ -172,7 +172,7 @@ public final class AiMemoryEmbeddingClient {
             }
             return new Result(true, out, "");
         } catch (Exception e) {
-            return Result.fail(e.toString());
+             com.maidsmart.diag.Diag.swallow("AiMemoryEmbeddingClient", e); return Result.fail(e.toString());
         }
     }
 }

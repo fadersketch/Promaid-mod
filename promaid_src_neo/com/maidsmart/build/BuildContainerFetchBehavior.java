@@ -116,6 +116,10 @@ public class BuildContainerFetchBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean canStillUse(ServerLevel level, EntityMaid maid, long gameTime) {
+        // TD-10：总开关也在 canStillUse 里问——关掉"从容器取料"时正在跑的这一轮即刻停。
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_FETCH_FROM_CHESTS.get()) {
+            return false;
+        }
         if (this.target == null || this.neededId == null) {
             return false;
         }
@@ -186,7 +190,7 @@ public class BuildContainerFetchBehavior extends Behavior<EntityMaid> {
         }
         try {
             level.blockEvent(this.target, level.getBlockState(this.target).getBlock(), 1, 1);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildContainerFetchBehavior", ignored);
         }
     }
 
@@ -197,7 +201,7 @@ public class BuildContainerFetchBehavior extends Behavior<EntityMaid> {
         }
         try {
             level.blockEvent(this.target, level.getBlockState(this.target).getBlock(), 1, 0);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BuildContainerFetchBehavior", ignored);
         }
     }
 

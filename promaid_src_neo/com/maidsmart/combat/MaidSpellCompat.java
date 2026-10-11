@@ -73,7 +73,7 @@ public final class MaidSpellCompat {
     public static boolean isLoaded() {
         try {
             return net.neoforged.fml.ModList.get().isLoaded(MOD_ID);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             return false;
         }
     }
@@ -88,11 +88,11 @@ public final class MaidSpellCompat {
             if (UID_MELEE.equals(uid) || UID_FAR.equals(uid)) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
         }
         try {
             return task.getClass().getName().startsWith(TASK_CLASS_PREFIX);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             return false;
         }
     }
@@ -101,7 +101,7 @@ public final class MaidSpellCompat {
     public static boolean isSpellTask(EntityMaid maid) {
         try {
             return maid != null && isSpellTask(maid.getTask());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             return false;
         }
     }
@@ -160,7 +160,7 @@ public final class MaidSpellCompat {
                     return s;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
         }
         return null;
     }
@@ -177,7 +177,7 @@ public final class MaidSpellCompat {
         java.util.List<? extends String> raw;
         try {
             raw = com.maidsmart.config.MaidSmartConfig.COMBAT_SPELL_GEAR_IGNORE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             return java.util.Set.of("slashblade", "youkaishomecoming");
         }
         if (raw != null && raw.equals(cachedIgnoreRaw)) {
@@ -270,7 +270,7 @@ public final class MaidSpellCompat {
                     return hit;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
         }
         return null;
     }
@@ -283,7 +283,7 @@ public final class MaidSpellCompat {
         }
         try {
             return provider + ":" + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             return provider + ":?";
         }
     }
@@ -322,7 +322,7 @@ public final class MaidSpellCompat {
         try {
             Object r = mAreFriendly.invoke(null, a, b);
             return r instanceof Boolean v ? v : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             return null;
         }
     }
@@ -347,7 +347,7 @@ public final class MaidSpellCompat {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
         }
         return false;
     }
@@ -375,12 +375,12 @@ public final class MaidSpellCompat {
                 try {
                     mDataGet[i] = Class.forName(DATA_CLASSES[i], false, cl)
                             .getMethod("get", java.util.UUID.class);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
                     mDataGet[i] = null; // 该前置魔法模组没装（附属只启用其中一部分）
                 }
             }
             present = true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             present = false;
         }
         // 盟友判定是**可选**的（老版本附属可能没有这个类）：单独解析，失败只是让
@@ -389,7 +389,7 @@ public final class MaidSpellCompat {
             Class<?> ally = Class.forName(CLS_ALLY, false, MaidSpellCompat.class.getClassLoader());
             mAreFriendly = ally.getMethod("areFriendly",
                     net.minecraft.world.entity.Entity.class, net.minecraft.world.entity.Entity.class);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             mAreFriendly = null;
         }
         return present;

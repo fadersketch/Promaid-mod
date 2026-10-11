@@ -67,7 +67,7 @@ public final class MaidBdRestock {
     public void onMaidTick(MaidTickEvent event) {
         try {
             tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdRestock", ignored);
         }
     }
 
@@ -201,7 +201,7 @@ public final class MaidBdRestock {
         try {
             return maid == null ? null : maid.getAvailableBackpackInv();
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBdRestock", t); return null;
         }
     }
 }

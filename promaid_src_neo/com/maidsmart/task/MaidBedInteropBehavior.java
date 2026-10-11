@@ -71,13 +71,13 @@ public class MaidBedInteropBehavior extends Behavior<EntityMaid> {
                     .getBoolean(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
                 return false;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBedInteropBehavior", ignored);
         }
         try {
             if (com.maidsmart.combat.AutoCombatSwitch.isAutoCombatActive(maid)) {
                 return false;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBedInteropBehavior", ignored);
         }
         if (maid.isMaidInSittingPose() || maid.getVehicle() != null) {
             return false;
@@ -142,7 +142,7 @@ public class MaidBedInteropBehavior extends Behavior<EntityMaid> {
                     .min(Comparator.comparingDouble(pos -> pos.distSqr(maid.blockPosition())));
             return found.orElse(null);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidBedInteropBehavior", t); return null;
         }
     }
 

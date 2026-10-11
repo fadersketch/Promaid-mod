@@ -82,7 +82,7 @@ public abstract class MaidFollowOwnerTickMixin {
             }
             // 超过 4 格：重断言跟随目标（参考改版 jar 的每 tick 驱动）
             BehaviorUtils.setWalkAndLookTargetMemories(maid, owner, this.speedModifier, this.stopDistance);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFollowOwnerTickMixin", ignored);
         }
     }
 }

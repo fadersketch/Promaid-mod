@@ -156,12 +156,12 @@ public class ProMaidExtension implements ILittleMaid {
         // 启动时全量清除（任何女仆此刻都不可能在搭路——行为刚初始化）。
         for (net.minecraft.server.level.ServerLevel level : event.getServer().getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）
             // v1.2.0（2026-09-18）【Sable 兼容】：原来的"有限值全世界 AABB"改为
             // level.getAllEntities()——超大 AABB 会被 Sable 直接拒绝（Aborting entity get
             // → 返回空列表 + 每次附完整堆栈刷日志），getAllEntities() 不传 AABB，
             // 同时绕开桶 bug 与 ±∞ 经 blockToSection 溢出两个老坑。
-            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(level)) {
                 if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
                     continue;
                 }
@@ -211,13 +211,13 @@ public class ProMaidExtension implements ILittleMaid {
                 com.maidsmart.task.PlacedBlockTracker.reclaimAllFor(
                         maid.level().getServer(), maid.getUUID());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         // 实测八百三十三：她 NBT 里若还压着"拆笼借镐时摘下的那件原副手物品"，人一死就落地
         // （先清 NBT 再掉落——复活若从 NBT 重建，不会多出一份）
         try {
             com.maidsmart.combat.MaidSpawnerTorchBehavior.dropSavedOffhand(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
     }
 
@@ -441,7 +441,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             com.maidsmart.tool.PromaidLog.log("离场", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 离开世界（id " + maid.getId() + "，reason=" + maid.getRemovalReason()
                     + "，维度=" + maid.level().dimension().location() + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         // v1.2.0 实测五百五十七：**离场也登记一次补包**。
         // 【为什么】实测现场：她飞在离主人上千格处（-1184, 115, 96）时客户端实体丢失，
@@ -522,7 +522,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                 return;
             }
             registerEscrow(maid, event.getSlot(), from);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
     }
 
@@ -573,7 +573,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             com.maidsmart.tool.PromaidLog.log("装备托管", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 槽=" + slot + " 她拿走了 " + from.getCount() + "x" + from.getItem()
                     + "，盯着它落定");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
     }
 
@@ -693,7 +693,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         return LOC_NONE;
     }
@@ -725,7 +725,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                 return false; // 耐久见底 / 已用坏（例：挡到 0 的盾）
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return false;
         }
     }
@@ -740,7 +740,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     // 实测八百四十三：还要查她的两只手 —— 本模组自己的"主手⇄副手换手"（如 MaidPlanting）
                     // 会把副手原物挪到主手再腾空副手，"挪到另一只手"不是丢，否则一样会被救回成复制。
                     || hasSame(maid.getHandsInvWrapper(), want);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return false;
         }
     }
@@ -760,7 +760,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         return false;
     }
@@ -787,7 +787,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             a.setDamageValue(0); // 只把耐久对齐，别的组件不动
             b.setDamageValue(0);
             return net.minecraft.world.item.ItemStack.isSameItemSameComponents(a, b);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return false;
         }
     }
@@ -806,7 +806,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             }
             return net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(
                     maid.getAvailableBackpackInv(), lost, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
             return lost;
         }
     }
@@ -829,7 +829,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                 com.maidsmart.schedule.ScheduleManager.clearAppliedForJoin(maid);
                 com.maidsmart.schedule.ScheduleManager.applyNow(maid, sl);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         // 【实测六百七十五】武装拴绳：女仆重新入世界（魂符放出的**最后一步** / 区块重载 / 跨维度）
         //  —— 他还挂在她身上就把链路当场重建，否则把残留的金色描边标记与拴绳键清掉。

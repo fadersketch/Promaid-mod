@@ -86,7 +86,7 @@ public final class PromaidI18n {
                     }
                     m = Collections.unmodifiableMap(tmp);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidI18n", ignored);
                 // 读不到 → 空表 → 全部回退中文原文（最安全的失败模式）
             }
             TABLE = m;
@@ -272,7 +272,7 @@ public final class PromaidI18n {
             String sel = mc.m_91102_().m_264236_();
             return sel == null || sel.isEmpty()
                     || sel.toLowerCase(Locale.ROOT).startsWith("zh");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidI18n", ignored);
             return true;
         }
     }
@@ -319,7 +319,7 @@ public final class PromaidI18n {
                 return c;
             }
             return Component.m_237113_(out).m_130948_(c.m_7383_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidI18n", ignored);
             return c;
         }
     }
@@ -339,7 +339,7 @@ public final class PromaidI18n {
                 return t;
             }
             return net.minecraft.network.chat.FormattedText.m_130775_(out);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidI18n", ignored);
             return t;
         }
     }

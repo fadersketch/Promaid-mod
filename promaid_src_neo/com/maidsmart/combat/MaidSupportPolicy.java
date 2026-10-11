@@ -108,7 +108,7 @@ public final class MaidSupportPolicy {
             }
             ResourceLocation k = BuiltInRegistries.POTION.getKey(p);
             return k == null ? null : k.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
             return null;
         }
     }
@@ -139,7 +139,7 @@ public final class MaidSupportPolicy {
         try {
             FoodProperties fp = s.get(net.minecraft.core.component.DataComponents.FOOD);
             return fp != null && !fp.effects().isEmpty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
             return false;
         }
     }
@@ -211,7 +211,7 @@ public final class MaidSupportPolicy {
                     return c;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
         }
         return null;
     }
@@ -284,11 +284,11 @@ public final class MaidSupportPolicy {
         java.util.List<String> out = new java.util.ArrayList<>();
         try {
             out.addAll(com.maidsmart.config.MaidSmartConfig.AID_SUPPORT_CATEGORY.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
         }
         try {
             out.addAll(com.maidsmart.config.MaidSmartConfig.AID_SUPPORT_CATEGORY_UNDEAD.get());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
         }
         return out;
     }
@@ -325,7 +325,7 @@ public final class MaidSupportPolicy {
                 return Cat.DEFAULT; // 不在候选范围
             }
             return classifyEffects(effIds, undead);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
             return Cat.OFF;
         }
     }
@@ -414,7 +414,7 @@ public final class MaidSupportPolicy {
             if (!com.maidsmart.config.MaidSmartConfig.AID_SELF_USE.get()) {
                 return true; // 关掉 = 不管（与旧版逐字节一致）
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
             return true;
         }
         return allow(s, false, ctx); // 女仆非亡灵 → 通用表
@@ -448,7 +448,7 @@ public final class MaidSupportPolicy {
     public static double healThreshold() {
         try {
             return com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
             return 0.3;
         }
     }
@@ -458,7 +458,7 @@ public final class MaidSupportPolicy {
         try {
             double ratio = target.getHealth() / Math.max(1.0f, target.getMaxHealth());
             return ratio < healThreshold();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
             return false;
         }
     }
@@ -482,7 +482,7 @@ public final class MaidSupportPolicy {
             }
             return com.maidsmart.tool.MaidExtraContainer.contains(
                     maid, st -> usable(st, includeDefault));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
             return false;
         }
     }
@@ -551,7 +551,7 @@ public final class MaidSupportPolicy {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
         }
         return false;
     }
@@ -573,7 +573,7 @@ public final class MaidSupportPolicy {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
         }
         return false;
     }

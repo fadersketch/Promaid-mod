@@ -44,7 +44,7 @@ public final class SoulBindingService {
         Path p = soulsRoot().resolve(sanitize(soulId)).resolve("memory");
         try {
             Files.createDirectories(p);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SoulBindingService", ignored);
         }
         return p;
     }

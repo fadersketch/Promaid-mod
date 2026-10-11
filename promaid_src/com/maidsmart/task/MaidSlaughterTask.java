@@ -43,7 +43,7 @@ public class MaidSlaughterTask implements IMaidTask {
         try {
             com.maidsmart.tool.PromaidLog.log("宰杀",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 宰杀行为已注册（createBrainTasks）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSlaughterTask", ignored);
         }
         // 必须返回可变列表：TLM 的 MaidBrain.registerWorkGoals 会往里追加行为
         return new ArrayList<>(List.of(Pair.of(5, new MaidSlaughterBehavior())));

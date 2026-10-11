@@ -56,7 +56,7 @@ public final class BombMarkNetworking {
                             pos == null ? 0 : pos.m_123342_(),
                             pos == null ? 0 : pos.m_123343_(),
                             ttl));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombMarkNetworking", ignored);
         }
     }
 

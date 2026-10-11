@@ -39,7 +39,7 @@ public final class PatrolChartData {
                 return new PatrolBook();
             }
             return PatrolBook.load(tag);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return new PatrolBook();
         }
     }
@@ -57,7 +57,7 @@ public final class PatrolChartData {
             tag.m_128365_(PatrolBook.TAG_ROOT, book.save());
             tag.m_128473_(PatrolBook.TAG_LEGACY_SINGLE); // 旧结构已迁走，别留着占地方
             stack.m_41751_(tag);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
         }
     }
 
@@ -83,7 +83,7 @@ public final class PatrolChartData {
             int idx = book.routes().indexOf(existing);
             book.routes().set(idx, route);
             writeBook(stack, book);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
         }
     }
 
@@ -134,7 +134,7 @@ public final class PatrolChartData {
                 return null;
             }
             return PatrolRoute.load(data.m_128469_(PatrolRoute.TAG_ROOT));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return null;
         }
     }
@@ -152,7 +152,7 @@ public final class PatrolChartData {
             copy.setDimension(dimensionOf(maid));
             maid.getPersistentData().m_128365_(PatrolRoute.TAG_ROOT, copy.save());
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return false;
         }
     }
@@ -164,7 +164,7 @@ public final class PatrolChartData {
                 return;
             }
             maid.getPersistentData().m_128473_(PatrolRoute.TAG_ROOT);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
         }
     }
 
@@ -175,7 +175,7 @@ public final class PatrolChartData {
     private static String dimensionOf(EntityMaid maid) {
         try {
             return maid.m_9236_().m_46472_().m_135782_().toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
             return "";
         }
     }

@@ -138,7 +138,7 @@ public final class BombPose {
             if (!MaidSmartConfig.COMBAT_BOMBING_POSE.get()) {
                 return;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPose", ignored);
         }
         show(maid, display, ticks);
     }
@@ -185,7 +185,7 @@ public final class BombPose {
             fresh.left = Math.max(1, ticks);
             ACTIVE.put(id, fresh);
             syncOffhand(maid, want);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPose", ignored);
         }
     }
 
@@ -230,7 +230,7 @@ public final class BombPose {
             }
             ACTIVE.remove(id);
             restore(maid, st);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPose", ignored);
         }
     }
 
@@ -246,7 +246,7 @@ public final class BombPose {
             if (st != null) {
                 restore(maid, st);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPose", ignored);
         }
     }
 
@@ -254,7 +254,7 @@ public final class BombPose {
     public static boolean isShowing(EntityMaid maid) {
         try {
             return maid != null && ACTIVE.containsKey(maid.m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPose", ignored);
             return false;
         }
     }
@@ -275,7 +275,7 @@ public final class BombPose {
     public static boolean offhandBorrowed(EntityMaid maid) {
         try {
             return maid != null && FlightFireworkPose.isShowing(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPose", ignored);
             return false;
         }
     }
@@ -354,7 +354,7 @@ public final class BombPose {
                         maid.m_19879_(),
                         List.of(Pair.of(EquipmentSlot.OFFHAND, send))));
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPose", ignored);
         }
     }
 }

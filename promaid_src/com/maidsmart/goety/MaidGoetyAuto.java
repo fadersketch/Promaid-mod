@@ -71,7 +71,7 @@ public final class MaidGoetyAuto {
         try {
             return maid != null && maid.getPersistentData().m_128471_(TAG);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", t); return false;
         }
     }
 
@@ -79,7 +79,7 @@ public final class MaidGoetyAuto {
         try {
             maid.getPersistentData().m_128379_(TAG, on);
             PromaidLog.log("Goety自动", maid.m_7755_().getString() + " 自动推进 = " + on);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         if (!on) {
             MaidGoetyFlight.stop(maid, "自动已关");
@@ -115,7 +115,7 @@ public final class MaidGoetyAuto {
             if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
                 return "上游的飞行跟随正在带她飞";
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         return null;
     }
@@ -128,7 +128,7 @@ public final class MaidGoetyAuto {
             if (mem != null && mem.isPresent()) {
                 return mem.get();
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         return maid.m_5448_();
     }
@@ -137,7 +137,7 @@ public final class MaidGoetyAuto {
     public void onMaidTick(MaidTickEvent event) {
         try {
             tick(event.getMaid());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
     }
 
@@ -192,7 +192,7 @@ public final class MaidGoetyAuto {
         LivingEntity owner = null;
         try {
             owner = maid.m_269323_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyAuto", ignored);
         }
         if (owner == null || !owner.m_6084_()) {
             if (ours) {

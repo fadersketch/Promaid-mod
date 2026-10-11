@@ -56,7 +56,7 @@ final class ToolKit {
         }
         try {
             return ResourceLocation.fromNamespaceAndPath(ns, path);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ToolKit", ignored);
             return null;
         }
     }
@@ -107,7 +107,7 @@ final class ToolKit {
     static String name(LivingEntity e) {
         try {
             return e.getName().getString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ToolKit", ignored);
             return "?";
         }
     }
@@ -116,7 +116,7 @@ final class ToolKit {
     static void bubble(EntityMaid maid, String text) {
         try {
             maid.getChatBubbleManager().addTextChatBubble(text);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ToolKit", ignored);
         }
     }
 }

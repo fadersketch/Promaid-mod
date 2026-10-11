@@ -92,7 +92,7 @@ public final class FlightDiveTilt {
             }
             // 原版低头为正角 → 取负与基础 -90° 同向，即"继续往前翻"
             poseStack.m_252781_(Axis.f_252529_.m_252977_(-pitch * TILT_FACTOR));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightDiveTilt", ignored);
         }
     }
 }

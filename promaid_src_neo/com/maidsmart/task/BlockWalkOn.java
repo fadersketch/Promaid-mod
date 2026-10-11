@@ -103,7 +103,7 @@ public final class BlockWalkOn {
             return !level.getBlockState(below).getCollisionShape(level, below,
                     net.minecraft.world.phys.shapes.CollisionContext.empty()).isEmpty();
         } catch (Exception e) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("BlockWalkOn", e); return true;
         }
     }
 }

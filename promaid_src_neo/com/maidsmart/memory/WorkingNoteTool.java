@@ -78,7 +78,7 @@ public class WorkingNoteTool implements ITool<WorkingNoteTool.Result> {
             Path p = notePath(maid);
             return p != null && Files.exists(p) ? Files.readString(p, StandardCharsets.UTF_8) : "";
         } catch (Exception e) {
-            return "";
+             com.maidsmart.diag.Diag.swallow("WorkingNoteTool", e); return "";
         }
     }
 
@@ -122,7 +122,7 @@ public class WorkingNoteTool implements ITool<WorkingNoteTool.Result> {
                 }
             }
         } catch (Exception e) {
-            return callback.addToolResult("工作笔记操作失败：" + e, toolId);
+             com.maidsmart.diag.Diag.swallow("WorkingNoteTool", e); return callback.addToolResult("工作笔记操作失败：" + e, toolId);
         }
     }
 

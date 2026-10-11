@@ -151,7 +151,7 @@ public final class BombMarkClient {
             AABB box = e.m_20191_().m_82383_(camera);
             drawFilled(pose, box, 0.38f);
             drawEdges(pose, mc, camera, box);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombMarkClient", ignored);
         }
     }
 
@@ -177,7 +177,7 @@ public final class BombMarkClient {
             drawBoxEdges(pose, buf,
                     box.f_82288_ - camera.f_82479_, box.f_82289_ - camera.f_82480_, box.f_82290_ - camera.f_82481_,
                     box.f_82291_ - camera.f_82479_, box.f_82292_ - camera.f_82480_, box.f_82293_ - camera.f_82481_);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombMarkClient", ignored);
         }
     }
 
@@ -214,7 +214,7 @@ public final class BombMarkClient {
         try {
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
                     PINK_LABEL, x, y, z, 0xFF88CC, 0.12f, true, -5.0f, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombMarkClient", ignored);
         }
     }
 

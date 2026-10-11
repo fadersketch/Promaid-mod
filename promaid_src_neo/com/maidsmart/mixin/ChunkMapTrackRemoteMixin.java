@@ -105,7 +105,7 @@ public abstract class ChunkMapTrackRemoteMixin implements RemoteTrackBridge {
     public boolean promaid$isPaired(ServerPlayer player) {
         try {
             return player != null && seenBy.contains(player.connection);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ChunkMapTrackRemoteMixin", ignored);
             return false;
         }
     }
@@ -121,7 +121,7 @@ public abstract class ChunkMapTrackRemoteMixin implements RemoteTrackBridge {
                 serverEntity.addPairing(player);
             }
             return true;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ChunkMapTrackRemoteMixin", ignored);
             // 任何意外都退回"按原版算"——远一点开不出来，但绝不会因为这里坏了把别的东西带崩
             return false;
         }

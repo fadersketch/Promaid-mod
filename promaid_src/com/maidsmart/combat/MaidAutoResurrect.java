@@ -97,7 +97,7 @@ public final class MaidAutoResurrect {
         // 然后报「没能等到」（正是玩家报的"一键召回显示无法召回"的来源之一）。
         try {
             com.maidsmart.follow.MaidChunkLoadManager.forgetMaid(event.getMaid().m_20148_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
         }
         if (!com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_ENABLE.get()) {
             return;
@@ -129,7 +129,7 @@ public final class MaidAutoResurrect {
             CompoundTag nbt = new CompoundTag();
             maid.m_20240_(nbt); // saveWithoutId：此时背包/饰品完整
             DEATH_NBT.put(maid.m_20148_(), nbt);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
         }
     }
 
@@ -177,7 +177,7 @@ public final class MaidAutoResurrect {
             MinecraftServer server = level.m_7654_();
             ServerLevel overworld = server != null ? server.m_129880_(Level.f_46428_) : level;
             store(overworld).put(maidId, p);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
         }
     }
 
@@ -284,7 +284,7 @@ public final class MaidAutoResurrect {
                     // 复活失败（异常）：推迟 5 秒重试，不丢快照
                     p.dueTick = now + 100L;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
                 p.dueTick = now + 100L;
             }
         }
@@ -402,7 +402,7 @@ public final class MaidAutoResurrect {
                 try {
                     list.removeIf(i -> p.tombstoneId.equals(i.getEntityId()));
                     data.m_77762_();
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
                 }
                 com.maidsmart.tool.PromaidLog.log("自动复活",
                         "墓碑登记表有记录但实体已不存在（该格实体已确证载入）→ 已清掉这条登记（"
@@ -420,7 +420,7 @@ public final class MaidAutoResurrect {
                 return TOMBSTONE_NO_TARGET; // 维度不存在 = 没有可重试的目标
             }
         } catch (Throwable t) {
-            // 【实测七百六十三·点1】把这条也点出来：加载/读取过程中真的抛了异常（区块读不出来、
+             com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", t); // 【实测七百六十三·点1】把这条也点出来：加载/读取过程中真的抛了异常（区块读不出来、
             // 维度正在卸载等）时旧版是彻底静默的 —— 与"维度串对不上"同属"存在却够不到"的少数
             // 情形，值得留一行。本方法每次复活只走一次，不会刷屏。
             com.maidsmart.tool.PromaidLog.log("自动复活", "按登记表删除墓碑时出错：" + t);
@@ -549,7 +549,7 @@ public final class MaidAutoResurrect {
             MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
             AutoResurrectStore data = store(server == null ? null : server.m_129783_());
             return data != null && data.get(maidId) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
             return false;
         }
     }
@@ -571,7 +571,7 @@ public final class MaidAutoResurrect {
                     out.add(e.getKey());
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
         }
         return out;
     }
@@ -586,7 +586,7 @@ public final class MaidAutoResurrect {
             AutoResurrectStore data = store(server == null ? null : server.m_129783_());
             Pending p = data == null ? null : data.get(maidId);
             return p == null || p.maidName == null || p.maidName.isEmpty() ? "女仆" : p.maidName;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
             return "女仆";
         }
     }
@@ -605,7 +605,7 @@ public final class MaidAutoResurrect {
                 return -1;
             }
             return (int) Math.max(0L, (p.dueTick - ow.m_46467_() + 19L) / 20L);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
             return -1;
         }
     }
@@ -718,7 +718,7 @@ public final class MaidAutoResurrect {
                     if (maidId != null && nbt != null && ownerId != null) {
                         pending.put(maidId, new Pending(nbt, ownerId, due, tomb, name));
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
                 }
             }
         }

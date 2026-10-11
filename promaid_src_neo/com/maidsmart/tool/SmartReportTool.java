@@ -49,7 +49,7 @@ public class SmartReportTool implements ITool<SmartReportTool.Result> {
             if (maid.getTask() != null && maid.getTask().getUid() != null) {
                 taskUid = maid.getTask().getUid().toString();
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SmartReportTool", ignored);
         }
         String report = String.format("Health: %.1f/%.1f, Favorability: level %d (%d/384), Task: %s, Schedule: %s, Pickup: %s",
                 maid.getHealth(), maid.getMaxHealth(), level, favorability,

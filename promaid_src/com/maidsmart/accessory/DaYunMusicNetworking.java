@@ -46,7 +46,7 @@ public final class DaYunMusicNetworking {
         try {
             CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new MusicPacket(wearerId, track, playing));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunMusicNetworking", ignored);
         }
     }
 

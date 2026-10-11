@@ -135,7 +135,7 @@ public final class MaidBuildBlockFilter {
             }
             return true;
         } catch (Exception e) {
-            return false; // 查询异常（怪异模组方块）——保守拒绝
+             com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", e); return false; // 查询异常（怪异模组方块）——保守拒绝
         }
     }
 
@@ -168,7 +168,7 @@ public final class MaidBuildBlockFilter {
             ResourceLocation id = ForgeRegistries.BLOCKS.getKey(block);
             return id != null && isBlacklistedBuildBlock(id.toString());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", t); return false;
         }
     }
 
@@ -190,7 +190,7 @@ public final class MaidBuildBlockFilter {
             }
             return false;
         } catch (Throwable t) {
-            return false; // 配置未加载等异常 → 放行（退回旧行为，不掐死链路）
+             com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", t); return false; // 配置未加载等异常 → 放行（退回旧行为，不掐死链路）
         }
     }
 
@@ -378,7 +378,7 @@ public final class MaidBuildBlockFilter {
         int before;
         try {
             before = handler.getStackInSlot(slot).m_41613_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
             return false;
         }
         if (before <= 0) {
@@ -391,13 +391,13 @@ public final class MaidBuildBlockFilter {
                 return false;
             }
             moved = taken.m_41613_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
             return false;
         }
         int after;
         try {
             after = handler.getStackInSlot(slot).m_41613_();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
             return true; // 查不到复核值时按原口径放行（不做更坏的假设）
         }
         return after == before - moved;

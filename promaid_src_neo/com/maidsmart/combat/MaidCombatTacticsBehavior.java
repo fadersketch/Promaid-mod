@@ -217,7 +217,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                     && maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
                     && AutoCombatSwitch.isRangedTask(maid.getTask());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", e); return false;
         }
     }
 
@@ -283,7 +283,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             // 与弓同一条路（该任务里 `if (owner.isUsingItem())` 会把盾当成"正在蓄力"）。
             return maid.getTask() != null
                     && "touhou_little_maid:danmaku_attack".equals(maid.getTask().getUid().toString());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", ignored);
             return false;
         }
     }
@@ -624,7 +624,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             return target.level().getEntitiesOfClass(net.minecraft.world.entity.monster.Monster.class,
                     target.getBoundingBox().inflate(radius), m -> m.isAlive()).size();
         } catch (Exception e) {
-            return 0;
+             com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", e); return 0;
         }
     }
 
@@ -750,7 +750,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             double y = target.getY() + target.getBbHeight() * 0.6; // 身体中上部
             double z = target.getZ();
             level.sendParticles(crit, x, y, z, count, 0.3, 0.2, 0.3, 0.2);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", ignored);
         }
     }
 
@@ -765,7 +765,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             }
             level.playSound(null, target.blockPosition(), snd,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", ignored);
         }
     }
 
@@ -896,7 +896,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                 double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
                 victim.knockback(0.5, dx / len, dz / len);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", ignored);
         }
     }
 
@@ -919,7 +919,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             }
             return total;
         } catch (Exception e) {
-            return -1.0f;
+             com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", e); return -1.0f;
         }
     }
 
@@ -959,7 +959,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                     best = s;
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidCombatTacticsBehavior", ignored);
         }
         return best;
     }

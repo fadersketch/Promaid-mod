@@ -41,7 +41,7 @@ public final class DangerBlocks {
         try {
             return MaidSmartConfig.MISC_DANGER_AVOID.get();
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("DangerBlocks", e); return false;
         }
     }
 
@@ -57,7 +57,7 @@ public final class DangerBlocks {
             ResourceLocation rl = ForgeRegistries.BLOCKS.getKey(b);
             return rl != null && set().contains(rl.toString());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("DangerBlocks", e); return false;
         }
     }
 
@@ -71,7 +71,7 @@ public final class DangerBlocks {
             }
             return set().contains(rl.toString());
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("DangerBlocks", e); return false;
         }
     }
 
@@ -160,7 +160,7 @@ public final class DangerBlocks {
                 if (b != null) {
                     out.add(s); // 存配置里的注册名字符串（原样）
                 }
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("DangerBlocks", ignored);
             }
         }
         synchronized (DangerBlocks.class) {

@@ -263,7 +263,7 @@ public class GuideScreen extends Screen {
                 grid[0][i] = flat.get(i);
             }
             return new Recipe(false, grid, result, note);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GuideScreen", ignored);
             return null;
         }
     }
@@ -567,7 +567,7 @@ public class GuideScreen extends Screen {
                 i = end;
             }
             return sb.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GuideScreen", ignored);
             return raw;
         }
     }

@@ -113,11 +113,11 @@ public final class NeutralThreatDriver {
                 for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, level)) {
                     try {
                         drive(level, maid);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
         }
     }
 
@@ -254,7 +254,7 @@ public final class NeutralThreatDriver {
                 maid.m_6274_().m_21886_(MemoryModuleType.f_26371_,
                         java.util.Optional.of(new EntityTracker(threat, true)));
                 ASSIGNED_TARGETS.put(maid.m_20148_(), threat.m_20148_());
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
             }
         }
         // ③ 攻击执行兜底（实测三百四十五，反馈："进入了攻击模式，但是并没有进行
@@ -381,7 +381,7 @@ public final class NeutralThreatDriver {
     private static boolean canFight(EntityMaid maid) {
         try {
             return com.maidsmart.combat.AutoCombatPools.hasAnyCombatWeapon(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
             return false;
         }
     }
@@ -396,7 +396,7 @@ public final class NeutralThreatDriver {
             try {
                 maid.m_6274_().m_21936_(MemoryModuleType.f_26372_); // ATTACK_TARGET
                 maid.m_6274_().m_21936_(MemoryModuleType.f_26371_); // LOOK_TARGET
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
             }
         }
     }
@@ -412,7 +412,7 @@ public final class NeutralThreatDriver {
             return main.m_41638_(net.minecraft.world.entity.EquipmentSlot.MAINHAND)
                     .containsKey(net.minecraft.world.entity.ai.attributes.Attributes.f_22281_);
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", t); return false;
         }
     }
 
@@ -429,7 +429,7 @@ public final class NeutralThreatDriver {
             }
             return (int) Math.ceil(20.0 / speed);
         } catch (Throwable t) {
-            return 20;
+             com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", t); return 20;
         }
     }
 
@@ -491,7 +491,7 @@ public final class NeutralThreatDriver {
     private static int assistRadius() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_ASSIST_RADIUS.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
             return 0;
         }
     }
@@ -523,7 +523,7 @@ public final class NeutralThreatDriver {
                 return legalAssist(maid, owner, at);
             }
             return null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
             return null;
         }
     }
@@ -557,7 +557,7 @@ public final class NeutralThreatDriver {
             }
             int r = assistRadius();
             return (owner.m_20270_(mob) <= r || maid.m_20270_(mob) <= r) ? mob : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
             return null;
         }
     }
@@ -602,7 +602,7 @@ public final class NeutralThreatDriver {
             ASSIGNED_TARGETS.remove(id);
             ATTACK_CDS.remove(id);
             com.maidsmart.tool.PromaidLog.log("援护", "目标跑出 " + r + " 格（她与主人都超）→ 松手");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
         }
     }
 
@@ -652,7 +652,7 @@ public final class NeutralThreatDriver {
             // 即真实威胁（TLM MaidMeleeAttack 打它没有心理负担：狼已对主人兵刃相向）
             return com.maidsmart.combat.SelfPreservationBehavior.hasSight(maid, mob);
         } catch (Throwable ex) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ex); return false;
         }
     }
 

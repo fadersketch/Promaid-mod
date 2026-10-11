@@ -444,8 +444,8 @@ if (++this.restoreThrottle < 20) {
             // （x/z ±131072 = ±128km，y ±4096 覆盖全部建筑高度）：blockToSection
             // 对有限值正常换算，循环覆盖所有已加载区块。
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
-            // 未预建 EntityMaid 桶的 section 被整段跳过，还原扫描扫不到该 section
+            // instanceof 过滤——类查询漏扫（同 FarmTillDriver，真因见 MaidRoster）：
+            // 光靠类查询会漏扫该 section，还原扫描扫不到它
             // 里的战斗女仆 → 战斗还原永不触发
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
             // 实测八百三十九：来源改 MaidRoster（只攒女仆、按 20 tick 复用）；零女仆时零成本
@@ -620,7 +620,7 @@ if (++this.restoreThrottle < 20) {
                 IMaidTask prevTask = null;
                 try {
                     prevTask = TaskManager.findTask(ResourceLocation.parse(prevUid)).orElse(null);
-                } catch (Exception ignored) {
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatSwitch", ignored);
                 }
                 if (prevTask == null) {
                     // v1.1.0 实测一百零二：原任务不存在时不再永久卡在战斗任务——
@@ -638,7 +638,7 @@ if (++this.restoreThrottle < 20) {
                             com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
                             fallbackDone = maid.getTask() != null
                                     && !maid.getTask().getUid().toString().equals(assignedUid);
-                        } catch (Exception ignored) {
+                        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatSwitch", ignored);
                         }
                     }
                     if (!fallbackDone) {
@@ -654,7 +654,7 @@ if (++this.restoreThrottle < 20) {
                                         && maid.getTask().getUid() != null
                                         && idleTask.getUid().equals(maid.getTask().getUid());
                             }
-                        } catch (Exception ignored) {
+                        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatSwitch", ignored);
                         }
                     }
                     if (fallbackDone) {
@@ -711,7 +711,7 @@ if (++this.restoreThrottle < 20) {
                     // 可能被换走）；结果忽略（MISSING 也照常还原任务本身）
                     try {
                         com.maidsmart.combat.CombatTaskCompat.prepareSwitch(maid, restoreTask);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatSwitch", ignored);
                     }
                     com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
                             maid.getUUID(), restoreTask.getUid(), () -> maid.setTask(restoreTask));

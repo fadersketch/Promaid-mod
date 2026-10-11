@@ -45,7 +45,7 @@ public final class BrewManualNetworking {
             BrewConfig cfg = BrewConfig.load(maid);
             CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new OpenBrewManualPacket(maid.m_20148_().toString(), cfg));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewManualNetworking", ignored);
         }
     }
 

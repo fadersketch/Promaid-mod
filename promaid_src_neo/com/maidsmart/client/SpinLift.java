@@ -61,7 +61,7 @@ public final class SpinLift {
                 return;
             }
             poseStack.translate(0.0f, SPIN_LIFT, 0.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SpinLift", ignored);
         }
     }
 }

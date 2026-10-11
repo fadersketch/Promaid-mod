@@ -83,7 +83,7 @@ public final class WorkPosMarkerClient {
             }
             return mc.f_91074_.m_21205_().m_150930_(compass)
                     || mc.f_91074_.m_21206_().m_150930_(compass);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkPosMarkerClient", ignored);
             return false;
         }
     }
@@ -96,7 +96,7 @@ public final class WorkPosMarkerClient {
         try {
             return com.maidsmart.patrol.PatrolChartKit.isChart(mc.f_91074_.m_21205_())
                     || com.maidsmart.patrol.PatrolChartKit.isChart(mc.f_91074_.m_21206_());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkPosMarkerClient", ignored);
             return false;
         }
     }
@@ -114,7 +114,7 @@ public final class WorkPosMarkerClient {
                     return p;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkPosMarkerClient", ignored);
         }
         return null;
     }

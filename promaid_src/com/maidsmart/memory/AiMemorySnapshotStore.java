@@ -36,7 +36,7 @@ public final class AiMemorySnapshotStore {
                 String s = Files.readString(f, StandardCharsets.UTF_8).trim();
                 return s;
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemorySnapshotStore", ignored);
         }
         return "";
     }
@@ -49,7 +49,7 @@ public final class AiMemorySnapshotStore {
         try {
             Files.createDirectories(dir);
             Files.writeString(file(dir), clip(text), StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemorySnapshotStore", ignored);
         }
     }
 
@@ -57,7 +57,7 @@ public final class AiMemorySnapshotStore {
     public static void clear(Path dir) {
         try {
             Files.deleteIfExists(file(dir));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemorySnapshotStore", ignored);
         }
     }
 

@@ -59,7 +59,7 @@ public final class GunnerTetherNetworking {
         try {
             PacketDistributor.sendToPlayersTrackingEntityAndSelf(maid,
                     new SyncPacket(maid.getId(), riderId, state));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherNetworking", ignored);
         }
     }
 
@@ -70,7 +70,7 @@ public final class GunnerTetherNetworking {
         }
         try {
             PacketDistributor.sendToPlayer(watcher, new SyncPacket(maidId, riderId, state));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherNetworking", ignored);
         }
     }
 

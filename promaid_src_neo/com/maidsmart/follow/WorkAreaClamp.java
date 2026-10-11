@@ -30,7 +30,7 @@ public final class WorkAreaClamp {
             }
             return maid.isWithinRestriction(pos);
         } catch (Throwable t) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return true;
         }
     }
 
@@ -69,7 +69,7 @@ public final class WorkAreaClamp {
             int r = playerCircleRadius(maid);
             return c.distSqr(pos) <= (double) r * r;
         } catch (Throwable t) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return true;
         }
     }
 
@@ -92,7 +92,7 @@ public final class WorkAreaClamp {
             BlockPos p = sp.getNearestPos(maid);
             return p != null && !p.equals(BlockPos.ZERO) ? p : null;
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return null;
         }
     }
 
@@ -105,7 +105,7 @@ public final class WorkAreaClamp {
                     return r;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkAreaClamp", ignored);
         }
         return Math.max(2, com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get());
     }
@@ -146,7 +146,7 @@ public final class WorkAreaClamp {
             int r = wanderRadius(maid);
             return anchor.distSqr(pos) <= (double) r * r;
         } catch (Throwable t) {
-            return true;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return true;
         }
     }
 
@@ -183,7 +183,7 @@ public final class WorkAreaClamp {
             }
             return maid.blockPosition();
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return null;
         }
     }
 
@@ -200,7 +200,7 @@ public final class WorkAreaClamp {
             if (com.maidsmart.schedule.PlayerCircle.isPlayerCircle(maid)) {
                 return playerCircleRadius(maid);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("WorkAreaClamp", ignored);
         }
         return Math.max(2, com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get());
     }
@@ -245,7 +245,7 @@ public final class WorkAreaClamp {
             //  而锚点就是河童的罗盘/排班表写进去的那三个点，读它等于直取"玩家画的那个圈"。
             return nearestAnchor(maid);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return null;
         }
     }
     /**
@@ -264,7 +264,7 @@ public final class WorkAreaClamp {
             }
             return sp.getNearestPos(maid);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return null;
         }
     }
 
@@ -287,7 +287,7 @@ public final class WorkAreaClamp {
             }
             return circleCenter(maid);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return null;
         }
     }
 
@@ -321,7 +321,7 @@ public final class WorkAreaClamp {
                     + " 锚点已配置=" + (sp != null && sp.isConfigured())
                     + " 锚点=" + anchors;
         } catch (Throwable t) {
-            return "读取异常：" + t;
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return "读取异常：" + t;
         }
     }
 
@@ -343,7 +343,7 @@ public final class WorkAreaClamp {
             }
             return String.valueOf(a.getName());
         } catch (Throwable t) {
-            return "?";
+             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return "?";
         }
     }
 

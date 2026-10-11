@@ -219,7 +219,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
                 return ItemStack.EMPTY;
             }
             return MaidFlightKit.isRiptide(main) ? main : ItemStack.EMPTY;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
             return ItemStack.EMPTY;
         }
     }
@@ -236,7 +236,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
                 return true; // 空袭
             }
             return "touhou_little_maid".equals(uid.getNamespace()) && "attack".equals(uid.getPath());
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
             return false;
         }
     }
@@ -255,7 +255,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
                 return false;
             }
             return taskAllows(maid) && !spinWeapon(maid).isEmpty();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
             return false;
         }
     }
@@ -383,7 +383,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
             // （ignite 内部走 fetchRiptide = 先看身上，再问额外容器）。实测六百四十 起主手与副手
             // 重新算数——见 MaidFlightKit.findRiptide 的那段来龙去脉。
             return MaidRiptideBoost.ignite(level, maid, "激流起飞", "激流推进", null, consumeDurability);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
             return false;
         }
     }
@@ -399,7 +399,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
     public static boolean isDashing(EntityMaid maid) {
         try {
             return liveDash(maid) != null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
             return false;
         }
     }
@@ -420,7 +420,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
                 DASH.remove(id);
                 return null;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
         }
         return dash;
     }
@@ -531,7 +531,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
         // ④ 这一秒的移动权归突进
         try {
             maid.getNavigation().stop();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
         }
     }
 
@@ -591,12 +591,12 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
             float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
             maid.setYRot(yaw);
             maid.yRotO = yaw;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
         }
         // 突进期间别再让寻路把她拽回去
         try {
             maid.getNavigation().stop();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
         }
 
         // ⑦ 音效按等级（原版三选一）+ 耐久扣 1（原版与投掷共用那一条）
@@ -606,7 +606,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
                     : (level_ == 2 ? net.minecraft.sounds.SoundEvents.TRIDENT_RIPTIDE_2.value()
                                    : net.minecraft.sounds.SoundEvents.TRIDENT_RIPTIDE_1.value());
             level.playSound(null, maid.blockPosition(), snd, net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
         }
         weapon.hurtAndBreak(1, maid, EquipmentSlot.MAINHAND);
 
@@ -633,7 +633,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
             LivingEntitySpinAccessor spin = (LivingEntitySpinAccessor) (Object) maid;
             spin.promaid$setSpinTicks(0);
             spin.promaid$setLivingFlag(4, false);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
         }
     }
 
@@ -646,7 +646,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
             }
             LivingEntity e = t.get();
             return e.isAlive() ? e : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
             return null;
         }
     }
@@ -656,7 +656,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
             return com.github.tartaricacid.touhoulittlemaid.datagen.EnchantmentKeys
                     .getEnchantmentLevel(maid.level().registryAccess(),
                             net.minecraft.world.item.enchantment.Enchantments.RIPTIDE, stack);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
             return 1;
         }
     }
@@ -710,7 +710,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
                     maid.level().playSound(null, target.blockPosition(),
                             net.minecraft.sounds.SoundEvents.TRIDENT_HIT,
                             net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
                 }
                 // 附魔后效（火焰附加 / 荆棘等，与 MaidMaceSmashBehavior 同款调用）
                 if (maid.level() instanceof ServerLevel sl) {
@@ -723,7 +723,7 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
                     }
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTridentSpinBehavior", ignored);
         }
     }
 

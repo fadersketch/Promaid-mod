@@ -103,7 +103,7 @@ public abstract class ServerEntityRebuildMixin {
                     serverEntity.removePairing(player);
                     serverEntity.addPairing(player);
                     rebuilt++;
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ServerEntityRebuildMixin", ignored);
                 }
             }
             // 基线对齐到当前位置：否则下一 tick 会判定"还是大跳变"而反复重建
@@ -121,7 +121,7 @@ public abstract class ServerEntityRebuildMixin {
             MaidTeleportRebuild.schedule(maid);
             // 拦住本 tick 的后续处理——绝不让那个会引发 lerpTo 的传送包发出去
             ci.cancel();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ServerEntityRebuildMixin", ignored);
             // 任何意外都退回"按原版发"——宁可偶尔漏修一次，也不能因为这里坏了把实体同步整个带崩
         }
     }

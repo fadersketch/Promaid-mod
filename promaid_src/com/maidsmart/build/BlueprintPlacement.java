@@ -505,7 +505,7 @@ public final class BlueprintPlacement {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintPlacement", ignored);
         }
     }
 
@@ -648,7 +648,7 @@ public final class BlueprintPlacement {
             // 该锚点无匹配候选 → 换下一种锚点方块
             }
             return null;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintPlacement", ignored);
             return null;
         }
     }

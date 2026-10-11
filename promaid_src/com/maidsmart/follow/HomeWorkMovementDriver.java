@@ -41,7 +41,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * 能力，无牲畜可杀时会永久站桩，必须由本驱动兜着）。</p>
  *
  * <p>驱动逻辑（每 5 tick = 0.25 秒一轮）：全图扫描（Entity.class 全量 + instanceof，
- * 有限 AABB——ClassInstanceMultiMap 桶 bug 与 ±∞ 溢出均已绕开）；条件 = home 模式 +
+ * 有限 AABB——类查询漏扫与 ±∞ 溢出均已绕开）；条件 = home 模式 +
  * 宰杀任务；有 WALK_TARGET（工作目标）→ 交给 MoveToTargetSink 正常寻路，不干扰；
  * 无 WALK_TARGET → home 锚点附近随机点直连导航（巡逻式移动，保证"会动"）。</p>
  */
@@ -86,7 +86,7 @@ public final class HomeWorkMovementDriver {
                     drive(level, maid);
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("HomeWorkMovementDriver", ignored);
         }
     }
 
@@ -134,7 +134,7 @@ public final class HomeWorkMovementDriver {
                 com.maidsmart.tool.PromaidLog.log("驻守", com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " home 工作移动：宰杀任务当前无牲畜目标 → 去 home 附近闲逛点 " + target);
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("HomeWorkMovementDriver", ignored);
         }
     }
 
@@ -146,7 +146,7 @@ public final class HomeWorkMovementDriver {
             }
             return "maid_smart:slaughter".equals(maid.getTask().getUid().toString());
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("HomeWorkMovementDriver", t); return false;
         }
     }
 }

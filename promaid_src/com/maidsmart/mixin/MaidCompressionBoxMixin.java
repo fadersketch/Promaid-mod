@@ -84,7 +84,7 @@ public abstract class MaidCompressionBoxMixin {
             }
             // 背包里一个压缩盒都没有时，视图等价于原背包（多一层转发，行为不变）
             cir.setReturnValue(ext);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCompressionBoxMixin", ignored);
             // 任何异常都退回原版返回值——背包访问是女仆每个 tick 都在走的路，
             // 这里绝不能把异常抛进她的 AI 调用链
         }
@@ -107,7 +107,7 @@ public abstract class MaidCompressionBoxMixin {
                     : new IItemHandlerModifiable[]{bag, hands};
             cir.setReturnValue(new com.github.tartaricacid.touhoulittlemaid.inventory.handler
                     .MaidInvWrapper((EntityMaid) (Object) this, promaid$append(members, boxes)));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCompressionBoxMixin", ignored);
         }
     }
 
@@ -124,7 +124,7 @@ public abstract class MaidCompressionBoxMixin {
             cir.setReturnValue(new com.github.tartaricacid.touhoulittlemaid.inventory.handler
                     .MaidInvWrapper((EntityMaid) (Object) this,
                     promaid$append(new IItemHandlerModifiable[]{bag}, boxes)));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCompressionBoxMixin", ignored);
         }
     }
 

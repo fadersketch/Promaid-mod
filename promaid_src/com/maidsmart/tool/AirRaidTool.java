@@ -128,7 +128,7 @@ public class AirRaidTool implements ITool<AirRaidTool.Result> {
             sb.append("已切到").append(ranged ? "远程空袭" : "近战空袭")
                     .append("（").append(uid).append("）");
         } catch (Throwable t) {
-            return callback.addToolResult("切换空袭任务失败：" + t, toolId);
+             com.maidsmart.diag.Diag.swallow("AirRaidTool", t); return callback.addToolResult("切换空袭任务失败：" + t, toolId);
         }
         // 能不能飞 = 复用她自己那套缺件口径（不另起一套判定，避免"两套口径说不一致"）
         try {
@@ -143,7 +143,7 @@ public class AirRaidTool implements ITool<AirRaidTool.Result> {
             if (ranged && !com.maidsmart.combat.MaidFlightKit.rangedAmmoOk(maid)) {
                 sb.append("；另外没有远程弹药（箭/枪弹/副手烟花）");
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AirRaidTool", ignored);
         }
         LivingEntity target = ToolKit.pick(maid, level, result.target());
         if (ToolKit.lock(maid, target)) {
@@ -171,7 +171,7 @@ public class AirRaidTool implements ITool<AirRaidTool.Result> {
             maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
             maid.m_6710_(null);
             sb.append("，已清掉目标");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AirRaidTool", ignored);
         }
         IMaidTask attack = TaskManager.findTask(
                 new ResourceLocation("touhou_little_maid", "attack")).orElse(null);

@@ -149,7 +149,7 @@ public final class SchedulePacketsPlan {
                             && pkt.scheduleOrdinal < MaidSchedule.values().length) {
                         maid.setSchedule(MaidSchedule.values()[pkt.scheduleOrdinal]);
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SchedulePacketsPlan", ignored);
                     // 客户端侧容错——绝不影响游戏
                 }
             });
@@ -508,7 +508,7 @@ public final class SchedulePacketsPlan {
                 int applied = 0;
                 int schedSkipped = 0; // v1.1.0 实测七十：排班中被跳过的数量
                 for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
-                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
+                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
                         if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
                             continue;
                         }
@@ -593,7 +593,7 @@ public final class SchedulePacketsPlan {
                                         applyMode ? pkt.mode : -1, applyTask ? pkt.taskUid : "");
                             }
                         } catch (Throwable t) {
-                            // 单只隔离：一只女仆异常不中断整队（旧版无保护，setSchedule
+                             com.maidsmart.diag.Diag.swallow("SchedulePacketsPlan", t); // 单只隔离：一只女仆异常不中断整队（旧版无保护，setSchedule
                             // 抛异常会让循环中断、后面的女仆全部不应用）
                             com.mojang.logging.LogUtils.getLogger().info(
                                     "batch-apply: {} error: {}", mName, t.toString());

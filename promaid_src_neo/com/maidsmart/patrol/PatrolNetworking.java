@@ -205,7 +205,7 @@ public final class PatrolNetworking {
                         int idx = -1;
                         try {
                             idx = Integer.parseInt(p.text.trim());
-                        } catch (Throwable ignored) {
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
                         }
                         if (idx < 0 || idx >= r.size()) {
                             return;
@@ -445,7 +445,7 @@ public final class PatrolNetworking {
                     return m;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
         }
         return null;
     }
@@ -474,7 +474,7 @@ public final class PatrolNetworking {
                             -> m.distanceToSqr(player))
                     .thenComparing(m -> com.maidsmart.tool.PromaidLog.nameOf(m)));
             return maids;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
             return new ArrayList<>();
         }
     }
@@ -492,7 +492,7 @@ public final class PatrolNetworking {
         try {
             sendBookOnly(player, stack, offHand, open);
             PacketDistributor.sendToPlayer(player, new MaidListPacket(offHand, collectOwnMaids(player)));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
         }
     }
 
@@ -519,7 +519,7 @@ public final class PatrolNetworking {
                     open, offHand, book.save(),
                     new ArrayList<>(rep.problems()), new ArrayList<>(rep.notes()),
                     rep.length(), rep.seconds()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
         }
     }
 
@@ -541,7 +541,7 @@ public final class PatrolNetworking {
                         com.maidsmart.tool.PromaidLog.nameOf(m),
                         bound == null ? "" : bound.id()});
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
         }
         return out;
     }
@@ -570,7 +570,7 @@ public final class PatrolNetworking {
                             "§7标记已结束——点「§a连接§7」把首尾接成闭环，通过后这条轨道才能用"));
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
         }
     }
 
@@ -767,7 +767,7 @@ public final class PatrolNetworking {
     private static void sendMarking(ServerPlayer player, boolean marking, String routeId) {
         try {
             PacketDistributor.sendToPlayer(player, new MarkingStatePacket(marking, routeId));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
         }
     }
 
@@ -829,7 +829,7 @@ public final class PatrolNetworking {
                                     : player.getVehicle().getType().toString())
                             + " pos=" + String.format("%.1f,%.1f,%.1f",
                                     player.getX(), player.getY(), player.getZ()));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
                 }
                 ItemStack stack = heldChart(player, off);
                 PatrolBook book = PatrolChartData.readBook(stack);
@@ -986,7 +986,7 @@ public final class PatrolNetworking {
                                         + "——不影响连接，飞的时候她自己会绕开/抬升",
                                 cres.hits().size(), h.pos().x, h.pos().y, h.pos().z, h.block())));
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
                 }
                 sendBook(player, stack, p.offHand, false);
             });
@@ -1056,7 +1056,7 @@ public final class PatrolNetworking {
         try {
             ItemStack s = offHand ? player.getOffhandItem() : player.getMainHandItem();
             return PatrolChartKit.isChart(s) ? s : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
             return null;
         }
     }

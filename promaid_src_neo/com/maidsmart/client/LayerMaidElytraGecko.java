@@ -137,7 +137,7 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
             if (!com.maidsmart.config.MaidSmartConfig.COMBAT_WING_YSM_YIELD.get()) {
                 return false;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LayerMaidElytraGecko", ignored);
             // 配置还没装载（极少）时按默认处理
         }
         if (YSM_YIELD_LOGGED.compareAndSet(false, true)) {
@@ -243,7 +243,7 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
         float modelScale = 1.0f;
         try {
             modelScale = getGeoEntity(mob).getMaidInfo().getRenderEntityScale();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LayerMaidElytraGecko", ignored);
         }
         if (modelScale <= 0.0f) {
             modelScale = 1.0f;
@@ -343,7 +343,7 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
                         "模型没有 ElytraLocator/Elytra/UpperBody/Root 任一骨骼，鞘翅位置退回原点");
             }
             return false;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LayerMaidElytraGecko", ignored);
             return false;
         }
     }

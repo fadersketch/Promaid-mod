@@ -83,7 +83,7 @@ public final class BombItems {
                 ITEM_CACHE.put(id, it);
             }
             return it;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
             return null;
         }
     }
@@ -109,7 +109,7 @@ public final class BombItems {
         try {
             net.minecraft.resources.ResourceLocation rl = BuiltInRegistries.ITEM.getKey(stack.getItem());
             return rl == null ? "" : rl.toString();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
             return "";
         }
     }
@@ -123,7 +123,7 @@ public final class BombItems {
                 return false;
             }
             return bi.getBlock() instanceof BedBlock;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
             return false;
         }
     }
@@ -147,7 +147,7 @@ public final class BombItems {
                 return null;
             }
             return bi.getBlock() instanceof TntBlock tb ? tb : null;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
             return null;
         }
     }
@@ -169,7 +169,7 @@ public final class BombItems {
                     return true;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
         }
         return false;
     }
@@ -249,7 +249,7 @@ public final class BombItems {
                     return taken;
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
         }
         return ItemStack.EMPTY;
     }
@@ -276,7 +276,7 @@ public final class BombItems {
                 try {
                     // 道具（有耐久）：原版口径——点一次掉 1 点耐久（1.21.1：hurtAndBreak(1, 实体, 装备槽)）
                     one.hurtAndBreak(1, maid, EquipmentSlot.MAINHAND);
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
                 }
                 if (!one.isEmpty()) {
                     ItemStack left = inv.insertItem(i, one, false); // 先放回原槽（那一格刚被我们腾出来）
@@ -286,7 +286,7 @@ public final class BombItems {
                 }
                 return display;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
         }
         return ItemStack.EMPTY;
     }
@@ -299,7 +299,7 @@ public final class BombItems {
             if (stack.getItem() instanceof FlintAndSteelItem) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
         }
         return isStack(stack, ID_FLINT_AND_STEEL);
     }
@@ -312,7 +312,7 @@ public final class BombItems {
             if (stack.getItem() instanceof FireChargeItem) {
                 return true;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
         }
         return isStack(stack, ID_FIRE_CHARGE);
     }
@@ -343,7 +343,7 @@ public final class BombItems {
                 used = useIgniterIn(inv, maid, BombItems::isChargeLike);
             }
             return used;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
             return ItemStack.EMPTY;
         }
     }
@@ -351,7 +351,7 @@ public final class BombItems {
     static SoundEvent sound(String id) {
         try {
             return BuiltInRegistries.SOUND_EVENT.get(net.minecraft.resources.ResourceLocation.parse(id));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
             return null;
         }
     }

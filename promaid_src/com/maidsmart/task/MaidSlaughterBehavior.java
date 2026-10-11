@@ -54,7 +54,7 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
             com.maidsmart.tool.PromaidLog.log("宰杀",
                     com.maidsmart.tool.PromaidLog.nameOf(maid)
                             + " 行为评估 canUse=" + ok + "（当前任务=" + cur + "）");
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSlaughterBehavior", ignored);
         }
         return ok;
     }
@@ -169,7 +169,7 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
      * MobType.f_21640_（UNDEAD）——原版牲畜（牛/羊/猪/鸡/兔/山羊等）都不覆写
      * 该方法 → 全部命中排除 → alive=0 → 永远无目标 → 站桩不动（统计诊断实证：
      * total=45 animal=17 alive=0 kept=0）。重写后的判定链：
-     * ① Entity.class 全量扫描（ClassInstanceMultiMap 桶 bug 已绕开，日志实证可靠）
+     * ① Entity.class 全量扫描（类查询漏扫真因已绕开，日志实证可靠）
      * ② instanceof Animal（牲畜基类）
      * ③ 存活（isAlive && !isRemoved）
      * ④ 排除驯服宠物（TamableAnimal：狼/猫/鹦鹉——Animal 子类但非牲畜）

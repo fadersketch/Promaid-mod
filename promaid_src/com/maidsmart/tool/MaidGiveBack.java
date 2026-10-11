@@ -46,7 +46,7 @@ public final class MaidGiveBack {
         try {
             rest = ItemHandlerHelper.insertItemStacked(maid.getAvailableBackpackInv(), stack, false);
         } catch (Throwable t) {
-            // 插入过程本身抛异常：无法判断已经塞进去多少，整栈落地（宁可多一件也绝不吞）
+             com.maidsmart.diag.Diag.swallow("MaidGiveBack", t); // 插入过程本身抛异常：无法判断已经塞进去多少，整栈落地（宁可多一件也绝不吞）
             rest = stack;
             PromaidLog.log("归还", nameOf(maid) + " 背包插入异常，整栈落地："
                     + stack.m_41786_().getString());
@@ -62,7 +62,7 @@ public final class MaidGiveBack {
         }
         try {
             maid.m_5552_(rest, 0.5f);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGiveBack", ignored);
             return;
         }
         PromaidLog.log("归还", nameOf(maid) + " 背包塞不下 → 掉在她脚下：" + rest.m_41613_()
@@ -73,7 +73,7 @@ public final class MaidGiveBack {
     private static String nameOf(EntityMaid maid) {
         try {
             return PromaidLog.nameOf(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGiveBack", ignored);
             return "女仆";
         }
     }

@@ -115,7 +115,7 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             float modelScale = 1.0f;
             try {
                 modelScale = this.modelRenderer.getMainInfo().getRenderEntityScale();
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("LayerMaidElytra", ignored);
             }
             if (modelScale <= 0.0f) {
                 modelScale = 1.0f;

@@ -60,7 +60,7 @@ public final class BrewConfig {
             if (cfg.targetPotion == null) {
                 cfg.targetPotion = "";
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewConfig", ignored);
             // 配置损坏回退默认——绝不影响女仆
         }
         return cfg;
@@ -74,7 +74,7 @@ public final class BrewConfig {
             tag.putInt("form", cfg.form);
             tag.putString("targetPotion", cfg.targetPotion == null ? "" : cfg.targetPotion);
             ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().put(TAG, tag);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BrewConfig", ignored);
         }
     }
 
@@ -87,7 +87,7 @@ public final class BrewConfig {
             return net.minecraft.core.registries.BuiltInRegistries.POTION
                     .get(ResourceLocation.parse(targetPotion)) != null;
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("BrewConfig", t); return false;
         }
     }
 

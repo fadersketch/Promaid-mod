@@ -116,7 +116,7 @@ public abstract class MaidChatLanguageMixin {
                 LLMCallback translateCb = new LLMCallback(cb.getChatManager(), messages);
                 RETRIES.put(translateCb, retry); // 延续计数——翻译结果仍非中文则不再翻
                 client.chat(translateCb);
-            } catch (Exception ignored) {
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidChatLanguageMixin", ignored);
             }
         }
 

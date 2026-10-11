@@ -85,7 +85,7 @@ public final class MaidBdNetworking {
     public static void sendRule(byte op, String entry, int n) {
         try {
             CHANNEL.sendToServer(new BdRulePacket(op, entry, n));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
         }
     }
 
@@ -93,7 +93,7 @@ public final class MaidBdNetworking {
     public static void togglePerMaid(String maidUuid, boolean on) {
         try {
             CHANNEL.sendToServer(new BdPerMaidPacket(maidUuid == null ? "" : maidUuid, on));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
         }
     }
 
@@ -113,7 +113,7 @@ public final class MaidBdNetworking {
                     c = c.getSuperclass();   // 面板可能被匿名/子类包一层
                 }
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
         }
     }
 
@@ -126,7 +126,7 @@ public final class MaidBdNetworking {
                     MaidBdRules.describeMatches((byte) 2),
                     MaidBdRules.describeKeepN(),
                     MaidBdRules.describeAtLeast()));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
         }
     }
 
@@ -277,7 +277,7 @@ public final class MaidBdNetworking {
                                 .min(java.util.Comparator.comparingDouble(sp::m_20280_))
                                 .orElse(null);
                     }
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
                 }
                 if (maid == null) {
                     sp.m_213846_(net.minecraft.network.chat.Component.m_237113_(
@@ -300,7 +300,7 @@ public final class MaidBdNetworking {
                             maid.m_20148_().toString(),
                             maid.m_5446_() == null ? "女仆" : maid.m_5446_().getString(),
                             MaidBdDeposit.isOn(maid)));
-                } catch (Throwable ignored) {
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBdNetworking", ignored);
                 }
             });
             ctx.setPacketHandled(true);

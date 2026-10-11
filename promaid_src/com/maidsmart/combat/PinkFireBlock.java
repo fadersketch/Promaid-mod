@@ -146,7 +146,7 @@ public final class PinkFireBlock extends FireBlock {
     public static boolean pinkEnabled() {
         try {
             return MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
             return false; // 读不到配置 = 什么都不换（绝不擅自改世界）
         }
     }
@@ -222,7 +222,7 @@ public final class PinkFireBlock extends FireBlock {
                     .m_61124_(FireBlock.f_53411_, vanillaFire.m_61143_(FireBlock.f_53411_))
                     .m_61124_(FireBlock.f_53412_, vanillaFire.m_61143_(FireBlock.f_53412_))
                     .m_61124_(FireBlock.f_53413_, vanillaFire.m_61143_(FireBlock.f_53413_));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
             out = out.m_61124_(FireBlock.f_53413_, true); // 读不到属性就退回"地面火"形态，至少看得见
         }
         return out;
@@ -261,7 +261,7 @@ public final class PinkFireBlock extends FireBlock {
             // 同一个值：只发变化、不惊动邻居），再排下一拍。
             level.m_7731_(pos, state.m_61124_(FireBlock.f_53408_, age + 1), 4);
             level.m_186460_(pos, this, 15 + random.m_188503_(10));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
         }
     }
 
@@ -286,7 +286,7 @@ public final class PinkFireBlock extends FireBlock {
                 return false;
             }
             return entity instanceof Player || entity instanceof EntityMaid;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
             return false;
         }
     }
@@ -340,7 +340,7 @@ public final class PinkFireBlock extends FireBlock {
                         pos.m_123342_() + random.m_188500_() * 0.5 + 0.5,
                         pos.m_123343_() + random.m_188500_());
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
         }
     }
 
@@ -351,7 +351,7 @@ public final class PinkFireBlock extends FireBlock {
         try {
             level.m_7106_(new DustParticleOptions(PINK, 0.9F + random.m_188501_() * 0.4F),
                     x, y, z, 0.0, 0.0, 0.0);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
         }
     }
 
@@ -368,7 +368,7 @@ public final class PinkFireBlock extends FireBlock {
     private static boolean cfgRender() {
         try {
             return MaidSmartConfig.COMBAT_BOMBING_FIRE_RENDER.get();
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
             return true;
         }
     }
@@ -406,7 +406,7 @@ public final class PinkFireBlock extends FireBlock {
                 return out;
             }
             return pink.m_61124_(FireBlock.f_53408_, state.m_61143_(FireBlock.f_53408_));
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
             return out;
         }
     }
@@ -430,7 +430,7 @@ public final class PinkFireBlock extends FireBlock {
         try {
             BlockState pink = fromVanillaFire(out);
             return pink != null ? pink : out;
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PinkFireBlock", ignored);
             return out;
         }
     }

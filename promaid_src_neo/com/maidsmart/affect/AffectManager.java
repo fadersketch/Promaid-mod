@@ -55,7 +55,7 @@ public final class AffectManager {
                 return com.maidsmart.memory.AiMemoryModels.GSON.fromJson(
                         java.nio.file.Files.readString(f), AffectProfile.class);
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AffectManager", ignored);
         }
         return new AffectProfile();
     }
@@ -70,7 +70,7 @@ public final class AffectManager {
             java.nio.file.Files.createDirectories(dir);
             java.nio.file.Files.writeString(dir.resolve(AFFECT_FILE),
                     com.maidsmart.memory.AiMemoryModels.GSON.toJson(p));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AffectManager", ignored);
         }
     }
 

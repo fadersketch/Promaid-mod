@@ -232,7 +232,7 @@ public final class MaidGoetyFlyCommand {
             AABB box = new AABB(pos, pos).m_82400_(64.0);
             return src.m_81372_().m_45976_(EntityMaid.class, box).stream().findFirst().orElse(null);
         } catch (Throwable t) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidGoetyFlyCommand", t); return null;
         }
     }
 

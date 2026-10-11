@@ -100,14 +100,14 @@ public final class PatrolClearance {
                     try {
                         st = level.m_8055_(pos);
                         blocking = !st.m_60812_(level, pos).m_83281_();
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolClearance", ignored);
                         continue; // 判不出来就放行（宁可漏一处，不可误拦）
                     }
                     boolean dangerous = false;
                     try {
                         dangerous = com.maidsmart.tool.DangerBlocks.idIn(level, pos.m_123341_(), pos.m_123342_(), pos.m_123343_())
                                 || isAlwaysDangerous(level, pos);
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolClearance", ignored);
                     }
                     if (!blocking && !dangerous) {
                         continue;
@@ -117,7 +117,7 @@ public final class PatrolClearance {
                         net.minecraft.resources.ResourceLocation rl =
                                 net.minecraft.core.registries.BuiltInRegistries.f_256975_.m_7981_(st.m_60734_());
                         id = rl == null ? "?" : rl.toString();
-                    } catch (Throwable ignored) {
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolClearance", ignored);
                         id = "?";
                     }
                     return new Hit(new Vec3(pos.m_123341_() + 0.5, pos.m_123342_() + 0.5, pos.m_123343_() + 0.5),
@@ -145,7 +145,7 @@ public final class PatrolClearance {
                      "minecraft:wither_rose" -> true;
                 default -> false;
             };
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolClearance", ignored);
             return false;
         }
     }

@@ -192,7 +192,7 @@ public final class MaidToolAutoEquip {
             }
             // v1.5.140：按任务词条匹配——符合不换，不符合才换（挑最高分）
             return equipIfMismatched(maid, need, scorer);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
             return false;
         }
     }
@@ -326,7 +326,28 @@ public final class MaidToolAutoEquip {
             // 再看精妙背包/旅行者背包（只读探针，不搬动；真换镐时由 ensureForTarget 搬）
             return com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> isPickaxe(s) && canHarvest(s, target));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
+        }
+        return false;
+    }
+
+    /** 实测八百六十九【没镐不启动】：手/背包（含精妙背包）里是否有任意一把镐——挖矿入口闸用。
+     *  只看物品类型，不看能不能挖某种矿（那是 canHarvestWithHandOrBackpack）。 */
+    public static boolean hasAnyPickaxe(EntityMaid maid) {
+        try {
+            IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            if (isPickaxe(hands.getStackInSlot(0))) {
+                return true;
+            }
+            IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.isEmpty() && isPickaxe(s)) {
+                    return true;
+                }
+            }
+            return com.maidsmart.tool.MaidExtraContainer.contains(maid, MaidToolAutoEquip::isPickaxe);
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
         }
         return false;
     }
@@ -362,7 +383,7 @@ public final class MaidToolAutoEquip {
             return com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> com.maidsmart.combat.GunCompat.isAmmo(s)
                             || com.maidsmart.combat.GunCompat.isAmmoBox(s));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
         }
         return false;
     }
@@ -385,7 +406,7 @@ public final class MaidToolAutoEquip {
             // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上（斧）
             return com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> isAxe(s) && canHarvest(s, target));
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
         }
         return false;
     }
@@ -488,7 +509,7 @@ public final class MaidToolAutoEquip {
         try {
             return enchantCount(stack) * 10_000L + durabilityScore(stack);
         } catch (Exception e) {
-            return Long.MIN_VALUE;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return Long.MIN_VALUE;
         }
     }
 
@@ -559,7 +580,7 @@ public final class MaidToolAutoEquip {
             score += enchantCount(stack) * 10_000L + durabilityScore(stack);
             return score;
         } catch (Exception e) {
-            return Long.MIN_VALUE;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return Long.MIN_VALUE;
         }
     }
 
@@ -582,7 +603,7 @@ public final class MaidToolAutoEquip {
             score += durabilityScore(stack); // 剩余耐久
             return score;
         } catch (Exception e) {
-            return Long.MIN_VALUE;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return Long.MIN_VALUE;
         }
     }
 
@@ -600,7 +621,7 @@ public final class MaidToolAutoEquip {
             score += durabilityScore(stack); // 剩余耐久
             return score;
         } catch (Exception e) {
-            return Long.MIN_VALUE;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return Long.MIN_VALUE;
         }
     }
 
@@ -613,7 +634,7 @@ public final class MaidToolAutoEquip {
                 return tierLevelOf(((net.minecraft.world.item.TieredItem) stack.getItem()).getTier());
             }
         } catch (Exception e) {
-            // fallthrough
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); // fallthrough
         }
         return 1;
     }
@@ -635,7 +656,7 @@ public final class MaidToolAutoEquip {
             }
             return max - stack.getDamageValue() <= max * BROKEN_SOON_RATIO;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return false;
         }
     }
 
@@ -655,7 +676,7 @@ public final class MaidToolAutoEquip {
             int dmg = stack.getDamageValue(); // getDamageValue
             return Math.max(0.0, Math.min(1.0, 1.0 - (double) dmg / (double) max));
         } catch (Exception e) {
-            return 0.0;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return 0.0;
         }
     }
 
@@ -676,7 +697,7 @@ public final class MaidToolAutoEquip {
             }
             return tag.getList("Enchantments", 9); // getList，类型 9 = ListTag
         } catch (Exception e) {
-            return null;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return null;
         }
     }
 
@@ -712,7 +733,7 @@ public final class MaidToolAutoEquip {
             }
             return best + fire;
         } catch (Exception e) {
-            return 0.0;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return 0.0;
         }
     }
 
@@ -734,7 +755,7 @@ public final class MaidToolAutoEquip {
             return stack.getItem().builtInRegistryHolder().tags().anyMatch(
                     t -> net.neoforged.neoforge.common.Tags.Items.TOOLS_SHEAR.equals(t));
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return false;
         }
     }
 
@@ -818,7 +839,7 @@ public final class MaidToolAutoEquip {
             hands.setStackInSlot(1, picked);
             // 副手原本空 → 背包格直接清空；原本是快坏的盾 → 放回背包
             inv.setStackInSlot(best, cur.isEmpty() ? ItemStack.EMPTY : cur);
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
         }
     }
 
@@ -830,7 +851,7 @@ public final class MaidToolAutoEquip {
         try {
             return enchantCount(stack) * 10_000L + durabilityScore(stack);
         } catch (Exception e) {
-            return Long.MIN_VALUE;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return Long.MIN_VALUE;
         }
     }
 
@@ -871,7 +892,7 @@ public final class MaidToolAutoEquip {
             inv.setStackInSlot(bestSlot, cur);
             return true;
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return false;
         }
     }
 
@@ -888,7 +909,7 @@ public final class MaidToolAutoEquip {
         try {
             return enchantCount(stack) * 10_000L + durabilityScore(stack);
         } catch (Exception e) {
-            return Long.MIN_VALUE;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", e); return Long.MIN_VALUE;
         }
     }
     /** 1.21.1：属性修饰符改由数据组件承载（旧 getAttributeModifiers(EquipmentSlot) 已移除）。 */
@@ -899,7 +920,7 @@ public final class MaidToolAutoEquip {
                             net.minecraft.world.item.component.ItemAttributeModifiers.EMPTY).modifiers().stream()
                     .anyMatch(en -> en.attribute().is(attribute));
         } catch (Throwable t) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", t); return false;
         }
     }
 
@@ -913,7 +934,7 @@ public final class MaidToolAutoEquip {
                     .map(net.minecraft.world.item.component.ItemAttributeModifiers.Entry::modifier)
                     .toList();
         } catch (Throwable t) {
-            return java.util.List.of();
+             com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", t); return java.util.List.of();
         }
     }
 

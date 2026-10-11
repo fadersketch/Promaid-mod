@@ -49,7 +49,8 @@ public class MaidShieldShareBehavior extends Behavior<EntityMaid> {
      */
     @Override
     protected boolean canStillUse(ServerLevel level, EntityMaid maid, long gameTime) {
-        return true;
+        // 重写为 true 的原因见上；TD-10：总开关也在 canStillUse 里问——关掉即刻停，不用等跑完。
+        return com.maidsmart.config.MaidSmartConfig.SHIELD_SHARE_ENABLE.get();
     }
 
     @Override
@@ -139,7 +140,7 @@ public class MaidShieldShareBehavior extends Behavior<EntityMaid> {
                     n += s.getCount();
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidShieldShareBehavior", ignored);
         }
         return n;
     }

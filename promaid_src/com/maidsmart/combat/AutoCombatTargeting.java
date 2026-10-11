@@ -40,7 +40,7 @@ public final class AutoCombatTargeting {
                 return;
             }
             tryEngageMaid(maid);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ignored);
         }
     }
 
@@ -58,7 +58,7 @@ public final class AutoCombatTargeting {
             net.minecraft.world.entity.LivingEntity t = mob.m_5448_(); // getTarget
             return t == maid || (owner != null && t == owner);
         } catch (Throwable ex) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ex); return false;
         }
     }
 
@@ -81,7 +81,7 @@ public final class AutoCombatTargeting {
             // 锁定的是主人的任意女仆
             return t instanceof EntityMaid tm && tm.m_269323_() == owner;
         } catch (Throwable ex) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ex); return false;
         }
     }
 
@@ -92,7 +92,7 @@ public final class AutoCombatTargeting {
     static void touchContact(EntityMaid maid) {
         try {
             maid.getPersistentData().m_128356_(AutoCombatSwitch.LAST_CONTACT_TAG, maid.m_9236_().m_46467_());
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ignored);
         }
     }
 
@@ -117,7 +117,7 @@ public final class AutoCombatTargeting {
                 maid.getPersistentData().m_128359_(AutoCombatSwitch.ATTACKER_UUID_TAG, attacker.m_20148_().toString());
                 maid.getPersistentData().m_128356_(AutoCombatSwitch.ATTACKER_TIME_TAG, maid.m_9236_().m_46467_());
             }
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ignored);
         }
     }
 
@@ -166,7 +166,7 @@ public final class AutoCombatTargeting {
             return e instanceof net.minecraft.world.entity.NeutralMob nm
                     && nm.m_21674_((net.minecraft.world.entity.LivingEntity) target);
         } catch (Exception ex) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ex); return false;
         }
     }
 
@@ -180,7 +180,7 @@ public final class AutoCombatTargeting {
                     && e instanceof net.minecraft.world.entity.NeutralMob nm
                     && nm.m_21674_((net.minecraft.world.entity.LivingEntity) target);
         } catch (Exception ex) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ex); return false;
         }
     }
 
@@ -188,7 +188,7 @@ public final class AutoCombatTargeting {
         try {
             return nm.m_21660_();
         } catch (Exception e) {
-            return false;
+             com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", e); return false;
         }
     }
 
@@ -337,7 +337,7 @@ public final class AutoCombatTargeting {
         try {
             prevSched = maid.getSchedule() == null ? "" : maid.getSchedule().name();
             maid.getPersistentData().m_128359_(AutoCombatSwitch.COMBAT_PREV_SCHEDULE_TAG, prevSched);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ignored);
         }
         // 实测八百二十三【参战顺手把作息切成「全天」】——
         //
@@ -360,7 +360,7 @@ public final class AutoCombatTargeting {
                             + " 参战：作息临时切「全天」（原 " + prevSched
                             + "）→ WORK 常驻活动，她才会真的出手（威胁消失 10 秒后随任务一起复原）");
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ignored);
             }
         }
         // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
@@ -442,7 +442,7 @@ public final class AutoCombatTargeting {
             }
             // 硬上限 32 格：防跨基地区域的荒谬放大
             return maid.m_20238_(attacker.m_20182_()) <= 32.0 * 32.0;
-        } catch (Exception ignored) {
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", ignored);
             return false;
         }
     }
@@ -471,7 +471,7 @@ public final class AutoCombatTargeting {
             }
             return best;
         } catch (Exception e) {
-            return -1;
+             com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", e); return -1;
         }
     }
 
@@ -522,7 +522,7 @@ public final class AutoCombatTargeting {
             }
             return "none";
         } catch (Exception e) {
-            return "err:" + e.getClass().getSimpleName();
+             com.maidsmart.diag.Diag.swallow("AutoCombatTargeting", e); return "err:" + e.getClass().getSimpleName();
         }
     }
 }

@@ -73,7 +73,7 @@ public final class MaidGoetyKeysClient {
                     mc.f_91074_.m_5661_(Component.m_237113_("\u00a7e" + maid.m_7755_().getString()
                             + " \u00a7r飞行聚晶自动档：" + (next ? "\u00a7a开" : "\u00a77关")), true);
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyKeysClient", ignored);
             }
         }
     }
@@ -93,7 +93,7 @@ public final class MaidGoetyKeysClient {
                     .filter(m -> m.m_6084_() && m.m_21830_(mc.f_91074_))
                     .min((a, b) -> Double.compare(a.m_20280_(mc.f_91074_), b.m_20280_(mc.f_91074_)))
                     .orElse(null);
-        } catch (Throwable ignored) {
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidGoetyKeysClient", ignored);
             return null;
         }
     }
