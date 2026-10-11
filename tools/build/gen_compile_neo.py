@@ -32,14 +32,22 @@ def find(*cands):
             return c
     return None
 
-LIB = r'D:\.minecraft\libraries'
+# --- 路径可配置（TD-13）：默认与当前本机一致，不设环境变量时输出逐字节不变。
+#   PROMAID_LIB      <MC 根>/libraries（默认 D:\.minecraft\libraries）
+#   PROMAID_MC_HOME  Minecraft 根（默认 D:\.minecraft），用于 <MC_HOME>\versions\...\mods 里的 TLM / libIPN
+MC_HOME = os.environ.get('PROMAID_MC_HOME') or r'D:\.minecraft'
+LIB = os.environ.get('PROMAID_LIB') or os.path.join(MC_HOME, 'libraries')
+VERSIONS = os.path.join(MC_HOME, 'versions')
+MC_LIB_DEFAULT = r'D:\.minecraft\libraries'
+if LIB != MC_LIB_DEFAULT:
+    print('classpath roots: LIB=%s  MC_HOME=%s' % (LIB, MC_HOME))
 neo = find(os.path.join(LIB, r'net\neoforged\neoforge\21.1.250\neoforge-21.1.250-client.jar'),
            os.path.join(LIB, r'net\neoforged\neoforge\21.1.250\neoforge-21.1.250-universal.jar'))
 neou = os.path.join(LIB, r'net\neoforged\neoforge\21.1.250\neoforge-21.1.250-universal.jar')
 mc = find(os.path.join(LIB, r'net\minecraft\client\1.21.1-20240808.144430\client-1.21.1-20240808.144430-srg.jar'))
-tlm = find(r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar')
+tlm = find(os.path.join(VERSIONS, r'1.21.1-NeoForge_21.1.250\mods\touhoulittlemaid-1.5.3-neoforge+mc1.21.1.jar'))
 if tlm is None:
-    for p in glob.glob(r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\*touhoulittlemaid*.jar'):
+    for p in glob.glob(os.path.join(VERSIONS, r'1.21.1-NeoForge_21.1.250\mods\*touhoulittlemaid*.jar')):
         tlm = p
         break
 

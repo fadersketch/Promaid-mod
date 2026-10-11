@@ -20,7 +20,9 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 每个树的 DIY 会关掉的布尔条数基线（新增配置项后要一起改，见 DEV_GUIDE §7）
-BASELINE_FLIP = {'promaid_src': 171, 'promaid_src_neo': 175}
+# 实测八百八十二·TD-08：巡逻总开关的 TOML 路径原与扫帚总开关撞键（broom.enable），
+# 撞键时 parse 只会算到一个 → 拆开后两条都独立计数，基线 173/177 → 174/178。
+BASELINE_FLIP = {'promaid_src': 174, 'promaid_src_neo': 178}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
@@ -67,6 +69,9 @@ GATES_ELSEWHERE = {
     'COMBAT_RIDE_PURSUE_TARGET': 'com/maidsmart/combat/RideBindManager.java',
     # 实测八百六十三：绑定飞行载具后的启动时间
     'COMBAT_RIDE_STARTUP_SECONDS': 'com/maidsmart/combat/RideBindManager.java',
+    # 实测八百六十九：挖矿入口闸（没镐不启动）/ 锁定期间持续重挑——接点在任务类里
+    'MINE_REQUIRE_PICK': 'com/maidsmart/task/MaidMineBehavior.java',
+    'MINE_REPICK': 'com/maidsmart/task/MaidMineBehavior.java',
 }
 # 「干预型 mixin 必须有闸」的兜底名单：这几处改的是女仆行为、但**没有自己的配置项**
 # （表驱动管不到），所以在代码里直接问 MaidConfigPreset.isDiy()。少一处 = DIY 下仍然生效。

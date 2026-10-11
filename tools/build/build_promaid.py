@@ -153,7 +153,10 @@ if rc != 0:
 # 文案/注释护栏（DEV_GUIDE §6）：当前历史存量未清零，先以告警形式跑，不清零也不阻断出包。
 # 存量清零后把 --warn 去掉即可改为阻断。
 for _g in ('tools/verify/check_comment_style.py',
-           'tools/verify/check_preset.py', 'tools/verify/check_workflow.py'):
+           'tools/verify/check_preset.py', 'tools/verify/check_workflow.py',
+           'tools/verify/check_catch_swallow.py', 'tools/verify/check_i18n_keys.py',
+           'tools/verify/check_dev_voice.py', 'tools/verify/check_comment_dup.py',
+           'tools/verify/check_reflection.py'):
     _p = os.path.join(BASE, _g)
     if os.path.isfile(_p):
         subprocess.call([sys.executable, _p, '--warn'])
