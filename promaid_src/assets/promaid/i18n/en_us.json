@@ -5972,7 +5972,6 @@
   "、速度修正=§f": ", speed modifier=§f",
   "§r（= 写进 walkTarget 的那个倍率）": "§r(= the multiplier written into walkTarget)",
   "当前移动目标：读不到（": "Current move target: unreadable (",
-  "weapon guard: 幼儿女儿 {} 手上的 {} 已移除并丢地": "weapon guard: young daughter {}'s {} has been removed and dropped",
   "背包里没有能搭的方块了（圆石/泥土等），够不着高处的木材……请给我一些方块～": "No placeable blocks left in inventory (cobblestone/dirt etc.), can't reach the wood up high... please give me some blocks~",
   "我没有斧头，只能用手慢慢掰了……要是给我一把斧就快多了～": "I don't have an axe, so I'll just break it by hand... If only I had an axe, it'd be much faster~",
   "钻石斧": "Diamond Axe",

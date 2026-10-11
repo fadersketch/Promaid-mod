@@ -20,7 +20,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 每个树的 DIY 会关掉的布尔条数基线（新增配置项后要一起改，见 DEV_GUIDE §7）
-BASELINE_FLIP = {'promaid_src': 171, 'promaid_src_neo': 175}
+BASELINE_FLIP = {'promaid_src': 170, 'promaid_src_neo': 174}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
@@ -56,7 +56,6 @@ GATES_ELSEWHERE = {
     'COMBAT_PET_IMMUNITY': 'com/maidsmart/combat/PetImmunityGuard.java',
     'COMBAT_BUILD_SHIELD': 'com/maidsmart/combat/BuildShieldGuard.java',
     'MISC_FARMLAND_GUARD': 'com/maidsmart/combat/FarmlandGuard.java',
-    'MISC_WEAPON_GUARD': 'com/maidsmart/task/MaidWeaponGuard.java',
     'MISC_TOOL_AUTO_EQUIP': 'com/maidsmart/task/MaidToolAutoEquipBehavior.java',
     'MISC_HOME_MOVEMENT': 'com/maidsmart/follow/HomePatrolHandler.java',
     'MISC_FISHING_CHAIR': 'com/maidsmart/fishing/FishingChairService.java',

@@ -1503,7 +1503,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.BooleanValue COMBAT_BUILD_SHIELD;
     public static final ModConfigSpec.BooleanValue COMBAT_HOE_NOT_WEAPON;
     public static final ModConfigSpec.BooleanValue MISC_FARMLAND_GUARD;
-    public static final ModConfigSpec.BooleanValue MISC_WEAPON_GUARD;
     public static final ModConfigSpec.BooleanValue MISC_TOOL_AUTO_EQUIP;
     public static final ModConfigSpec.BooleanValue MISC_BAUBLE_TOTEM;
     public static final ModConfigSpec.BooleanValue MISC_ORB_JOIN;
@@ -3602,8 +3601,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // v1.3.2 实测八百五十九：杂项类改行为的介入补开关（默认开）——随 DIY 关
     MISC_FARMLAND_GUARD = BUILDER.comment("不踩坏农田（默认开）：女仆经过/落在农田上不再把它踩成泥土。关闭 = 回原版（她会踩坏农田）")
             .translation("config.promaid.misc.farmlandGuard").define("farmlandGuard", true);
-    MISC_WEAPON_GUARD = BUILDER.comment("幼儿女儿武器禁持（默认开）：婴儿/幼年阶段的女儿手上出现剑/斧/弓/弩/三叉戟时，把武器从手上删除并原地丢一个一样的。关闭 = 回原版（幼儿也能拿武器）")
-            .translation("config.promaid.misc.weaponGuard").define("weaponGuard", true);
     MISC_TOOL_AUTO_EQUIP = BUILDER.comment("任务工具自动装备（默认开）：按任务自动把合适工具/武器换到主手、战斗时补副手盾牌、建造时强制坐下。关闭 = 回原版（她不做任何自动换装，主手完全听玩家）")
             .translation("config.promaid.misc.toolAutoEquip").define("toolAutoEquip", true);
     MISC_BAUBLE_TOTEM = BUILDER.comment("饰品/背包不死图腾复活（默认开）：女仆自己致命伤时从饰品栏或背包自动消耗不死图腾复活（手里已有图腾仍由原版处理）。关闭 = 回原版（只有手里拿着图腾才会触发）")

@@ -472,7 +472,6 @@
   "config.promaid.combat.buildShield": "建造护盾（抗性 V / 免伤 / 不可锁定）",
   "config.promaid.combat.hoeNotWeapon": "锄头不算武器",
   "config.promaid.misc.farmlandGuard": "不踩坏农田",
-  "config.promaid.misc.weaponGuard": "幼儿女儿武器禁持",
   "config.promaid.misc.toolAutoEquip": "任务工具自动装备",
   "config.promaid.misc.baubleTotem": "饰品 / 背包不死图腾复活",
   "config.promaid.misc.orbJoin": "经验球归挖矿女仆",

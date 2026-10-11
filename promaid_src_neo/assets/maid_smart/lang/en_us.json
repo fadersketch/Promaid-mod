@@ -482,7 +482,6 @@
   "config.promaid.combat.buildShield": "Build shield (resistance V / immunity / untargetable)",
   "config.promaid.combat.hoeNotWeapon": "Hoe is not a weapon",
   "config.promaid.misc.farmlandGuard": "No farmland trampling",
-  "config.promaid.misc.weaponGuard": "Toddler maid weapon ban",
   "config.promaid.misc.toolAutoEquip": "Auto-equip task tools",
   "config.promaid.misc.baubleTotem": "Bauble / backpack totem revive",
   "config.promaid.misc.orbJoin": "XP orbs go to mining maid",

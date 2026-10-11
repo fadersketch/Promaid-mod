@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 600 | 264 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 604 | 268 | 24 |
+| promaid_src（Forge 1.20.1） | 599 | 263 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 603 | 267 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：`broom.enable`
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -1163,7 +1163,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
 | `mine.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8，发呆出现很快） |
 
-### misc　（83 项）
+### misc　（82 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1242,7 +1242,6 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.scheduleActivityRange` | num | 12 | 排班活动半径（格，默认 12） |
 | `misc.scheduleRangeFloor` | bool | true | 排班活动半径下限生效（默认开） |
 | `misc.farmlandGuard` | bool | true | 不踩坏农田（默认开） |
-| `misc.weaponGuard` | bool | true | 幼儿女儿武器禁持（默认开） |
 | `misc.toolAutoEquip` | bool | true | 任务工具自动装备（默认开） |
 | `misc.baubleTotem` | bool | true | 饰品/背包不死图腾复活（默认开） |
 | `misc.orbJoin` | bool | true | 经验球归挖矿女仆（默认开） |

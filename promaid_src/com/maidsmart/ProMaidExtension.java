@@ -59,8 +59,6 @@ public class ProMaidExtension implements ILittleMaid {
     private int hudTimer = 0;
     /** v1.5.275：钓鱼女仆走位高频维持节流计数（每 3 tick 一次） */
     private int seatWalkTimer = 0;
-    /** v1.5.332：幼儿女儿武器禁持轮询节流计数（每 20 tick = 1 秒一次） */
-    private int weaponGuardTimer = 0;
     /** v1.3.7 实测六百六十七：武装拴绳挂载校验（2 tick 一次；无挂载对时零开销） */
     private int tetherTimer = 0;
 
@@ -306,12 +304,6 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.follow.MaidChunkLoadManager.followTickets(server);
         // 实测五百六十六（PR #10 移植）：入世界自动补包队列（空队列零开销）
         com.maidsmart.command.MaidResyncCommand.tickAutoResync(server);
-        // v1.5.332：幼儿女儿武器禁持（1 秒轮询——婴儿/幼年女儿手上出现武器
-        // → 移除并原地丢一个完全一样的到地上）
-        if (++this.weaponGuardTimer >= 20) {
-            this.weaponGuardTimer = 0;
-            com.maidsmart.task.MaidWeaponGuard.tick(server);
-        }
         // v1.5.252j：建造 HUD 广播（每秒一次）——客户端左上角显示速度/预计完成时间
         if (++this.hudTimer >= 20) {
             this.hudTimer = 0;
