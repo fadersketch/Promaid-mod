@@ -146,6 +146,9 @@ public final class FriendlyFireGuard {
 
     /** 女仆是否不该伤害该目标：自身 / 主人 / 同主人女仆 / 友军（同队等） */
     public static boolean isFriendly(EntityMaid maid, Entity target) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FRIENDLY_FIRE_GUARD.get()) {
+            return false; // v1.3.2 实测八百五十九：关 = 回原版（主人/友军照常可能被她打到）
+        }
         if (!com.maidsmart.tool.MaidScope.owned(maid)) {
             return false; // v1.2.2 实测六百：无主女仆的伤害关系一律按原版走，本模组不介入
         }

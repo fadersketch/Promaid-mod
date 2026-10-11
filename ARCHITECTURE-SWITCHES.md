@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 581 | 246 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 585 | 250 | 24 |
+| promaid_src（Forge 1.20.1） | 598 | 263 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 602 | 267 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：`broom.enable`
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -89,7 +89,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.scheduleActivityRange` | num | 12 | 排班活动半径（格，默认 12） |
 | `misc.scheduleRangeFloor` | bool | true | 排班活动半径下限生效（默认开） |
 
-### 战斗 / 自保　（130 项）
+### 战斗 / 自保　（134 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -215,6 +215,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `combat.assistRadius` | num | 16 | 援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3） |
 | `combat.sweepAlways` | bool | true | 平A必横扫（默认开） |
 | `combat.attackThoseAttackingUs` | bool | true | 反击类型判不出的攻击者（默认开） |
+| `combat.friendlyFireGuard` | bool | true | 主人/友军免伤总闸（默认开） |
+| `combat.petImmunity` | bool | true | 玩家宠物免伤（默认开） |
+| `combat.buildShield` | bool | true | 建造护盾（默认开） |
+| `combat.hoeNotWeapon` | bool | true | 锄头不算武器（默认开） |
 | `broom.range` | num | 8.0 | 战斗盘旋的站立距离（格，默认 8） |
 | `teleportExemptSitting` | bool | true | 坐下的女仆不被自保传送拉走（默认开） |
 | `bombing.melee` | bool | true | 战斗模式轰炸（默认开） |
@@ -351,7 +355,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `ride.airCombat` | bool | true | 骑飞行载具时的悬停与低空盘旋（默认开） |
 | `ride.ammoFeed` | bool | true | 骑载具时替她装弹（默认开） |
 
-### 挖矿 / 伐木　（69 项）
+### 挖矿 / 伐木　（70 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -426,8 +430,9 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `aitools.switchTask` | bool | true | smart_switch_task 工具（切换任务/工作模式——TLM 原生 + 本模组任务全可切，支持空袭/挖矿/ |
 | `bridge.reclaimToMaid` | bool | true | 搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用） |
 | `misc.pickupPriority` | bool | true | 挖矿中禁止拾取（捡掉落物最低优先级） |
+| `misc.orbJoin` | bool | true | 经验球归挖矿女仆（默认开） |
 
-### 建造 / 蓝图　（37 项）
+### 建造 / 蓝图　（40 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -467,7 +472,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `build.lookahead` | num | 512 | 单轮扫描步数上限（建造计划每轮最多推进的步骤） |
 | `build.deferredScanCap` | num | 256 | 延后步骤轮询上限（每轮检查的延后步骤数） |
 | `build.structureMaxVolume` | num | 16777216 | 结构文件体积上限（宽×高×长，超限拒绝加载） |
+| `build.areaProtection` | bool | true | 建造区保护（默认开） |
+| `build.forceWorkActivity` | bool | true | 建造任务强制工作时段（默认开） |
 | `aitools.workList` | bool | true | work_list 工具（query_todo/build_need——当前任务清单与建造材料缺口查询，杜绝'先生成 |
+| `combat.buildShield` | bool | true | 建造护盾（默认开） |
 
 ### 防刷怪　（10 项）
 
@@ -500,7 +508,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `accessory.daYunWallPhase` | bool | false | 「大运」穿墙锁敌（默认关） |
 | `accessory.daYunNoWallDamage` | bool | true | 「大运」免疫冲撞（默认开） |
 
-### 压缩盒 / 背包　（11 项）
+### 压缩盒 / 背包　（12 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -515,8 +523,9 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `compressionBox.maidExtension` | bool | true | 压缩盒·女仆背包延伸（默认开） |
 | `compressionBox.maxStack` | num | 114514 | 压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000） |
 | `misc.backpackOverflow` | bool | true | 背包满时装进精妙背包（默认开） |
+| `misc.baubleTotem` | bool | true | 饰品/背包不死图腾复活（默认开） |
 
-### 记忆 / 对话 / 语音　（101 项）
+### 记忆 / 对话 / 语音　（102 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -602,6 +611,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `dialogue.topicBackoffMin` | num | 60 | 话题冷却（分钟，被主人否定的主动话题 N 分钟内不再提起） |
 | `dialogue.outputLanguage` | str | "" | 对话输出语言（留空 = 强制中文输出 |
 | `dialogue.langCheck` | bool | true | 对话输出语言检测（v1.5.250 起 |
+| `dialogue.promptSittingWork` | bool | true | 对话提示词·坐姿工作说明（默认开） |
 | `misc.bubbleLimitMs` | num | 5000 | 对话气泡限频（毫秒，防刷屏） |
 | `voice.volumeMultiplier` | num | 2.0 | TTS 语音播放音量倍率（与伤害/减伤无关！） |
 | `voice.systemEnabled` | bool | true | 系统消息朗读（感知/工作/自保等规则气泡也播放 TTS 语音） |
@@ -815,7 +825,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `broom.airAltMigrated` | bool | false | 内部标记 |
 | `broom.orbitRadiusMigrated` | bool | false | 内部标记 |
 
-### build　（36 项）
+### build　（38 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -855,8 +865,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `build.lookahead` | num | 512 | 单轮扫描步数上限（建造计划每轮最多推进的步骤） |
 | `build.deferredScanCap` | num | 256 | 延后步骤轮询上限（每轮检查的延后步骤数） |
 | `build.structureMaxVolume` | num | 16777216 | 结构文件体积上限（宽×高×长，超限拒绝加载） |
+| `build.areaProtection` | bool | true | 建造区保护（默认开） |
+| `build.forceWorkActivity` | bool | true | 建造任务强制工作时段（默认开） |
 
-### combat　（120 项）
+### combat　（124 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -982,6 +994,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `combat.assistRadius` | num | 16 | 援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3） |
 | `combat.sweepAlways` | bool | true | 平A必横扫（默认开） |
 | `combat.attackThoseAttackingUs` | bool | true | 反击类型判不出的攻击者（默认开） |
+| `combat.friendlyFireGuard` | bool | true | 主人/友军免伤总闸（默认开） |
+| `combat.petImmunity` | bool | true | 玩家宠物免伤（默认开） |
+| `combat.buildShield` | bool | true | 建造护盾（默认开） |
+| `combat.hoeNotWeapon` | bool | true | 锄头不算武器（默认开） |
 
 ### compat　（1 项）
 
@@ -996,7 +1012,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `compressionBox.maidExtension` | bool | true | 压缩盒·女仆背包延伸（默认开） |
 | `compressionBox.maxStack` | num | 114514 | 压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000） |
 
-### dialogue　（26 项）
+### dialogue　（27 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1026,6 +1042,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `dialogue.topicBackoffMin` | num | 60 | 话题冷却（分钟，被主人否定的主动话题 N 分钟内不再提起） |
 | `dialogue.outputLanguage` | str | "" | 对话输出语言（留空 = 强制中文输出 |
 | `dialogue.langCheck` | bool | true | 对话输出语言检测（v1.5.250 起 |
+| `dialogue.promptSittingWork` | bool | true | 对话提示词·坐姿工作说明（默认开） |
 
 ### flightFollow　（6 项）
 
@@ -1144,7 +1161,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
 | `mine.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8，发呆出现很快） |
 
-### misc　（73 项）
+### misc　（83 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1222,6 +1239,16 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.scheduleForceBrainRefresh` | bool | true | 排班切段后大脑自愈（默认开，借鉴 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUC |
 | `misc.scheduleActivityRange` | num | 12 | 排班活动半径（格，默认 12） |
 | `misc.scheduleRangeFloor` | bool | true | 排班活动半径下限生效（默认开） |
+| `misc.farmlandGuard` | bool | true | 不踩坏农田（默认开） |
+| `misc.weaponGuard` | bool | true | 幼儿女儿武器禁持（默认开） |
+| `misc.toolAutoEquip` | bool | true | 任务工具自动装备（默认开） |
+| `misc.baubleTotem` | bool | true | 饰品/背包不死图腾复活（默认开） |
+| `misc.orbJoin` | bool | true | 经验球归挖矿女仆（默认开） |
+| `misc.equipRescue` | bool | true | 装备救回（默认开） |
+| `misc.homeMovement` | bool | true | home 模式走位（默认开） |
+| `misc.stationaryLock` | bool | true | 站桩锁位（默认开） |
+| `misc.fishingChair` | bool | true | 钓鱼自动坐垫（默认开） |
+| `misc.drivenNoStroll` | bool | true | 坐骑不闲逛（默认开） |
 
 ### perception　（12 项）
 

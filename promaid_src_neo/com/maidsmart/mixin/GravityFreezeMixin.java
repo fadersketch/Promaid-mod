@@ -34,6 +34,9 @@ public abstract class GravityFreezeMixin {
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void promaid$freezeGravity(BlockState state, ServerLevel level, BlockPos pos,
                                        RandomSource random, CallbackInfo ci) {
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_AREA_PROTECTION.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（下落方块照落）
+        }
         if (BuildPlan.isBuildingRegion(level, pos)) {
             ci.cancel();
         }

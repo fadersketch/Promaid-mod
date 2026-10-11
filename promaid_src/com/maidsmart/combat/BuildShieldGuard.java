@@ -94,7 +94,8 @@ public final class BuildShieldGuard {
     @SubscribeEvent
     public static void onMaidHurt(LivingHurtEvent event) {
         try {
-            if (event.getEntity() instanceof EntityMaid maid && isBuilding(maid)) {
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_BUILD_SHIELD.get()
+                    && event.getEntity() instanceof EntityMaid maid && isBuilding(maid)) {
                 event.setCanceled(true);
             }
         } catch (Throwable ignored) {
@@ -105,7 +106,8 @@ public final class BuildShieldGuard {
     @SubscribeEvent
     public static void onChangeTarget(LivingChangeTargetEvent event) {
         try {
-            if (event.getNewTarget() instanceof EntityMaid maid && isBuilding(maid)) {
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_BUILD_SHIELD.get()
+                    && event.getNewTarget() instanceof EntityMaid maid && isBuilding(maid)) {
                 event.setNewTarget(null);
             }
         } catch (Throwable ignored) {
@@ -116,7 +118,8 @@ public final class BuildShieldGuard {
      *  建造中 → 保证无限时长抗性 V 存在；切出建造 → 移除效果 + 清标记 */
     public static void tickShield(EntityMaid maid) {
         try {
-            boolean building = isBuilding(maid);
+            boolean building = isBuilding(maid)
+                    && com.maidsmart.config.MaidSmartConfig.COMBAT_BUILD_SHIELD.get(); // 关时走 else 支撤掉已给的效果
             boolean marked = maid.getPersistentData().m_128471_(SHIELD_TAG);
             if (building) {
                 if (!marked) {

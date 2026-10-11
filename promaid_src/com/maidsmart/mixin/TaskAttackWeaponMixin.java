@@ -19,6 +19,9 @@ public abstract class TaskAttackWeaponMixin {
     @Inject(method = "isWeapon", at = @At("HEAD"), cancellable = true)
     private void maidsmart$excludeHoe(EntityMaid maid, ItemStack stack,
                                       CallbackInfoReturnable<Boolean> cir) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_HOE_NOT_WEAPON.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（锄头会被当武器）
+        }
         if (stack != null && stack.m_41720_() instanceof net.minecraft.world.item.HoeItem) {
             cir.setReturnValue(false); // 锄头不是武器（农具），不参与攻击/装备判定
         }

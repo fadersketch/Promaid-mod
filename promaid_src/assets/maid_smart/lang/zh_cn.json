@@ -463,5 +463,22 @@
   "config.promaid.tlmTeleportExempt": "TLM 瞬移/跟随豁免",
   "config.promaid.misc.scheduleRangeFloor": "排班活动半径下限生效",
   "config.promaid.misc.presetMode": "预设模式（手册页切换）",
-  "item.maid_smart.da_yun.desc5": "§7佩戴者（玩家 / 女仆）在 §f鞘翅滑翔中撞到方块不再掉血§7（原版「撞墙」伤害）；面板「佩戴者的保护」可关"
+  "item.maid_smart.da_yun.desc5": "§7佩戴者（玩家 / 女仆）在 §f鞘翅滑翔中撞到方块不再掉血§7（原版「撞墙」伤害）；面板「佩戴者的保护」可关",
+  "config.promaid.build.areaProtection": "建造区保护（随机刻 / 重力 / 树叶 / TNT）",
+  "config.promaid.build.forceWorkActivity": "建造任务强制工作时段",
+  "config.promaid.dialogue.promptSittingWork": "对话提示词·坐姿工作说明",
+  "config.promaid.combat.friendlyFireGuard": "主人 / 友军免伤总闸",
+  "config.promaid.combat.petImmunity": "玩家宠物免伤",
+  "config.promaid.combat.buildShield": "建造护盾（抗性 V / 免伤 / 不可锁定）",
+  "config.promaid.combat.hoeNotWeapon": "锄头不算武器",
+  "config.promaid.misc.farmlandGuard": "不踩坏农田",
+  "config.promaid.misc.weaponGuard": "幼儿女儿武器禁持",
+  "config.promaid.misc.toolAutoEquip": "任务工具自动装备",
+  "config.promaid.misc.baubleTotem": "饰品 / 背包不死图腾复活",
+  "config.promaid.misc.orbJoin": "经验球归挖矿女仆",
+  "config.promaid.misc.equipRescue": "装备救回",
+  "config.promaid.misc.homeMovement": "home 模式走位",
+  "config.promaid.misc.stationaryLock": "站桩锁位",
+  "config.promaid.misc.fishingChair": "钓鱼自动坐垫",
+  "config.promaid.misc.drivenNoStroll": "坐骑不闲逛"
 }

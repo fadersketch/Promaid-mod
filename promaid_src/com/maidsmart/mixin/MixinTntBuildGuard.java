@@ -34,6 +34,9 @@ public abstract class MixinTntBuildGuard {
     @Inject(method = "m_6807_", at = @At("HEAD"), cancellable = true)
     private void maidsmart$guardBuildTntIgnite(BlockState state, Level level, BlockPos pos,
                                                BlockState oldState, boolean isMoving, CallbackInfo ci) {
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_AREA_PROTECTION.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（TNT 照常点火）
+        }
         if (level instanceof net.minecraft.server.level.ServerLevel sl
                 && com.maidsmart.build.BuildTntGuard.suppressing(sl)) {
             ci.cancel();
@@ -44,6 +47,9 @@ public abstract class MixinTntBuildGuard {
     private void maidsmart$guardBuildTntNeighbor(BlockState state, Level level, BlockPos pos,
                                                  Block block, BlockPos fromPos, boolean isMoving,
                                                  CallbackInfo ci) {
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_AREA_PROTECTION.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（TNT 照常点火）
+        }
         if (level instanceof net.minecraft.server.level.ServerLevel sl
                 && com.maidsmart.build.BuildTntGuard.suppressing(sl)) {
             ci.cancel();

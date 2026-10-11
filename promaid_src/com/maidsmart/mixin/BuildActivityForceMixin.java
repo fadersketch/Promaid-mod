@@ -40,6 +40,9 @@ public abstract class BuildActivityForceMixin {
     private static void maidSmartForceWorkActivity(
             ServerLevel level, EntityMaid maid, Brain<?> brain, long gameTime,
             CallbackInfo ci) {
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_FORCE_WORK_ACTIVITY.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（完全按作息表切活动）
+        }
         if (maid.getTask() != null && maid.getTask().getUid() != null
                 && "maid_smart".equals(maid.getTask().getUid().m_135827_())
                 && ("build".equals(maid.getTask().getUid().m_135815_())

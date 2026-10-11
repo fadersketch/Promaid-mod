@@ -156,6 +156,9 @@ if (++scanCounter < 40) {
      *  之外再直接查 getCustomName（getCustomName）与 getName（getName），任一命中即标记；
      *  并放宽为"包含"匹配（旧版只查显示名，若显示名被队伍/其他模组改写会漏判）。 */
     public static boolean isPetMarked(EntityMaid maid, LivingEntity target) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_PET_IMMUNITY.get()) {
+            return false; // v1.3.2 实测八百五十九：关 = 回原版（她照常攻击宠物）
+        }
         if (target == null) {
             return false;
         }

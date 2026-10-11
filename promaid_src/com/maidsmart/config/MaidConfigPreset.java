@@ -52,8 +52,8 @@ public final class MaidConfigPreset {
             // ---- 感知 / 情绪 ----
             "perception.enable", "perception.hostile", "perception.owner", "perception.weather",
             "affect.enable", "affect.inject",
-            // ---- AI 工具：读写记忆与做物保留；能直接指挥她行动的四个（切任务/放方块/空袭/工作区）关掉 ----
-            "aitools.remember", "aitools.workingNote", "aitools.craft", "aitools.perception",
+            // ---- AI 工具：读写记忆保留；能直接指挥她行动的（做物/切任务/放方块/空袭/工作区）关掉 ----
+            "aitools.remember", "aitools.workingNote", "aitools.perception",
             "aitools.workList", "aitools.ownerInventory", "aitools.readiness",
             // ---- 对话与播报（她说什么，不改变她做什么） ----
             "dialogue.statusReporter", "dialogue.proactive", "dialogue.replyFeedback", "dialogue.langCheck",
@@ -65,8 +65,8 @@ public final class MaidConfigPreset {
             "compat.puppetBlacklist",
             // ---- 大运：只留"不拆箱子/照常掉落/照常粒子"三个安全项，总开关 / 玩家侧 / 免疫冲撞随 DIY 关 ----
             "accessory.daYunSkipContainers", "accessory.daYunDropItems", "accessory.daYunBreakParticles",
-            // ---- 自保传送豁免坐/蹲（开着 = 我们少管） ----
-            "teleportExemptSitting",
+            // ---- v1.3.2 实测八百五十九：自保传送豁免坐/蹲（teleportExemptSitting）移出保留表——它改的是
+            //      移动行为（坐/蹲女仆免于自保传送），随 DIY 关 ----
             // ---- 保护玩家已有配置 / 修 bug：罗盘圈不被覆盖、传送后重建、背包溢出兜底 ----
             "misc.compassPriority", "misc.maidTeleportRebuild", "misc.backpackOverflow",
             // ---- 自己的显示与标记 ----

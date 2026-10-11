@@ -37,6 +37,9 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
             return false;
         }
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_TOOL_AUTO_EQUIP.get()) {
+            return false; // v1.3.2 实测八百五十九：关 = 回原版（主手完全听玩家）
+        }
         // v1.3.0「扫帚模式」：**照远程空袭一样自己换武器**。
         //
         // 【为什么必须自动换】玩家实测反馈："女仆虽然可以骑上扫帚，但是没有办法给她更换武器，

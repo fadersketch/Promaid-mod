@@ -31,6 +31,9 @@ public abstract class MaidStationaryMixin {
             return; // v1.2.2 实测六百：无主女仆不干预
         }
         EntityMaid maid = (EntityMaid) (Object) this;
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_STATIONARY_LOCK.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（不锁水平位移）
+        }
         if (MaidWorkTags.isStill(maid) || MaidWorkTags.isBuildSitting(maid)) {
             // v1.5.98c：只清水平速度（x/z 归零），保留垂直（y）——防溺水/保下落
             // v1.1.0：建造强制坐下同锁——玩家"解除坐下"后 MaidMoveControl 直施

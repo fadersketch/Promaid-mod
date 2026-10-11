@@ -1458,6 +1458,24 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.IntValue TTS_JAR_PACK_MIN_INTERVAL_S;
     public static final ForgeConfigSpec.BooleanValue TTS_JAR_PACK_MUTE_NATIVE;
 
+    // ================= v1.3.2 实测八百五十九：改行为的介入补开关（默认开 · 随 DIY 关） =================
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FRIENDLY_FIRE_GUARD;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_PET_IMMUNITY;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BUILD_SHIELD;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_HOE_NOT_WEAPON;
+    public static final ForgeConfigSpec.BooleanValue MISC_FARMLAND_GUARD;
+    public static final ForgeConfigSpec.BooleanValue MISC_WEAPON_GUARD;
+    public static final ForgeConfigSpec.BooleanValue MISC_TOOL_AUTO_EQUIP;
+    public static final ForgeConfigSpec.BooleanValue MISC_BAUBLE_TOTEM;
+    public static final ForgeConfigSpec.BooleanValue MISC_ORB_JOIN;
+    public static final ForgeConfigSpec.BooleanValue MISC_EQUIP_RESCUE;
+    public static final ForgeConfigSpec.BooleanValue MISC_HOME_MOVEMENT;
+    public static final ForgeConfigSpec.BooleanValue MISC_STATIONARY_LOCK;
+    public static final ForgeConfigSpec.BooleanValue MISC_FISHING_CHAIR;
+    public static final ForgeConfigSpec.BooleanValue MISC_DRIVEN_NO_STROLL;
+    public static final ForgeConfigSpec.BooleanValue BUILD_AREA_PROTECTION;
+    public static final ForgeConfigSpec.BooleanValue BUILD_FORCE_WORK_ACTIVITY;
+    public static final ForgeConfigSpec.BooleanValue DIALOGUE_PROMPT_SITTING_WORK;
     public static final ForgeConfigSpec SPEC;
 
     static {
@@ -1595,6 +1613,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILD_STRUCTURE_MAX_VOLUME = BUILDER.comment("结构文件体积上限（宽×高×长，超限拒绝加载）")
                 .translation("config.promaid.build.structureMaxVolume")
                 .defineInRange("structureMaxVolume", 16777216, 100000, 67108864);
+        // v1.3.2 实测八百五十九：建造区保护 / 强制工作时段——随 DIY 关
+        BUILD_AREA_PROTECTION = BUILDER.comment("建造区保护（默认开）：建造计划进行中，图纸区域内的随机刻度暂停（草不传播、作物不长）、下落方块重力冻结（沙砾悬空保持）、蓝图树叶永不衰减、TNT 点火被压制（放完就炸、活塞推炸）。关闭 = 完全回原版物理与随机刻度（建造中的沙砾会崩落、蓝图树叶会掉）")
+                .translation("config.promaid.build.areaProtection").define("areaProtection", true);
+        BUILD_FORCE_WORK_ACTIVITY = BUILDER.comment("建造任务强制工作时段（默认开）：她的任务是本模组建造时，把大脑活动钉在 WORK（休息/睡觉时段也照建——否则建造行为根本不被评估，她会站着不动）。关闭 = 完全按作息表切活动（休息时段不再建造）")
+                .translation("config.promaid.build.forceWorkActivity").define("forceWorkActivity", true);
         BUILDER.pop();
 
         // ---- 饰品「大运」（v1.5.393 实测八百零四） ----
@@ -2134,6 +2157,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 不符（日文/英文混入）则丢弃并提示（日志搜 "lang check" 看原文）
         DIALOGUE_LANG_CHECK = BUILDER.comment("对话输出语言检测（v1.5.250 起：LLM 回复非设定语言时【内嵌翻译】成目标语言再显示——替代旧版审查打回重刷）")
                 .translation("config.promaid.dialogue.langCheck").define("langCheck", true);
+        // v1.3.2 实测八百五十九：对话提示词追加「坐姿工作」段——随 DIY 关
+        DIALOGUE_PROMPT_SITTING_WORK = BUILDER.comment("对话提示词·坐姿工作说明（默认开）：给 LLM 的系统提示词追加一段说明——她坐着干活时别说「要先站起来」。关闭 = 不加这段")
+                .translation("config.promaid.dialogue.promptSittingWork").define("promptSittingWork", true);
         BUILDER.pop();
 
         // ---- 战斗与自保 ----
@@ -2652,6 +2678,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.sweepAlways").define("sweepAlways", true);
         COMBAT_ATTACK_THOSE_ATTACKING_US = BUILDER.comment("反击类型判不出的攻击者（默认开）：正在打她/主人、或刚打过我们这一边的生物，即使它的类型在 TLM 的闸门里算「中立/友方」也当敌人打（给 ALEX 的生物这类「扑上来咬人、类型却判不出威胁」的模组生物用；只在它真的在攻击我们的 5 秒窗口内成立，主人/同主女仆/友军照旧不碰）。关闭 = 回 TLM 原版类型闸")
                 .translation("config.promaid.combat.attackThoseAttackingUs").define("attackThoseAttackingUs", true);
+        // v1.3.2 实测八百五十九：免伤总闸 / 宠物免伤 / 建造护盾 / 锄头择物——随 DIY 关
+        COMBAT_FRIENDLY_FIRE_GUARD = BUILDER.comment("主人/友军免伤总闸（默认开）：女仆绝不对主人、同主女仆、友军造成任何伤害（近战/横扫/箭矢/法术/她扔的炸弹全覆盖，三层伤害事件都取消并每 2 秒清掉这类仇恨）。关闭 = 完全回原版伤害关系（主人/友军照常可能被她打到）")
+                .translation("config.promaid.combat.friendlyFireGuard").define("friendlyFireGuard", true);
+        COMBAT_PET_IMMUNITY = BUILDER.comment("玩家宠物免伤（默认开）：名字含「玩家宠物」「主人的宠物」或以「MaidNoAttack」开头、以及主人自己的可驯服宠物，女仆不对其造成任何伤害并清除这类仇恨。关闭 = 完全回原版（她照常攻击宠物）")
+                .translation("config.promaid.combat.petImmunity").define("petImmunity", true);
+        COMBAT_BUILD_SHIELD = BUILDER.comment("建造护盾（默认开）：本模组建造任务进行中的女仆获得无限时长抗性提升 V、任何伤害来源被取消、任何生物不能把她选为目标。关闭 = 完全回原版（建造中的她照常被怪打、会被锁定）")
+                .translation("config.promaid.combat.buildShield").define("buildShield", true);
+        COMBAT_HOE_NOT_WEAPON = BUILDER.comment("锄头不算武器（默认开）：TLM 只要主手物品带攻击属性就当成武器，而锄头带攻击属性 → 她会拿锄头去打架。开着 = 任何锄头都不算武器（不参战、不被自动装备）；关闭 = 回 TLM 原版判定")
+                .translation("config.promaid.combat.hoeNotWeapon").define("hoeNotWeapon", true);
         BUILDER.pop();
 
         // ---- v1.3.0「扫帚模式」（配置面板：战斗与自保 → 扫帚模式）----
@@ -3479,6 +3514,27 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.scheduleActivityRange").defineInRange("scheduleActivityRange", 12, 8, 512);
     MISC_SCHEDULE_RANGE_FLOOR = BUILDER.comment("排班活动半径下限生效（默认开）：开 = 工作区域的半径取「max(排班活动半径, TLM 设置)」，本模组那个数只是下限（TLM 调更大时听 TLM 的）；关 = 完全用 TLM 自己的设置（工作/休闲/睡眠三个半径），本模组一个数都不掺")
             .translation("config.promaid.misc.scheduleRangeFloor").define("scheduleRangeFloor", true);
+    // v1.3.2 实测八百五十九：杂项类改行为的介入补开关（默认开）——随 DIY 关
+    MISC_FARMLAND_GUARD = BUILDER.comment("不踩坏农田（默认开）：女仆经过/落在农田上不再把它踩成泥土。关闭 = 回原版（她会踩坏农田）")
+            .translation("config.promaid.misc.farmlandGuard").define("farmlandGuard", true);
+    MISC_WEAPON_GUARD = BUILDER.comment("幼儿女儿武器禁持（默认开）：婴儿/幼年阶段的女儿手上出现剑/斧/弓/弩/三叉戟时，把武器从手上删除并原地丢一个一样的。关闭 = 回原版（幼儿也能拿武器）")
+            .translation("config.promaid.misc.weaponGuard").define("weaponGuard", true);
+    MISC_TOOL_AUTO_EQUIP = BUILDER.comment("任务工具自动装备（默认开）：按任务自动把合适工具/武器换到主手、战斗时补副手盾牌、建造时强制坐下。关闭 = 回原版（她不做任何自动换装，主手完全听玩家）")
+            .translation("config.promaid.misc.toolAutoEquip").define("toolAutoEquip", true);
+    MISC_BAUBLE_TOTEM = BUILDER.comment("饰品/背包不死图腾复活（默认开）：女仆自己致命伤时从饰品栏或背包自动消耗不死图腾复活（手里已有图腾仍由原版处理）。关闭 = 回原版（只有手里拿着图腾才会触发）")
+            .translation("config.promaid.misc.baubleTotem").define("baubleTotem", true);
+    MISC_ORB_JOIN = BUILDER.comment("经验球归挖矿女仆（默认开）：经验球附近没有玩家、但附近有挖矿任务的已加载女仆时，让她把经验收走。关闭 = 回原版（经验球不会被她自动吸收）")
+            .translation("config.promaid.misc.orbJoin").define("orbJoin", true);
+    MISC_EQUIP_RESCUE = BUILDER.comment("装备救回（默认开）：女仆装备槽被清空（第三方工具/意外掉落）时，把物品救回她身上/背包，防丢失。关闭 = 回原版（装备被清就是没了）")
+            .translation("config.promaid.misc.equipRescue").define("equipRescue", true);
+    MISC_HOME_MOVEMENT = BUILDER.comment("home 模式走位（默认开）：在家模式女仆没有移动目标时，由本模组给 home 锚点附近的随机走位（非干活的持续巡逻、宰杀任务无牲畜时去附近闲逛）。关闭 = 回原版（home 女仆站原地不动）")
+            .translation("config.promaid.misc.homeMovement").define("homeMovement", true);
+    MISC_STATIONARY_LOCK = BUILDER.comment("站桩锁位（默认开）：站桩/建造坐姿的女仆从实体移动层锁死水平位移（防被各种直连通道推着走）。关闭 = 回原版（坐姿/站桩的她可能被移动源推走）")
+            .translation("config.promaid.misc.stationaryLock").define("stationaryLock", true);
+    MISC_FISHING_CHAIR = BUILDER.comment("钓鱼自动坐垫（默认开）：钓鱼女仆自动生成坐垫并维持坐垫走位。关闭 = 回原版（不生成坐垫）")
+            .translation("config.promaid.misc.fishingChair").define("fishingChair", true);
+    MISC_DRIVEN_NO_STROLL = BUILDER.comment("坐骑不闲逛（默认开）：被本模组女仆驾驶的坐骑不许自己随机溜达（原版只对玩家乘客做这件事）。关闭 = 回原版（女仆驾驶时坐骑仍会自己溜达）")
+            .translation("config.promaid.misc.drivenNoStroll").define("drivenNoStroll", true);
     BUILDER.pop();
 
         // ---- 语音（v1.5.198：TTS 音量倍率 / 系统消息朗读 / 系统语音包 / 语音缓存）----

@@ -44,6 +44,9 @@ public abstract class RandomStrollGoalRiddenMixin {
 
     @Inject(method = "m_8036_", at = @At("HEAD"), cancellable = true)
     private void promaid$noStrollWhileMaidDriven(CallbackInfoReturnable<Boolean> cir) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_DRIVEN_NO_STROLL.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（女仆驾驶时坐骑仍会自己溜达）
+        }
         try {
             if (com.maidsmart.combat.MaidRideKit.isNoSaddleRideable(this.f_25725_)) {
                 return; // 实测七百七十：模组仆从坐骑的闲逛归它自己，不拦

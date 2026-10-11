@@ -23,6 +23,9 @@ public abstract class LeavesBlockMixin {
     @Inject(method = "m_213898_", at = @At("HEAD"), cancellable = true)
     private void maidSmartProtectLeaves(BlockState state, ServerLevel level, BlockPos pos,
                                         RandomSource random, CallbackInfo ci) {
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_AREA_PROTECTION.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（蓝图树叶照常衰减）
+        }
         if (ChunkFreeze.isProtectedLeaf(level.m_46472_(), pos)) {
             ci.cancel(); // 蓝图树叶：永不随机刻度衰减
         }

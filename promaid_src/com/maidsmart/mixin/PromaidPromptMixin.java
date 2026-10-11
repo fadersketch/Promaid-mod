@@ -26,6 +26,9 @@ public abstract class PromaidPromptMixin {
 
     @ModifyVariable(method = "systemChat", at = @At("HEAD"), argsOnly = true)
     private static String promaid$appendWorkPosture(String setting) {
+        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_PROMPT_SITTING_WORK.get()) {
+            return setting; // v1.3.2 实测八百五十九：关 = 回原版（不追加这段）
+        }
         if (setting.contains(PromaidPromptAppender.MARKER)) {
             return setting; // 幂等：已注入不重复
         }

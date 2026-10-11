@@ -45,6 +45,9 @@ public abstract class MaidBaubleTotemMixin {
     private void maidsmart$baubleTotemInner(DamageSource source, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
         if (self instanceof EntityMaid maid) {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_BAUBLE_TOTEM.get()) {
+                return; // v1.3.2 实测八百五十九：关 = 回原版（只有手里拿着图腾才触发）
+            }
             // 女仆自己：手里已有图腾 → 原版路径处理，不双份触发
             for (InteractionHand hand : InteractionHand.values()) {
                 if (maid.getItemInHand(hand).is(Items.TOTEM_OF_UNDYING)) {

@@ -65,6 +65,9 @@ public final class HomeWorkMovementDriver {
 
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_HOME_MOVEMENT.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（home 宰杀女仆不再被强推走位）
+        }
 if (++this.throttle < 5) {
             return; // 每 5 tick = 0.25 秒一轮
         }

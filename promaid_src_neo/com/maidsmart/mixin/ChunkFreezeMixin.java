@@ -21,6 +21,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ChunkFreezeMixin {
     @Inject(method = "tickChunk", at = @At("HEAD"), cancellable = true)
     private void maidSmartFreezeChunkTick(LevelChunk chunk, int randomTickCount, CallbackInfo ci) {
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_AREA_PROTECTION.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（随机刻度照跑）
+        }
         ChunkPos cp = chunk.getPos();
         // 区块最小方块坐标 >> 4 = 区块号；按 (维度, cx, cz) 判定是否冻结
         if (ChunkFreeze.isFrozen(chunk.getLevel().dimension(),

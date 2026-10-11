@@ -111,6 +111,9 @@ public final class FishingChairService {
      * 行为与旧版逐字一致：旧版也是"对每只活着的女仆调 tickKeepSeatWalk"，只是它**遍历了所有实体**。
      */
     public static void tickKeepSeatWalkAll(net.minecraft.server.MinecraftServer server) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_FISHING_CHAIR.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（不维持坐垫走位）
+        }
         if (server == null || SEAT_TARGET.isEmpty()) {
             return; // 没有人在走向坐垫 → 零开销（旧版照样扫全图）
         }
@@ -417,6 +420,9 @@ public final class FishingChairService {
      * - 正常骑着钓鱼 → 保留。
      */
     public static void sweep(MinecraftServer server) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_FISHING_CHAIR.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（不自动生成坐垫）
+        }
         try {
             // 全维度收集存活女仆（跨维度判定任务）
             // 实测八百三十九：改走 MaidRoster（只攒女仆、按 20 tick 复用，且已是存活快照）

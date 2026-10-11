@@ -467,5 +467,22 @@
   "config.promaid.tlmTeleportExempt": "TLM teleport/follow exemption",
   "config.promaid.misc.scheduleRangeFloor": "Schedule activity-radius floor active",
   "config.promaid.misc.presetMode": "Preset mode (switch on the manual page)",
-  "item.maid_smart.da_yun.desc5": "§7The wearer (player or maid) §ftakes no damage from hitting blocks while gliding§7 (vanilla fly-into-wall); toggle it in \"Protection for the wearer\""
+  "item.maid_smart.da_yun.desc5": "§7The wearer (player or maid) §ftakes no damage from hitting blocks while gliding§7 (vanilla fly-into-wall); toggle it in \"Protection for the wearer\"",
+  "config.promaid.build.areaProtection": "Build-area protection (random tick / gravity / leaves / TNT)",
+  "config.promaid.build.forceWorkActivity": "Force WORK activity during build task",
+  "config.promaid.dialogue.promptSittingWork": "System prompt: sitting-work note",
+  "config.promaid.combat.friendlyFireGuard": "Owner / ally friendly-fire guard",
+  "config.promaid.combat.petImmunity": "Player-pet immunity",
+  "config.promaid.combat.buildShield": "Build shield (resistance V / immunity / untargetable)",
+  "config.promaid.combat.hoeNotWeapon": "Hoe is not a weapon",
+  "config.promaid.misc.farmlandGuard": "No farmland trampling",
+  "config.promaid.misc.weaponGuard": "Toddler maid weapon ban",
+  "config.promaid.misc.toolAutoEquip": "Auto-equip task tools",
+  "config.promaid.misc.baubleTotem": "Bauble / backpack totem revive",
+  "config.promaid.misc.orbJoin": "XP orbs go to mining maid",
+  "config.promaid.misc.equipRescue": "Equipment rescue on slot clear",
+  "config.promaid.misc.homeMovement": "Home-mode walking driver",
+  "config.promaid.misc.stationaryLock": "Stationary move lock",
+  "config.promaid.misc.fishingChair": "Auto fishing chair",
+  "config.promaid.misc.drivenNoStroll": "No stray-walk for maid-driven mounts"
 }

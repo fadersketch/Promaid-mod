@@ -20,7 +20,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 每个树的 DIY 会关掉的布尔条数基线（新增配置项后要一起改，见 DEV_GUIDE §7）
-BASELINE_FLIP = {'promaid_src': 151, 'promaid_src_neo': 155}
+BASELINE_FLIP = {'promaid_src': 170, 'promaid_src_neo': 174}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
@@ -39,8 +39,30 @@ GATES = {
     # 要求 mixin 引用的必须是【自己那一条】开关，而不只是"引用了预设类"。
     'COMBAT_SWEEP_ALWAYS': 'MaidSweepMixin.java',
     'COMBAT_ATTACK_THOSE_ATTACKING_US': 'MaidCanAttackDefenseMixin.java',
+    # 实测八百五十九：以下 17 处原为"改行为但无开关"的介入，本轮落成真开关（默认开、随 DIY 关）。
+    # 先在 mixin 目录能覆盖到的部分纳入 GATES，其余（非 mixin 常驻）纳入 GATES_ELSEWHERE。
+    'COMBAT_HOE_NOT_WEAPON': 'TaskAttackWeaponMixin.java',
+    'BUILD_AREA_PROTECTION': 'ChunkFreezeMixin.java',
+    'BUILD_FORCE_WORK_ACTIVITY': 'BuildActivityForceMixin.java',
+    'MISC_STATIONARY_LOCK': 'MaidStationaryMixin.java',
+    'MISC_DRIVEN_NO_STROLL': 'RandomStrollGoalRiddenMixin.java',
+    'DIALOGUE_PROMPT_SITTING_WORK': 'PromaidPromptMixin.java',
+    'MISC_BAUBLE_TOTEM': 'MaidBaubleTotemMixin.java',
 }
 GATES_EXTRA = {'TLM_TELEPORT_EXEMPT': 'FollowPreserveMixin.java'}
+# 同上，但接点在非 mixin 的常驻类里（值 = 相对树根的文件路径）
+GATES_ELSEWHERE = {
+    'COMBAT_FRIENDLY_FIRE_GUARD': 'com/maidsmart/combat/FriendlyFireGuard.java',
+    'COMBAT_PET_IMMUNITY': 'com/maidsmart/combat/PetImmunityGuard.java',
+    'COMBAT_BUILD_SHIELD': 'com/maidsmart/combat/BuildShieldGuard.java',
+    'MISC_FARMLAND_GUARD': 'com/maidsmart/combat/FarmlandGuard.java',
+    'MISC_WEAPON_GUARD': 'com/maidsmart/task/MaidWeaponGuard.java',
+    'MISC_TOOL_AUTO_EQUIP': 'com/maidsmart/task/MaidToolAutoEquipBehavior.java',
+    'MISC_HOME_MOVEMENT': 'com/maidsmart/follow/HomePatrolHandler.java',
+    'MISC_FISHING_CHAIR': 'com/maidsmart/fishing/FishingChairService.java',
+    'MISC_ORB_JOIN': 'com/maidsmart/ProMaidExtension.java',
+    'MISC_EQUIP_RESCUE': 'com/maidsmart/ProMaidExtension.java',
+}
 # 「干预型 mixin 必须有闸」的兜底名单：这几处改的是女仆行为、但**没有自己的配置项**
 # （表驱动管不到），所以在代码里直接问 MaidConfigPreset.isDiy()。少一处 = DIY 下仍然生效。
 # 实测八百四十后本表为空：原先那两处（平A横扫、反击类型判不出的攻击者）已有真配置项，
@@ -211,6 +233,10 @@ def check_tree(tree, label):
         text = read(os.path.join(ROOT, tree, 'com/maidsmart/mixin', mixin))
         if field not in text:
             fail('%s: %s 没有引用 %s（开关写了没人问）' % (tree, mixin, field))
+    for field, rel in GATES_ELSEWHERE.items():
+        text = read(os.path.join(ROOT, tree, rel))
+        if field not in text:
+            fail('%s: %s 没有引用 %s（开关写了没人问）' % (tree, rel, field))
 
     # 5b) 预设硬闸：没有配置项的干预型 mixin，必须直接问 MaidConfigPreset
     for mixin in PRESET_GATES:

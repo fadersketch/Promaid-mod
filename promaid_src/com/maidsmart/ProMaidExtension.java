@@ -489,6 +489,9 @@ public class ProMaidExtension implements ILittleMaid {
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public void onMaidEquipmentLeave(
             net.minecraftforge.event.entity.living.LivingEquipmentChangeEvent event) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_EQUIP_RESCUE.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（装备被清就是没了）
+        }
         try {
             if (!(event.getEntity()
                     instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
@@ -717,7 +720,11 @@ public class ProMaidExtension implements ILittleMaid {
      * 否则 24 格内最近挖矿女仆直接吸收经验并取消生成（治"女仆挖矿 + 玩家同区双倍经验"）。
      */
     @net.minecraftforge.eventbus.api.SubscribeEvent
-    public void onOrbJoin(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {        if (event.getLevel().m_5776_() || !(event.getEntity() instanceof net.minecraft.world.entity.ExperienceOrb orb)) {
+    public void onOrbJoin(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_ORB_JOIN.get()) {
+            return; // v1.3.2 实测八百五十九：关 = 回原版（经验球不会被她自动吸收）
+        }
+        if (event.getLevel().m_5776_() || !(event.getEntity() instanceof net.minecraft.world.entity.ExperienceOrb orb)) {
             return;
         }
         net.minecraft.server.level.ServerLevel level = (net.minecraft.server.level.ServerLevel) event.getLevel();
