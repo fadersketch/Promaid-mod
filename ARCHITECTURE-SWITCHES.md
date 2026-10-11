@@ -7,10 +7,10 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 600 | 264 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 604 | 268 | 24 |
+| promaid_src（Forge 1.20.1） | 604 | 268 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 608 | 272 | 24 |
 
-同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：`broom.enable`
+同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：（无）
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
 
 ## 2. 主题索引（按行为聚合——改行为先看这里）
@@ -329,11 +329,11 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `voice.freeFlightTravelDist` | num | 8.0 | 仿创造飞行·超过多远就改飞（格，默认 8） |
 | `voice.glideElytraAnimation` | bool | false | 滑翔时改用模型自己的鞘翅动画（默认关） |
 
-### 扫帚 / 载具　（24 项）
+### 扫帚 / 载具　（26 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
-| `broom.enable` | bool | true | 巡逻航迹总开关（默认开） |
+| `broom.enable` | bool | true | 扫帚模式总开关（默认开） |
 | `broom.range` | num | 8.0 | 战斗盘旋的站立距离（格，默认 8） |
 | `broom.orbitMax` | num | 10.0 | 锁敌之后离敌的最远距离（格，默认 10，1~48） |
 | `broom.minStandoff` | num | 6.0 | 锁敌之后离敌的**最小距离**（格，默认 6，1~32） |
@@ -347,10 +347,12 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `broom.unstick` | bool | true | 卡墙脱困（默认开） |
 | `broom.idleLand` | bool | true | 扫帚待命落地（默认开） |
 | `broom.recallDistance` | num | 100 | 扫帚牵引绳（格，默认 100，0=关闭） |
+| `broom.patrolEnable` | bool | true | 巡逻航迹总开关（默认开） |
 | `broom.clearance` | num | 1.5 | 新建航迹的默认净空半径（格，默认 1.5，0.5~6.0） |
 | `broom.maxRadius` | num | 128 | 巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制） |
 | `broom.climbMigrated` | bool | false | 内部标记 |
 | `broom.climb12Migrated` | bool | false | 内部标记 |
+| `broom.patrolEnableMigrated` | bool | false | 内部标记 |
 | `broom.airAltMigrated` | bool | false | 内部标记 |
 | `broom.orbitRadiusMigrated` | bool | false | 内部标记 |
 | `tether.broomExtra` | num | 0.3 | 【扫帚档的额外下沉】（格，默认 0.3，0.0~2.0） |
@@ -358,7 +360,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `ride.airCombat` | bool | true | 骑飞行载具时的悬停与低空盘旋（默认开） |
 | `ride.ammoFeed` | bool | true | 骑载具时替她装弹（默认开） |
 
-### 挖矿 / 伐木　（70 项）
+### 挖矿 / 伐木　（72 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -396,6 +398,8 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.chainFullDurability` | bool | false | 连锁采集每块都消耗耐久（默认关） |
 | `mine.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
 | `mine.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8，发呆出现很快） |
+| `mine.requirePick` | bool | true | 没镐不启动（默认开） |
+| `mine.repick` | bool | true | 锁定期间持续重挑（默认开） |
 | `wood.woodValues` | list | List.of(
                                 "minecraft:oak_log=300" | 可砍伐木材表 |
 | `wood.tagAuto` | bool | true | 自动识别模组原木（默认开） |
@@ -803,11 +807,11 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `bridge.buildWhitelist` | list | java.util.List.of( | 搭方块放宽名单（完整注册名，逗号分隔；默认空） |
 | `bridge.combatPlacedLifetime` | num | 10 | 战斗搭方块清理时间（秒，默认 10） |
 
-### broom　（20 项）
+### broom　（22 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
-| `broom.enable` | bool | true | 巡逻航迹总开关（默认开） |
+| `broom.enable` | bool | true | 扫帚模式总开关（默认开） |
 | `broom.range` | num | 8.0 | 战斗盘旋的站立距离（格，默认 8） |
 | `broom.orbitMax` | num | 10.0 | 锁敌之后离敌的最远距离（格，默认 10，1~48） |
 | `broom.minStandoff` | num | 6.0 | 锁敌之后离敌的**最小距离**（格，默认 6，1~32） |
@@ -821,10 +825,12 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `broom.unstick` | bool | true | 卡墙脱困（默认开） |
 | `broom.idleLand` | bool | true | 扫帚待命落地（默认开） |
 | `broom.recallDistance` | num | 100 | 扫帚牵引绳（格，默认 100，0=关闭） |
+| `broom.patrolEnable` | bool | true | 巡逻航迹总开关（默认开） |
 | `broom.clearance` | num | 1.5 | 新建航迹的默认净空半径（格，默认 1.5，0.5~6.0） |
 | `broom.maxRadius` | num | 128 | 巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制） |
 | `broom.climbMigrated` | bool | false | 内部标记 |
 | `broom.climb12Migrated` | bool | false | 内部标记 |
+| `broom.patrolEnableMigrated` | bool | false | 内部标记 |
 | `broom.airAltMigrated` | bool | false | 内部标记 |
 | `broom.orbitRadiusMigrated` | bool | false | 内部标记 |
 
@@ -1125,7 +1131,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `memory.embedTimeout` | num | 5000 | embeddings 请求超时（毫秒） |
 | `memory.embedBatch` | num | 16 | embeddings 单批文本数上限 |
 
-### mine　（33 项）
+### mine　（35 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1163,6 +1169,8 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.chainFullDurability` | bool | false | 连锁采集每块都消耗耐久（默认关） |
 | `mine.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
 | `mine.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8，发呆出现很快） |
+| `mine.requirePick` | bool | true | 没镐不启动（默认开） |
+| `mine.repick` | bool | true | 锁定期间持续重挑（默认开） |
 
 ### misc　（83 项）
 

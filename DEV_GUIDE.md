@@ -182,10 +182,15 @@ release 说明从那里取素材（见 `WORKFLOW.md` §6.1）。
 | `tools/verify/check_comment_style.py` | 扫描两树：注释禁引语/禁超长块；**字符串字面量（玩家可见文案）也不许有引述玩家字样** | 每次改代码后；已接进 `build_promaid*.py` |
 | `tools/verify/check_preset.py` | 校验预设模式分类表：路径存在性 / 表间不重叠 / 布尔分类条数基线（Forge 141、Neo 145）/ 默认 false 白名单 / mixin 闸真的引用到配置项 / 两树表一致 | 改配置项或动预设时；已接进 `build_promaid*.py`（`--warn`） |
 | `tools/verify/check_workflow.py` | 工作流门禁（`WORKFLOW.md`）：两树版本不一致 / 同号覆盖 / 四处版本一致性 / 轮次记录 / 台账格式 / §8 债配额 / 配置清单过期 | 每轮改完；已接进 `build_promaid*.py`（`--warn`） |
+| `tools/verify/check_catch_swallow.py` | 吞异常棘轮：数注释之外的**未留痕**静默吞异常（裸 `catch (... ignored)` 或具名却体首只 `return`/注释/空，且不是 `Diag.swallow`），高于基线 FAIL、低于基线 WARN（只减不增） | 每次改代码后；已接进 `build_promaid*.py`（`--warn`）；见 TD-14 / TD-18 |
+| `tools/verify/check_i18n_keys.py` | i18n 键漂移棘轮：源码里有 `.translation("k")`、lang 表里没有 `k` 的处数只减不增（防"英文界面回落中文/键名"） | 改配置项或加开关时；已接进 `build_promaid*.py`（`--warn`）；见 TD-07 |
+| `tools/verify/check_dev_voice.py` | 开发口吻棘轮：可见文案（两树 `assets/promaid/i18n/en_us.json` 与 `assets/maid_smart/lang/en_us.json` 的 value）里禁 `test/实测` 轮次号与第一人称复数 `we/our/us/ours`，处数只减不增 | 改任意可见文案时；已接进 `build_promaid*.py`（`--warn`）；见 TD-03 |
+| `tools/verify/check_comment_dup.py` | 重复注释棘轮：把两树源码里所有 `.comment("…")` 正文（去空白后）分组，同一段文字出现在多处即算重复；仅 4 段共用机制的固定文案在白名单，其余重复组只减不增 | 改配置项注释时；已接进 `build_promaid*.py`（`--warn`）；见 TD-02 |
+| `tools/verify/check_reflection.py` | 探针式反射棘轮：数两树源码（去注释后）里的 `Class.forName(` / `getMethod(` / `getDeclaredMethod(` / `getDeclaredField(` 处数，高于基线 FAIL、低于基线 WARN（只减不增） | 每次改代码后；已接进 `build_promaid*.py`（`--warn`）；见 TD-15 |
 | `tools/verify/gen_switch_inventory.py` | 生成 `ARCHITECTURE-SWITCHES.md`（按节 + 按主题聚合配置项），改行为前先查、新开关必须进 | 改配置项后 |
 | `tools/verify/verify_jar_classes.py` | 打包后自检（mixin 登记 / 注入签名 / class 齐全） | 打 jar 后（已有） |
 
-三个护栏**目前以 `--warn` 形式接进构建**（注释存量未清零，先告警不阻断）；
+八个护栏**目前以 `--warn` 形式接进构建**（注释 / 吞异常 / 缺译文存量未清零，先告警不阻断）；
 存量清零后把 `build_promaid*.py` 里那行的 `--warn` 去掉即改为**阻断出包**。
 
 ### 6.1 「引语」到底禁什么

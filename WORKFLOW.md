@@ -348,7 +348,12 @@
 |---|---|---|
 | `tools/verify/check_workflow.py` | §5 版本纪律与哈希登记、§9 轮次记录（**§1 排班** / §9 验证 / **§4.1 验收** / §9 边界）、§8 台账配额 | 见运行输出 |
 | `tools/verify/check_preset.py` | 预设分类表与配置项一致（DIY/默认不出错） | FAIL 0 / WARN 2 |
-| `tools/verify/check_comment_style.py` | 注释禁引语/禁超长块 | 927 文件 · 2,258 处（存量；八百三十七 净减 2） |
+| `tools/verify/check_comment_style.py` | 注释禁引语/禁超长块 | 931 文件 · 2,260 处（存量） |
+| `tools/verify/check_catch_swallow.py` | §2.4 禁静默吞异常（棘轮：未留痕吞异常只减不增，见 TD-14/TD-18） | FAIL 0 / WARN 0（0 / 0） |
+| `tools/verify/check_i18n_keys.py` | §6 配置项 key 都要有译文（棘轮：有 key 无译文只减不增，见 TD-07） | FAIL 0 / WARN 0（0 / 0） |
+| `tools/verify/check_dev_voice.py` | §6 可见文案禁开发过程/第一人称复数口吻（棘轮：`test/实测` 轮次号 + `we/our/us` 只减不增，见 TD-03） | FAIL 0 / WARN 0（0 / 0） |
+| `tools/verify/check_comment_dup.py` | §6 禁止把同一条 `.comment()` 注释复制到多处（棘轮：非白名单重复组只减不增，见 TD-02） | FAIL 0 / WARN 0（4 组，全白名单） |
+| `tools/verify/check_reflection.py` | §2.5 探针式反射棘轮：`Class.forName`/`getMethod`/`getDeclaredMethod`/`getDeclaredField` 处数只减不增（见 TD-15） | FAIL 0 / WARN 0 |
 | `tools/verify/verify_jar_classes.py` | 打包含全（mixin/注入/class） | 出包时 |
 | `tools/verify/gen_switch_inventory.py` | §3.1 ③配置清单不过期 | 生成 `ARCHITECTURE-SWITCHES.md` |
 | `tools/arch/debt_report.py` | 结构债自动报告 | 生成 `ARCHITECTURE-DEBT.md` |
