@@ -400,7 +400,7 @@ public final class GuideChaptersCombat {
      */
     static GuideContent.Chapter rideGuide() {
         return new GuideContent.Chapter("骑乘指挥棒（让女仆骑坐骑 / 载具 / 龙）",
-                "骑乘指挥棒让女仆骑上坐骑、跟着你走：原版兽（马 / 驴 / 骡 / 骷髅马 / 僵尸马 / 猪 / 炽足兽 / 骆驼…）、卓越前线的载具（坦克 / 装甲车 / 直升机 / 固定"
+                "骑乘指挥棒让女仆骑上坐骑、跟着你走：原版兽（马 / 驴 / 骡 / 猪 / 炽足兽 / 骆驼…；僵尸马、骷髅马 Java 版装不上鞍、骑不了）、卓越前线的载具（坦克 / 装甲车 / 直升机 / 固定"
                         + "翼 / 飞艇…），以及冰火传说的龙（可以挂上去，但不建议，见第五节）。道具是\u00a7e【骑乘指挥棒】\u00a7r。",
                 // 实测八百四十九：合成表整块画（无序：拴绳 + 木棍）
                 "\u00a7e合成\u00a7r（工作台，无序）："
@@ -1077,7 +1077,7 @@ public final class GuideChaptersCombat {
                         + "贴着山壁滑翔就是一条隧道，掠过树林就是一条走廊。",
                 // 实测八百一十三：合成表整块画出来（物品图标 + 产物），不再只是文字配方
                 "\u00a7e合成\u00a7r（工作台）："
-                        + "[[#shaped;IDI;RMR;IDI;I=minecraft:iron_block;D=minecraft:diamond_block;R=minecraft:redstone_block;M=minecraft:minecart;>maid_smart:da_yun;@铁块×4 + 钻石块×4 + 红石块×2 + 矿车×1]]",
+                        + "[[#shaped;IDI;RMR;IDI;I=minecraft:iron_block;D=minecraft:diamond_block;R=minecraft:redstone_block;M=minecraft:minecart;>maid_smart:da_yun;@铁块×4 + 钻石块×2 + 红石块×2 + 矿车×1]]",
                 "\u00a7e一、两种佩戴方式（同一个物品，戴在谁身上就给谁开路）\u00a7r",
                 "\u00a7e女仆\u00a7r：把「大运」放进\u00a7e她自己的饰品栏\u00a7r（TLM 的饰品格，就是放头饰、"
                         + "背包那排格子）。她戴着它时\u00a7e只有在空袭模式下\u00a7r（飞行作战 / 飞行远战这两种"

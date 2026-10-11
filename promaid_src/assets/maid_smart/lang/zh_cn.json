@@ -423,7 +423,7 @@
   "item.maid_smart.da_yun.desc1": "§7佩戴后 §f使用鞘翅飞行§7 的途中，直接击毁自身周边 §f5×5×5§7 内的方块",
   "item.maid_smart.da_yun.desc2": "§7硬度 §f大于等于黑曜石（≥50）§7、以及 §f小于 0§7（基岩/屏障/命令方块…）的方块一律不清",
   "item.maid_smart.da_yun.desc3": "§7带方块实体的 §f容器§7（箱子/熔炉/漏斗/潜影盒/刷怪笼…）整个跳过；普通方块 §f照原版掉落",
-  "item.maid_smart.da_yun.desc4": "§7女仆：放进 §f她自己的饰品栏§7 后 §f只在空袭模式§7 生效；玩家：放进 §fCurios 饰品栏§7 后自己滑翔即生效（需装 Curios）。合成：铁块×4 + 钻石块×4 + 红石块×2 + 矿车×1",
+  "item.maid_smart.da_yun.desc4": "§7女仆：放进 §f她自己的饰品栏§7 后 §f只在空袭模式§7 生效；玩家：放进 §fCurios 饰品栏§7 后自己滑翔即生效（需装 Curios）。合成：铁块×4 + 钻石块×2 + 红石块×2 + 矿车×1",
   "config.promaid.accessory": "饰品「大运」设置",
   "config.promaid.accessory.daYun.enable": "「大运」总开关",
   "config.promaid.accessory.daYun.playerEnable": "「大运」玩家侧",
