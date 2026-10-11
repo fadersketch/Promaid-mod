@@ -482,6 +482,7 @@
   "config.promaid.misc.baubleTotem": "饰品 / 背包不死图腾复活",
   "config.promaid.misc.orbJoin": "经验球归挖矿女仆",
   "config.promaid.misc.equipRescue": "装备救回",
+  "config.promaid.misc.workTeleportHold": "干活时不被传送召回",
   "config.promaid.misc.homeMovement": "home 模式走位",
   "config.promaid.misc.stationaryLock": "站桩锁位",
   "config.promaid.misc.fishingChair": "钓鱼自动坐垫",

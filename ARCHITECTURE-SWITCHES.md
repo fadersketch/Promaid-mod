@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 599 | 263 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 603 | 267 | 24 |
+| promaid_src（Forge 1.20.1） | 600 | 264 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 604 | 268 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：`broom.enable`
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -50,7 +50,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.pickupValueReorder` | bool | true | 拾取按价值重排（默认开） |
 | `misc.autoCollect` | bool | false | 农场掉落物立即拾取（默认关） |
 
-### 传送 / 召回　（14 项）
+### 传送 / 召回　（15 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -68,6 +68,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.dimensionFollow` | bool | true | 跟随女仆跨维度传送（主人换维度后，跟随模式女仆自动传送到主人身边 |
 | `misc.maidChunkLoad` | bool | true | 女仆区块强制加载（所有有主女仆所在区块持续保持实体 ticking，随时可传送/召回/救援 |
 | `misc.maidTeleportRebuild` | bool | true | 传送后客户端重建（默认开） |
+| `misc.workTeleportHold` | bool | true | 干活时不被传送召回（默认开） |
 
 ### 排班 / 作息　（15 项）
 
@@ -1163,7 +1164,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
 | `mine.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8，发呆出现很快） |
 
-### misc　（82 项）
+### misc　（83 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1246,6 +1247,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.baubleTotem` | bool | true | 饰品/背包不死图腾复活（默认开） |
 | `misc.orbJoin` | bool | true | 经验球归挖矿女仆（默认开） |
 | `misc.equipRescue` | bool | true | 装备救回（默认开） |
+| `misc.workTeleportHold` | bool | true | 干活时不被传送召回（默认开） |
 | `misc.homeMovement` | bool | true | home 模式走位（默认开） |
 | `misc.stationaryLock` | bool | true | 站桩锁位（默认开） |
 | `misc.fishingChair` | bool | true | 钓鱼自动坐垫（默认开） |

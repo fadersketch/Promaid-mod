@@ -1472,6 +1472,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.BooleanValue MISC_BAUBLE_TOTEM;
     public static final ForgeConfigSpec.BooleanValue MISC_ORB_JOIN;
     public static final ForgeConfigSpec.BooleanValue MISC_EQUIP_RESCUE;
+    public static final ForgeConfigSpec.BooleanValue MISC_WORK_TELEPORT_HOLD;
     public static final ForgeConfigSpec.BooleanValue MISC_HOME_MOVEMENT;
     public static final ForgeConfigSpec.BooleanValue MISC_STATIONARY_LOCK;
     public static final ForgeConfigSpec.BooleanValue MISC_FISHING_CHAIR;
@@ -3533,6 +3534,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.orbJoin").define("orbJoin", true);
     MISC_EQUIP_RESCUE = BUILDER.comment("装备救回（默认开）：女仆装备槽被清空（第三方工具/意外掉落）时，把物品救回她身上/背包，防丢失。关闭 = 回原版（装备被清就是没了）")
             .translation("config.promaid.misc.equipRescue").define("equipRescue", true);
+    MISC_WORK_TELEPORT_HOLD = BUILDER.comment("干活时不被传送召回（默认开）：女仆在挖矿/伐木且已盯上目标期间，TLM 自带的\"离主人太远就瞬移回主人身边\"暂不生效——避免她走远找矿/伐木时被拽走、手上这一轮作废。关闭 = 回原版（照常被传送）")
+            .translation("config.promaid.misc.workTeleportHold").define("workTeleportHold", true);
     MISC_HOME_MOVEMENT = BUILDER.comment("home 模式走位（默认开）：在家模式女仆没有移动目标时，由本模组给 home 锚点附近的随机走位（非干活的持续巡逻、宰杀任务无牲畜时去附近闲逛）。关闭 = 回原版（home 女仆站原地不动）")
             .translation("config.promaid.misc.homeMovement").define("homeMovement", true);
     MISC_STATIONARY_LOCK = BUILDER.comment("站桩锁位（默认开）：站桩/建造坐姿的女仆从实体移动层锁死水平位移（防被各种直连通道推着走）。关闭 = 回原版（坐姿/站桩的她可能被移动源推走）")

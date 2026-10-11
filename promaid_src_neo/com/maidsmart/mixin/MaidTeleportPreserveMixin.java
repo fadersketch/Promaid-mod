@@ -54,6 +54,15 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
+            // 实测八百六十七：干活时不被传送召回——挖矿/伐木且已盯上目标（工作态）期间，TLM 原版
+            // "离主人太远就瞬移回主人身边"暂不生效。否则她走远找矿/伐木会被拽回、手上这一轮作废
+            // （地下挖矿尤其频繁触发，是"挖矿比伐木更差"的一个外部放大因素）。停手即恢复原版。
+            if (com.maidsmart.config.MaidSmartConfig.MISC_WORK_TELEPORT_HOLD.get()
+                    && (com.maidsmart.task.MaidMineBehavior.isMining(maid)
+                        || com.maidsmart.task.MaidWoodBehavior.isWooding(maid))) {
+                cir.setReturnValue(false);
+                return;
+            }
             // v1.1.0 实测三百一十五（反馈："怀疑是老代码作祟"——基岩层传送问题复查）：
             // 坐垫/骑乘/蹲下豁免——TLM 原版 teleportToOwner（离主人过远自动传送）只被
             // 自保/建造/搭路拦截，坐垫/骑乘/蹲下的女仆仍会被拉走。反馈"蹲下、坐垫全都

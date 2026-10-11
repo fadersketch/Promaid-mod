@@ -20,7 +20,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 每个树的 DIY 会关掉的布尔条数基线（新增配置项后要一起改，见 DEV_GUIDE §7）
-BASELINE_FLIP = {'promaid_src': 170, 'promaid_src_neo': 174}
+BASELINE_FLIP = {'promaid_src': 171, 'promaid_src_neo': 175}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
@@ -48,6 +48,8 @@ GATES = {
     'MISC_DRIVEN_NO_STROLL': 'RandomStrollGoalRiddenMixin.java',
     'DIALOGUE_PROMPT_SITTING_WORK': 'PromaidPromptMixin.java',
     'MISC_BAUBLE_TOTEM': 'MaidBaubleTotemMixin.java',
+    # 实测八百六十七：干活时（挖矿/伐木且已盯上目标）暂不执行 TLM 远距离传送召回
+    'MISC_WORK_TELEPORT_HOLD': 'MaidTeleportPreserveMixin.java',
 }
 GATES_EXTRA = {'TLM_TELEPORT_EXEMPT': 'FollowPreserveMixin.java'}
 # 同上，但接点在非 mixin 的常驻类里（值 = 相对树根的文件路径）

@@ -480,6 +480,7 @@
   "config.promaid.misc.baubleTotem": "Bauble / backpack totem revive",
   "config.promaid.misc.orbJoin": "XP orbs go to mining maid",
   "config.promaid.misc.equipRescue": "Equipment rescue on slot clear",
+  "config.promaid.misc.workTeleportHold": "No teleport recall while working",
   "config.promaid.misc.homeMovement": "Home-mode walking driver",
   "config.promaid.misc.stationaryLock": "Stationary move lock",
   "config.promaid.misc.fishingChair": "Auto fishing chair",
