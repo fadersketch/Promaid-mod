@@ -1162,6 +1162,11 @@ public final class RideBindManager {
             }
         }
         LINKS.put(maid.m_20148_(), new Link(maid, mount, player, chair, prevCmd, prevSitting));
+        // v1.3.2 实测八百六十三：绑定**飞行载具**后先给一段"启动时间"（引擎起、车不动），让玩家上机
+        double startupSecs = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_STARTUP_SECONDS.get();
+        if (startupSecs > 0.0 && MaidMountCompat.isFlyingVehicle(mount)) {
+            STARTUP_UNTIL.put(maid.m_20148_(), maid.m_9236_().m_46467_() + (long) (startupSecs * 20.0));
+        }
         try {
             maid.getPersistentData().m_128359_(TAG_RIDE_MOUNT, maid.m_20148_() + "|"
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "|" + mount.m_20148_());
@@ -1214,6 +1219,7 @@ public final class RideBindManager {
             return;
         }
         Link link = LINKS.remove(maid.m_20148_());
+        STARTUP_UNTIL.remove(maid.m_20148_());
         // 【实测七百二十六·点3】下鞍 = 空战这一场遭遇结束：清掉爬升相位/盘旋高度（与扫帚 clearClimb
         // 同口径）。不清的话她下次再骑上去会带着上一场的盘旋高度/方位角。
         MaidAirCombat.clear(maid);
@@ -1927,6 +1933,8 @@ public final class RideBindManager {
      * 已绑定载具数量）。
      */
     private static final java.util.Set<UUID> PLAYER_DRIVING = new java.util.HashSet<>();
+    /** v1.3.2 实测八百六十三：绑定飞行载具后的「启动截止时刻」（gameTime tick；到时清）。 */
+    private static final java.util.Map<java.util.UUID, Long> STARTUP_UNTIL = new java.util.HashMap<>();
 
     private static void drive(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
@@ -1957,6 +1965,16 @@ public final class RideBindManager {
                 return;
             }
             PLAYER_DRIVING.remove(mount.m_20148_());
+            // v1.3.2 实测八百六十三【飞行载具"启动时间"】：绑定后这段时间内不喂任何移动（起飞/接敌都压后），
+            // 给玩家上机的机会；玩家若已坐上驾驶位，上面那一档已把控制权交给他。
+            Long startUntil = STARTUP_UNTIL.get(maid.m_20148_());
+            if (startUntil != null) {
+                if (maid.m_9236_().m_46467_() < startUntil) {
+                    MaidMountCompat.stop(mount);
+                    return;
+                }
+                STARTUP_UNTIL.remove(maid.m_20148_());
+            }
             // 【实测七百八十三 / 七百九十四】丢掉降落落点缓存——但**只在"从降到不降"的过渡那一拍**。
             //
             // 【七百九十四·修正】783 写的是这行注释（"离开 home 档 → 丢掉缓存"），代码却是

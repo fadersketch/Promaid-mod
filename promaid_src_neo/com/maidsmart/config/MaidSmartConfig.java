@@ -578,6 +578,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_ENABLE;
     /** v1.3.2 实测八百六十二：骑马追击目标（默认开，随 DIY 关） */
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_PURSUE_TARGET;
+    /** v1.3.2 实测八百六十三：绑定飞行载具后的启动时间（秒，0 = 关闭；随 DIY 置 0） */
+    public static final ModConfigSpec.DoubleValue COMBAT_RIDE_STARTUP_SECONDS;
     /** 跟随停下距离（格，默认 5.0）：骑在坐骑上跟主人走时，离主人这么近就不再往前 */
     public static final ModConfigSpec.DoubleValue COMBAT_RIDE_FOLLOW_DIST;
     /** 速度总倍率（默认 1.0）：乘在"载具速度与女仆速度取最大"之上 */
@@ -2862,6 +2864,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.ride.speedScale").defineInRange("speedScale", 1.0, 0.2, 3.0);
         COMBAT_RIDE_PURSUE_TARGET = BUILDER.comment("骑马追击目标（默认开）：她骑着原版坐骑接敌、而目标超出她的战术接战范围（8 格）时（战术这会儿不接管走位），由坐骑朝她的攻击目标走过去，进到近身距离即停。关掉 = 回旧行为（超出接敌范围就原地等，直到主人离得远才动一下——反馈的「打一下就罚站」）")
                 .translation("config.promaid.ride.pursueTarget").define("pursueTarget", true);
+        COMBAT_RIDE_STARTUP_SECONDS = BUILDER.comment("绑定飞行载具后的启动时间（秒，默认 3.0，0 = 关闭）：她骑上飞机/直升机这类**飞行载具**后，先有这一段「引擎起、车不动」的时间——本模组这段时间内不喂任何移动（**起飞与接敌都压后**），让玩家来得及上机。3.0 左右即够；调 0 = 立即可起飞（旧行为）")
+                .translation("config.promaid.ride.startupDelaySeconds")
+                .defineInRange("startupDelaySeconds", 3.0, 0.0, 10.0);
         // v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单】——
         //
         //

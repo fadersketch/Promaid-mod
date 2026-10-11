@@ -93,7 +93,8 @@ public final class MaidConfigPreset {
             "combat.assistRadius", 0,            // 0 = 不援护、不撒手
             "combat.flightRecallDistance", 0,    // 0 = 空袭牵引绳关闭
             "broom.recallDistance", 0,           // 0 = 扫帚牵引绳关闭
-            "build.speedTier", "x1");            // x1 = 原速档（非加速档）
+            "build.speedTier", "x1",
+            "ride.startupDelaySeconds", 0.0);            // x1 = 原速档（非加速档）
 
     /** 恢复出厂默认时要保留的项：个人凭据（重置不该丢钥匙） */
     private static final java.util.Set<String> RESET_KEEP = java.util.Set.of(

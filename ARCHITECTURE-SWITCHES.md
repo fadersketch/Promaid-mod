@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 599 | 264 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 603 | 268 | 24 |
+| promaid_src（Forge 1.20.1） | 600 | 264 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 604 | 268 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：`broom.enable`
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -230,7 +230,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.scheduleRestoreGrace` | num | 60 | 战斗还原后排班宽限（tick，默认 60=3 秒） |
 | `voice.systemEnabled` | bool | true | 系统消息朗读（感知/工作/自保等规则气泡也播放 TTS 语音） |
 
-### 飞行 / 空袭　（92 项）
+### 飞行 / 空袭　（93 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -261,6 +261,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `maneuver.airSeparation` | bool | true | 空袭·空中防叠罗汉（默认开） |
 | `maneuver.airSeparationRadius` | num | 2.0 | 空袭·半径偏置强度（格，默认 2.0，0~8） |
 | `tether.tetherLeashSteer` | bool | true | 二号位·悬挂时用武装拴绳操控方向（默认开，仅空袭档） |
+| `ride.startupDelaySeconds` | num | 3.0 | 绑定飞行载具后的启动时间（秒，默认 3.0，0 = 关闭） |
 | `ride.airCombat` | bool | true | 骑飞行载具时的悬停与低空盘旋（默认开） |
 | `airRaid.launchTicksMelee` | num | 30 | 起飞段时长·近战（tick，默认 30 = 1.5 秒） |
 | `airRaid.launchTicksRanged` | num | 20 | 起飞段时长·远程（tick，默认 20 = 1 秒） |
@@ -327,7 +328,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `voice.freeFlightTravelDist` | num | 8.0 | 仿创造飞行·超过多远就改飞（格，默认 8） |
 | `voice.glideElytraAnimation` | bool | false | 滑翔时改用模型自己的鞘翅动画（默认关） |
 
-### 扫帚 / 载具　（23 项）
+### 扫帚 / 载具　（24 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -352,6 +353,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `broom.airAltMigrated` | bool | false | 内部标记 |
 | `broom.orbitRadiusMigrated` | bool | false | 内部标记 |
 | `tether.broomExtra` | num | 0.3 | 【扫帚档的额外下沉】（格，默认 0.3，0.0~2.0） |
+| `ride.startupDelaySeconds` | num | 3.0 | 绑定飞行载具后的启动时间（秒，默认 3.0，0 = 关闭） |
 | `ride.airCombat` | bool | true | 骑飞行载具时的悬停与低空盘旋（默认开） |
 | `ride.ammoFeed` | bool | true | 骑载具时替她装弹（默认开） |
 
@@ -1267,7 +1269,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `perception.lookExitDeg` | num | 55.0 | 看向退出角度（度） |
 | `perception.lookCooldown` | num | 1800 | 「主人一直在看着我…」触发间隔（秒，每只女仆各自计时 |
 
-### ride　（17 项）
+### ride　（18 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1275,6 +1277,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `ride.followDist` | num | 5.0 | 跟随停下距离（格，默认 5.0，1.0~16.0） |
 | `ride.speedScale` | num | 1.0 | 速度总倍率（默认 1.0，0.2~3.0） |
 | `ride.pursueTarget` | bool | true | 骑马追击目标（默认开） |
+| `ride.startupDelaySeconds` | num | 3.0 | 绑定飞行载具后的启动时间（秒，默认 3.0，0 = 关闭） |
 | `ride.furnitureBlacklist` | list | java.util.List.of("touhou_little_maid:chair" | 家具类坐骑黑名单（女仆坐上去时，本模组所有骑乘改动一律不生效） |
 | `ride.modMounts` | bool | true | 模组坐骑兼容（默认开） |
 | `ride.modMountFire` | bool | true | 模组坐骑·代她开火（默认开） |

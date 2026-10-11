@@ -64,6 +64,8 @@ GATES_ELSEWHERE = {
     'MISC_EQUIP_RESCUE': 'com/maidsmart/ProMaidExtension.java',
     # 实测八百六十二：骑马追击目标
     'COMBAT_RIDE_PURSUE_TARGET': 'com/maidsmart/combat/RideBindManager.java',
+    # 实测八百六十三：绑定飞行载具后的启动时间
+    'COMBAT_RIDE_STARTUP_SECONDS': 'com/maidsmart/combat/RideBindManager.java',
 }
 # 「干预型 mixin 必须有闸」的兜底名单：这几处改的是女仆行为、但**没有自己的配置项**
 # （表驱动管不到），所以在代码里直接问 MaidConfigPreset.isDiy()。少一处 = DIY 下仍然生效。
