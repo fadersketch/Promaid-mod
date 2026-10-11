@@ -12,7 +12,7 @@
   - 低于基线 → WARN（可以顺势把基线往下调，棘轮只往一个方向走）；
   - --dump 打印每文件计数，便于下一轮挑最肥的先烧。
 
-修法见 TECH_DEBT TD-14 / TD-18：热点路径改成 `Diag.swallow("类名", ignored)`（保留 catch，只加一条留痕）。
+修法见 DEBT.md TD-14 / TD-18：热点路径改成 `Diag.swallow("类名", ignored)`（保留 catch，只加一条留痕）。
 """
 import io
 import os
@@ -74,7 +74,7 @@ def main():
             WARNS.append('%s: 没有基线（脚本与源码对不上了）' % tree)
         elif total > base:
             FAILS.append('%s: 未留痕吞异常 %d > 基线 %d —— 新增了静默吞异常，请改用 Diag.swallow'
-                         '（见 TECH_DEBT TD-14）' % (tree, total, base))
+                         '（见 DEBT.md TD-14）' % (tree, total, base))
         elif total < base:
             WARNS.append('%s: 未留痕吞异常 %d < 基线 %d —— 可以把基线往下调（棘轮只减不增）'
                          % (tree, total, base))

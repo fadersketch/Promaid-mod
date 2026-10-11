@@ -173,7 +173,7 @@ python tools/arch/finalize_arch.py   # 覆盖 receipt.json（HTML 之后重算�
 
 ## 6. 技术债与屎山清单
 
-单独成文：[`ARCHITECTURE-DEBT.md`](ARCHITECTURE-DEBT.md)（含逐文件证据、超大文件排行、死代码候选、重复逻辑）。
+单独成文：[`DEBT.md`](DEBT.md)（逐条台账 + 机器快照：超大文件排行、死代码候选、重复逻辑）。
 
 三条最要紧的：
 

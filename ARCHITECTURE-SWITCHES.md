@@ -10,7 +10,7 @@
 | promaid_src（Forge 1.20.1） | 604 | 268 | 24 |
 | promaid_src_neo（NeoForge 1.21.1） | 608 | 272 | 24 |
 
-同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：（无）
+同一路径被定义两次的（TOML 后者覆盖前者，见 `DEBT.md` TD-08）：（无）
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
 
 ## 2. 主题索引（按行为聚合——改行为先看这里）

@@ -146,7 +146,7 @@ def render():
             len(set(r['section'] for r in rows))))
     extra = sorted(set(r['path'] for r in b) - set(r['path'] for r in a))
     out.append('')
-    out.append('同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：%s' % (
+    out.append('同一路径被定义两次的（TOML 后者覆盖前者，见 `DEBT.md` TD-08）：%s' % (
         '、'.join('`%s`' % d for d in dups) if dups else '（无）'))
     out.append('Neo 树比 Forge 树多出的配置项（%d 个）：%s' % (
         len(extra), '、'.join('`%s`' % p for p in extra) if extra else '（无）'))

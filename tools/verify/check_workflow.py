@@ -8,7 +8,7 @@
   2. 发布登记：rounds/RELEASES.tsv 里 published 行与 patched/ 里同号 jar 哈希不符（FAIL，= 同号覆盖）；
      当前版本的 jar 未登记（WARN）；更早的 jar 未登记（聚合 WARN）。
   3. 轮次记录：rounds/ 里最新的 RNNN-*.md 必须含 ## 排班 / ## 验证 / ## 验收 / ## 边界。
-  4. 台账：BUG_DEBT.md / TECH_DEBT.md 存在；每行有级别与状态。
+  4. 台账：DEBT.md 存在；BD-*/TD-* 行有级别与状态。
   5. 配额（§8）：最新轮次记录标为 FEATURE 轮时，不得存在未清的 P0/P1 债。
   6. 配置清单不过期：ARCHITECTURE-SWITCHES.md 与重新生成的内容一致。
 
@@ -219,31 +219,31 @@ def check_round_record():
 
 
 def check_ledgers():
-    print('--- 台账')
-    # BUG_DEBT：ID | 级别(P0–P3) | 症状 | 证据 | 状态；TECH_DEBT：ID | 主题 | 证据 | 影响 | 建议做法 | 状态
-    for rel, need_level in (('BUG_DEBT.md', True), ('TECH_DEBT.md', False)):
-        t = read(rel)
-        if t is None:
-            warn('%s 不存在（WORKFLOW.md §8）' % rel)
+    print('--- 台账 DEBT.md')
+    # 唯一台账 DEBT.md：BD-*（ID | 级别 | 症状 | 证据 | 状态）、TD-*（ID | 主题 | 证据 | 影响 | 建议做法 | 状态）
+    t = read('DEBT.md')
+    if t is None:
+        warn('DEBT.md 不存在（WORKFLOW.md §8；原 BUG_DEBT / TECH_DEBT 已并入）')
+        return
+    n_ok = n_bad = 0
+    for line in t.splitlines():
+        is_bd = line.startswith('| BD-')
+        if not is_bd and not line.startswith('| TD-'):
             continue
-        n_ok = n_bad = 0
-        for line in t.splitlines():
-            if not line.startswith('| B') and not line.startswith('| T'):
-                continue
-            cells = [c.strip() for c in line.strip('|').split('|')]
-            if len(cells) < 4:
-                n_bad += 1
-                continue
-            ok_level = (not need_level) or any(lv in cells[1] for lv in ('P0', 'P1', 'P2', 'P3'))
-            ok_status = any(st in cells[-1] for st in ('未清', '已清', '已确认', '部分'))
-            if ok_level and ok_status:
-                n_ok += 1
-            else:
-                n_bad += 1
-        print('    %s：合规行 %d / 不合规 %d' % (rel, n_ok, n_bad))
-        if n_bad:
-            warn('%s 有 %d 行的级别或状态列不合格式（级别 P0–P3；状态 未清/已清@轮次/已确认/部分）'
-                 % (rel, n_bad))
+        cells = [c.strip() for c in line.strip('|').split('|')]
+        if len(cells) < 4:
+            n_bad += 1
+            continue
+        ok_level = (not is_bd) or any(lv in cells[1] for lv in ('P0', 'P1', 'P2', 'P3'))
+        ok_status = any(st in cells[-1] for st in ('未清', '已清', '已确认', '部分'))
+        if ok_level and ok_status:
+            n_ok += 1
+        else:
+            n_bad += 1
+    print('    DEBT.md：合规行 %d / 不合规 %d' % (n_ok, n_bad))
+    if n_bad:
+        warn('DEBT.md 有 %d 行的级别或状态列不合格式（BD 级别 P0–P3；状态 未清/已清@轮次/已确认/部分）'
+             % n_bad)
 
 
 def check_quota(latest_round):
@@ -255,10 +255,10 @@ def check_quota(latest_round):
     is_feature = bool(re.search(r'跑道\**：\s*B|FEATURE', text))
     if not is_feature:
         return
-    debt = read('BUG_DEBT.md') or ''
+    debt = read('DEBT.md') or ''
     open_p01 = []
     for line in debt.splitlines():
-        if not line.startswith('| B'):
+        if not line.startswith('| BD-'):
             continue
         cells = [c.strip() for c in line.strip('|').split('|')]
         if len(cells) >= 5 and any(lv in cells[1] for lv in ('P0', 'P1')) \

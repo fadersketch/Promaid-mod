@@ -16,7 +16,7 @@
 2. **硬约束**（前置条件、单位、取值范围、为什么是这个魔数、两树差异、失效时的表现）。
 
 **不写**变更史（旧版错在哪、这版怎么改的）——那是轮次记录（`rounds/RNNN-*.md`）的职责。
-`ARCHITECTURE-DEBT.md` §「注释里的历史记录」已记录这条取舍。
+`DEBT.md` §3（机器结构快照）已记录这条取舍。
 
 ### 1.2 出处压成一行
 
@@ -110,7 +110,7 @@ release 说明从那里取素材（见 `WORKFLOW.md` §6.1）。
 
 | 面 | 文件 |
 |---|---|
-| 仓库内部开发记录（dev） | `rounds/RNNN-*.md` 轮次记录 + `BUG_DEBT.md` / `TECH_DEBT.md` 台账 |
+| 仓库内部开发记录（dev） | `rounds/RNNN-*.md` 轮次记录 + `DEBT.md` 台账 |
 | 版本更新内容（发布素材） | 桌面 `Promaid文本\v<版本号> ….md`（按 §2.2 的记 / 不记口径） |
 
 - 玩家能感知的改动才写进 `Promaid文本`；纯流程 / 护栏 / 内部重构只留 dev 面；
@@ -220,7 +220,7 @@ tools/verify/           校验护栏（jar / 注释 / 预设 / 工作流 / 清�
 patched/                构建产物（jar）+ 部署备份
 store/                  平台文案母本（gitignore，本地维护）
 WORKFLOW.md             开发工作流与门禁（两条跑道 / 版本纪律 / 债务配额）
-BUG_DEBT.md / TECH_DEBT.md   债务台账（手工，每轮更新）
+DEBT.md                唯一债务台账（手工 + 机器快照，每轮更新）
 ARCHITECTURE-SWITCHES.md     配置项清单（自动生成）
 rounds/                 每轮记录 + RELEASES.tsv 发布哈希登记
 DEV_GUIDE.md / WORKFLOW.md / PUBLISH_GUIDE.md / GIT_SYNC.md   成文标准与流程

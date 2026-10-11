@@ -10,7 +10,7 @@
   - 高于基线 → FAIL（新增了"有 key 无译文"的选项——英文界面会回落中文/键名）；
   - 低于基线 → WARN（可以顺势把基线往下调，棘轮只往一个方向走）。
 
-修法见 TECH_DEBT TD-07：按节把缺的 key 补进两树 lang（zh 取同项 `.comment()` 原文，en 写英文）。
+修法见 DEBT.md TD-07：按节把缺的 key 补进两树 lang（zh 取同项 `.comment()` 原文，en 写英文）。
 """
 import io
 import json
