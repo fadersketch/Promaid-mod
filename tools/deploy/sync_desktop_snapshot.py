@@ -42,7 +42,7 @@ QUIET = '--quiet' in sys.argv[1:]
 
 DIRS = ['promaid_src', 'promaid_src_neo', 'libs_forge', 'libs_neo', 'tools']
 DOCS = ['ARCHITECTURE-DEBT.md', 'ARCHITECTURE.md', 'DEDICATED_SERVER_NOTES.md',
-        'GIT_SYNC.md', 'HOW-TO-PUSH-CLEANED-HISTORY.md', 'PUBLISH_GUIDE.md', 'README.md',
+        'GIT_SYNC.md', 'PUBLISH_GUIDE.md', 'README.md',
         'release_body.md', 'release_body_neo.md', 'DEV_GUIDE.md', 'RELEASE_NOTES_v1.3.1.md']
 JARS = ['promaid-1.3.2-neoforge-1.21.1.jar', 'promaid-1.3.2-forge-1.20.1.jar']
 TARGETS = [r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods',

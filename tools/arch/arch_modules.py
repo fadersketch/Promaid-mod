@@ -560,7 +560,7 @@ MODULES = [
  "Scans the external config/maid_smart/blueprints and schematics directories, 7 extensions, zip import and "
  "bundled-blueprint unpacking with warmup. The procedural built-in generator has not been enumerated by the "
  "catalog since v1.5.387 and is reachable only by hardcoded id (dormant code).",
- [("promaid_src_neo/com/maidsmart/build/BlueprintFileIo.java", 1, 725),
+ [("promaid_src_neo/com/maidsmart/build/BlueprintFileIo.java", 1, 724),
   ("promaid_src_neo/com/maidsmart/build/BlueprintCatalog.java", 1, 427),
   ("promaid_src_neo/com/maidsmart/build/BuiltinHouses.java", 1, 1385)], ["build", "io"], [], []),
 

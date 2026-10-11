@@ -140,7 +140,6 @@ public final class BlueprintFileIo {
         "水__水立方.litematic",
         "水__沙滩别墅.litematic",
         "水__河滨度假别墅.litematic",
-        "甘蔗牧场（已失效）.schem",
         "红石__中世纪刷石机.litematic",
         "红石__优雅的村民交易所.litematic",
         "红石__全树种树场（有红树）.litematic",

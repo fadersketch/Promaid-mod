@@ -13,7 +13,7 @@ description:
       procedural built-in generator has not been enumerated by the catalog since
       v1.5.387 and is reachable only by hardcoded id (dormant code).
 source:
-  - {path: promaid_src_neo/com/maidsmart/build/BlueprintFileIo.java, line: 1, end_line: 725}
+  - {path: promaid_src_neo/com/maidsmart/build/BlueprintFileIo.java, line: 1, end_line: 724}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintCatalog.java, line: 1, end_line: 427}
   - {path: promaid_src_neo/com/maidsmart/build/BuiltinHouses.java, line: 1, end_line: 1385}
 revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
