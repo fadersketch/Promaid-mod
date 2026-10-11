@@ -20,7 +20,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 每个树的 DIY 会关掉的布尔条数基线（新增配置项后要一起改，见 DEV_GUIDE §7）
-BASELINE_FLIP = {'promaid_src': 170, 'promaid_src_neo': 174}
+BASELINE_FLIP = {'promaid_src': 171, 'promaid_src_neo': 175}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
@@ -62,6 +62,8 @@ GATES_ELSEWHERE = {
     'MISC_FISHING_CHAIR': 'com/maidsmart/fishing/FishingChairService.java',
     'MISC_ORB_JOIN': 'com/maidsmart/ProMaidExtension.java',
     'MISC_EQUIP_RESCUE': 'com/maidsmart/ProMaidExtension.java',
+    # 实测八百六十二：骑马追击目标
+    'COMBAT_RIDE_PURSUE_TARGET': 'com/maidsmart/combat/RideBindManager.java',
 }
 # 「干预型 mixin 必须有闸」的兜底名单：这几处改的是女仆行为、但**没有自己的配置项**
 # （表驱动管不到），所以在代码里直接问 MaidConfigPreset.isDiy()。少一处 = DIY 下仍然生效。

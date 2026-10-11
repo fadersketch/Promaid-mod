@@ -2430,6 +2430,9 @@ public final class RideBindManager {
                 // 接敌、但她的寻路这一拍恰好是空的（两段走位之间的间隙）：**什么都不做**，
                 // 让坐骑顺着上一拍的目标再走几步——这一拍直接掐停会把迂回变成"一顿一顿"。
                 if (fighting) {
+                    // v1.3.2 实测八百六十二：超出战术接战范围（>8 格）时她自己的寻路上没有点 →
+                    // 由坐骑朝她的攻击目标走过去，别原地罚站（否则只有主人离得远才动一下）。
+                    pursueTarget(maid, mount);
                     return;
                 }
                 MaidRideKit.stopNavigation(mount);
@@ -2445,6 +2448,36 @@ public final class RideBindManager {
                 return;
             }
             MaidRideKit.feedNavigation(mount, target, MaidRideKit.speedModifierFor(mount, maid), maid);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** v1.3.2 实测八百六十二：骑马追击攻击目标的停车距离（格，进到近身距离内即停）。 */
+    private static final double RIDE_PURSUE_STOP = 2.5;
+
+    /**
+     * v1.3.2 实测八百六十二【骑马近战「打一下就罚站」】：她接敌、但她自己的寻路这一拍是空的
+     * （战术行为只在 {@code ≤8} 格接管走位，再远没人往她导航写目标；她是乘客，TLM 原版那条
+     * 「目标超出近战距离就走过去」对乘客是关的）→ 由坐骑**朝她的攻击目标**走过去，进到近身
+     * 距离即停。只在「她有活目标、且上面几条都没给出走位点」时调用，不与战术抢移动。
+     * 关掉 = 回旧行为（超出接战范围就原地等，直到主人离得远）。
+     */
+    private static void pursueTarget(EntityMaid maid, Entity mount) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_PURSUE_TARGET.get()) {
+                return;
+            }
+            LivingEntity foe = targetOf(maid);
+            if (foe == null || !foe.m_6084_() || foe.m_9236_() != maid.m_9236_()
+                    || FriendlyFireGuard.isFriendly(maid, foe)) {
+                return;
+            }
+            if (horizontalDist(mount, foe) > RIDE_PURSUE_STOP) {
+                MaidRideKit.feedNavigation(mount, foe.m_20182_(),
+                        MaidRideKit.speedModifierFor(mount, maid), maid);
+            } else {
+                MaidRideKit.stopNavigation(mount); // 进了近身距离 → 停下，交给她的攻击/战术
+            }
         } catch (Throwable ignored) {
         }
     }

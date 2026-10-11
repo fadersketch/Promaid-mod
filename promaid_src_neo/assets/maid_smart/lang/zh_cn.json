@@ -486,5 +486,6 @@
   "config.promaid.misc.homeMovement": "home 模式走位",
   "config.promaid.misc.stationaryLock": "站桩锁位",
   "config.promaid.misc.fishingChair": "钓鱼自动坐垫",
-  "config.promaid.misc.drivenNoStroll": "坐骑不闲逛"
+  "config.promaid.misc.drivenNoStroll": "坐骑不闲逛",
+  "config.promaid.ride.pursueTarget": "骑马追击目标"
 }

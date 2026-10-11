@@ -938,6 +938,8 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     // ---- v1.3.0(beta)·原版生物骑乘（配置面板：移动与行为 → 骑乘指挥棒）----
     /** 总开关（默认开）：关掉 = 骑乘指挥棒不再绑定/上鞍，坐骑也照原版自由行动 */
     public static final ForgeConfigSpec.BooleanValue COMBAT_RIDE_ENABLE;
+    /** v1.3.2 实测八百六十二：骑马追击目标（默认开，随 DIY 关） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_RIDE_PURSUE_TARGET;
     /** 跟随停下距离（格，默认 5.0）：骑在坐骑上跟主人走时，离主人这么近就不再往前 */
     public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_FOLLOW_DIST;
     /** 速度总倍率（默认 1.0）：乘在"载具速度与女仆速度取最大"之上 */
@@ -2801,6 +2803,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.ride.followDist").defineInRange("followDist", 5.0, 1.0, 16.0);
         COMBAT_RIDE_SPEED_SCALE = BUILDER.comment("速度总倍率（默认 1.0，0.2~3.0）：乘在「坐骑速度与女仆速度取最大」之上。1.0 = 严格按原话取最大值；嫌慢（比如骑驴/猪跟着跑跟不上）可以调到 1.5~2.0；嫌快（复杂地形上容易被甩下去）往 0.5 调。它不会突破载具自己的寻路安全上限，只是把目标速度按比例缩放")
                 .translation("config.promaid.ride.speedScale").defineInRange("speedScale", 1.0, 0.2, 3.0);
+        COMBAT_RIDE_PURSUE_TARGET = BUILDER.comment("骑马追击目标（默认开）：她骑着原版坐骑接敌、而目标超出她的战术接战范围（8 格）时（战术这会儿不接管走位），由坐骑朝她的攻击目标走过去，进到近身距离即停。关掉 = 回旧行为（超出接敌范围就原地等，直到主人离得远才动一下——反馈的「打一下就罚站」）")
+                .translation("config.promaid.ride.pursueTarget").define("pursueTarget", true);
         // v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单】——
         //
         //

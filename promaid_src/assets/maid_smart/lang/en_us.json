@@ -484,5 +484,6 @@
   "config.promaid.misc.homeMovement": "Home-mode walking driver",
   "config.promaid.misc.stationaryLock": "Stationary move lock",
   "config.promaid.misc.fishingChair": "Auto fishing chair",
-  "config.promaid.misc.drivenNoStroll": "No stray-walk for maid-driven mounts"
+  "config.promaid.misc.drivenNoStroll": "No stray-walk for maid-driven mounts",
+  "config.promaid.ride.pursueTarget": "Pursue target while riding"
 }

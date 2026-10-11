@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 598 | 263 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 602 | 267 | 24 |
+| promaid_src（Forge 1.20.1） | 599 | 264 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 603 | 268 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `TECH_DEBT.md` TD-08）：`broom.enable`
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -1267,13 +1267,14 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `perception.lookExitDeg` | num | 55.0 | 看向退出角度（度） |
 | `perception.lookCooldown` | num | 1800 | 「主人一直在看着我…」触发间隔（秒，每只女仆各自计时 |
 
-### ride　（16 项）
+### ride　（17 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
 | `ride.enable` | bool | true | 原版生物骑乘总开关（默认开） |
 | `ride.followDist` | num | 5.0 | 跟随停下距离（格，默认 5.0，1.0~16.0） |
 | `ride.speedScale` | num | 1.0 | 速度总倍率（默认 1.0，0.2~3.0） |
+| `ride.pursueTarget` | bool | true | 骑马追击目标（默认开） |
 | `ride.furnitureBlacklist` | list | java.util.List.of("touhou_little_maid:chair" | 家具类坐骑黑名单（女仆坐上去时，本模组所有骑乘改动一律不生效） |
 | `ride.modMounts` | bool | true | 模组坐骑兼容（默认开） |
 | `ride.modMountFire` | bool | true | 模组坐骑·代她开火（默认开） |
