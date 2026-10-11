@@ -10,7 +10,7 @@ description:
       Also counts enraged wolves and mod-mutated neutral mobs as threats.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/NeutralThreatDriver.java, line: 1, end_line: 590}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: a2cbc9bcbf988f5758a81b5d3f7a9c23bd200a19a211fced654dfd5dc8225d33
 state: active

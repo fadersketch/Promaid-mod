@@ -13,7 +13,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/dialogue/WorkListTool.java, line: 1, end_line: 288}
   - {path: promaid_src_neo/com/maidsmart/dialogue/WorkStatusReporter.java, line: 1, end_line: 175}
   - {path: promaid_src_neo/com/maidsmart/dialogue/MaidWorkList.java, line: 1, end_line: 122}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 1200fe36b9e0124e770874f70325266f966ce4feedfade4a7607181b7787c852
 state: active

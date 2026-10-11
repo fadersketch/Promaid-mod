@@ -15,7 +15,7 @@ description:
       mod's largest file.
 source:
   - {path: promaid_src_neo/com/maidsmart/config/PromaidConfigScreen.java, line: 1, end_line: 6424}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f158bfda38550176563f7f96a5fcb560b92d26534861a1d229118b65809ec3ff
 state: active

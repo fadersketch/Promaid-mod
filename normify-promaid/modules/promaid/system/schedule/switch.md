@@ -13,7 +13,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/schedule/ScheduleSwitchEngine.java, line: 1, end_line: 176}
   - {path: promaid_src_neo/com/maidsmart/schedule/ScheduleTaskAvailability.java, line: 1, end_line: 296}
   - {path: promaid_src_neo/com/maidsmart/schedule/ScheduleSwitchGuard.java, line: 1, end_line: 73}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 29e61822d60dd1bf10b4c389685360f22ab3e3471cc8c9c3b35bf3ee10b27d2f
 state: active

@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/protect/MasterDeathTeleportHandler.java, line: 1, end_line: 619}
   - {path: promaid_src_neo/com/maidsmart/protect/DangerEscapeHandler.java, line: 1, end_line: 195}
   - {path: promaid_src_neo/com/maidsmart/protect/MaidDangerMalusHandler.java, line: 1, end_line: 146}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 50ccd932365c497515a62c770716ccfc8a31028ad0cc276d7d283cfcb59e40a2
 state: active

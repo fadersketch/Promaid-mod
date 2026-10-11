@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintFileIo.java, line: 1, end_line: 724}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintCatalog.java, line: 1, end_line: 427}
   - {path: promaid_src_neo/com/maidsmart/build/BuiltinHouses.java, line: 1, end_line: 1385}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: ad093c0b1ffbcbd6a50fce4293a5191b1a0d17b30541b9208b314abab88ee8ad
 state: active

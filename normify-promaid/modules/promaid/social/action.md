@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/action/EmotionalActionExecutor.java, line: 1, end_line: 300}
   - {path: promaid_src_neo/com/maidsmart/action/ThirstCompat.java, line: 1, end_line: 248}
   - {path: promaid_src_neo/com/maidsmart/action/ItemUses.java, line: 1, end_line: 186}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: ac162abe8c73d3980624ae053488bc44096e9acfd62a211082d71f1635cea03a
 state: active

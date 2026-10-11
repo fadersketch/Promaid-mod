@@ -12,7 +12,7 @@ description:
       flee, log placed blocks. 3789 lines — the mod's largest single file.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/SelfPreservationBehavior.java, line: 1, end_line: 4696}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 1f132530e82ee2991e3eae66aaca6d7e9ed933416f12109f99d679827e61c37f
 state: active

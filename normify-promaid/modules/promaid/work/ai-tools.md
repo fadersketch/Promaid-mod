@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/SmartBuildTool.java, line: 1, end_line: 407}
   - {path: promaid_src_neo/com/maidsmart/build/SmartDesignTool.java, line: 1, end_line: 333}
   - {path: promaid_src_neo/com/maidsmart/build/SmartBuildListTool.java, line: 1, end_line: 78}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 59c1b015cbcda73af07e765e87f1022d92d785f2cba7a71f70d9ef7d00ca7374
 state: active

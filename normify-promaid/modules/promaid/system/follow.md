@@ -17,7 +17,7 @@ description:
       tickets, follow, queue and visibility in one class.
 source:
   - {path: promaid_src_neo/com/maidsmart/follow/MaidChunkLoadManager.java, line: 1, end_line: 2090}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 148e8c3588c01496253b3738a7942834097e32b0b10e655d26fff7ab4b2c7b3b
 state: active

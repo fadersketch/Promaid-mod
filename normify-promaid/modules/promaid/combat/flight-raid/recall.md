@@ -12,7 +12,7 @@ description:
       after a kill.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidFlightRecall.java, line: 1, end_line: 158}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 3615311e2568550a40c7632dd40158972810a761384c7aceaf65cfcfa4251ac8
 state: active

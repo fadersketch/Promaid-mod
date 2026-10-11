@@ -12,7 +12,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/AutoCombatPools.java, line: 1, end_line: 676}
   - {path: promaid_src_neo/com/maidsmart/combat/CombatModeTable.java, line: 1, end_line: 280}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 4ff023c682e8974f0debdc387c707ceaf4a50fff52b8eadc4cda98b15d5d085d
 state: active

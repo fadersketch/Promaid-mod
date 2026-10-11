@@ -13,7 +13,7 @@ description:
       one-shot migration flags live in user-visible config.
 source:
   - {path: promaid_src_neo/com/maidsmart/config/MaidSmartConfig.java, line: 1, end_line: 3172}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f50a6468b16c6f70ecb42f22c13459427077910754c1e746b11f636dcffc3876
 state: active

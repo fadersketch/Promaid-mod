@@ -16,7 +16,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintStructureCodec.java, line: 1, end_line: 300}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintWorldExtract.java, line: 1, end_line: 397}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 918d2e3c907d2da8ad0f0c6820a9a0c0374995742ff873bb842dbab06e3f7694
 state: active

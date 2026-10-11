@@ -17,7 +17,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/FriendlyWindGuard.java, line: 1, end_line: 270}
   - {path: promaid_src_neo/com/maidsmart/combat/PetImmunityGuard.java, line: 1, end_line: 207}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidFireGuard.java, line: 1, end_line: 105}
-revision: 2aecfcf42170bc0d9d1966705e0998f044f53d1f
+revision: 85479ee734277ed4a37e6983830ca533adcb40e9
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 515a8a406c20395e200792bdf5d3d754a934b720b17e59aca50a678d21a2f0ba
 state: active

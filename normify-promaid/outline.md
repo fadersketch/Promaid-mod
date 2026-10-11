@@ -1,6 +1,6 @@
 # Promaid 架构大纲 / Architecture Outline
 
-修订 2aecfcf42170bc0d9d1966705e0998f044f53d1f · 112 模块 / 41 API / 61 箭头 / 最大深度 3
+修订 85479ee734277ed4a37e6983830ca533adcb40e9 · 112 模块 / 41 API / 61 箭头 / 最大深度 3
 
 - **Promaid 模组总览** `promaid`
   - **入口与装配** `promaid.entry`
