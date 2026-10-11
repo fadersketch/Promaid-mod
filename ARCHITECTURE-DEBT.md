@@ -162,8 +162,9 @@
 | **⑤ 高风险** | 拆 `PromaidConfigScreen`（按 Section 拆成独立面板类） | 高（需实机验收 UI） | 解除 UI 改动阻塞 |
 | **⑥ 最高** | 两树共享源目录（先纯逻辑，后映射层） | 最高 | 一次改动只写一遍 |
 
-> 本项目有一批**编号回归 harness**（`tools/test/test_*.py`，27 个）和 `verify_jar_classes.py`，
-> 这是做 ④⑤⑥ 的底气 —— **动刀之前先确认对应编号的 harness 还能跑**。
+> 编号回归 harness（原 27 个 `tools/test/test_*.py`）已随仓库大清理移除，只保留通用回归骨架
+> `tools/test/test_server.py`（启动到 `Done (`）与 `test_maid_load.py`（女仆大脑装载），
+> 配合 `verify_jar_classes.py` 作为 ④⑤⑥ 动刀前的编译 / 装载校验。
 
 ---
 

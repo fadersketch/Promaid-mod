@@ -167,7 +167,7 @@ python tools/arch/finalize_arch.py   # 覆盖 receipt.json（HTML 之后重算�
 | 改载具/骑乘 | `combat/RideBindManager.java`（绑定语义）+ `combat/MaidMountCompat.java`（各载具适配） |
 | 改建造 | `build/BlueprintBuildExecutor.java` → `build/MaidBuildBehavior.java` → `build/BlueprintLib.java` |
 | 改记忆/对话 | `memory/AiMemoryStore.java` / `dialogue/ProactiveDialogueManager.java` |
-| 接手一个"怪 bug" | `tools/test/` 里多半已有一条编号 harness 在盯它 |
+| 接手一个"怪 bug" | 先用 `tools/test/test_server.py` / `test_maid_load.py` 复现，再按行为定位到 `task/` / `combat/` / `mixin/` |
 
 ---
 
@@ -193,5 +193,5 @@ python tools/arch/finalize_arch.py   # 覆盖 receipt.json（HTML 之后重算�
 | `.gitignore` | 构建产物、本地 jar、诊断垃圾、`_*.py` 一次性脚本全部排除 |
 | 历史 | 已用 `git-filter-repo` 清掉早期误提交的诊断目录与一次性修复脚本 |
 
-> 诊断脚本一律用 `_` 前缀命名（已被 `.gitignore` 排除）。要留档的测试用例放
-> `tools/test/`，并带编号与用法说明 —— 这一批编号 harness 是本项目最有价值的资产之一。
+> 诊断脚本一律用 `_` 前缀命名（已被 `.gitignore` 排除）。`tools/test/` 只保留通用回归骨架
+> `test_server.py` / `test_maid_load.py`；其余按轮次编号的一次性场景脚本已随仓库大清理移除。
