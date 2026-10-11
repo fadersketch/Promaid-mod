@@ -469,7 +469,10 @@ public class PromaidConfigScreen extends Screen {
         VOICE("语音与 TTS", Group.UI), HUD("显示与提示", Group.UI),
         UTILITY("交互与杂项", Group.SYSTEM), LOG("运行日志", Group.SYSTEM),
         // v1.2.2 实测六百一十六：压缩盒（新道具）——自己的两条参数，挂在系统与杂项下
-        COMPRESSION_BOX("压缩盒", Group.SYSTEM);
+        COMPRESSION_BOX("压缩盒", Group.SYSTEM),
+        // 实测八百六十五：自动补全小类——把 toml 里「手工面板没收录」的项反射列出来
+        // （见 extraRows），兑现「所有 toml 都在手册里有对应开关」。
+        EXTRA("其余开关（自动）", Group.SYSTEM);
         final String title;
         final Group group;
 
@@ -798,6 +801,7 @@ public class PromaidConfigScreen extends Screen {
             case UTILITY -> this.utilityRows();
             case LOG -> this.logRows();
             case COMPRESSION_BOX -> this.compressionBoxRows();
+            case EXTRA -> this.extraRows();
         }
         // v1.1.0 实测二十二：perPage 按动态行高累加计算——每行高度 = rowHeight(def)
         // （注释折行多则高、SectionRow 紧凑），从 CONTENT_TOP 起逐行累加、超出
@@ -4750,6 +4754,146 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
 
 
+
+    /**
+     * 实测八百六十五：其余开关（自动补全）——把 toml 里手工面板没收录的配置项反射列出来。
+     *
+     * <p>已收录的（assets/promaid/panel_coverage.txt，由 gen_panel_coverage.py 从本类源码提取）
+     * 跳过、一次性迁移标记 *_MIGRATED 跳过；以后新增配置项会自动出现在本页；标签取翻译键。
+     */
+    private void extraRows() {
+        this.rows.add(new SectionRow("\u00a7e其余开关（自动补全）", false));
+        this.rows.add(new InfoRow("这一页是什么",
+                "\u00a77上面各页没收录的 toml 配置项，全在这里：每一项都能直接改。",
+                "本页由面板自动生成——反射枚举 MaidSmartConfig 的全部配置字段，扣掉上面各页已收录的"
+                        + "（assets/promaid/panel_coverage.txt）。以后新加的配置项会自动出现在这里；"
+                        + "数值越界会在下次加载时被原版钳回边界。"));
+        java.util.Set<String> covered = loadPanelCoverage();
+        java.util.List<Object[]> items = new java.util.ArrayList<>();
+        for (java.lang.reflect.Field f : MaidSmartConfig.class.getDeclaredFields()) {
+            try {
+                if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                        || !java.lang.reflect.Modifier.isFinal(f.getModifiers())
+                        || !ModConfigSpec.ConfigValue.class.isAssignableFrom(f.getType())) {
+                    continue;
+                }
+                f.setAccessible(true);
+                Object v = f.get(null);
+                if (!(v instanceof ModConfigSpec.ConfigValue<?> cv)) {
+                    continue;
+                }
+                String name = f.getName();
+                if (covered.contains(name) || name.endsWith("_MIGRATED")) {
+                    continue;
+                }
+                java.util.List<String> path = cv.getPath();
+                if (path == null || path.isEmpty()) {
+                    continue;
+                }
+                items.add(new Object[]{String.join(".", path), name, cv});
+            } catch (Throwable ignored) {
+            }
+        }
+        java.util.Set<String> seenPath = new java.util.HashSet<>();
+        String curSec = null;
+        for (Object[] it : items) {
+            String path = (String) it[0];
+            if (!seenPath.add(path)) {
+                continue; // 同路径去重（如 broom.enable 重复定义）
+            }
+            String sec = path.contains(".") ? path.substring(0, path.indexOf('.')) : "其他";
+            if (!sec.equals(curSec)) {
+                curSec = sec;
+                this.rows.add(new SectionRow(sec, true));
+            }
+            if (!(it[2] instanceof ModConfigSpec.ConfigValue<?> cv2)) {
+                continue;
+            }
+            String label = net.minecraft.network.chat.Component.translatable("config.promaid." + path).getString();
+            String tip = "自动收录：" + path + "（config 文件里同名键）";
+            try {
+                if (cv2 instanceof ModConfigSpec.BooleanValue b) {
+                    this.rows.add(new BoolRow(label, b.get(), b::set, tip));
+                } else if (cv2 instanceof ModConfigSpec.IntValue n) {
+                    this.rows.add(new NumRow(label, String.valueOf(n.get()), s -> setInt(n, s), tip));
+                } else if (cv2 instanceof ModConfigSpec.DoubleValue d) {
+                    this.rows.add(new NumRow(label, String.valueOf(d.get()), s -> setDouble(d, s), tip));
+                } else {
+                    Object cur = cv2.get();
+                    if (cur instanceof java.util.List<?> lst) {
+                        this.rows.add(new TextRow(label, joinList(lst), s -> setListRaw(cv2, s), tip));
+                    } else if (cur instanceof String sv) {
+                        this.rows.add(new TextRow(label, sv, s -> setStringRaw(cv2, s), tip));
+                    } else {
+                        this.rows.add(new InfoRow(label, String.valueOf(cur), tip));
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** 读覆盖清单：面板已手工收录的字段名（资源缺失时返回空集——只是本页会多列已收录项）。 */
+    private static java.util.Set<String> loadPanelCoverage() {
+        java.util.Set<String> out = new java.util.HashSet<>();
+        try (java.io.InputStream in = PromaidConfigScreen.class.getResourceAsStream("/assets/promaid/panel_coverage.txt")) {
+            if (in == null) {
+                return out;
+            }
+            java.io.BufferedReader r = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
+            String line;
+            while ((line = r.readLine()) != null) {
+                String t = line.trim();
+                if (!t.isEmpty() && !t.startsWith("#")) {
+                    out.add(t);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    private static String joinList(java.util.List<?> lst) {
+        StringBuilder sb = new StringBuilder();
+        for (Object o : lst) {
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(o);
+        }
+        return sb.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean setStringRaw(ModConfigSpec.ConfigValue<?> cv, String s) {
+        String v = s == null ? "" : s.trim();
+        if (v.isEmpty()) {
+            return false;
+        }
+        ((ModConfigSpec.ConfigValue<String>) cv).set(v);
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean setListRaw(ModConfigSpec.ConfigValue<?> cv, String s) {
+        try {
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (String part : s.split("[、,;\\s]+")) {
+                String t = part.trim();
+                if (!t.isEmpty()) {
+                    out.add(t);
+                }
+            }
+            if (out.isEmpty()) {
+                return false;
+            }
+            ((ModConfigSpec.ConfigValue<java.util.List<? extends String>>) cv).set(out);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
 
     /** v1.5.127：逗号分隔的英文 id 列表 → List（去空、去空格） */
     private static List<String> idList(String s) {

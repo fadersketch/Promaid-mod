@@ -485,5 +485,20 @@
   "config.promaid.misc.fishingChair": "Auto fishing chair",
   "config.promaid.misc.drivenNoStroll": "No stray-walk for maid-driven mounts",
   "config.promaid.ride.pursueTarget": "Pursue target while riding",
-  "config.promaid.ride.startupDelaySeconds": "Flying-vehicle startup delay (s)"
+  "config.promaid.ride.startupDelaySeconds": "Flying-vehicle startup delay (s)",
+  "config.promaid.build.fetchFromChests": "Build: fetch from chests",
+  "config.promaid.build.chestSearchMargin": "Chest search margin",
+  "config.promaid.build.chestFetchPerTake": "Items per fetch",
+  "config.promaid.build.chestFetchCooldown": "Fetch cooldown",
+  "config.promaid.dialogue.langCheck": "Dialogue language check",
+  "config.promaid.wood.stuckWatchdog": "Wood stuck watchdog",
+  "config.promaid.wood.stuckResetSeconds": "Wood stuck reset (s)",
+  "config.promaid.mine.stuckWatchdog": "Mine stuck watchdog",
+  "config.promaid.mine.stuckResetSeconds": "Mine stuck reset (s)",
+  "config.promaid.combat.autoSwitchStaleSeconds": "Auto-switch stale (s)",
+  "config.promaid.combat.autoSwitchThreatExpandSeconds": "Auto-switch threat expand (s)",
+  "config.promaid.misc.slaughterRadius": "Slaughter radius",
+  "config.promaid.misc.scheduleBubbleEnabled": "Schedule bubble",
+  "config.promaid.misc.scheduleBubbleDist": "Schedule bubble distance",
+  "config.promaid.misc.brewAuto": "Auto brewing"
 }

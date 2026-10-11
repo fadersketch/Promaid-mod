@@ -481,5 +481,20 @@
   "config.promaid.misc.fishingChair": "钓鱼自动坐垫",
   "config.promaid.misc.drivenNoStroll": "坐骑不闲逛",
   "config.promaid.ride.pursueTarget": "骑马追击目标",
-  "config.promaid.ride.startupDelaySeconds": "飞行载具启动时间（秒）"
+  "config.promaid.ride.startupDelaySeconds": "飞行载具启动时间（秒）",
+  "config.promaid.build.fetchFromChests": "建造从箱子取料",
+  "config.promaid.build.chestSearchMargin": "取料箱子搜索余量",
+  "config.promaid.build.chestFetchPerTake": "每次取料格数",
+  "config.promaid.build.chestFetchCooldown": "取料冷却",
+  "config.promaid.dialogue.langCheck": "对话语言检查",
+  "config.promaid.wood.stuckWatchdog": "伐木卡住监测",
+  "config.promaid.wood.stuckResetSeconds": "伐木卡住重置秒数",
+  "config.promaid.mine.stuckWatchdog": "挖矿卡住监测",
+  "config.promaid.mine.stuckResetSeconds": "挖矿卡住重置秒数",
+  "config.promaid.combat.autoSwitchStaleSeconds": "换目标失效秒数",
+  "config.promaid.combat.autoSwitchThreatExpandSeconds": "换目标威胁扩张秒数",
+  "config.promaid.misc.slaughterRadius": "宰杀半径",
+  "config.promaid.misc.scheduleBubbleEnabled": "排班气泡",
+  "config.promaid.misc.scheduleBubbleDist": "排班气泡距离",
+  "config.promaid.misc.brewAuto": "自动酿造"
 }
