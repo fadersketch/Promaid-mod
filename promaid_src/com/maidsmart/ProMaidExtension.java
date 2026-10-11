@@ -61,6 +61,8 @@ public class ProMaidExtension implements ILittleMaid {
     private int seatWalkTimer = 0;
     /** v1.3.7 实测六百六十七：武装拴绳挂载校验（2 tick 一次；无挂载对时零开销） */
     private int tetherTimer = 0;
+    /** 实测八百六十六：穿戴装备托管核对节流计数（每 5 tick 一次；托管表空时零开销） */
+    private int escrowTimer = 0;
 
     public ProMaidExtension() {
         MinecraftForge.EVENT_BUS.register(new ProactiveDialogueManager());
@@ -304,6 +306,11 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.follow.MaidChunkLoadManager.followTickets(server);
         // 实测五百六十六（PR #10 移植）：入世界自动补包队列（空队列零开销）
         com.maidsmart.command.MaidResyncCommand.tickAutoResync(server);
+        // 实测八百六十六：穿戴装备托管——每 5 拍核一次"离身的装备落定了没"（空表零开销）
+        if (++this.escrowTimer >= 5) {
+            this.escrowTimer = 0;
+            tickEquipEscrow(server);
+        }
         // v1.5.252j：建造 HUD 广播（每秒一次）——客户端左上角显示速度/预计完成时间
         if (++this.hudTimer >= 20) {
             this.hudTimer = 0;
@@ -518,22 +525,15 @@ public class ProMaidExtension implements ILittleMaid {
                         + " 主手=" + short0(maid.m_21205_())
                         + " | 调用栈：" + frames);
             }
-            // ---- ② 救回（限频不拦这一步：1.5 秒内连丢两件也要都接回来）----
-            // 实测八百四十一：第二道闸由"看调用栈"改成"看那件此刻在不在玩家手里"——原 isPlayerDriven
-            // 因为本事件是实体 tick 补发而**恒为 false**（等于没写），玩家在界面里取走副手物会被塞回来
-            // = 刷物品。判据与实证见 heldByAnyPlayer。
-            if (!maid.m_6084_() || heldByAnyPlayer(maid, from) || !rescuable(from)
-                    || inMaidContainers(maid, from) || inOwnerInventory(maid, from)) {
+            // ---- ② 托管（实测八百六十六：把旧"当拍救回"改成"登记后盯着落定"）----
+            // 旧版当拍判定：那件此刻在玩家手里（光标/背包）就不救（对，否则复制）。可玩家从光标
+            // 放进背包那一下万一真丢了，槽位清空事件只在"有→空"补发一次、不会再来第二枪，就再也
+            // 没人看它 —— 实测那一局 58 次 [装备离开] / 0 次 [装备救回] 即此。新口径：离身即打标记，
+            // 之后每 5 拍定位一次，只有确认落到最终位置才销；光标上=还在搬→续期；到点仍找不到→放回。
+            if (!maid.m_6084_() || !rescuable(from)) {
                 return;
             }
-            net.minecraft.world.entity.EquipmentSlot lostSlot = event.getSlot();
-            net.minecraft.world.item.ItemStack left = putBack(maid, from, lostSlot);
-            if (!left.m_41619_()) {
-                maid.m_5552_(left, 0.5f); // 副手占了、背包也满 → 落地（绝不删）
-            }
-            com.maidsmart.tool.PromaidLog.log("装备救回", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 槽=" + lostSlot + " 找回 " + from.m_41613_() + "x" + from.m_41720_()
-                    + "（清空事件是它最后一份引用，已放回她身上）");
+            registerEscrow(maid, event.getSlot(), from);
         } catch (Throwable ignored) {
         }
     }
@@ -542,48 +542,175 @@ public class ProMaidExtension implements ILittleMaid {
         return st.m_41619_() ? "空" : (st.m_41613_() + "x" + st.m_41720_());
     }
 
-    /**
-     * 这件东西此刻在**任何一个玩家手里**吗（界面光标或玩家背包）——命中 = 没丢，不救。
-     * <p>javap 实证（两树都核）：{@code LivingEquipmentChangeEvent} 是实体每 tick 在
-     * {@code detectEquipmentUpdates} 里补发的（比较上次/当前装备），栈里永远没有容器/网络帧；
-     * 旧判据 {@code isPlayerDriven} 因此**恒为 false**（形同没写），玩家在界面取走副手物会被当成
-     * "丢了"塞回来 = 凭空复制（实测八百四十一）。现在的判据是直接找那件在不在玩家手里：
-     * 一次界面取走只可能落到"光标"或"玩家背包"，见 {@link #inPlayerPossession}；真丢失不命中照旧救回。
-     */
-    private static boolean heldByAnyPlayer(EntityMaid maid, net.minecraft.world.item.ItemStack want) {
+    /** 实测八百六十六：穿戴装备托管表（女仆 UUID → 已离身、还没确认落定的装备清单） */
+    private static final java.util.Map<java.util.UUID, java.util.List<Escrow>> EQUIP_ESCROW =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 托管观察窗（毫秒）：装备离身后这么久仍四处查无 → 放回她身上；光标上会不断续期 */
+    private static final long ESCROW_MS = 1500L;
+
+    /** 光标上最多续期多久（毫秒）——防玩家一直攥着导致托管表不收敛 */
+    private static final long ESCROW_MAX = 30000L;
+
+    private static final int LOC_NONE = 0, LOC_MAID = 1, LOC_PLAYER = 2, LOC_CURSOR = 3, LOC_GROUND = 4;
+
+    /** 一件「已离开她身上、还没确认落到最终位置」的装备（want 是离身那一刻的副本） */
+    private static final class Escrow {
+        final net.minecraft.world.entity.EquipmentSlot slot;
+        final net.minecraft.world.item.ItemStack want;
+        final long started;
+        long deadline;
+
+        Escrow(net.minecraft.world.entity.EquipmentSlot slot,
+               net.minecraft.world.item.ItemStack want, long now) {
+            this.slot = slot;
+            this.want = want;
+            this.started = now;
+            this.deadline = now + ESCROW_MS;
+        }
+    }
+
+    /** 登记一件离身的装备（同件已有未销标记则不重复登记——防止到点放回两次 = 复制） */
+    private static void registerEscrow(EntityMaid maid, net.minecraft.world.entity.EquipmentSlot slot,
+                                       net.minecraft.world.item.ItemStack from) {
         try {
-            if (!(maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
-                return false;
+            java.util.List<Escrow> list = EQUIP_ESCROW.computeIfAbsent(maid.m_20148_(),
+                    k -> new java.util.ArrayList<>());
+            for (Escrow e : list) {
+                if (sameIgnoringDurability(from, e.want)) {
+                    return;
+                }
             }
-            for (net.minecraft.server.level.ServerPlayer p : level.m_6907_()) {
-                if (inPlayerPossession(p, want)) {
-                    return true;
+            list.add(new Escrow(slot, from.m_41777_(), System.currentTimeMillis()));
+            com.maidsmart.tool.PromaidLog.log("装备托管", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 槽=" + slot + " 她拿走了 " + from.m_41613_() + "x" + from.m_41720_()
+                    + "，盯着它落定");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 每 5 拍核一遍托管表：落定即销；光标上续期；到点四处查无就放回（任何路径都不删） */
+    private static void tickEquipEscrow(net.minecraft.server.MinecraftServer server) {
+        if (EQUIP_ESCROW.isEmpty()) {
+            return;
+        }
+        if (!com.maidsmart.tool.MaidRoster.any(server)) {
+            EQUIP_ESCROW.clear();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        java.util.List<EntityMaid> maids = com.maidsmart.tool.MaidRoster.all(server);
+        java.util.Iterator<java.util.Map.Entry<java.util.UUID, java.util.List<Escrow>>> it =
+                EQUIP_ESCROW.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<java.util.UUID, java.util.List<Escrow>> ent = it.next();
+            EntityMaid maid = null;
+            for (EntityMaid m : maids) {
+                if (m.m_20148_().equals(ent.getKey())) {
+                    maid = m;
+                    break;
+                }
+            }
+            if (maid == null) {
+                it.remove(); // 她不在了（被收/被删/死了）：无从放回，标记作废
+                continue;
+            }
+            java.util.Iterator<Escrow> li = ent.getValue().iterator();
+            while (li.hasNext()) {
+                Escrow es = li.next();
+                int loc = locateEquip(server, maid, es.want);
+                if (loc == LOC_MAID || loc == LOC_PLAYER || loc == LOC_GROUND) {
+                    li.remove();
+                    com.maidsmart.tool.PromaidLog.log("装备落定", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 槽=" + es.slot + " 的 " + es.want.m_41613_() + "x" + es.want.m_41720_()
+                            + " 已确认落定（" + locName(loc) + "）");
+                    continue;
+                }
+                if (loc == LOC_CURSOR) {
+                    if (now - es.started < ESCROW_MAX) {
+                        es.deadline = now + ESCROW_MS; // 玩家正搬着：续期，标记不许清（也不碰光标）
+                        continue;
+                    }
+                    li.remove(); // 攥太久：放过（东西在他光标上，没丢）
+                    continue;
+                }
+                if (now < es.deadline) {
+                    continue; // 还没到点：继续观察（可能是搬运中的空档）
+                }
+                li.remove();
+                net.minecraft.world.item.ItemStack left = putBack(maid, es.want, es.slot);
+                if (!left.m_41619_()) {
+                    maid.m_5552_(left, 0.5f); // 副手占了、背包也满 → 落地（绝不删）
+                }
+                com.maidsmart.tool.PromaidLog.log("装备救回", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 槽=" + es.slot + " 找回 " + es.want.m_41613_() + "x" + es.want.m_41720_()
+                        + "（离身 1.5 秒四处查无，已放回她身上）");
+            }
+            if (ent.getValue().isEmpty()) {
+                it.remove();
+            }
+        }
+    }
+
+    private static String locName(int loc) {
+        return loc == LOC_MAID ? "她身上" : (loc == LOC_PLAYER ? "玩家侧" : "地上");
+    }
+
+    /** 那件此刻在哪儿：她容器/她装备槽 → 任意玩家界面或背包 → 任意玩家光标 → 附近地面；查无 = 真丢 */
+    private static int locateEquip(net.minecraft.server.MinecraftServer server,
+                                   EntityMaid maid, net.minecraft.world.item.ItemStack want) {
+        try {
+            if (inMaidContainers(maid, want)) {
+                return LOC_MAID;
+            }
+            for (net.minecraft.world.entity.EquipmentSlot s : net.minecraft.world.entity.EquipmentSlot.values()) {
+                if (matchOne(maid.m_6844_(s), want)) {
+                    return LOC_MAID; // 她又穿回去了（头/胸/腿/脚/主副手任意一槽）
+                }
+            }
+            // 跨维度算上：主人在别的维度把东西拿走了也要认（否则到点会放回一件 = 复制）
+            for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
+                for (net.minecraft.server.level.ServerPlayer p : level.m_6907_()) {
+                    if (matchOne(p.f_36096_.m_142621_(), want)) {
+                        return LOC_CURSOR; // 拿起未放下：还在搬
+                    }
+                    for (net.minecraft.world.item.ItemStack st : p.f_36096_.m_38927_()) {
+                        if (matchOne(st, want)) {
+                            return LOC_PLAYER; // 玩家背包 / 当前界面里的箱子 / 女仆界面里的她的背包格
+                        }
+                    }
+                }
+            }
+            if (maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel ml) {
+                net.minecraft.world.phys.AABB box = maid.m_20191_().m_82400_(24.0);
+                for (net.minecraft.world.entity.item.ItemEntity it
+                        : ml.m_45976_(net.minecraft.world.entity.item.ItemEntity.class, box)) {
+                    if (matchOne(it.m_32055_(), want)) {
+                        return LOC_GROUND;
+                    }
+                }
+                for (EntityMaid other : ml.m_45976_(EntityMaid.class, box)) {
+                    if (other != maid && inMaidContainers(other, want)) {
+                        return LOC_MAID; // 被别的女仆捡走也算落定
+                    }
+                }
+            }
+            for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
+                for (net.minecraft.server.level.ServerPlayer p : level.m_6907_()) {
+                    for (net.minecraft.world.entity.item.ItemEntity it : level.m_45976_(
+                            net.minecraft.world.entity.item.ItemEntity.class, p.m_20191_().m_82400_(16.0))) {
+                        if (matchOne(it.m_32055_(), want)) {
+                            return LOC_GROUND; // 她落地在他脚边也算落定（关界面时原版会把手上的丢出来）
+                        }
+                    }
                 }
             }
         } catch (Throwable ignored) {
         }
-        return false;
+        return LOC_NONE;
     }
 
-    /** 这件东西此刻在这个玩家手里吗：界面光标（拿起未放下）或背包任一格 */
-    private static boolean inPlayerPossession(net.minecraft.world.entity.player.Player p,
-                                              net.minecraft.world.item.ItemStack want) {
-        try {
-            if (matchOne(p.f_36096_.m_142621_(), want)) {
-                return true; // 光标上（他在界面里拿着还没放下）
-            }
-            net.minecraft.world.entity.player.Inventory inv = p.m_150109_();
-            for (int i = 0; i < inv.m_6643_(); i++) {
-                if (matchOne(inv.m_8020_(i), want)) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    /** 单件比对："同一件、数量够"（与 {@link #hasSame} 同口径，给光标与背包格用） */
+    /** 单件比对："同一件、数量够"（与 {@link #hasSame} 同口径，给光标、背包格与地面物用） */
     private static boolean matchOne(net.minecraft.world.item.ItemStack s,
                                     net.minecraft.world.item.ItemStack want) {
         return s != null && !s.m_41619_() && s.m_41613_() >= want.m_41613_()
@@ -674,18 +801,6 @@ public class ProMaidExtension implements ILittleMaid {
         } catch (Throwable ignored) {
             return false;
         }
-    }
-
-    /** 主人手里还有没有同一件（玩家把她的装备拖自己身上时，东西在主人那边；含光标） */
-    private static boolean inOwnerInventory(EntityMaid maid, net.minecraft.world.item.ItemStack want) {
-        try {
-            net.minecraft.world.entity.LivingEntity owner = maid.m_269323_();
-            if (owner instanceof net.minecraft.world.entity.player.Player p) {
-                return inPlayerPossession(p, want);
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
     }
 
     /** 放回：原本是副手且副手空着 → 原位；否则背包。返回没能放进去的剩余（空栈 = 已安置好） */

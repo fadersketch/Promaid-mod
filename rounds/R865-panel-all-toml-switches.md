@@ -73,16 +73,17 @@
 | 打包自检 | 两树 `MISSING: none`、`lang json: OK`；Forge 17,574,160 B（`263f3774…1ce2f4`）、Neo 17,613,051 B（`c18656d7…07d479`）；两个 jar 内均含 `assets/promaid/panel_coverage.txt` 与 `config/PromaidConfigScreen.class` |
 | 护栏 | `check_preset` FAIL 0 / WARN 2（DIY 170/174）；`check_workflow` FAIL 0 / WARN 3；`check_comment_style` 927 文件 / **2262**（与基线同数，`extraRows` 的 javadoc 一度 9 行被判 MEMBER LONG-BLOCK +2，压回 7 行后归位）；**新护栏 `check_panel_coverage` FAIL 0**（Forge 声明 601 / 已收录 531 / 自动页列出 **61** / 迁移标记 9；Neo 607 / 540 / **58** / 9） |
 | 镜像/符号 | 两树 `EXTRA(` / `void extraRows()` / `loadPanelCoverage` / `setListRaw` 计数一致；`panel_coverage.txt` 531 / 540 行 |
-| 部署 | **未部署**（开发者闸门） |
-| 回归 | **未跑**（开发者闸门） |
+| 部署 | **已部署@2026-10-11**（开发者开闸「部署」；`deploy_all.py` 4 个目标全部 `match=True`） |
+| 回归 | **已回归@2026-10-11**（`test_server` + `test_maid_load` × 1201 / neoforge1211，四件全 PASS；日志里无与 promaid 相关的 ERROR） |
 
 ## 版本与上传
 
-- 版本保持 **1.3.2**；**不**部署、**不**跑回归、**不**发 release；同号重打按 WORKFLOW §5.2 留痕。
+- 版本保持 **1.3.2**；**已部署**（本机 4 实例，`match=True`）+ **已回归**（两加载器各两件全 PASS）；**未**上平台、**未**发 release；同号重打按 WORKFLOW §5.2 留痕。
 
 ## 验收
 
-**未验收**。
+**已验收@2026-10-11**（开发者指示「部署」并写版本更新内容=验收）；版本更新内容已写入桌面
+`Promaid文本\v1.3.2 骑乘修整与全部配置开关可见.md`（1.3.2 覆盖 R858~R865）。
 
 ## 边界
 
