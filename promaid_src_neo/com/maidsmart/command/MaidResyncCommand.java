@@ -458,6 +458,12 @@ public final class MaidResyncCommand {
      */
     private static final int ATTR_RESEND_TICKS = 5;
 
+    /** v1.3.2 实测八百五十八：属性补包诊断日志的限频表（UUID → 上次打日志的 gameTime）。 */
+    private static final java.util.Map<UUID, Long> ATTR_LOG_SINCE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 同一女仆的"属性补包"日志最短间隔（tick）= 30 秒。正常传送太密，逐条打会刷屏。 */
+    private static final long ATTR_LOG_MIN_INTERVAL = 600L;
+
     /** 传送链路调用：接下来 {@link #ATTR_RESEND_TICKS} 拍里每拍给她补一次属性表包 */
     public static void scheduleAttributeResend(EntityMaid maid) {
         if (maid == null) {
@@ -470,12 +476,19 @@ public final class MaidResyncCommand {
             // 故障态恰恰是"客户端已经有她（所以血条显示 20）、追踪表 seenBy 里却没有主人"，
             // 此时 5 拍广播一发都到不了主人手里，且不留任何痕迹。补包是低频事件（每次传送一次），
             // 所以在这里记一行，写清这次有没有可用的"直连主人"兜底。
+            //
+            // 【v1.3.2 实测八百五十八：日志按女仆限频（30 秒/条）——补包行为一字不改，只防刷屏】
             net.minecraft.world.entity.LivingEntity owner = maid.getOwner();
             boolean online = owner instanceof ServerPlayer;
             boolean sameDim = online && owner.level() == maid.level();
-            PromaidLog.log("属性补包", PromaidLog.nameOf(maid) + " 传送后补属性表（"
-                    + ATTR_RESEND_TICKS + " 拍）：直连主人兜底="
-                    + (online ? (sameDim ? "用（主人同维）" : "不用（主人异维）") : "不用（主人离线）"));
+            long nowTick = maid.level().getGameTime();
+            Long lastLog = ATTR_LOG_SINCE.get(maid.getUUID());
+            if (lastLog == null || nowTick - lastLog >= ATTR_LOG_MIN_INTERVAL) {
+                ATTR_LOG_SINCE.put(maid.getUUID(), nowTick);
+                PromaidLog.log("属性补包", PromaidLog.nameOf(maid) + " 传送后补属性表（"
+                        + ATTR_RESEND_TICKS + " 拍）：直连主人兜底="
+                        + (online ? (sameDim ? "用（主人同维）" : "不用（主人异维）") : "不用（主人离线）"));
+            }
         } catch (Throwable ignored) {
         }
     }

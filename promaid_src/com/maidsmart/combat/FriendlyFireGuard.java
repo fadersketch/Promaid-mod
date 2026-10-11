@@ -187,4 +187,28 @@ public final class FriendlyFireGuard {
             return false;
         }
     }
+
+    /**
+     * v1.3.2 实测八百五十八：她此刻是否"正在交战"——有活着的、非友方的攻击目标。
+     *
+     * <p>自保退出归位传送（{@code teleportHomeOnExit}）据此**交战中不把她拽回主人身边**——
+     * 反馈"跳到一半还没出刀就被传回身边"。目标消失/脱战后下一次退出照常归位。
+     * 两处都查：{@code getTarget()}（近战/战术写）与 {@code ATTACK_TARGET} 记忆（TLM 也写）；
+     * 友方目标用 {@link #isFriendly} 过滤（主人/同主女仆/友军不算"交战"）。
+     */
+    public static boolean isEngaged(EntityMaid maid) {
+        try {
+            if (isHostileTarget(maid, maid.m_5448_())) { // getTarget
+                return true;
+            }
+            LivingEntity mem = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_).orElse(null);
+            return isHostileTarget(maid, mem);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isHostileTarget(EntityMaid maid, LivingEntity t) {
+        return t != null && t != maid && t.m_6084_() && !isFriendly(maid, t);
+    }
 }

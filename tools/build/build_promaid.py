@@ -18,7 +18,7 @@ STAGING = os.path.join(BASE, 'staging_promaid')
 OUT = os.path.join(BASE, 'out_promaid')
 SRC = os.path.join(BASE, 'promaid_src')
 # 命名规范（v1.2.4 起）：promaid-<版本>-<加载器>-<游戏版本>.jar
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.1-forge-1.20.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.2-forge-1.20.1.jar')
 
 # 实测六百六十八：mixin 注入点审计闸门（只读）——javac 只保证注解字符串是合法 Java，**不保证
 # "目标类真的自己声明了这个方法"**；那种错要等游戏启动时 Mixin 才报，直接崩在 Bootstrap

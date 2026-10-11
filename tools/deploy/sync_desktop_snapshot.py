@@ -44,7 +44,7 @@ DIRS = ['promaid_src', 'promaid_src_neo', 'libs_forge', 'libs_neo', 'tools']
 DOCS = ['ARCHITECTURE-DEBT.md', 'ARCHITECTURE.md', 'DEDICATED_SERVER_NOTES.md',
         'GIT_SYNC.md', 'HOW-TO-PUSH-CLEANED-HISTORY.md', 'PUBLISH_GUIDE.md', 'README.md',
         'release_body.md', 'release_body_neo.md', 'DEV_GUIDE.md', 'RELEASE_NOTES_v1.3.1.md']
-JARS = ['promaid-1.3.1-neoforge-1.21.1.jar', 'promaid-1.3.1-forge-1.20.1.jar']
+JARS = ['promaid-1.3.2-neoforge-1.21.1.jar', 'promaid-1.3.2-forge-1.20.1.jar']
 TARGETS = [r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods',
            r'D:\.minecraft\versions\1.20.1-Forge_47.4.10\mods',
            r'D:\.minecraft\versions\龙之冒险：新征程v2.4a\mods',
@@ -151,7 +151,7 @@ def write_readme(jars):
     L.append('')
     L.append('【本版包含的更新】')
     L.append('  %s' % round_title())
-    L.append('  （版本号 1.3.1：三份 mods.toml 与 jar 文件名、README.md 已统一。）')
+    L.append('  （版本号 1.3.2：三份 mods.toml 与 jar 文件名、README.md 已统一。）')
     L.append('')
     L.append('【里面有什么】')
     L.append('  source/promaid_src/       Forge 1.20.1 树（SRG 名）')

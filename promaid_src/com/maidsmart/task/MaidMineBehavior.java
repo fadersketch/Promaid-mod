@@ -402,6 +402,16 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static final long ORE_CACHE_TTL = 100L;
 
     /**
+     * v1.3.2 实测八百五十八【锁定期间的目标重评估间隔】（tick = 5 秒）。
+     *
+     * <p>旧版只在 {@code targetPos == null}（挖完/失效/缓存轮空）时才调 {@code findOre} 重新评估——
+     * 一旦锁定一块矿就一路挖过去/走过去、中途不再看别的矿（反馈"锁定一个目标……除非等到重新检测"）。
+     * 本轮在锁定期间每 5 秒走一次**廉价**的缓存重挑（有缓存只校验、不重建、不停顿），
+     * 换了更优的矿才切目标；**不是**把已经删掉的"每 5 秒全量重扫"请回来（那会"每 5 秒停一下"）。
+     */
+    private static final int MINE_REPICK_INTERVAL = 100;
+
+    /**
      * v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描的分帧游标状态
      * （与伐木 WoodScanState 同款）——每 tick 最多扫 MINE_SCAN_BUDGET 格，跨 tick 续进。
      */
@@ -497,6 +507,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static final String PROGRESS_TAG = "maid_smart_mine_progress";
     /** 目标扫描节流：找不到矿时每 20 tick 才扫一次，避免每 tick 全量查询 */
     private int scanCooldown = 0;
+    /** v1.3.2 实测八百五十八：锁定目标期间的重评估倒计时（见 {@link #MINE_REPICK_INTERVAL}） */
+    private int repickCooldown = 0;
     /** v1.5.113：上一次 findOre 是否做了全量重建（缓存轮=false）——只有全量重建
      *  确认框空才滑动锚点迁移（缓存轮空不迁移，等 5 秒重建再判） */
     private boolean lastScanWasFull = true;
@@ -886,6 +898,20 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             TARGET_SINCE.put(maid.m_19879_(), gameTime);
             // v1.5.140：有目标 = 挖矿进行中 → 登记标记（拾取任务让位，与 doStart 一致）
             MINING.add(maid.m_20148_());
+            }
+        }
+        // v1.3.2 实测八百五十八【锁定期间的重评估】：到这里 targetPos 必非空。每 5 秒从缓存里
+        // 重挑一次——旧版只在 targetPos==null 时才重新评估，锁上一块就不换（反馈"检测间隔太长"）。
+        // 只走廉价的缓存轮（findOre 有缓存就只校验、不重建、不停顿）；挖矿进行中（destroyProgress>0）
+        // 不打扰（免得切目标打断当前这块）；返回 null（分帧扫描进行中/框内无矿）时保留当前目标。
+        if (this.targetPos != null && this.destroyProgress <= 0.0f
+                && --this.repickCooldown <= 0) {
+            this.repickCooldown = MINE_REPICK_INTERVAL;
+            BlockPos repicked = this.findOre(level, maid, anchor);
+            if (repicked != null && !repicked.equals(this.targetPos)) {
+                this.targetPos = repicked;
+                TARGET_SINCE.put(maid.m_19879_(), gameTime);
+                MaidToolAutoEquip.ensureForTarget(maid, level.m_8055_(this.targetPos));
             }
         }
         // v1.5.47：弃置检查——目标 5 秒够不着且无任何破坏进度 → 弃置重选（防原地磨蹭）

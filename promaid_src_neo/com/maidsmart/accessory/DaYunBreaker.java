@@ -62,11 +62,25 @@ public final class DaYunBreaker {
      */
     public static final int BLOCK_BREAK_EVENT = 2001;
 
-    /** 前瞻系数：把这一 tick 的速度乘上它当"要看多远"（实测八百一十）。 */
-    private static final double AHEAD_FACTOR = 3.0D;
+    /**
+     * 前瞻系数：把这一 tick 的速度乘上它当"要看多远"（实测八百一十）。
+     * v1.3.2 实测八百五十八：3.0 → 4.0（鞘翅带烟花/俯冲时速度明显超平飞，系数太小会算近）。
+     */
+    private static final double AHEAD_FACTOR = 4.0D;
 
-    /** 前瞻距离上限（格）：鞘翅平飞约 0.6~1.2 格/tick，3 格足够覆盖下一两 tick。 */
-    private static final double AHEAD_MAX = 3.0D;
+    /**
+     * 前瞻距离上限（格）。v1.3.2 实测八百五十八：3.0 → 8.0——旧上限只按"平飞 0.6~1.2 格/tick"
+     * 定的，高速（烟花加速/俯冲）时"这一 tick 会走到哪"算得比实际近，墙还是撞上才清。
+     * 8 格足以覆盖现实里鞘翅能到的速度；再快也是 8 格前瞻 + 立方体半宽，实际覆盖更远。
+     */
+    private static final double AHEAD_MAX = 8.0D;
+
+    /**
+     * 前瞻距离下限（格）。v1.3.2 实测八百五十八：速度被墙撞没（已经贴墙/卡住）时旧版前瞻整段跳过
+     * （reach=0），只能等下一 tick 中心段救，观感是"贴墙愣一下"。给个最小前瞻，配上"贴着墙就沿
+     * 视线方向清"，能立刻把自己顶出来。
+     */
+    private static final double AHEAD_MIN = 2.5D;
 
     /**
      * v1.5.398 实测八百一十三：把配置里的「边长」规整成合法值——
@@ -153,28 +167,55 @@ public final class DaYunBreaker {
         List<BlockPos> removed = new ArrayList<>();
         List<BlockState> removedStates = new ArrayList<>();
 
-        cleared += clearAround(level, entity, center, maxHardness, skipContainers,
-                breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
-
-        // 【实测八百一十】再沿速度方向提前清前方（消掉"撞上才清"的顿挫）
+        // 【v1.3.2 实测八百五十八：前瞻段【先跑】】——高速时"这一 tick 要撞上的墙"优先于"脚边"，
+        // 且旧版中心段先跑可能吃光 maxBlocksPerTick 预算、恰好在最需要前瞻的时候把前瞻饿死。
         if (motion != null && cleared < maxBlocksPerTick) {
             double vx = motion.x, vy = motion.y, vz = motion.z;
             double speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+            double dx;
+            double dy;
+            double dz;
+            double reach;
             if (speed > 1.0E-4) {
-                // 前瞻距离 = min(速度 × 系数, 上限)：鞘翅平飞约 0.6~1.2 格/tick
-                double reach = Math.min(speed * AHEAD_FACTOR, AHEAD_MAX);
-                int steps = (int) Math.ceil(reach);
-                for (int step = 1; step <= steps && cleared < maxBlocksPerTick; step++) {
-                    double t = Math.min(step, reach);
-                    BlockPos ahead = BlockPos.containing(
-                            center.getX() + 0.5 + vx / speed * t,
-                            center.getY() + 0.5 + vy / speed * t,
-                            center.getZ() + 0.5 + vz / speed * t);
-                    cleared += clearAround(level, entity, ahead, maxHardness, skipContainers,
-                            breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
+                // 前瞻距离 = clamp(速度 × 系数, 最小, 上限)：系数 4 / 上限 8 格——带烟花/俯冲的
+                // 高速也能覆盖"这一 tick 会走到哪"；最小 2.5 格保证低速同样有前瞻。
+                dx = vx / speed;
+                dy = vy / speed;
+                dz = vz / speed;
+                reach = Math.min(Math.max(speed * AHEAD_FACTOR, AHEAD_MIN), AHEAD_MAX);
+            } else {
+                // 【v1.3.2】速度被墙撞没了（已经贴墙/卡住）：改沿**视线方向**清一段把自己顶出来。
+                // 旧版这里 speed≈0 → 前瞻整段跳过，只能等中心段救 —— 观感是"贴墙愣一下"。
+                net.minecraft.world.phys.Vec3 look = entity.getLookAngle();
+                double lx = look.x, ly = look.y, lz = look.z;
+                double ls = Math.sqrt(lx * lx + ly * ly + lz * lz);
+                if (ls > 1.0E-4) {
+                    dx = lx / ls;
+                    dy = ly / ls;
+                    dz = lz / ls;
+                    reach = AHEAD_MIN;
+                } else {
+                    dx = 0.0D;
+                    dy = 0.0D;
+                    dz = 0.0D;
+                    reach = 0.0D;
                 }
             }
+            int steps = (int) Math.ceil(reach);
+            for (int step = 1; step <= steps && cleared < maxBlocksPerTick; step++) {
+                double t = Math.min(step, reach);
+                BlockPos ahead = BlockPos.containing(
+                        center.getX() + 0.5 + dx * t,
+                        center.getY() + 0.5 + dy * t,
+                        center.getZ() + 0.5 + dz * t);
+                cleared += clearAround(level, entity, ahead, maxHardness, skipContainers,
+                        breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
+            }
         }
+
+        // 中心段：自身周边（脚边 / 身上那一格）——放在前瞻段之后跑（见上）
+        cleared += clearAround(level, entity, center, maxHardness, skipContainers,
+                breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
 
         if (dropItems) {
             for (int i = 0; i < removed.size(); i++) {

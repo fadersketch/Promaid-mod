@@ -442,6 +442,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
     private static final long WOOD_CACHE_TTL = 100L;
 
+    /**
+     * v1.3.2 实测八百五十八【锁定期间的目标重评估间隔】（tick = 5 秒）——与挖矿
+     * `MaidMineBehavior.MINE_REPICK_INTERVAL` 同款同口径（反馈"砍树同理"）。详见那边的说明。
+     */
+    private static final int WOOD_REPICK_INTERVAL = 100;
+
     /** 审计M4修复（v1.5.383）：女仆实体卸载时清理其全部行为状态表（防长会话泄漏） */
     public static void forget(int maidEntityId) {
         ANCHORS.remove(maidEntityId);
@@ -541,6 +547,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private static final String PROGRESS_TAG = "maid_smart_wood_progress";
     /** 目标扫描节流：找不到矿时每 20 tick 才扫一次，避免每 tick 全量查询 */
     private int scanCooldown = 0;
+    /** v1.3.2 实测八百五十八：锁定目标期间的重评估倒计时（见 {@link #WOOD_REPICK_INTERVAL}） */
+    private int repickCooldown = 0;
     /** v1.5.113：上一次 findWood 是否做了全量重建（缓存轮=false）——只有全量重建
      *  确认框空才滑动锚点迁移（缓存轮空不迁移，等 5 秒重建再判） */
     private boolean lastScanWasFull = true;
@@ -956,6 +964,20 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             TARGET_SINCE.put(maid.m_19879_(), gameTime);
             // v1.5.140：有目标 = 挖矿进行中 → 登记标记（拾取任务让位，与 doStart 一致）
             WOODING.add(maid.m_20148_());
+            }
+        }
+        // v1.3.2 实测八百五十八【锁定期间的重评估】：到这里 targetPos 必非空。每 5 秒从缓存里
+        // 重挑一次（与挖矿 MaidMineBehavior 同款）——旧版只在 targetPos==null 时才重新评估，
+        // 锁上一棵树就不换。只走廉价的缓存轮（findWood 有缓存就只校验、不重建、不停顿）；
+        // 砍伐进行中（destroyProgress>0）不打扰；返回 null 时保留当前目标。
+        if (this.targetPos != null && this.destroyProgress <= 0.0f
+                && --this.repickCooldown <= 0) {
+            this.repickCooldown = WOOD_REPICK_INTERVAL;
+            BlockPos repicked = this.findWood(level, maid, anchor);
+            if (repicked != null && !repicked.equals(this.targetPos)) {
+                this.targetPos = repicked;
+                TARGET_SINCE.put(maid.m_19879_(), gameTime);
+                MaidToolAutoEquip.ensureAxeForTarget(maid, level.m_8055_(this.targetPos));
             }
         }
         // v1.5.47：弃置检查——目标 5 秒够不着且无任何破坏进度 → 弃置重选（防原地磨蹭）

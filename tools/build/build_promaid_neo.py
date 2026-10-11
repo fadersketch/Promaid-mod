@@ -17,7 +17,7 @@ BASE = _find_repo_root(__file__)
 STAGING = os.path.join(BASE, 'staging_promaid_neo')
 OUT = os.path.join(BASE, 'out_promaid_neo')
 SRC = os.path.join(BASE, 'promaid_src_neo')
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.1-neoforge-1.21.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.2-neoforge-1.21.1.jar')
 
 # 实测六百六十八：mixin 注入点审计闸门（只读）——javac 只保证注解字符串是合法 Java，**不保证
 # "目标类真的自己声明了这个方法"**；那种错要等游戏启动时 Mixin 才报，直接崩在 Bootstrap

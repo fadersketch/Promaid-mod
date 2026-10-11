@@ -2085,6 +2085,14 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (shouldSkipTeleportForParked(maid)) {
                 return;
             }
+            // v1.3.2 实测八百五十八【交战中不把她拽走】：退出自保的归位传送旧口径是
+            // "不在主人 5 格内就传"（无论有没有怪）——战斗里血量一上一下就被反复传送
+            // 回主人身边，反馈"距离稍微拉远就回传主人，频率很高"，而且这一传会打断
+            // 她正在打的跳劈。战斗交还给战术：有活的非友方目标就不传；目标消失/脱战后
+            // 下一次退出照常归位（原"恢复即支援"语义在真正脱战时不变）。
+            if (FriendlyFireGuard.isEngaged(maid)) {
+                return;
+            }
             double dx = maid.getX() - owner.getX();
             double dz = maid.getZ() - owner.getZ();
             if (dx * dx + dz * dz < 25.0) {
