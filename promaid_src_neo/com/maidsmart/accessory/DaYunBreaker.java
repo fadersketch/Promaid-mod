@@ -125,27 +125,26 @@ public final class DaYunBreaker {
                 maxBlocksPerTick, motion, side);
     }
 
-    private static int sweep(ServerLevel level, LivingEntity entity,
-                             float maxHardness, boolean skipContainers,
-                             boolean dropItems, boolean breakParticles, int maxBlocksPerTick,
-                             net.minecraft.world.phys.Vec3 motion, int side) {
-        if (level == null || entity == null || !entity.isAlive()) {
-            return 0;
+    /**
+     * 「本 tick 会碰到的那些格」——开路与撞击（{@code DaYunSmash}）共用的范围口径。
+     * <p>顺序即优先级：前瞻采样点（由近到远、每 1 格一个）在前、自身那一格在后——破坏按这个
+     * 顺序花预算，于是"这一 tick 要撞上的墙"优先于"脚边"（见 {@code sweep}）。
+     * <p>前瞻段的数值与旧 {@code sweep} 内联那段完全一致（{@link #AHEAD_FACTOR} / {@link #AHEAD_MAX} /
+     * {@link #AHEAD_MIN}）；{@code motion} 为 null 时只剩自身那一格。撞击拿这份列表逐格取实体，
+     * 所以"破坏范围内"两边指同一片地方（边长由调用方自己的 {@code half} 定）。
+     */
+    public static List<BlockPos> coveredCenters(LivingEntity entity, net.minecraft.world.phys.Vec3 motion) {
+        List<BlockPos> centers = new ArrayList<>();
+        if (entity == null) {
+            return centers;
         }
-        // 【必须先判滑翔】需求原文："使用鞘翅飞行的过程中"——只有真在滑翔才动手
-        if (!entity.isFallFlying()) {
-            return 0;
-        }
-        final int half = halfOf(side);
-        BlockPos center = entity.blockPosition();
-        int cleared = 0;
-        List<BlockPos> removed = new ArrayList<>();
-        List<BlockState> removedStates = new ArrayList<>();
-
-        // 【v1.3.2 实测八百五十八：前瞻段【先跑】】——高速时"这一 tick 要撞上的墙"优先于"脚边"，
-        // 且旧版中心段先跑可能吃光 maxBlocksPerTick 预算、恰好在最需要前瞻的时候把前瞻饿死。
-        if (motion != null && cleared < maxBlocksPerTick) {
-            double vx = motion.x, vy = motion.y, vz = motion.z;
+        BlockPos base = entity.blockPosition();
+        if (motion != null) {
+            // Vec3.x/y/z = m_7096_/m_7098_/m_7094_——Mojmap 下是公开字段，直接读
+            // 本模组读 Vec3 分量一律走这三个分量（见 DaYunWallPhase#exitParam）
+            double vx = motion.x;
+            double vy = motion.y;
+            double vz = motion.z;
             double speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
             double dx;
             double dy;
@@ -161,8 +160,10 @@ public final class DaYunBreaker {
             } else {
                 // 【v1.3.2】速度被墙撞没了（已经贴墙/卡住）：改沿**视线方向**清一段把自己顶出来。
                 // 旧版这里 speed≈0 → 前瞻整段跳过，只能等中心段救 —— 观感是"贴墙愣一下"。
-                net.minecraft.world.phys.Vec3 look = entity.getLookAngle();
-                double lx = look.x, ly = look.y, lz = look.z;
+                net.minecraft.world.phys.Vec3 look = entity.getLookAngle(); // getLookAngle
+                double lx = look.x;
+                double ly = look.y;
+                double lz = look.z;
                 double ls = Math.sqrt(lx * lx + ly * ly + lz * lz);
                 if (ls > 1.0E-4) {
                     dx = lx / ls;
@@ -177,20 +178,44 @@ public final class DaYunBreaker {
                 }
             }
             int steps = (int) Math.ceil(reach);
-            for (int step = 1; step <= steps && cleared < maxBlocksPerTick; step++) {
+            for (int step = 1; step <= steps; step++) {
                 double t = Math.min(step, reach);
-                BlockPos ahead = BlockPos.containing(
-                        center.getX() + 0.5 + dx * t,
-                        center.getY() + 0.5 + dy * t,
-                        center.getZ() + 0.5 + dz * t);
-                cleared += clearAround(level, entity, ahead, maxHardness, skipContainers,
-                        breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
+                centers.add(BlockPos.containing(
+                        base.getX() + 0.5 + dx * t,
+                        base.getY() + 0.5 + dy * t,
+                        base.getZ() + 0.5 + dz * t));
             }
         }
+        centers.add(base);
+        return centers;
+    }
 
-        // 中心段：自身周边（脚边 / 身上那一格）——放在前瞻段之后跑（见上）
-        cleared += clearAround(level, entity, center, maxHardness, skipContainers,
-                breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
+    private static int sweep(ServerLevel level, LivingEntity entity,
+                             float maxHardness, boolean skipContainers,
+                             boolean dropItems, boolean breakParticles, int maxBlocksPerTick,
+                             net.minecraft.world.phys.Vec3 motion, int side) {
+        if (level == null || entity == null || !entity.isAlive()) {
+            return 0;
+        }
+        // 【必须先判滑翔】需求原文："使用鞘翅飞行的过程中"——只有真在滑翔才动手
+        if (!entity.isFallFlying()) {
+            return 0;
+        }
+        final int half = halfOf(side);
+        int cleared = 0;
+        List<BlockPos> removed = new ArrayList<>();
+        List<BlockState> removedStates = new ArrayList<>();
+
+        // 【v1.3.2 实测八百五十八：前瞻段【先跑】】——高速时"这一 tick 要撞上的墙"优先于"脚边"，
+        // 且旧版中心段先跑可能吃光 maxBlocksPerTick 预算、恰好在最需要前瞻的时候把前瞻饿死。
+        // 范围口径统一收在 coveredCenters（前瞻采样点在前、自身那一格在后）——撞击（DaYunSmash）共用同一份。
+        for (BlockPos center : coveredCenters(entity, motion)) {
+            if (cleared >= maxBlocksPerTick) {
+                break;
+            }
+            cleared += clearAround(level, entity, center, maxHardness, skipContainers,
+                    breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
+        }
 
         if (dropItems) {
             for (int i = 0; i < removed.size(); i++) {

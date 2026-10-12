@@ -20,16 +20,25 @@
 - 全套护栏 `FAIL 0`（`check_comment_style` PASS、`check_catch_swallow`/`check_comment_dup`/`check_dev_voice`/`check_i18n_keys`/`check_panel_coverage`/`check_preset`/`check_reflection` 全 0、`check_workflow` FAIL 0 / WARN 3 为既有发布登记项）。
 - **行为透明性证明**：脚本逐成员比对——基类每个成员正文（去可见性）== **两个**子类各自的原文；子类无同体副本残留（dups=0）；唯一不匹配项是基类自己的构造（设计如此）。
 - **镜像保真**：forge↔neo 基类 diff 仅 `m_123341_()`↔`getX()`、`m_19879_()`↔`getId()`、`m_8096_()`↔`isCorrectToolForDrops(...)`、`ForgeRegistries`↔`BuiltInRegistries`、`net.minecraftforge.*`↔`net.neoforged.neoforge.*` 等映射/加载器差异（及两树既有换行/注释漂移），无逻辑差异。
-- 未部署、未跑实机挖矿/伐木回归。
+- 未跑实机挖矿/伐木回归（按 `WORKFLOW.md` §4 第 8 步后一律先停、等验收，不许"顺手把回归也跑了"）。
+
+### 部署（2026-10-12，开发者开闸「部署」）
+- **打 jar**：`tools/build/build_promaid.py` → `patched/promaid-1.3.2-forge-1.20.1.jar`（**17575733** 字节，sha256 `3c330bb6…8f967d3e`）；`build_promaid_neo.py` → `patched/promaid-1.3.2-neoforge-1.21.1.jar`（**17613836** 字节，sha256 `5f54b609…b46cecf0`）。两树 `verify_jar_classes` OK（forge 761 / neo 765 个 class 全在 jar 内、无多余；mixin 登记与注入签名 OK），构建末尾全套护栏 **FAIL 0**。
+- **装机**：`tools/deploy/deploy_all.py` → 4 个本机实例全部 **`match=True`**（与 `patched/` 逐字节一致）：1.21.1-NeoForge_21.1.250（17613836）/ 1.20.1-Forge_47.4.10 / 龙之冒险：新征程v2.4a / mc_server_test pack1201（均 17575733）。旧包已备份到 `patched/backup_old/`。
+- **留痕**：`rounds/RELEASES.tsv` 两条 1.3.2 `workspace` 行按 §5 追加「第四十七次同号重打」记录（旧字节 `501db5cf…e7a085` / `555d87a5…26cd2c` 作废）。
+- **到此为止**：**未跑回归**（§4 第 8 步后一律先停、等验收）。
 
 ## 验收
-- 状态：`未验收`（编译 + 护栏 + 「基类正文 == 子类原文」三者可自证；运行时行为需开发者「部署」开闸回环测试）。
+- 状态：`未验收`（已部署@2026-10-12，本机 4 实例与 `patched/` 逐字节一致；等开发者实测挖矿/伐木是否照常）。
+  - 复现步骤（第 8 步交接）：装好即进世界，给女仆一把镐 → 挖矿任务开；换斧 → 伐木任务开。观察点：①能正常找矿/找树、走过去、采下来、掉落物进背包（`logs/promaid.log` 里无 `MaidMineBehavior`/`MaidWoodBehavior` 相关 ERROR）；②搭路/垫脚/清障碍/换工具这三大卖点照常；③`Diag.swallow` 无新增 WARN（本基类成员未改控制流）。
+  - 判定：与改前行为一致即合格；有异常请把 `logs/promaid.log` 里那几行贴回来。
 - 累计（相对 `1aff5710`，每树）：`MaidMineBehavior` −613、`MaidWoodBehavior` −619、基类 +686 → **每树净去重约 546 行，两树合计约 1092 行**。
 
 ## 边界（没动什么）
 - 未上提三个**真差异**成员（`reachSq`/`PLACED_TRACKER`/`approachSpeed`）及其连带引用者——它们要任务特异参数化（`MINE_*` vs `WOOD_*` 配置键），属下一步。
 - 未合并剩余**驱动逻辑**（扫描-接近-连锁-回收的差异部分）：两树行数/写法均有差异，需逐方法人工核对语义 + 实机回归。
-- 未动 ⑤（`PromaidConfigScreen`）、⑥ 第二步（共享源目录）；未动 `patched/`、`store/`、`_tmp_pub/`；未改版本号（仍 1.3.2）；未 push。
+- 未动 ⑤（`PromaidConfigScreen`）、⑥ 第二步（共享源目录）；未改版本号（仍 1.3.2）；未 push、未发版。
+- `patched/` 仅按 §5 同号重打（旧包留 `patched/backup_old/`、`RELEASES.tsv` 留痕），未改 `store/`、`_tmp_pub/`。
 - 临时脚本（`_hoist2.py`/`_ver2.py`/`_tidy2.py` 等）用后即删。
 
 ## 台账

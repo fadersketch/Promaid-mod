@@ -122,6 +122,14 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 佩戴「大运」者鞘翅滑翔时免疫冲撞伤害（原版 fly_into_wall） */
     public static final ModConfigSpec.BooleanValue DAYUN_NO_WALL_DAMAGE;
 
+    // ---- v1.3.2 实测九百〇六：撞击（伤害 + 击飞按速度） ----
+    /** 撞击伤害开关（默认开，随 DIY 关） */
+    public static final ModConfigSpec.BooleanValue DAYUN_SMASH;
+    /** 撞击伤害·每格速度（伤害 = 速度 × 此值，上限 40） */
+    public static final ModConfigSpec.DoubleValue DAYUN_SMASH_DAMAGE;
+    /** 撞击击飞·每格速度（击飞 = 速度 × 此值，上限 10） */
+    public static final ModConfigSpec.DoubleValue DAYUN_SMASH_KNOCKBACK;
+
     // ================= 挖矿 =================
     public static final ModConfigSpec.ConfigValue<List<? extends String>> MINE_ORE_VALUES;
     /** v1.5.101b：额外可挖穿方块（障碍物名单，path 名如 oak_log；面板挖矿-障碍物管理） */
@@ -1551,6 +1559,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         DAYUN_NO_WALL_DAMAGE = BUILDER.comment("「大运」免疫冲撞（默认开）：佩戴者（玩家戴 Curios / 女仆戴 TLM 饰品栏）鞘翅滑翔中撞到方块，免疫原版「撞墙」伤害。关掉 = 照原版结算，飞得越快撞得越疼。与飞行作战那条「免疫撞击」是两道独立闸：这条只认「戴着大运」，那条只认「女仆在飞任务」")
                 .translation("config.promaid.accessory.daYun.noWallDamage")
                 .define("daYunNoWallDamage", true);
+        // ---- v1.3.2 实测九百〇六：撞击（破坏范围内的非友方单位，按这一刻的速度吃伤害 + 被击飞） ----
+        DAYUN_SMASH = BUILDER.comment("「大运」撞击伤害（默认开）：佩戴者鞘翅滑翔中，**破坏范围内**（与开路同一片地方、同一段前瞻）的非友方单位会被撞到——伤害与击飞都按**这一刻的速度**结算：飞得越快、打得越狠、飞得越远。速度低于 0.4 格/tick（几乎悬停）不结算。主人 / 同主女仆 / 自己的宠物 / 友军一律不撞")
+                .translation("config.promaid.accessory.daYun.smash").define("daYunSmash", true);
+        DAYUN_SMASH_DAMAGE = BUILDER.comment("「大运」撞击伤害·每格速度（默认 5.0）：伤害 = 速度(格/tick) × 此值，上限 40。平飞约 0.6~1.2 格/tick → 3~6 点；带烟花/俯冲能到 2 以上 → 10 点以上。设 0 = 只击飞、不掉血")
+                .translation("config.promaid.accessory.daYun.smashDamage")
+                .defineInRange("daYunSmashDamage", 5.0d, 0.0d, 40.0d);
+        DAYUN_SMASH_KNOCKBACK = BUILDER.comment("「大运」撞击击飞·每格速度（默认 2.0）：击飞强度 = 速度(格/tick) × 此值，上限 10（原版普攻击退约 0.5 作参照）；**方向顺着佩戴者这一刻的运动方向**（含上下——平飞就顺着飞出去、俯冲往下砸、爬升往上抛，不再固定向上）。设 0 = 只掉血、不击飞")
+                .translation("config.promaid.accessory.daYun.smashKnockback")
+                .defineInRange("daYunSmashKnockback", 2.0d, 0.0d, 10.0d);
         BUILDER.pop();
 
         // ---- 挖矿 ----

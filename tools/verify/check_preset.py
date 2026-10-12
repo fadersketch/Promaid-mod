@@ -22,7 +22,8 @@ TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 每个树的 DIY 会关掉的布尔条数基线（新增配置项后要一起改，见 DEV_GUIDE §7）
 # 实测八百八十二·TD-08：巡逻总开关的 TOML 路径原与扫帚总开关撞键（broom.enable），
 # 撞键时 parse 只会算到一个 → 拆开后两条都独立计数，基线 173/177 → 174/178。
-BASELINE_FLIP = {'promaid_src': 174, 'promaid_src_neo': 178}
+# 实测九百〇六：新增 accessory.daYunSmash（撞击，默认开、随 DIY 关）→ 174/178 → 175/179。
+BASELINE_FLIP = {'promaid_src': 175, 'promaid_src_neo': 179}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
@@ -72,6 +73,8 @@ GATES_ELSEWHERE = {
     # 实测八百六十九：挖矿入口闸（没镐不启动）/ 锁定期间持续重挑——接点在任务类里
     'MINE_REQUIRE_PICK': 'com/maidsmart/task/MaidMineBehavior.java',
     'MINE_REPICK': 'com/maidsmart/task/MaidMineBehavior.java',
+    # 实测九百〇六：「大运」撞击（破坏范围内按速度的伤害+击飞）——接点在饰品侧
+    'DAYUN_SMASH': 'com/maidsmart/accessory/DaYunSmash.java',
 }
 # 「干预型 mixin 必须有闸」的兜底名单：这几处改的是女仆行为、但**没有自己的配置项**
 # （表驱动管不到），所以在代码里直接问 MaidConfigPreset.isDiy()。少一处 = DIY 下仍然生效。

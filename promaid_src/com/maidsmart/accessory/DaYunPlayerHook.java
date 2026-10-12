@@ -65,6 +65,8 @@ public final class DaYunPlayerHook {
                                 MaidSmartConfig.DAYUN_MAX_PER_TICK.get(),
                                 player.m_20184_(),
                                 MaidSmartConfig.DAYUN_RANGE.get());
+                        // 实测九百〇六：同一片「破坏范围内」的非友方单位，按这一刻的速度吃伤害 + 被击飞
+                        DaYunSmash.impact(level, player, player.m_20184_(), MaidSmartConfig.DAYUN_RANGE.get());
                     }
                 } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunPlayerHook", ignored);
                     // 单个玩家出错不影响其它玩家

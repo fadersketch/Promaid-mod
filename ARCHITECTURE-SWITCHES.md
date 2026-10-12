@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 594 | 258 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 598 | 262 | 24 |
+| promaid_src（Forge 1.20.1） | 597 | 259 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 601 | 263 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `DEBT.md` TD-08）：（无）
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -489,7 +489,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `spawnerTorch.breakOnlyWhenActive` | bool | true | 只在刷怪笼**真的在刷怪**时才拆（默认开） |
 | `spawnerTorch.breakBlacklist` | list | java.util.List.of("empty" | 拆除黑名单（永不拆的刷怪笼，默认 empty,benign） |
 
-### 大运 / 饰品　（11 项）
+### 大运 / 饰品　（14 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -504,6 +504,9 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `accessory.daYunBgm` | num | 1 | 佩戴「大运」鞘翅飞行时播放的 BGM（默认 1，可选 1 或 2） |
 | `accessory.daYunWallPhase` | bool | false | 「大运」穿墙锁敌（默认关） |
 | `accessory.daYunNoWallDamage` | bool | true | 「大运」免疫冲撞（默认开） |
+| `accessory.daYunSmash` | bool | true | 「大运」撞击伤害（默认开） |
+| `accessory.daYunSmashDamage` | num | 5.0d | 「大运」撞击伤害·每格速度（默认 5.0） |
+| `accessory.daYunSmashKnockback` | num | 2.0d | 「大运」撞击击飞·每格速度（默认 2.0） |
 
 ### 压缩盒 / 背包　（12 项）
 
@@ -654,7 +657,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `teleportExemptSitting` | bool | true | 坐下的女仆不被自保传送拉走（默认开） |
 | `tlmTeleportExempt` | bool | true | TLM 瞬移/跟随豁免（默认开） |
 
-### accessory　（11 项）
+### accessory　（14 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -669,6 +672,9 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `accessory.daYunBgm` | num | 1 | 佩戴「大运」鞘翅飞行时播放的 BGM（默认 1，可选 1 或 2） |
 | `accessory.daYunWallPhase` | bool | false | 「大运」穿墙锁敌（默认关） |
 | `accessory.daYunNoWallDamage` | bool | true | 「大运」免疫冲撞（默认开） |
+| `accessory.daYunSmash` | bool | true | 「大运」撞击伤害（默认开） |
+| `accessory.daYunSmashDamage` | num | 5.0d | 「大运」撞击伤害·每格速度（默认 5.0） |
+| `accessory.daYunSmashKnockback` | num | 2.0d | 「大运」撞击击飞·每格速度（默认 2.0） |
 
 ### affect　（3 项）
 
