@@ -5,15 +5,15 @@ parent: promaid.entry
 name: {zh: 模组主类与初始化, en: "Mod Main & Bootstrap"}
 description:
   zh: >
-      注解 @Mod 的入口：注册物品、物品/网络/TaskData 引导、配置 SPEC 装配，以及一段约 320 行的历史默认值迁移链（含 22 个
+      注解 @Mod 的入口：注册物品、物品/网络/TaskData 引导、配置 SPEC 装配，以及一段约 320 行的历史默认值迁移链（含 10 个
       *_MIGRATED 一次性标记）。
   en: >
       The @Mod entry: registers items, bootstraps item/network/task-data,
       assembles the config SPEC, and runs a ~320-line chain of historical
-      default-value migrations (including 22 one-shot *_MIGRATED flags).
+      default-value migrations (including 10 one-shot *_MIGRATED flags).
 source:
   - {path: promaid_src_neo/com/maidsmart/ProMaidMod.java, line: 1, end_line: 452}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 15fdf0a6f075685e1558cb87a803c22c95d0a05c2137603eb647811956c5c986
 state: active
@@ -29,7 +29,7 @@ apis:
 
 ## 模组主类与初始化 · Mod Main & Bootstrap
 
-注解 @Mod 的入口：注册物品、物品/网络/TaskData 引导、配置 SPEC 装配，以及一段约 320 行的历史默认值迁移链（含 22 个 *_MIGRATED 一次性标记）。
+注解 @Mod 的入口：注册物品、物品/网络/TaskData 引导、配置 SPEC 装配，以及一段约 320 行的历史默认值迁移链（含 10 个 *_MIGRATED 一次性标记）。
 
 **代码证据**
 

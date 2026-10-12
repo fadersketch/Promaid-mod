@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintStepMath.java, line: 1, end_line: 557}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintProjectionSampler.java, line: 1, end_line: 131}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: d347b25b5d97962f02635b126d545df8f794a0597d3aff4876c3042ea7199e80
 state: active

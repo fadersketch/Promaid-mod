@@ -1,6 +1,6 @@
 # Promaid 架构大纲 / Architecture Outline
 
-修订 85479ee734277ed4a37e6983830ca533adcb40e9 · 112 模块 / 41 API / 61 箭头 / 最大深度 3
+修订 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f · 121 模块 / 61 API / 73 箭头 / 最大深度 3
 
 - **Promaid 模组总览** `promaid`
   - **入口与装配** `promaid.entry`
@@ -64,6 +64,9 @@
     - **主人贴身辅助** `promaid.combat.owner-support` *(leaf)*
     - **第三方战斗兼容** `promaid.combat.compat` *(leaf)*
   - **生产类任务** `promaid.work`
+    - **采集行为共享基类** `promaid.work.base` *(leaf)*
+      - `rpc:MaidWorkBehavior()` — 共享构造（emptyMap, MAX, MAX = 无限时长）。
+      - `dataflow:JUNK_STONES / OPEN_BREAKABLE` — 废石白名单与开路可破白名单。
     - **挖矿** `promaid.work.mine` *(leaf)*
     - **伐木** `promaid.work.wood` *(leaf)*
     - **烧制** `promaid.work.cook` *(leaf)*
@@ -102,9 +105,35 @@
   - **飞行** `promaid.flight`
     - **仿创造飞行** `promaid.flight.free`
       - **飞行事件桥与网络** `promaid.flight.free.handlers` *(leaf)*
+  - **饰品「大运」** `promaid.accessory`
+    - **饰品本体与音效** `promaid.accessory.item` *(leaf)*
+      - `rpc:DaYunItem.appendHoverText(...)` — 五行可翻译说明（配方文案也在其中）。
+      - `event:DaYunSounds.register(IEventBus)` — 把两首 BGM 的声音事件注册到 MOD 总线。
+      - `rpc:DaYunSounds.forTrack(int)` — 曲目序号 → 声音事件。
+    - **开路破坏引擎** `promaid.accessory.breaker` *(leaf)*
+      - `rpc:DaYunBreaker.sweepAhead(...)` — 每 tick 的前瞻清障入口（佩戴者两侧共用）。
+      - `rpc:DaYunBreaker.coveredCenters(...)` — 本 tick 要清的采样格（前瞻点 + 自身那格）——与「撞击」共用。
+      - `rpc:DaYunBreaker.canPhaseThrough(...)` — 这一格撞得开吗——破坏与穿墙锁敌共用同一判据。
+    - **撞击伤害与击飞** `promaid.accessory.smash` *(leaf)*
+      - `rpc:DaYunSmash.impact(ServerLevel, LivingEntity, Vec3, int)` — 每 tick 每个佩戴者一次的撞击结算入口。
+    - **女仆侧佩戴** `promaid.accessory.maid` *(leaf)*
+      - `event:DaYunBauble.onTick(EntityMaid, ItemStack)` — 女仆每 tick：开路 + 撞击 + BGM。
+      - `rpc:DaYunBauble.isAirRaidTask(EntityMaid)` — 她现在是不是空袭任务。
+    - **玩家侧佩戴** `promaid.accessory.player` *(leaf)*
+      - `event:DaYunPlayerHook.tick(MinecraftServer)` — 玩家服务端每 tick：开路 + 撞击 + BGM。
+      - `rpc:DaYunPlayerHook.hasDaYun(ServerPlayer)` — 这名玩家戴着没有（全反射扫 Curios）。
+      - `rpc:DaYunPlayerHook.isDaYun(ItemStack)` — 这叠是不是「大运」——跨模块共用的判据。
+    - **穿墙锁敌** `promaid.accessory.wall-phase` *(leaf)*
+      - `rpc:DaYunWallPhase.active(LivingEntity)` — 她此刻可以隔墙看吗（戴着 + 在飞 + 开关开）。
+      - `rpc:DaYunWallPhase.canSeeThrough(LivingEntity, Vec3)` — 这条视线路上每一格都撞得开吗。
+      - `rpc:DaYunWallPhase.wearsDaYun(EntityMaid)` — 她饰品栏里有没有「大运」。
+    - **飞行 BGM** `promaid.accessory.bgm` *(leaf)*
+      - `rpc:DaYunMusic.play(ServerLevel, Entity, int)` — 某佩戴者的 BGM 开始（边沿触发，状态没变不发包）。
+      - `rpc:DaYunMusic.stop(ServerLevel, Entity)` — 停止（走 60 刻宽限期，期间 play 可撤回）。
+      - `rpc:DaYunMusicNetworking.sendMusic(ServerPlayer, int, int, boolean)` — S2C：(佩戴者 id, 曲目, 起/停)。
   - **社交与心智** `promaid.social`
     - **长期记忆** `promaid.social.memory`
-      - **记忆索引与检索** `promaid.social.memory.index` *(leaf)*
+      - **记忆索引与检索** `promaid.social.memory.recall` *(leaf)*
         - `file:<world>/promaid_memory/<uuid>/paragraphs.jsonl` — 段落记忆表。
         - `file:<world>/promaid_memory/<uuid>/relations.jsonl` — 关系表。
         - `rpc:AiMemoryStore.append(...)` — 写入一条记忆。

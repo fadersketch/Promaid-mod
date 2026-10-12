@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintBlockData.java, line: 1, end_line: 284}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintLegacyIds.java, line: 1, end_line: 947}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintNames.java, line: 1, end_line: 303}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f44b2dc15420d9a7b0787e2ceb8f53a3fca86ddf793708c72f344112560fabe1
 state: active

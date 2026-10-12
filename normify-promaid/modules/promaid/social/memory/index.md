@@ -1,42 +1,35 @@
 ---
-uid: 97523d32
-id: promaid.social.memory.index
-parent: promaid.social.memory
-name: {zh: 记忆索引与检索, en: "Memory Index & Recall"}
+uid: 35f6c36d
+id: promaid.social.memory
+parent: promaid.social
+name: {zh: 长期记忆, en: Long-term Memory}
 description:
   zh: >
-      日记式索引、混合召回与 RRF 融合、跳过表（移植自 Sphantosis 的
-      cognitive/composite/skiplist_index.py）。
+      每女仆的长期记忆库：事件源注入加后台 LLM 提取加五表 jsonl
+      落盘（段落/实体/关系/片段/画像）加多级日记式索引加睡醒或登出自动归档；对话时只注入短投影。
   en: >
-      Diary-style index, hybrid recall with RRF fusion, and a skip list (ported
-      from Sphantosis's cognitive/composite/skiplist_index.py).
+      A per-maid long-term memory store: event-source injection, background LLM
+      extraction, five jsonl tables
+      (paragraphs/entities/relations/episodes/profiles), multi-level diary-style
+      indexing and auto-archival on wake or logout — with only a short projection
+      injected into chat.
 source:
-  - {path: promaid_src_neo/com/maidsmart/memory/AiMemoryIndexStore.java, line: 1, end_line: 171}
-  - {path: promaid_src_neo/com/maidsmart/memory/AiMemorySearch.java, line: 1, end_line: 221}
-  - {path: promaid_src_neo/com/maidsmart/memory/AiMemorySkipList.java, line: 1, end_line: 126}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+  - {path: promaid_src_neo/com/maidsmart/memory/AiMemoryStore.java, line: 1, end_line: 998}
+  - {path: promaid_src_neo/com/maidsmart/memory/AiMemoryExtractor.java, line: 1, end_line: 636}
+  - {path: promaid_src_neo/com/maidsmart/memory/AiMemoryArchiver.java, line: 1, end_line: 597}
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: f1277caaed79a573c75b19405f430a5dfd1fe7eb06d9fabf169c1e348d98ad20
+fingerprint: 1ec5be28ac93e34b369e8f55a2f85aa3ec2606e8d8815ab4385e132e198dea64
 state: active
-tags: [memory]
-apis:
-  - protocol: file
-    path: "<world>/promaid_memory/<uuid>/paragraphs.jsonl"
-    description: {zh: 段落记忆表。, en: Paragraph memory table.}
-  - protocol: file
-    path: "<world>/promaid_memory/<uuid>/relations.jsonl"
-    description: {zh: 关系表。, en: Relations table.}
-  - protocol: rpc
-    path: AiMemoryStore.append(...)
-    description: {zh: 写入一条记忆。, en: Appends one memory entry.}
+tags: [memory, ai]
 ---
 
-## 记忆索引与检索 · Memory Index & Recall
+## 长期记忆 · Long-term Memory
 
-日记式索引、混合召回与 RRF 融合、跳过表（移植自 Sphantosis 的 cognitive/composite/skiplist_index.py）。
+每女仆的长期记忆库：事件源注入加后台 LLM 提取加五表 jsonl 落盘（段落/实体/关系/片段/画像）加多级日记式索引加睡醒或登出自动归档；对话时只注入短投影。
 
 **代码证据**
 
-- `promaid_src_neo/com/maidsmart/memory/AiMemoryIndexStore.java`:1
-- `promaid_src_neo/com/maidsmart/memory/AiMemorySearch.java`:1
-- `promaid_src_neo/com/maidsmart/memory/AiMemorySkipList.java`:1
+- `promaid_src_neo/com/maidsmart/memory/AiMemoryStore.java`:1
+- `promaid_src_neo/com/maidsmart/memory/AiMemoryExtractor.java`:1
+- `promaid_src_neo/com/maidsmart/memory/AiMemoryArchiver.java`:1

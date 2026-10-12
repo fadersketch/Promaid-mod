@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "generated_at": "2026-10-01T00:00:00Z",
-  "revision": "85479ee734277ed4a37e6983830ca533adcb40e9",
+  "revision": "8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f",
   "trees": [
     {
       "name": "promaid",
       "root": "promaid",
-      "modules": 111
+      "modules": 120
     },
     {
       "name": "promaid-forge",
@@ -798,6 +798,25 @@
       "apis": 0,
       "deps": 0
     },
+    "promaid.work.base": {
+      "uid": "fed9c5ea",
+      "id": "promaid.work.base",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "采集行为共享基类",
+        "en": "Gathering Behavior Base"
+      },
+      "path": "modules/promaid/work/base.md",
+      "leaf": true,
+      "tags": [
+        "work",
+        "shared"
+      ],
+      "fingerprint": "a9d3b7eda1f1842c3eecd2f49f97f4bb5892c455b7373c7e60cdd481ecf17a41",
+      "apis": 2,
+      "deps": 0
+    },
     "promaid.work.mine": {
       "uid": "52594359",
       "id": "promaid.work.mine",
@@ -814,7 +833,7 @@
       ],
       "fingerprint": "24c7621ec70dcea4955b19e92d258b90250123b87aaf8a0022f3d9bc51498d7b",
       "apis": 0,
-      "deps": 2
+      "deps": 3
     },
     "promaid.work.wood": {
       "uid": "6c83dc7e",
@@ -832,7 +851,7 @@
       ],
       "fingerprint": "16b2a4f2b9d6921d1030cf7c2105f01ba88cdd39c788c9ecf21aeeed494910d3",
       "apis": 0,
-      "deps": 2
+      "deps": 3
     },
     "promaid.work.cook": {
       "uid": "fac33f31",
@@ -940,7 +959,7 @@
         "work",
         "idle"
       ],
-      "fingerprint": "63e4166bb8ad36f31373e29b22770ccf7ccbca3a2217fc224c776c2cf484be5e",
+      "fingerprint": "f4d2933c4f5c4bc124c9e0685d690c28c59675622134cf0e6a165fb595d4316e",
       "apis": 0,
       "deps": 0
     },
@@ -1295,7 +1314,7 @@
         "work",
         "compat"
       ],
-      "fingerprint": "13620f5a142289b6692fe0defc39b2c20ed28799c261ea208f9801230c8bf9c7",
+      "fingerprint": "c788eca23fa3ddef456041d7e368e3dbaffa3fbd65f1f02b6c43051551de8714",
       "apis": 0,
       "deps": 0
     },
@@ -1352,6 +1371,150 @@
       "apis": 0,
       "deps": 0
     },
+    "promaid.accessory": {
+      "uid": "f8721a95",
+      "id": "promaid.accessory",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "饰品「大运」",
+        "en": "Dayun Accessory"
+      },
+      "path": "modules/promaid/accessory/index.md",
+      "leaf": false,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "ebaa57f78c7271dc9d2044ca1bed7857cbdf7a3baf060d39e7a3b681c7a0b8d9",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.accessory.item": {
+      "uid": "31895144",
+      "id": "promaid.accessory.item",
+      "parent": "promaid.accessory",
+      "tree": "promaid",
+      "name": {
+        "zh": "饰品本体与音效",
+        "en": "Bauble Item & Sounds"
+      },
+      "path": "modules/promaid/accessory/item.md",
+      "leaf": true,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "60bc6bebd754496955e677141b909f5e2bdc4288422b274eecfd85547980470e",
+      "apis": 3,
+      "deps": 0
+    },
+    "promaid.accessory.breaker": {
+      "uid": "d6dde494",
+      "id": "promaid.accessory.breaker",
+      "parent": "promaid.accessory",
+      "tree": "promaid",
+      "name": {
+        "zh": "开路破坏引擎",
+        "en": "Glide Path Breaker"
+      },
+      "path": "modules/promaid/accessory/breaker.md",
+      "leaf": true,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "f9fa82fb48a9d28a747859904a85a6a00cd67f9976614fadef5c00ececd0e413",
+      "apis": 3,
+      "deps": 0
+    },
+    "promaid.accessory.smash": {
+      "uid": "fd6825c1",
+      "id": "promaid.accessory.smash",
+      "parent": "promaid.accessory",
+      "tree": "promaid",
+      "name": {
+        "zh": "撞击伤害与击飞",
+        "en": "Ram Damage & Knockback"
+      },
+      "path": "modules/promaid/accessory/smash.md",
+      "leaf": true,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "bf19cfd158f56a88d2ea282e887fa809220b265024843d1437e561cb14173b03",
+      "apis": 1,
+      "deps": 1
+    },
+    "promaid.accessory.maid": {
+      "uid": "0e60d8cb",
+      "id": "promaid.accessory.maid",
+      "parent": "promaid.accessory",
+      "tree": "promaid",
+      "name": {
+        "zh": "女仆侧佩戴",
+        "en": "Maid-Side Wear"
+      },
+      "path": "modules/promaid/accessory/maid.md",
+      "leaf": true,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "09aef49282b00fbd3ba2c34a18db1b83a89e1a60034bb1a25d0d2f0bcef6005f",
+      "apis": 2,
+      "deps": 3
+    },
+    "promaid.accessory.player": {
+      "uid": "810b1042",
+      "id": "promaid.accessory.player",
+      "parent": "promaid.accessory",
+      "tree": "promaid",
+      "name": {
+        "zh": "玩家侧佩戴",
+        "en": "Player-Side Wear"
+      },
+      "path": "modules/promaid/accessory/player.md",
+      "leaf": true,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "2c889862382cdfdbcad4e93594f78e1ebec8ec199eaee484b1822a5f9985f1d4",
+      "apis": 3,
+      "deps": 3
+    },
+    "promaid.accessory.wall-phase": {
+      "uid": "9f40aa69",
+      "id": "promaid.accessory.wall-phase",
+      "parent": "promaid.accessory",
+      "tree": "promaid",
+      "name": {
+        "zh": "穿墙锁敌",
+        "en": "Wall-Phase Targeting"
+      },
+      "path": "modules/promaid/accessory/wall-phase.md",
+      "leaf": true,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "070a73f0a3ae974bd565c3efe7e711d30a43b66158a09f4126d40043c8fd1cf3",
+      "apis": 3,
+      "deps": 3
+    },
+    "promaid.accessory.bgm": {
+      "uid": "e6503375",
+      "id": "promaid.accessory.bgm",
+      "parent": "promaid.accessory",
+      "tree": "promaid",
+      "name": {
+        "zh": "飞行 BGM",
+        "en": "Flight BGM"
+      },
+      "path": "modules/promaid/accessory/bgm.md",
+      "leaf": true,
+      "tags": [
+        "accessory"
+      ],
+      "fingerprint": "3a973f0c941824935522672758393dc4cc1117059badae2f782c63e2256a8995",
+      "apis": 3,
+      "deps": 0
+    },
     "promaid.social": {
       "uid": "e3bb0356",
       "id": "promaid.social",
@@ -1387,16 +1550,16 @@
       "apis": 0,
       "deps": 0
     },
-    "promaid.social.memory.index": {
-      "uid": "97523d32",
-      "id": "promaid.social.memory.index",
+    "promaid.social.memory.recall": {
+      "uid": "0e105653",
+      "id": "promaid.social.memory.recall",
       "parent": "promaid.social.memory",
       "tree": "promaid",
       "name": {
         "zh": "记忆索引与检索",
         "en": "Memory Index & Recall"
       },
-      "path": "modules/promaid/social/memory/index.md",
+      "path": "modules/promaid/social/memory/recall.md",
       "leaf": true,
       "tags": [
         "memory"
@@ -2099,6 +2262,8 @@
     "rpc:RideBindManager.handleSwapSeatRequest": "promaid.combat.ride",
     "rpc:MaidMountCompat.stopVehicle/followDist": "promaid.combat.mount-compat",
     "rpc:MaidMountCompat.applyVehicleAiTargets": "promaid.combat.mount-compat",
+    "rpc:MaidWorkBehavior": "promaid.work.base",
+    "dataflow:JUNK_STONES / OPEN_BREAKABLE": "promaid.work.base",
     "rpc:PlacedBlockTracker.place": "promaid.work.placed-block",
     "rpc:PlacedBlockTracker.expirePlaced": "promaid.work.placed-block",
     "dataflow:MaidWorkTags.WORK_STILL_TAG": "promaid.work.tags",
@@ -2107,9 +2272,27 @@
     "rpc:MaidBuildBehavior.doPlace": "promaid.work.build-exec",
     "rpc:BlueprintStepMath.rotateSteps": "promaid.work.blueprint-lib.math",
     "rpc:BlueprintStepMath.centerSteps": "promaid.work.blueprint-lib.math",
-    "file:<world>/promaid_memory/<uuid>/paragraphs.jsonl": "promaid.social.memory.index",
-    "file:<world>/promaid_memory/<uuid>/relations.jsonl": "promaid.social.memory.index",
-    "rpc:AiMemoryStore.append": "promaid.social.memory.index",
+    "rpc:DaYunItem.appendHoverText": "promaid.accessory.item",
+    "event:DaYunSounds.register": "promaid.accessory.item",
+    "rpc:DaYunSounds.forTrack": "promaid.accessory.item",
+    "rpc:DaYunBreaker.sweepAhead": "promaid.accessory.breaker",
+    "rpc:DaYunBreaker.coveredCenters": "promaid.accessory.breaker",
+    "rpc:DaYunBreaker.canPhaseThrough": "promaid.accessory.breaker",
+    "rpc:DaYunSmash.impact": "promaid.accessory.smash",
+    "event:DaYunBauble.onTick": "promaid.accessory.maid",
+    "rpc:DaYunBauble.isAirRaidTask": "promaid.accessory.maid",
+    "event:DaYunPlayerHook.tick": "promaid.accessory.player",
+    "rpc:DaYunPlayerHook.hasDaYun": "promaid.accessory.player",
+    "rpc:DaYunPlayerHook.isDaYun": "promaid.accessory.player",
+    "rpc:DaYunWallPhase.active": "promaid.accessory.wall-phase",
+    "rpc:DaYunWallPhase.canSeeThrough": "promaid.accessory.wall-phase",
+    "rpc:DaYunWallPhase.wearsDaYun": "promaid.accessory.wall-phase",
+    "rpc:DaYunMusic.play": "promaid.accessory.bgm",
+    "rpc:DaYunMusic.stop": "promaid.accessory.bgm",
+    "rpc:DaYunMusicNetworking.sendMusic": "promaid.accessory.bgm",
+    "file:<world>/promaid_memory/<uuid>/paragraphs.jsonl": "promaid.social.memory.recall",
+    "file:<world>/promaid_memory/<uuid>/relations.jsonl": "promaid.social.memory.recall",
+    "rpc:AiMemoryStore.append": "promaid.social.memory.recall",
     "file:voice_cache/<sha256>.ogg": "promaid.social.voice",
     "rpc:MaidChunkLoadManager.tick": "promaid.system.follow",
     "rpc:MaidChunkLoadManager.followIfCrossDimension": "promaid.system.follow",
@@ -2485,6 +2668,15 @@
     },
     {
       "from": "promaid.work.mine",
+      "to": "promaid.work.base",
+      "kind": "call",
+      "label": {
+        "zh": "共享基类",
+        "en": "Shared base"
+      }
+    },
+    {
+      "from": "promaid.work.mine",
       "to": "promaid.work.placed-block",
       "kind": "call",
       "label": {
@@ -2499,6 +2691,15 @@
       "label": {
         "zh": "自动换工具",
         "en": "Auto tool"
+      }
+    },
+    {
+      "from": "promaid.work.wood",
+      "to": "promaid.work.base",
+      "kind": "call",
+      "label": {
+        "zh": "共享基类",
+        "en": "Shared base"
       }
     },
     {
@@ -2610,6 +2811,96 @@
       }
     },
     {
+      "from": "promaid.accessory.smash",
+      "to": "promaid.accessory.breaker",
+      "kind": "call",
+      "label": {
+        "zh": "共用范围口径",
+        "en": "Shared footprint"
+      }
+    },
+    {
+      "from": "promaid.accessory.maid",
+      "to": "promaid.accessory.breaker",
+      "kind": "call",
+      "label": {
+        "zh": "开路",
+        "en": "Clearing"
+      }
+    },
+    {
+      "from": "promaid.accessory.maid",
+      "to": "promaid.accessory.smash",
+      "kind": "call",
+      "label": {
+        "zh": "撞击",
+        "en": "Ramming"
+      }
+    },
+    {
+      "from": "promaid.accessory.maid",
+      "to": "promaid.accessory.bgm",
+      "kind": "call",
+      "label": {
+        "zh": "飞行 BGM",
+        "en": "Flight BGM"
+      }
+    },
+    {
+      "from": "promaid.accessory.player",
+      "to": "promaid.accessory.breaker",
+      "kind": "call",
+      "label": {
+        "zh": "开路",
+        "en": "Clearing"
+      }
+    },
+    {
+      "from": "promaid.accessory.player",
+      "to": "promaid.accessory.smash",
+      "kind": "call",
+      "label": {
+        "zh": "撞击",
+        "en": "Ramming"
+      }
+    },
+    {
+      "from": "promaid.accessory.player",
+      "to": "promaid.accessory.bgm",
+      "kind": "call",
+      "label": {
+        "zh": "飞行 BGM",
+        "en": "Flight BGM"
+      }
+    },
+    {
+      "from": "promaid.accessory.wall-phase",
+      "to": "promaid.accessory.breaker",
+      "kind": "call",
+      "label": {
+        "zh": "逐格可破判据",
+        "en": "Per-cell breakable predicate"
+      }
+    },
+    {
+      "from": "promaid.accessory.wall-phase",
+      "to": "promaid.accessory.maid",
+      "kind": "call",
+      "label": {
+        "zh": "她是不是在空袭",
+        "en": "Is she on an air raid"
+      }
+    },
+    {
+      "from": "promaid.accessory.wall-phase",
+      "to": "promaid.accessory.player",
+      "kind": "call",
+      "label": {
+        "zh": "是不是大运",
+        "en": "Is-it-Dayun predicate"
+      }
+    },
+    {
       "from": "promaid.social.dialogue",
       "to": "promaid.social.memory",
       "kind": "call",
@@ -2674,11 +2965,11 @@
     }
   ],
   "stats": {
-    "modules": 112,
-    "leaves": 95,
-    "containers": 17,
-    "apis": 41,
-    "edges": 61,
+    "modules": 121,
+    "leaves": 103,
+    "containers": 18,
+    "apis": 61,
+    "edges": 73,
     "depth": 3
   },
   "diagnostics": {

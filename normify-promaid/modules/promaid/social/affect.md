@@ -15,7 +15,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/affect/AffectManager.java, line: 1, end_line: 246}
   - {path: promaid_src_neo/com/maidsmart/affect/AffectEventHooks.java, line: 1, end_line: 89}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 2f34d9d94ee62440354057095198e3319be72643743e0539ac3c6ad663878cec
 state: active

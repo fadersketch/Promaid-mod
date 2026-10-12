@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Collect hard evidence for the tech-debt document."""
+"""Collect hard evidence for the tech-debt document.
+
+口径：**读工作区**（`os.walk`），不用 `git ls-files`——本仓库的成果长期停在未提交状态，
+只数"已跟踪文件"会把新一轮的源码当成不存在（实测九百〇八 修正）。
+输出末尾的 `_tmp_debt_evidence.txt` 是一次性证据文件（`_` 前缀已被 .gitignore 排除）。
+"""
 import os
 import sys, os, re, json, subprocess, collections
 
@@ -17,12 +22,17 @@ REPO = _find_repo_root(__file__)
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 ROOT = _find_repo_root(__file__); os.chdir(ROOT)
 
-tracked = [l.strip() for l in subprocess.run(
-    ["git","ls-files"], capture_output=True, text=True, encoding="utf-8",
-    errors="replace").stdout.splitlines() if l.strip()]
+def _javas(tree):
+    """工作区实测：该树 com/ 下全部 .java（含未提交 / 未跟踪）。"""
+    out = []
+    for dp, dn, fn in os.walk(os.path.join(tree, "com")):
+        for f in fn:
+            if f.endswith(".java"):
+                out.append(os.path.join(dp, f).replace("\\", "/"))
+    return sorted(out)
 
-neo = [p for p in tracked if p.startswith("promaid_src_neo/com/") and p.endswith(".java")]
-forge = [p for p in tracked if p.startswith("promaid_src/com/") and p.endswith(".java")]
+neo = _javas("promaid_src_neo")
+forge = _javas("promaid_src")
 
 def loc(p):
     try:
@@ -36,6 +46,9 @@ rows.sort(reverse=True)
 
 res = []
 A = res.append
+_rev = subprocess.run(["git", "log", "-1", "--format=%H", "--", "promaid_src_neo", "promaid_src"],
+                      capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
+A("# snapshot: promaid_src* revision %s（读工作区，未提交改动一并计入）\n" % _rev[:12])
 A("# oversized files (neo, >1200 lines)\n")
 for n, p in rows:
     if n > 1200:
@@ -102,14 +115,15 @@ for label, rx in pats:
 # duplicated logic: near-identical file sizes in mirrored trees
 A("\n# two-tree mirror divergence (same relative path, different content)\n")
 mirror = []
+have = set(neo) | set(forge)
 for p in neo:
     q = p.replace("promaid_src_neo/", "promaid_src/", 1)
-    if q in tracked:
+    if q in have:
         a, b = loc(p), loc(q)
         if a != b:
             mirror.append((abs(a-b), a, b, p))
 mirror.sort(reverse=True)
-A(f"mirrored paths: {sum(1 for p in neo if p.replace('promaid_src_neo/','promaid_src/',1) in tracked)}")
+A(f"mirrored paths: {sum(1 for p in neo if p.replace('promaid_src_neo/','promaid_src/',1) in have)}")
 A(f"with differing line counts: {len(mirror)}")
 for d, a, b, p in mirror[:15]:
     A(f"   Δ{d:4d}  neo={a:5d} forge={b:5d}  {p.replace('promaid_src_neo/com/maidsmart/','')}")

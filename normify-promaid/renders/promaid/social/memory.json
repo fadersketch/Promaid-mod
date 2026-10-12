@@ -10,18 +10,18 @@
     "en": "2 submodules at this layer."
   },
   "order": [
-    "promaid.social.memory.index",
+    "promaid.social.memory.recall",
     "promaid.social.memory.tools"
   ],
   "groups": [
     {
-      "id": "g4",
+      "id": "g5",
       "title": {
         "zh": "社交与心智",
         "en": "Social & Mind"
       },
       "children": [
-        "promaid.social.memory.index",
+        "promaid.social.memory.recall",
         "promaid.social.memory.tools"
       ]
     }

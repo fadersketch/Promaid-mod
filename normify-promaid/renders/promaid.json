@@ -6,8 +6,8 @@
   "max_columns": 3,
   "max_api_rows": 0,
   "reading": {
-    "zh": "本层 10 个子模块。",
-    "en": "10 submodules at this layer."
+    "zh": "本层 11 个子模块。",
+    "en": "11 submodules at this layer."
   },
   "order": [
     "promaid.entry",
@@ -15,6 +15,7 @@
     "promaid.combat",
     "promaid.work",
     "promaid.flight",
+    "promaid.accessory",
     "promaid.social",
     "promaid.system",
     "promaid.core",
@@ -66,6 +67,16 @@
     {
       "id": "g4",
       "title": {
+        "zh": "饰品「大运」",
+        "en": "Dayun Accessory"
+      },
+      "children": [
+        "promaid.accessory"
+      ]
+    },
+    {
+      "id": "g5",
+      "title": {
         "zh": "社交与心智",
         "en": "Social & Mind"
       },
@@ -74,7 +85,7 @@
       ]
     },
     {
-      "id": "g5",
+      "id": "g6",
       "title": {
         "zh": "系统服务",
         "en": "System Services"
@@ -84,7 +95,7 @@
       ]
     },
     {
-      "id": "g6",
+      "id": "g7",
       "title": {
         "zh": "核心与文档",
         "en": "Core & Docs"

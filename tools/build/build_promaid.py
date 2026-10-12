@@ -150,13 +150,14 @@ rc = subprocess.call([sys.executable, os.path.join(BASE, 'tools/verify/verify_ja
 if rc != 0:
     raise SystemExit('FATAL: jar 与 out 目录内容不一致（缺 class，发布前必须修）')
 
-# 文案/注释护栏（DEV_GUIDE §6）：当前历史存量未清零，先以告警形式跑，不清零也不阻断出包。
+# 文案/注释护栏（DEV_GUIDE §6）+ 架构结构数据保鲜（tools/arch/ 的产物只许来自真源，
+# 含覆盖棘轮 / 陈旧 / 文档漂移）：当前历史存量未清零，先以告警形式跑，不清零也不阻断出包。
 # 存量清零后把 --warn 去掉即可改为阻断。
 for _g in ('tools/verify/check_comment_style.py',
            'tools/verify/check_preset.py', 'tools/verify/check_workflow.py',
            'tools/verify/check_catch_swallow.py', 'tools/verify/check_i18n_keys.py',
            'tools/verify/check_dev_voice.py', 'tools/verify/check_comment_dup.py',
-           'tools/verify/check_reflection.py'):
+           'tools/verify/check_reflection.py', 'tools/verify/check_arch.py'):
     _p = os.path.join(BASE, _g)
     if os.path.isfile(_p):
         subprocess.call([sys.executable, _p, '--warn'])

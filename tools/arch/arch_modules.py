@@ -32,9 +32,9 @@ MODULES = [
 
 ("promaid.entry.mod", "模组主类与初始化", "Mod Main & Bootstrap",
  "注解 @Mod 的入口：注册物品、物品/网络/TaskData 引导、配置 SPEC 装配，以及一段约 320 行的历史默认值"
- "迁移链（含 22 个 *_MIGRATED 一次性标记）。",
+ "迁移链（含 10 个 *_MIGRATED 一次性标记）。",
  "The @Mod entry: registers items, bootstraps item/network/task-data, assembles the config SPEC, and runs a "
- "~320-line chain of historical default-value migrations (including 22 one-shot *_MIGRATED flags).",
+ "~320-line chain of historical default-value migrations (including 10 one-shot *_MIGRATED flags).",
  [("promaid_src_neo/com/maidsmart/ProMaidMod.java", 1, 452)], ["entry"], [], []),
 
 ("promaid.entry.extension", "功能注册枢纽", "Feature Registration Hub",
@@ -400,26 +400,38 @@ MODULES = [
  "blueprint-building system. All registered through TLM's IMaidTask rather than self-hooking.",
  [("promaid_src_neo/com/maidsmart/task", 1, None)], [], [], []),
 
+("promaid.work.base", "采集行为共享基类", "Gathering Behavior Base",
+ "挖矿与伐木两个 AI 行为逐字相同的部分上提而成的抽象基类：废石白名单、开路可破白名单、per-女仆 状态表与"
+ "纯工具函数。上提后两个子类各留自己的差异（矿表 vs 原木表、连锁规则），不再各抄一份。",
+ "The abstract base that mining and woodcutting now both extend, holding what the two AI behaviors had verbatim "
+ "in common: the junk-stone whitelist, the open-breakable whitelist, the per-maid state map and the pure "
+ "helpers. After the hoist each subclass keeps only its own differences (ore table vs log table, chain rules) "
+ "instead of carrying a second copy.",
+ [("promaid_src_neo/com/maidsmart/task/MaidWorkBehavior.java", 1, 685)], ["work", "shared"], [], []),
+
 ("promaid.work.mine", "挖矿", "Mining",
  "按距离平方加深度惩罚减价值 扫最高价值矿，寻路过去逐块挖（原版破坏公式加工具等级门槛加女仆 1.2 倍加成），"
- "连锁挖整条矿脉；临时垫脚方块事后回收。2338 行。",
+ "连锁挖整条矿脉；临时垫脚方块事后回收。与伐木共用的静态表、状态表与纯工具已上提到 MaidWorkBehavior。",
  "Scans for the highest-value ore by distance squared plus a depth penalty minus value, paths there and mines "
  "block by block (vanilla break formula, tool-tier gated, 1.2x maid bonus), chain-mining the vein; temporary "
- "scaffold is reclaimed later. 2338 lines.",
- [("promaid_src_neo/com/maidsmart/task/MaidMineBehavior.java", 1, 2845),
-  ("promaid_src_neo/com/maidsmart/task/MaidMineTask.java", 1, 74)], ["work"], [],
- [("call", "promaid.work.placed-block", "方块回收", "Block reclaim"),
+ "scaffold is reclaimed later. The static tables, state map and pure helpers shared with woodcutting were "
+ "hoisted into MaidWorkBehavior.",
+ [("promaid_src_neo/com/maidsmart/task/MaidMineBehavior.java", 1, 2329),
+  ("promaid_src_neo/com/maidsmart/task/MaidMineTask.java", 1, 73)], ["work"], [],
+ [("call", "promaid.work.base", "共享基类", "Shared base"),
+  ("call", "promaid.work.placed-block", "方块回收", "Block reclaim"),
   ("call", "promaid.work.tool-equip", "自动换工具", "Auto tool")]),
 
 ("promaid.work.wood", "伐木", "Woodcutting",
- "与挖矿同构，表换成原木/竹子（logs 标签自动），树叶不挡视线，连锁砍整棵树。注释自述是「完整克隆挖矿」"
- "——2379 行乘 2 的重复。",
+ "与挖矿同构，表换成原木/竹子（logs 标签自动），树叶不挡视线，连锁砍整棵树。与挖矿共用的静态表、状态表与"
+ "纯工具已上提到 MaidWorkBehavior，不再整份克隆挖矿。",
  "Isomorphic to mining with the table swapped to logs/bamboo (auto logs tag); leaves do not block line of "
- "sight and the whole tree is felled in a chain. Its own comments admit it is a 'complete clone of mining' — "
- "2379 lines of duplication.",
- [("promaid_src_neo/com/maidsmart/task/MaidWoodBehavior.java", 1, 2951),
+ "sight and the whole tree is felled in a chain. The static tables, state map and pure helpers shared with "
+ "mining were hoisted into MaidWorkBehavior, so it is no longer a full clone of mining.",
+ [("promaid_src_neo/com/maidsmart/task/MaidWoodBehavior.java", 1, 2300),
   ("promaid_src_neo/com/maidsmart/task/MaidWoodTask.java", 1, 66)], ["work"], [],
- [("call", "promaid.work.mine", "同构来源", "Isomorphic origin"),
+ [("call", "promaid.work.base", "共享基类", "Shared base"),
+  ("call", "promaid.work.mine", "同构来源", "Isomorphic origin"),
   ("call", "promaid.work.placed-block", "方块回收", "Block reclaim")]),
 
 ("promaid.work.cook", "烧制", "Smelting & Cooking",
@@ -464,12 +476,10 @@ MODULES = [
 
 ("promaid.work.stroll", "空闲散步", "Idle Stroll",
  "核心行为优先级 50：给空闲女仆一个散步目标（TLM 原生散步概率约 8e-6/tick，基本不动）；遵守工作/战斗/"
- "禁足边界。MaidStrollCheck 仅为一条速度投诉的调试命令而存在。",
+ "禁足边界。",
  "Core behavior at priority 50: gives idle maids a stroll target, since TLM's native stroll chance is about "
- "8e-6/tick (i.e. she never moves). Respects work/combat/restriction bounds. MaidStrollCheck exists purely to "
- "back a debug command for a speed complaint.",
- [("promaid_src_neo/com/maidsmart/task/MaidStrollBehavior.java", 1, 240),
-  ("promaid_src_neo/com/maidsmart/task/MaidStrollCheck.java", 1, 413)], ["work", "idle"], [], []),
+ "8e-6/tick (i.e. she never moves). Respects work/combat/restriction bounds.",
+ [("promaid_src_neo/com/maidsmart/task/MaidStrollBehavior.java", 1, 234)], ["work", "idle"], [], []),
 
 ("promaid.work.planting", "随手种树", "Opportunistic Replanting",
  "独立 ServerTick 模块（不是大脑行为）：女仆在伐木任务时每 20 tick 捡附近树苗，在合法泥土上按树干净空判定"
@@ -640,8 +650,7 @@ MODULES = [
  "When the fishing task finds no chair or boat, she scans 8 blocks for a free cushion or a shoreline spot and "
  "spawns a marked TLM cushion she is forced onto; stale cushions are swept each second and drop nothing when "
  "destroyed.",
- [("promaid_src_neo/com/maidsmart/fishing/FishingChairService.java", 1, 501),
-  ("promaid_src_neo/com/maidsmart/fishing/PlayerWaterLog.java", 1, 73)], ["work", "compat"], [], []),
+ [("promaid_src_neo/com/maidsmart/fishing/FishingChairService.java", 1, 536)], ["work", "compat"], [], []),
 
 # ============================================================== 5. flight
 ("promaid.flight", "飞行", "Flight",
@@ -670,6 +679,103 @@ MODULES = [
   ("promaid_src_neo/com/maidsmart/flight/MaidFreeFlightNetworking.java", 1, 153),
   ("promaid_src_neo/com/maidsmart/flight/MaidFreeFlightAnimState.java", 1, 59)], ["flight", "net"], [], []),
 
+# ======================================================== 5b. accessory（饰品「大运」）
+("promaid.accessory", "饰品「大运」", "Dayun Accessory",
+ "一件戴在身上就把鞘翅滑翔变成「清障 + 撞击」的饰品：玩家放 Curios 饰品栏、女仆放 TLM 饰品栏。滑翔中清掉"
+ "身周立方体内的方块，并把范围内的非友方单位按这一刻的速度打伤、顺着飞行方向击飞；女仆侧还支持空袭模式下"
+ "隔着可破坏的墙锁敌，以及随飞行起停的两首 BGM。整包九个文件约 1200 行，只为这一个功能服务。",
+ "A wearable that turns an elytra glide into clearing plus ramming: a player slots it into Curios, a maid into "
+ "the TLM bauble slot. While gliding it clears the blocks in a cube around the wearer and hits non-friendly "
+ "units in range for damage scaled by the current speed, knocking them back along the flight direction; the "
+ "maid side also targets enemies through breakable walls in air-raid mode and plays one of two flight BGMs. All "
+ "nine files, about 1200 lines, serve this single feature.",
+ [("promaid_src_neo/com/maidsmart/accessory", 1, None)], ["accessory"], [], []),
+
+("promaid.accessory.item", "饰品本体与音效", "Bauble Item & Sounds",
+ "卡车头造型的「大运」物品本体与它的音效注册。物品只提供五行可翻译说明（合成配方文案也在其中），自身不写 "
+ "NBT、不记冷却——「谁戴着」完全由饰品栏回答，反复取放、换人佩戴都不留残留。音效侧注册两首飞行 BGM 的"
+ "可变衰减范围声音事件。",
+ "The truck-head Dayun item and its sound registration. The item only carries five translatable tooltip lines "
+ "(the recipe text among them) and keeps no NBT or cooldown of its own - who wears it is answered entirely by "
+ "the bauble slot. The sound side registers the two flight-BGM sound events (variable range, paired with a "
+ "200-block attenuation distance).",
+ [("promaid_src_neo/com/maidsmart/accessory/DaYunItem.java", 1, 38),
+  ("promaid_src_neo/com/maidsmart/accessory/DaYunSounds.java", 1, 52)], ["accessory"], [], []),
+
+("promaid.accessory.breaker", "开路破坏引擎", "Glide Path Breaker",
+ "滑翔时的清障引擎：每 tick 在佩戴者前方按速度前瞻采样，逐点清掉一个立方体内的方块（边长取 "
+ "accessory.daYunRange），跳过硬度达上限（默认黑曜石级）与可配的容器方块，掉落物照常产出。前瞻采样点加"
+ "自身那格另抽成 coveredCenters，供「撞击」复用，让两边说的「范围内」是同一片地方。",
+ "The clearing engine behind the glide: each tick it samples ahead of the wearer in proportion to speed and "
+ "erases the blocks inside a cube (edge = accessory.daYunRange) around every sample, skipping blocks at or "
+ "above the hardness cap (obsidian by default) and optionally containers, dropping items as usual. The sample "
+ "cells plus the wearer's own cell are exposed as coveredCenters so the ram reuses the very same footprint.",
+ [("promaid_src_neo/com/maidsmart/accessory/DaYunBreaker.java", 1, 326)], ["accessory"], [], []),
+
+("promaid.accessory.smash", "撞击伤害与击飞", "Ram Damage & Knockback",
+ "滑翔中撞人：覆盖范围内的非友方单位按这一刻的速度吃伤害（速度 × 每格伤害，封顶 40）与击飞（速度 × 每格"
+ "击飞，封顶 10）。击飞方向顺着佩戴者这一刻的运动方向——平飞顺着飞出去、俯冲往下砸、爬升往上抛；水平分量"
+ "走原版击退，竖直分量用 push 补。低于 0.4 格/tick 不结算。",
+ "Ramming while gliding: non-friendly units in the shared footprint take damage scaled by the current speed "
+ "(speed x per-block damage, capped at 40) plus knockback (speed x per-block knockback, capped at 10). The "
+ "knockback follows the wearer's motion direction - level flight throws it forward, a dive slams it down, a "
+ "climb tosses it up; the horizontal part is vanilla knockback, the vertical one added with push. Below 0.4 "
+ "blocks/tick nothing resolves.",
+ [("promaid_src_neo/com/maidsmart/accessory/DaYunSmash.java", 1, 155)], ["accessory"], [],
+ [("call", "promaid.accessory.breaker", "共用范围口径", "Shared footprint")]),
+
+("promaid.accessory.maid", "女仆侧佩戴", "Maid-Side Wear",
+ "把「大运」挂进女仆的 TLM 饰品栏：注册成 IMaidBauble，随女仆 tick 调开路与撞击，并把她的飞行 BGM 起停"
+ "交给音乐模块。只在空袭模式下真正生效（其余时候她在干活，开路没意义）；另对外回答「她是不是在空袭」，"
+ "给穿墙锁敌与自保复用。",
+ "Slots Dayun into a maid's TLM bauble slot: registered as an IMaidBauble it drives the breaker and the ram "
+ "from her tick and hands her flight BGM to the music module. It only takes effect in air-raid mode "
+ "(otherwise she is working, where clearing is pointless), and it answers whether she is on an air raid for the "
+ "wall-phase and self-preservation modules.",
+ [("promaid_src_neo/com/maidsmart/accessory/DaYunBauble.java", 1, 102)], ["accessory"], [],
+ [("call", "promaid.accessory.breaker", "开路", "Clearing"),
+  ("call", "promaid.accessory.smash", "撞击", "Ramming"),
+  ("call", "promaid.accessory.bgm", "飞行 BGM", "Flight BGM")]),
+
+("promaid.accessory.player", "玩家侧佩戴", "Player-Side Wear",
+ "把「大运」挂进玩家 Curios 饰品栏（全反射识别，没装 Curios 就静默不生效）：随玩家服务端 tick 调开路与"
+ "撞击，戴着滑翔即生效，不需要空袭模式。对外提供「这叠是不是大运」的全反射判据，供女仆侧与穿墙锁敌共用。",
+ "Slots Dayun into a player's Curios slot (found by reflection; silently inactive when Curios is absent) and "
+ "drives the breaker and the ram from the player's server tick - gliding is enough, no air raid needed. It also "
+ "exposes the reflection-based is-this-stack-a-Dayun predicate shared by the maid side and the wall-phase module.",
+ [("promaid_src_neo/com/maidsmart/accessory/DaYunPlayerHook.java", 1, 110)], ["accessory"], [],
+ [("call", "promaid.accessory.breaker", "开路", "Clearing"),
+  ("call", "promaid.accessory.smash", "撞击", "Ramming"),
+  ("call", "promaid.accessory.bgm", "飞行 BGM", "Flight BGM")]),
+
+("promaid.accessory.wall-phase", "穿墙锁敌", "Wall-Phase Targeting",
+ "佩戴「大运」的女仆能不能隔着可破坏的墙锁定敌人：沿视线逐个 raycast，路径上每一格都必须是撞得开的"
+ "（硬度在 [0, 上限) 且不带方块实体）才算看得见；夹一格基岩 / 屏障 / 黑曜石 / 自家箱子就仍不算数。它只从"
+ "全局唯一的实体版视线收口进来，故索敌（空袭扫描、威胁登记、自保反击）统一放宽，而防贴山壁顶的坐标版视线"
+ "不受影响。",
+ "Whether a Dayun-wearing maid can target enemies through breakable walls: an iterative raycast walks the line "
+ "of sight and every blocking cell must be one the breaker could punch through (hardness in [0, cap) and, with "
+ "skip-containers on, no block entity); one unbreakable cell voids the line. It is reached only from the single "
+ "entity-side line-of-sight funnel, so targeting is uniformly relaxed while the coordinate-side sight test that "
+ "avoids hugging a cliff stays unchanged.",
+ [("promaid_src_neo/com/maidsmart/accessory/DaYunWallPhase.java", 1, 154)], ["accessory"], [],
+ [("call", "promaid.accessory.breaker", "逐格可破判据", "Per-cell breakable predicate"),
+  ("call", "promaid.accessory.maid", "她是不是在空袭", "Is she on an air raid"),
+  ("call", "promaid.accessory.player", "是不是大运", "Is-it-Dayun predicate")]),
+
+("promaid.accessory.bgm", "飞行 BGM", "Flight BGM",
+ "佩戴者飞起来时给他/她（和 200 格内听得到的玩家）放一首 BGM，落地或摘饰品就停。服务端不自己播声音——只把"
+ "「谁的 BGM 开始 / 停了」发给听得见的人，客户端据此为每个佩戴者各建一条声音实例，否则两人同曲时停一个会"
+ "把另一条一起掐掉。为不被每 tick 的调用刷爆做边沿触发；又为让收翅猛击按下滑翔位那几拍不把音乐拆掉重播，"
+ "停止走 60 刻宽限期。",
+ "Plays one BGM for a gliding wearer (and for players within 200 blocks), stopping on landing or when the "
+ "bauble comes off. The server never plays the sound itself - it only tells those who can hear whose BGM "
+ "started or stopped, and the client builds a separate instance per wearer, so stopping one of two identical "
+ "tracks cannot cut the other off. Edge-triggered against the per-tick callers; stopping waits out a 60-tick "
+ "grace window so a wing-fold smash does not restart it.",
+ [("promaid_src_neo/com/maidsmart/accessory/DaYunMusic.java", 1, 189),
+  ("promaid_src_neo/com/maidsmart/accessory/DaYunMusicNetworking.java", 1, 89)], ["accessory"], [], []),
+
 # ============================================================== 6. social
 ("promaid.social", "社交与心智", "Social & Mind",
  "记忆、人格、情绪、对话、语音五层构成的「她像个人」的那部分。移植自 maidsoulcore 与 Sphantosis。",
@@ -687,7 +793,7 @@ MODULES = [
   ("promaid_src_neo/com/maidsmart/memory/AiMemoryExtractor.java", 1, 636),
   ("promaid_src_neo/com/maidsmart/memory/AiMemoryArchiver.java", 1, 597)], ["memory", "ai"], [], []),
 
-("promaid.social.memory.index", "记忆索引与检索", "Memory Index & Recall",
+("promaid.social.memory.recall", "记忆索引与检索", "Memory Index & Recall",
  "日记式索引、混合召回与 RRF 融合、跳过表（移植自 Sphantosis 的 cognitive/composite/skiplist_index.py）。",
  "Diary-style index, hybrid recall with RRF fusion, and a skip list (ported from Sphantosis's "
  "cognitive/composite/skiplist_index.py).",
@@ -905,11 +1011,11 @@ MODULES = [
  [("promaid_src_neo/com/maidsmart/config", 1, None)], [], [], []),
 
 ("promaid.core.config", "全模组配置定义", "Mod Config Definition",
- "524 个设置项、22 个分类；字段声明块后跟一个约 1850 行的巨型 static 初始化块逐项重复声明。另有 22 个一次性"
- "迁移标记被当成用户可见设置留在配置里。",
- "524 settings in 22 categories. A field-declaration block is followed by a ~1850-line static initializer that "
- "re-declares every value. Another 22 one-shot migration flags live in user-visible config.",
- [("promaid_src_neo/com/maidsmart/config/MaidSmartConfig.java", 1, 3172)], ["core", "config"], [], []),
+ "601 个设置项、22 个分类；字段声明块后跟一个巨型 static 初始化块逐项重复声明。另有 10 个一次性 "
+ "*_MIGRATED 迁移标记被当成用户可见设置留在配置里。",
+ "601 settings in 22 categories. A field-declaration block is followed by a huge static initializer that "
+ "re-declares every value. Another 10 one-shot *_MIGRATED migration flags live in user-visible config.",
+ [("promaid_src_neo/com/maidsmart/config/MaidSmartConfig.java", 1, 3546)], ["core", "config"], [], []),
 
 ("promaid.core.config-panel", "配置面板 GUI", "Config Panel GUI",
  "不是控件对象树，而是手写的立即模式界面：约 12 个嵌套类型（含 7 个分组枚举与 35 个 Section）、约 180 个方法、"

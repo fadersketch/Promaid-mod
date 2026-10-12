@@ -6,10 +6,11 @@
   "max_columns": 3,
   "max_api_rows": 0,
   "reading": {
-    "zh": "本层 22 个子模块。",
-    "en": "22 submodules at this layer."
+    "zh": "本层 23 个子模块。",
+    "en": "23 submodules at this layer."
   },
   "order": [
+    "promaid.work.base",
     "promaid.work.mine",
     "promaid.work.wood",
     "promaid.work.cook",
@@ -41,6 +42,7 @@
         "en": "Work & Building"
       },
       "children": [
+        "promaid.work.base",
         "promaid.work.mine",
         "promaid.work.wood",
         "promaid.work.cook",

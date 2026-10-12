@@ -18,7 +18,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/MaidBuildBehavior.java, line: 1, end_line: 1951}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintBuildExecutor.java, line: 1, end_line: 254}
   - {path: promaid_src_neo/com/maidsmart/build/MaidBuildTask.java, line: 1, end_line: 70}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 0b62c10ca254e182fd78ab78ed622002c231825a8a588d9a60ed3bd3fee29f6c
 state: active

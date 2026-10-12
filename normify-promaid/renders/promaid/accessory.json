@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "id": "promaid.accessory",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 7 个子模块。",
+    "en": "7 submodules at this layer."
+  },
+  "order": [
+    "promaid.accessory.item",
+    "promaid.accessory.breaker",
+    "promaid.accessory.smash",
+    "promaid.accessory.maid",
+    "promaid.accessory.player",
+    "promaid.accessory.wall-phase",
+    "promaid.accessory.bgm"
+  ],
+  "groups": [
+    {
+      "id": "g4",
+      "title": {
+        "zh": "饰品「大运」",
+        "en": "Dayun Accessory"
+      },
+      "children": [
+        "promaid.accessory.item",
+        "promaid.accessory.breaker",
+        "promaid.accessory.smash",
+        "promaid.accessory.maid",
+        "promaid.accessory.player",
+        "promaid.accessory.wall-phase",
+        "promaid.accessory.bgm"
+      ]
+    }
+  ]
+}

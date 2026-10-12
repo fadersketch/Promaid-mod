@@ -12,7 +12,7 @@ description:
       cause: ChunkMap removing the entity on chunk unload).
 source:
   - {path: promaid_src_neo/com/maidsmart/follow/MaidVisibilityGuard.java, line: 1, end_line: 119}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: dae096c7d21896a0a095015cd8f82d02563eb46966dc7c30e68af6848fb73c2c
 state: active

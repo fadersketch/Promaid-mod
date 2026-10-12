@@ -11,11 +11,10 @@ description:
       cushion or a shoreline spot and spawns a marked TLM cushion she is forced
       onto; stale cushions are swept each second and drop nothing when destroyed.
 source:
-  - {path: promaid_src_neo/com/maidsmart/fishing/FishingChairService.java, line: 1, end_line: 501}
-  - {path: promaid_src_neo/com/maidsmart/fishing/PlayerWaterLog.java, line: 1, end_line: 73}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+  - {path: promaid_src_neo/com/maidsmart/fishing/FishingChairService.java, line: 1, end_line: 536}
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: 13620f5a142289b6692fe0defc39b2c20ed28799c261ea208f9801230c8bf9c7
+fingerprint: c788eca23fa3ddef456041d7e368e3dbaffa3fbd65f1f02b6c43051551de8714
 state: active
 tags: [work, compat]
 ---
@@ -27,4 +26,3 @@ tags: [work, compat]
 **代码证据**
 
 - `promaid_src_neo/com/maidsmart/fishing/FishingChairService.java`:1
-- `promaid_src_neo/com/maidsmart/fishing/PlayerWaterLog.java`:1

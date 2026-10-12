@@ -11,7 +11,7 @@ description:
       instead of pillaring up on the ground.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidFlightFollowBehavior.java, line: 1, end_line: 1680}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: e2a5c1f49163281a6696234e1cf5b8d209fe2421d76d04e34dd48c5923172c18
 state: active

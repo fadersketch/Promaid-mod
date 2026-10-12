@@ -14,7 +14,7 @@ description:
       Forge side lives in the promaid-forge tree.
 source:
   - {path: promaid_src_neo/com/maidsmart/ProMaidMod.java, line: 1}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 15fdf0a6f075685e1558cb87a803c22c95d0a05c2137603eb647811956c5c986
 state: active

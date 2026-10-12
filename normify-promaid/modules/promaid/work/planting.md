@@ -12,7 +12,7 @@ description:
       dirt after a trunk-clearance check.
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidPlanting.java, line: 1, end_line: 755}
-revision: 85479ee734277ed4a37e6983830ca533adcb40e9
+revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 5aa74debb39d4bd41fc3713815c9659b7b7674c3259d78c4ac5db0772b8c6595
 state: active

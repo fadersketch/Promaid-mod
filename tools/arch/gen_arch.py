@@ -31,7 +31,11 @@ REPO = _find_repo_root(__file__)
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 ROOT = _find_repo_root(__file__)
+# --out <dir>：把结构数据生成到别处（tools/verify/check_arch.py 用它把"产物"与"真源重新生成的结果"
+# 逐字节比对；产物只许来自 arch_modules.py，不许手改）。
 OUT  = os.path.join(ROOT, "normify-promaid")
+if "--out" in sys.argv:
+    OUT = os.path.abspath(sys.argv[sys.argv.index("--out") + 1])
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from arch_modules import MODULES, MODULES_FORGE
 
@@ -127,7 +131,7 @@ APIS = {
 "promaid.system.work-area": [
   ("rpc","WorkAreaClamp.clamp(...)","把目标钳进工作圆。","Clamps a target into the work circle."),
 ],
-"promaid.social.memory.index": [
+"promaid.social.memory.recall": [
   ("file","<world>/promaid_memory/<uuid>/paragraphs.jsonl","段落记忆表。","Paragraph memory table."),
   ("file","<world>/promaid_memory/<uuid>/relations.jsonl","关系表。","Relations table."),
   ("rpc","AiMemoryStore.append(...)","写入一条记忆。","Appends one memory entry."),
@@ -157,6 +161,42 @@ APIS = {
 "promaid.guide": [
   ("rpc","GuideContent.chapters()","35 章注册表。","The 35-chapter registry."),
   ("rpc","GuideScreen.buildLines(...)","按像素宽度换行分页。","Pixel-width wrapping and paging."),
+],
+"promaid.accessory.item": [
+  ("rpc","DaYunItem.appendHoverText(...)","五行可翻译说明（配方文案也在其中）。","Five translatable tooltip lines (recipe text included)."),
+  ("event","DaYunSounds.register(IEventBus)","把两首 BGM 的声音事件注册到 MOD 总线。","Registers both BGM sound events on the mod bus."),
+  ("rpc","DaYunSounds.forTrack(int)","曲目序号 → 声音事件。","Track index -> sound event."),
+],
+"promaid.accessory.breaker": [
+  ("rpc","DaYunBreaker.sweepAhead(...)","每 tick 的前瞻清障入口（佩戴者两侧共用）。","Per-tick clearing entry point (shared by both wearers)."),
+  ("rpc","DaYunBreaker.coveredCenters(...)","本 tick 要清的采样格（前瞻点 + 自身那格）——与「撞击」共用。","Sample cells to clear this tick (ahead + self) - shared with the ram."),
+  ("rpc","DaYunBreaker.canPhaseThrough(...)","这一格撞得开吗——破坏与穿墙锁敌共用同一判据。","Can this cell be punched through - breaking and wall-phase share one predicate."),
+],
+"promaid.accessory.smash": [
+  ("rpc","DaYunSmash.impact(ServerLevel, LivingEntity, Vec3, int)","每 tick 每个佩戴者一次的撞击结算入口。","Per-wearer, per-tick ram resolution entry point."),
+],
+"promaid.accessory.maid": [
+  ("event","DaYunBauble.onTick(EntityMaid, ItemStack)","女仆每 tick：开路 + 撞击 + BGM。","Per maid tick: break + ram + BGM."),
+  ("rpc","DaYunBauble.isAirRaidTask(EntityMaid)","她现在是不是空袭任务。","Is she on an air-raid task."),
+],
+"promaid.accessory.player": [
+  ("event","DaYunPlayerHook.tick(MinecraftServer)","玩家服务端每 tick：开路 + 撞击 + BGM。","Per player server tick: break + ram + BGM."),
+  ("rpc","DaYunPlayerHook.hasDaYun(ServerPlayer)","这名玩家戴着没有（全反射扫 Curios）。","Does this player wear one (reflection over Curios)."),
+  ("rpc","DaYunPlayerHook.isDaYun(ItemStack)","这叠是不是「大运」——跨模块共用的判据。","Is this stack a Dayun - the predicate shared across modules."),
+],
+"promaid.accessory.wall-phase": [
+  ("rpc","DaYunWallPhase.active(LivingEntity)","她此刻可以隔墙看吗（戴着 + 在飞 + 开关开）。","May she see through walls now (wearing + flying + switch on)."),
+  ("rpc","DaYunWallPhase.canSeeThrough(LivingEntity, Vec3)","这条视线路上每一格都撞得开吗。","Is every blocking cell along this sight line punch-through-able."),
+  ("rpc","DaYunWallPhase.wearsDaYun(EntityMaid)","她饰品栏里有没有「大运」。","Does her bauble slot hold a Dayun."),
+],
+"promaid.accessory.bgm": [
+  ("rpc","DaYunMusic.play(ServerLevel, Entity, int)","某佩戴者的 BGM 开始（边沿触发，状态没变不发包）。","A wearer's BGM starts (edge-triggered; no packet when unchanged)."),
+  ("rpc","DaYunMusic.stop(ServerLevel, Entity)","停止（走 60 刻宽限期，期间 play 可撤回）。","Stop (through a 60-tick grace window that play can retract)."),
+  ("rpc","DaYunMusicNetworking.sendMusic(ServerPlayer, int, int, boolean)","S2C：(佩戴者 id, 曲目, 起/停)。","S2C: (wearer id, track, start/stop)."),
+],
+"promaid.work.base": [
+  ("rpc","MaidWorkBehavior()","共享构造（emptyMap, MAX, MAX = 无限时长）。","Shared constructor (emptyMap, MAX, MAX = unlimited duration)."),
+  ("dataflow","JUNK_STONES / OPEN_BREAKABLE","废石白名单与开路可破白名单。","Junk-stone and open-breakable whitelists."),
 ],
 }
 
@@ -351,6 +391,7 @@ GROUPS = {
    ("战斗与载具", "Combat & Vehicles", ["promaid.combat"]),
    ("生产任务与建造", "Work & Building", ["promaid.work"]),
    ("飞行", "Flight", ["promaid.flight"]),
+   ("饰品「大运」", "Dayun Accessory", ["promaid.accessory"]),
    ("社交与心智", "Social & Mind", ["promaid.social"]),
    ("系统服务", "System Services", ["promaid.system"]),
    ("核心与文档", "Core & Docs", ["promaid.core","promaid.client","promaid.guide"]),
@@ -391,14 +432,15 @@ rules:
       - {name: feature, match: ["promaid.combat", "promaid.combat.**",
                                 "promaid.work", "promaid.work.**",
                                 "promaid.flight", "promaid.flight.**",
-                                "promaid.social", "promaid.social.**"]}
+                                "promaid.social", "promaid.social.**",
+                                "promaid.accessory", "promaid.accessory.**"]}
       - {name: system,  match: ["promaid.system", "promaid.system.**"]}
       - {name: core,    match: ["promaid.core", "promaid.core.**"]}
   - id: no-feature-to-entry
     type: forbid-dependency
     severity: error
     from: ["promaid.combat.**", "promaid.work.**", "promaid.flight.**", "promaid.social.**",
-           "promaid.system.**", "promaid.core.**"]
+           "promaid.accessory.**", "promaid.system.**", "promaid.core.**"]
     to:   ["promaid.entry.mod"]
   - id: naming-kebab
     type: naming
