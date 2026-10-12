@@ -326,8 +326,10 @@
 **④ 抽 `MaidWorkBehavior` 基类（挖矿/伐木）**
 - 测绘确认：`task/MaidMineBehavior`(2952) 与 `task/MaidWoodBehavior`(2921) 是**系统性克隆**——公开/私有方法集一一对应，绝大多数只是 Ore↔Wood 词根替换。
 - 参数化点（子类差异）：`isOre/isWood`(+`isWoodState`) 判据；`OreCache/WoodCache` + `OreScanState/WoodScanState` 内部类；`load/ensure/reload{Builtin}`；`findOre/findWood`、`pickFromCache`；伐木独有的 `clearTreeTop`/`burstNearbyLeaves`/`isSaplingItem`/`firstWoodAbove`/`walkTargetFor`；提示文案 `hintNoPickaxe/hintNoAxe`；`requiredTool`/`canHarvest` 的物品集；配置键前缀（`mining.*` vs `wood.*`）。
-- 做法：抽 `abstract class MaidWorkBehavior`，把**无任务特异依赖**的成员上提 `protected`：`reachSq / distSqToBlock / blockCnName / isSoft / hasClearSight / hasClearRay / countBlocking / findBlockingBlock / maybeDropJunk / trackPlaced / expirePlaced / purgeStaleMaids / stuckReset / hardResetStuck / approachSpeed / walkToStep / startStepOn / walkToBlockFace / pillarUpStep / descendStep / slopeStep / takeBuildBlock / antiSuffocate / pillarGuard / watchSample / broadcastCrack` 等；子类只留 task-specific 覆盖点。**两树各做一份**（映射名不同，不能跨树共享源码）。
-- 门槛：DEBT 标注**中风险、需回环测试**。落刀后必须 `compile_promaid/neo` `EXITCODE=0` + `verify_jar_classes` + 实机跑一段挖矿/伐木（开发者「部署」开闸）。**本轮仅测绘，未动刀。**
+- 做法：抽 `abstract class MaidWorkBehavior extends Behavior<EntityMaid>`，把**无任务特异依赖**的成员上提 `protected`。**两树各做一份**（映射名不同，不能跨树共享源码）。
+  - **已落刀的安全子集（2026-10-12）**：先只上提「两文件逐字相同」的静态数据表与纯工具，共 7 个成员 / 每文件约 199 行：`JUNK_STONES`、`OPEN_BREAKABLE`(+static 块)、`BLOCK_CN`(+static 块)、`distSqToBlock`、`blockCnName`、`isSoft`、`canHarvest`。基类构造 `super(Collections.emptyMap(), Integer.MAX_VALUE, Integer.MAX_VALUE)` 与子类原写法逐字一致（无限时长），行为完全透明。两树 `compile_*` `EXITCODE=0`；forge↔neo 基类 diff 全部是 SRG↔Mojmap / 注册表 API 替换（`m_123341_()`↔`getX()`、`m_41619_()`↔`isEmpty()`、`m_8096_()`↔`isCorrectToolForDrops(...)`、`ForgeRegistries.BLOCKS`↔`BuiltInRegistries.BLOCK`），无一处逻辑差异。
+  - **注意**：`reachSq` **不可上提**（挖矿读 `MINE_REACH`、伐木读 `WOOD_REACH`，同名不同源）。其余候选方法（`findBlockingBlock / takeBuildBlock / pillarUpStep / …`）因两树**行数/写法均有差异**（非逐字克隆，含任务特异分支）暂不上提——需逐方法人工核对语义后再动，属下一步。
+- 门槛：DEBT 标注**中风险、需回环测试**。安全子集已满足 `compile_promaid/neo` `EXITCODE=0` + 全套护栏 `FAIL 0`；**完整 ~2500 行驱动逻辑合并仍停在测绘**，需开发者「部署」开闸做实机挖矿/伐木回归。
 
 **⑤ 拆 `PromaidConfigScreen`（7659 行）**
 - 现状：单类含 首页 / 大类页 / 参数页 + 5 组「列表 + 条目」对（BuildBlack/Alt/Cook/Water/Food/Minable 各写一遍增删改重建）+ `client/MaidConfigRowLayout` 辅助。
@@ -335,10 +337,10 @@
 - 门槛：DEBT 标注**高风险、需实机 UI 验收**——拆完必须实机点一遍每个 Section（行高 44 / 翻页 / 手册跳转 / 控件状态）。**本轮仅测绘，未动刀。**
 
 **⑥ 两树共享源目录**
-- 第一步（**本轮已做**）：`tools/verify/check_tree_mirror.py`（只读审计，不设门槛）。现状：同路径 `.java` 459 个，逐字节相同 **47** / 有差异 412（行数一致 160、行数不同 252——多为注释里的映射名引用，合法；行数差 Top 见脚本输出，最大 `GunnerTetherManager` Δ127）。
+- 第一步（**本轮已做**）：`tools/verify/check_tree_mirror.py`（只读审计，不设门槛）。现状（④ 落刀后复测）：同路径 `.java` **460** 个，逐字节相同 **47** / 有差异 413（行数一致 160、行数不同 253——多为注释里的映射名引用，合法；行数差 Top 见脚本输出，最大 `GunnerTetherManager` Δ127）。
 - 第二步（未做）：把**纯逻辑、无映射依赖**的文件移入共享源目录（如 `src_shared/`），两侧 `build.gradle` 的 `srcDir` 与 `tools/build/gen_compile*.py` 一并 include。候选先取「逐字节相同」那 47 个（先逐个确认真无映射依赖；已知 `memory/AiMemorySkipList`、`tool/NaturalBlocks`、`tool/StateTables` 相同，而 `build/BlueprintStepMath` 因注释映射名而 DIFF）。**需 gradle 构建验证，本轮未动。**
 
-> ④⑤⑥ 均停在**测绘**：三者都要求运行时 / 实机 UI / 真构建验证，而仓库规矩是「回归只在开发者开闸（『部署』）时跑」——故不在无人验收的情形下盲改。蓝本给出下一步的机械执行清单。
+> ④ 的**安全子集**已落刀（编译 + 护栏可验，见上）；⑤⑥ 仍停在**测绘**：两者都要求实机 UI / 真构建验证，而仓库规矩是「回归只在开发者开闸（『部署』）时跑」——故不在无人验收的情形下盲改。蓝本给出下一步的机械执行清单。
 
 ---
 
