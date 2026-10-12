@@ -3,8 +3,8 @@
 > 本文件是**架构总入口**。真正可下钻、可校验的结构数据在 `normify-promaid/`；
 > 用浏览器打开 `normify-promaid/normify.html` 即可逐层点开。
 
-- **修订**：`05103ae`（生成时 HEAD）
-- **规模**：112 模块 / 41 API / 61 依赖箭头 / 最大深度 3
+- **修订**：`8fbb6334`（最后一次改动 `promaid_src*` 的提交）
+- **规模**：121 模块 / 61 API / 73 依赖箭头 / 最大深度 3
 - **校验**：L1（写时）+ L2（全项目）+ L3（构建冻结）全部 **0 error**
 - **一键重建**：`python tools/arch/build_arch.py`（等价于下面三条依次跑）
 - **校验入口**：`python tools/arch/gen_arch.py` → `python tools/arch/render_arch.py` → `python tools/arch/finalize_arch.py`
@@ -30,7 +30,7 @@ TLM 本身**不能被 fork**，所以本模组的一切改动都靠两类扩展�
 
 ---
 
-## 2. 顶层脉络（8 个域）
+## 2. 顶层脉络（9 个域）
 
 ```
 promaid
@@ -39,6 +39,7 @@ promaid
 ├── combat     战斗与载具      76 文件 / 2.77 MB —— 体量最大、技术债最集中
 ├── work       生产类任务      挖矿 伐木 烧制 酿造 宰杀 搭路 + 整套蓝图建造
 ├── flight     飞行            仿创造模式自由飞行（空袭的战斗飞行在 combat）
+├── accessory  饰品「大运」     鞘翅滑翔清障 + 撞击 + 隔墙锁敌 + 飞行 BGM
 ├── social     社交与心智      记忆 人格 情绪 对话 语音（5 层）
 ├── system     系统服务        区块加载 跨维跟随 排班 保护 压缩盒 酿造 Goety
 └── core       核心与配置      配置定义与面板 指令 LLM 工具 建构安全过滤器
@@ -46,14 +47,15 @@ promaid
 
 | 域 | 模块数 | 一句话 |
 |---|---|---|
-| `entry` | 6 | 一切从这里被接上 TLM |
+| `entry` | 5 | 一切从这里被接上 TLM |
 | `mixin` | 10 | 唯一能深耦合的合法通道 |
-| `combat` | 17 | 从主动参战到骑乘指挥棒 |
-| `work` | 21 | 女仆的职业 + 蓝图建造系统 |
+| `combat` | 26 | 从主动参战到骑乘指挥棒 |
+| `work` | 29 | 女仆的职业 + 蓝图建造系统 |
 | `flight` | 3 | 自由飞行能力层 |
-| `social` | 12 | 记忆/人格/情绪/对话/语音 |
+| `accessory` | 8 | 饰品「大运」：滑翔清障 + 撞击 + 隔墙锁敌 |
+| `social` | 13 | 记忆/人格/情绪/对话/语音 |
 | `system` | 13 | 「别丢、别卡、别漏」的底层服务 |
-| `core` | 12 | 配置、指令、工具、过滤器 |
+| `core` | 10 | 配置、指令、工具、过滤器 |
 
 ---
 
@@ -123,7 +125,7 @@ PersonaPackage            人格种子（只读）┘
 | `outline.md` | 人类可读大纲 |
 | `api-index.json` | `protocol:path` → 模块 |
 | `policy.yml` | 架构规则（无环 / 层向 / 禁依赖 / 命名） |
-| `receipt.json` | 134 个产物的 SHA-256 冻结回执 |
+| `receipt.json` | 145 个产物的 SHA-256 冻结回执 |
 | `normify.html` | 单文件交互式架构图（零依赖，双击即开） |
 
 ### 契约
@@ -177,10 +179,11 @@ python tools/arch/finalize_arch.py   # 覆盖 receipt.json（HTML 之后重算�
 
 三条最要紧的：
 
-1. **两棵手工镜像树**（`promaid_src` 392 文件 / `promaid_src_neo` 394 文件）—— 每个功能写两遍。
-2. **`config/PromaidConfigScreen.java` 6424 行**单个立即模式界面类，含 543 行 `render()`。
-3. **`combat/SelfPreservationBehavior.java` 3789 行** 与 **`combat/MaidMountCompat.java` 3657 行** ——
-   单文件里堆积了上百处历史版本标记（`实测NNN`），是典型的"补丁坟场"。
+1. **两棵手工镜像树**（`promaid_src` 782 文件 / `promaid_src_neo` 786 文件，其中各含 463 / 466 个
+   `.java`）—— 每个功能写两遍。
+2. **`config/PromaidConfigScreen.java` 7661 行**单个立即模式界面类，含 645 行 `render()`。
+3. **`combat/SelfPreservationBehavior.java` 4804 行** 与 **`combat/MaidMountCompat.java` 6509 行** ——
+   单文件里堆积了数百处历史版本标记（两文件 `实测NNN` 合计 402 处），是典型的"补丁坟场"。
 
 ---
 

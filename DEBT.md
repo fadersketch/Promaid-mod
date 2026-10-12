@@ -30,7 +30,7 @@
 | **代码质量（吞异常 / 反射）** | TD-14 · TD-15 · TD-18 | P2 | 出 bug 有日志、反射收敛成在场判断 |
 | **mixin** | TD-16 | P2 | 冲突可二分关闭，不必改源码重编 |
 | **构建 / 发布** | TD-06 · TD-13 | P1 | 外部可复现构建；版本号不乱（同号覆盖已禁） |
-| **架构（两树镜像 / 选型）** | TD-05 · TD-17 | P1 | 已确认保留；长期才动（成本极高，收益最大） |
+| **架构（两树镜像 / 选型 / 测绘数据）** | TD-05 · TD-17 · TD-19 | P1 | 已确认保留；长期才动（成本极高，收益最大）；测绘数据已上保鲜门禁（TD-19） |
 | **功能取舍（重复性）** | TD-04 | P2 | 与生态重复的功能逐项裁决（保留/合并/默认关/删除） |
 
 
@@ -146,6 +146,7 @@
 |---|---|---|---|---|---|
 | TD-05 | **两树镜像重复**（最大的重复面） | `ARCHITECTURE-DEBT.md` §4.1 | 一次改动要写两遍，容易漏 | 长期可考虑单一源码 + 预处理生成另一树；短期靠 `check_preset.py` 那种"两树表逐项比对"护栏兜底 | 未清（已确认保留，暂不动架构） |
 | TD-17 | **架构选型的三条外部建议（有意不改，记录理由）** | issue #38 第 2 / 3 条 + 结尾：①两加载器应拆成两条分支；②自写 i18n + 一堆 mixin 不如改用 Patchouli / Cloth Config；③"从头开始写" | 外部协作者的心智负担；但这些是设计取舍而非缺陷 | 记录立场即可：①**不拆**——现"同仓两树镜像 + 逐项护栏比对"能保证"一次改动同时验证两加载器一致"，拆分支就丢了它（见 TD-05）；②**不换**——Patchouli / Cloth 会引入硬依赖，与本模组"零硬依赖 + 自带手册 / 配置面板（含 DIY 预设）"的目标冲突；③**不重写**——模组已上线、有验收与发布登记，按 `WORKFLOW.md` 的债务配额逐步收敛（本台账与 `BUG_DEBT.md` 就是收敛通道） | 已确认保留（理由） |
+| TD-19 | **结构数据没有保鲜机制**：`tools/arch/` 的产物（`normify-promaid/`）可以被手改且无人核对，`ARCHITECTURE.md` 的统计数字靠手写 | 实测九百〇八：重跑 `tools/arch/build_arch.py` 后，产物与真源差 **20 个文件**（`api-index.json`、`core/config.md`、`work/*.md` 等），而 `ARCHITECTURE.md` 还写着 112 模块 / 41 API（真源已是 121 / 61）。根因是"产品级编辑"绕过唯一真源 `tools/arch/arch_modules.py`，而文档数字没有生成者 | 交互图与代码各说各话；**新功能整包没登记，图上就是缺的**（新加 accessory「大运」9 个文件即此类），没人会发现；绕过真源的改动"看起来做了"，下一轮生成即蒸发 | 已挂棘轮 `tools/verify/check_arch.py`：① 产物必须**逐字节等于**真源重新生成（`gen_arch.py --out <tmp>` 比对，只抹 revision 哈希）② 未被任何模块 `source` 覆盖的 `.java` 只减不增（neo 181 / forge 0）③ revision 落后源码 WARN ④ `ARCHITECTURE.md` 统计漂移 WARN。已接进两 `build_promaid*.py`（`--warn`）；流程写进 `WORKFLOW.md` §0 分工表 / §4 结构数据保鲜 / §11 门禁表 / §12 DoD | 已清@实测九百〇八：产物已按真源重生成（121 模块 / 61 API / 73 箭头 / 深度 3，与文档一致）、门禁已上；残留 181 个 neo 次要文件按基线钉住，只减不增 |
 
 **功能取舍**
 
@@ -159,14 +160,15 @@
 
 > 本节是**机器实测**的结构快照（超大文件 / 补丁坟场 / 死代码 / 重复逻辑 / 隐患 / 清理顺序），
 > 取自 NeoForge 树；数字会随源码变化，重跑脚本即可刷新。它不是逐轮台账，改动不必同步它。
+> **当前快照 = 实测九百〇九**（对应 `promaid_src*` revision `8fbb6334`；`debt_report.py` 现在会把 revision 打在第一行）。
 
 ### 0. 先看结论：三条必须动刀的
 
 | # | 问题 | 规模 | 为什么必须动 |
 |---|---|---|---|
-| **1** | **两棵手工镜像源码树** | 390 个同路径文件，其中 **224 个行数已经不一致** | 每个功能写两遍；两树已开始分叉，再拖下去无法再手工同步 |
-| **2** | **`PromaidConfigScreen.java` 单类 6424 行** | 含 543 行 `render()`、468 行 `clickCookGrid()` | 加任何一个设置项都要改这个巨型类；是全部 UI 改动的阻塞点 |
-| **3** | **补丁坟场**：`SelfPreservationBehavior` 4696 行 / `MaidMountCompat` 4746 行 | 两文件共 **327 处** `实测NNN` 历史标记 | 逻辑按「第几轮实测修的」堆叠，读不懂、不敢改、改一处崩三处 |
+| **1** | **两棵手工镜像源码树** | 461 个同路径文件，其中 **253 个行数已经不一致** | 每个功能写两遍；两树已开始分叉，再拖下去无法再手工同步 |
+| **2** | **`PromaidConfigScreen.java` 单类 7661 行** | 含 645 行 `render()`、27 行 `clickCookGrid()` | 加任何一个设置项都要改这个巨型类；是全部 UI 改动的阻塞点 |
+| **3** | **补丁坟场**：`SelfPreservationBehavior` 4804 行 / `MaidMountCompat` 6509 行 | 两文件共 **402 处** `实测NNN` 历史标记 | 逻辑按「第几轮实测修的」堆叠，读不懂、不敢改、改一处崩三处 |
 
 ---
 
@@ -174,23 +176,23 @@
 
 | 行数 | 文件 | 性质 |
 |---|---|---|
-| **6424** | `config/PromaidConfigScreen.java` | 手写立即模式 UI 巨型类 |
-| **4746** | `combat/MaidMountCompat.java` | 兼容模块吞掉了整个功能 |
-| **4696** | `combat/SelfPreservationBehavior.java` | 补丁坟场（164 处实测标记） |
-| **3493** | `combat/MaidFlightCombatBehavior.java` | 空袭主循环（222 处实测标记） |
-| **3172** | `config/MaidSmartConfig.java` | 524 个设置项 + 1850 行 static 初始化块 |
-| 2951 | `task/MaidWoodBehavior.java` | 伐木（自述是挖矿的完整克隆） |
-| 2845 | `task/MaidMineBehavior.java` | 挖矿 |
-| 2571 | `combat/MaidBroomDrive.java` | 扫帚飞行 |
-| 2270 | `combat/RideBindManager.java` | 骑乘绑定语义 |
-| 2139 | `build/BlueprintBookScreen.java` | 6 视图蓝图界面 |
-| 2090 | `follow/MaidChunkLoadManager.java` | 区块票 + 跨维跟随 + 队列 + 可见性 |
-| 1951 | `build/MaidBuildBehavior.java` | 建造执行 |
-| 1946 | `combat/GunnerTetherManager.java` | 武装拴绳（与 RideBindManager 职责重叠） |
-| 1859 | `combat/MaidAidOwnerBehavior.java` | 主人辅助 |
-| 1748 | `combat/MaidFlightKit.java` | 空袭套件 |
+| **7661** | `config/PromaidConfigScreen.java` | 手写立即模式 UI 巨型类 |
+| **6509** | `combat/MaidMountCompat.java` | 兼容模块吞掉了整个功能 |
+| **4804** | `combat/SelfPreservationBehavior.java` | 补丁坟场（178 处实测标记） |
+| **3546** | `config/MaidSmartConfig.java` | 601 个配置项（`check_preset.py` 口径）+ 大段 static 初始化 |
+| **2997** | `combat/MaidFlightCombatBehavior.java` | 空袭主循环（149 处实测标记） |
+| 2863 | `combat/RideBindManager.java` | 骑乘绑定语义 |
+| 2475 | `combat/MaidAidOwnerBehavior.java` | 主人辅助 |
+| 2329 | `task/MaidMineBehavior.java` | 挖矿（与伐木共用基类 `MaidWorkBehavior`） |
+| 2300 | `task/MaidWoodBehavior.java` | 伐木（自述"架构完整克隆挖矿"） |
+| 2257 | `combat/MaidBroomDrive.java` | 扫帚飞行 |
+| 2252 | `build/BlueprintBookScreen.java` | 6 视图蓝图界面 |
+| 2081 | `follow/MaidChunkLoadManager.java` | 区块票 + 跨维跟随 + 队列 + 可见性 |
+| 1970 | `build/MaidBuildBehavior.java` | 建造执行 |
+| 1870 | `combat/MaidSpawnerTorchBehavior.java` | 刷怪笼判定（拆笼 / 放火把） |
+| 1760 | `combat/GunnerTetherManager.java` | 武装拴绳（与 RideBindManager 职责重叠） |
 
-> 这 15 个文件合计约 **45,000 行**，占 NeoForge 树 394 个文件的绝大部分体量。
+> 这 15 个文件合计 **47,674 行**；NeoForge 树 466 个 `.java` 共 156,789 行，其中 >1200 行的有 **21** 个、合计 55,602 行（约 35%）。
 
 ---
 
@@ -200,21 +202,21 @@
 
 | 合计 | 实测标记 | 版本标记 | 文件 |
 |---|---|---|---|
-| 814 | 397 | 417 | `config/MaidSmartConfig.java` |
-| 572 | 247 | 325 | `config/PromaidConfigScreen.java` |
-| 545 | 164 | 381 | `combat/SelfPreservationBehavior.java` |
-| 412 | 98 | 314 | `task/MaidWoodBehavior.java` |
-| 381 | 82 | 299 | `task/MaidMineBehavior.java` |
-| 339 | 222 | 117 | `combat/MaidFlightCombatBehavior.java` |
-| 275 | 29 | 246 | `build/MaidBuildBehavior.java` |
-| 242 | 95 | 147 | `combat/MaidAidOwnerBehavior.java` |
-| 221 | 147 | 74 | `follow/MaidChunkLoadManager.java` |
-| 202 | 16 | 186 | `build/BlueprintBookScreen.java` |
-| 168 | 159 | 9 | `combat/MaidMountCompat.java` |
-| 130 | 116 | 14 | `combat/MaidBroomDrive.java` |
+| 759 | 363 | 396 | `config/MaidSmartConfig.java` |
+| 552 | 253 | 299 | `config/PromaidConfigScreen.java` |
+| 546 | 178 | 368 | `combat/SelfPreservationBehavior.java` |
+| 308 | 94 | 214 | `task/MaidMineBehavior.java` |
+| 300 | 79 | 221 | `task/MaidWoodBehavior.java` |
+| 264 | 121 | 143 | `combat/MaidAidOwnerBehavior.java` |
+| 251 | 29 | 222 | `build/MaidBuildBehavior.java` |
+| 226 | 224 | 2 | `combat/MaidMountCompat.java` |
+| 226 | 149 | 77 | `combat/MaidFlightCombatBehavior.java` |
+| 211 | 22 | 189 | `build/BlueprintBookScreen.java` |
+| 188 | 135 | 53 | `follow/MaidChunkLoadManager.java` |
+| 182 | 75 | 107 | `ProMaidExtension.java` |
 
 **这意味着什么**：注释里保留的是「上一版哪里错了、这一版怎么改的」，而不是「这段代码现在做什么」。
-对维护者来说，要读懂一段逻辑必须先读它的历史 —— 这正是 `MaidMountCompat` 从 500 行长到 4746 行的方式。
+对维护者来说，要读懂一段逻辑必须先读它的历史 —— 这正是 `MaidMountCompat` 从 500 行长到 6509 行的方式。
 
 **建议**：把「为什么改」写进轮次记录（`rounds/RNNN-*.md`），把「现在做什么」留在代码里。这是可以纯做减法的一次清理。
 
@@ -228,19 +230,20 @@
 | `combat/FlightTargetProbe.java` | 自述「一次性排查工具，验证完可删」 | **已删**（零风险一档）|
 | `soul/SoulBindingService.java` | 自述灵魂核心功能已移除，只剩路由兼容 | 待确认是否还有旧存档用户 |
 | `guide/GuideScreen.java` | `VIEW_SETTINGS`/`VIEW_VOICE` 标注 `@Deprecated`「已不可达，保留仅为回滚方便」 | **已删**（零风险一档）|
-| `build/BuiltinHouses.java`（1385 行） | `BlueprintCatalog.BUILT_IN_NAMES` 空块 + 注释「内置预设已全部移除」 | **休眠代码**，只可硬编码 id 触达 |
+| `build/BuiltinHouses.java`（1393 行） | `BlueprintCatalog.BUILT_IN_NAMES` 空块 + 注释「内置预设已全部移除」 | **休眠代码**，只可硬编码 id 触达 |
 | `schedule/ScheduleNetworking.java` | 拆包后留下 10 条空段注释 | **已清**（零风险一档；类本身仍在用，只删注释）|
-| `fishing/PlayerWaterLog.java` | 纯诊断日志助手，住在主源码里 | 可移入 tools |
-| `box/CompressionBoxCheck.java`（702 行） | FakePlayer 自测住在主源码里 | 可移到测试源集 |
-| `task/MaidStrollCheck.java`（337 行） | 仅为一条速度投诉的调试命令服务 | 可移到 tools |
+| `fishing/PlayerWaterLog.java` | 纯诊断日志助手，住在主源码里 | **已做**@实测九百〇一（阶段③）：已移出主源码，两树均无此文件 |
+| `box/CompressionBoxCheck.java` | FakePlayer 自测住在主源码里 | **已做**@实测九百〇一（阶段③）：已移出主源码，两树均无此文件 |
+| `task/MaidStrollCheck.java` | 仅为一条速度投诉的调试命令服务 | **已做**@实测九百〇一（阶段③）：已移出主源码，两树均无此文件 |
 
-**"名字从未被别处引用"的类共 30 个**，其中 26 个是 Mixin（Mixin 由 `mixins.promaid.json` 按名注册，
-不靠 Java 引用，**属于正常，不是死代码**）。真正需要复核的非 Mixin 类只有 4 个：
+**"名字从未被别处引用"的类共 36 个**，其中 31 个是 Mixin（Mixin 由 `mixins.promaid.json` 按名注册，
+不靠 Java 引用，**属于正常，不是死代码**）。真正需要复核的非 Mixin 类只有 5 个：
 
-- `combat/FarmlandGuard.java`（24 行）
-- `combat/PetImmunityGuard.java`（201 行，职责与 `FriendlyFireGuard` 重叠）
-- `CreativeTabHandler.java`（48 行，经事件/注册表生效）
-- `flight/MaidFreeFlightKeysClient.java` / `goety/MaidGoetyKeysClient.java`（客户端按键注册）
+- `combat/FarmlandGuard.java`（33 行）
+- `combat/PetImmunityGuard.java`（203 行，职责与 `FriendlyFireGuard` 重叠）
+- `CreativeTabHandler.java`（52 行，经事件/注册表生效）
+- `flight/MaidFreeFlightKeysClient.java`（91 行，客户端按键注册）
+- `PromaidMixinPlugin.java`（由 jar manifest 按名加载，同 Mixin 属正常，留作记录）
 
 ---
 
@@ -248,17 +251,17 @@
 
 #### 4.1 两树镜像（最大的重复）
 
-- 同路径文件 **390 个**，其中 **224 个行数已经不一致**（Δ 最大 174 行）。
+- 同路径文件 **461 个**，其中 **253 个行数已经不一致**（Δ 最大 127 行）。
 - 不一致不代表功能不同 —— 大多只是注释/换行差异；但 **Δ 越大的文件越危险**，
   因为你无法再从"对照另一棵树"推断当前树是否正确。
 
 | Δ | NeoForge | Forge | 文件 |
 |---|---|---|---|
-| 174 | 1946 | 1772 | `combat/GunnerTetherManager.java` |
-| 141 | 1402 | 1261 | `flight/MaidFreeFlightController.java` |
-| 129 | 2270 | 2399 | `combat/RideBindManager.java` |
-| 91 | 433 | 524 | `combat/MaidSelfPropelledWings.java` |
-| 84 | 770 | 854 | `build/BlueprintBookNetworking.java` |
+| 127 | 1760 | 1633 | `combat/GunnerTetherManager.java` |
+| 104 | 1345 | 1241 | `flight/MaidFreeFlightController.java` |
+| 82 | 823 | 905 | `build/BlueprintBookNetworking.java` |
+| 70 | 1095 | 1165 | `guide/GuideChaptersCombat.java` |
+| 59 | 2863 | 2922 | `combat/RideBindManager.java` |
 
 **根因**：没有共享源集的机制。两树用不同的映射名（SRG vs Mojmap），但这**不能**用"注解处理器/模板"简单解决。
 **建议方向**（按成本从低到高）：
@@ -271,13 +274,13 @@
 
 | 重复 | 证据 |
 |---|---|
-| `MaidWoodBehavior` ≈ `MaidMineBehavior` | 自述「完整克隆挖矿」；两文件合计 **5796 行** |
-| `GunnerTetherManager` ≈ `RideBindManager` | 都在做绑定链/座位偏移/换座/清理；合计 **4216 行** |
+| `MaidWoodBehavior` ≈ `MaidMineBehavior` | 自述「架构完整克隆挖矿」；两文件合计 **4629 行**（2300 + 2329），另有 ④ 上提出来的共用基类 `MaidWorkBehavior` 685 行 |
+| `GunnerTetherManager` ≈ `RideBindManager` | 都在做绑定链/座位偏移/换座/清理；合计 **4623 行** |
 | `MaidFlightRecall` ≈ `MaidBroomRecall` | 同构的"半径 N 格找不到主人就回传" |
 | `MaidSeatNetworking` ≈ `GunnerTetherNetworking` | 两份几乎同构的 S2C 单包骨架 |
 | `BlueprintMaterials` 内 5+ 个近同构变体 | 缺口/玩家缺口/合并持有/计数/计数玩家 |
-| `SchedulePacketsPlan` ≈ `SchedulePacketsMaid` | 共享同一段 21 行 import 头，编解码逐字复制 |
-| `BlueprintBookBuildPackets`（919）+ `EntityPackets`（735） | ~25 个包类塞在两个 god-file，各自重复 `type()` 样板 |
+| `SchedulePacketsPlan` ≈ `SchedulePacketsMaid` | 共享同一段 23 行 import 头，编解码逐字复制 |
+| `BlueprintBookBuildPackets`（984）+ `EntityPackets`（818） | ~25 个包类塞在两个 god-file，各自重复 `type()` 样板 |
 | `PromaidConfigScreen` 内 5 组列表+条目对 | BuildBlack/Alt/Cook/Water/Food/Minable 各写一遍增删改重建 |
 | 各兼容层 | `GunCompat`/`MaidSpellCompat`/`SlashBladeCompat`/`TwilightFanKit`/`CuriosElytraCompat` 各自重写「反射失败→兜底」 |
 
@@ -287,7 +290,7 @@
 外加一个 12 项「默认值修复」批次（专门用来撤销一次改错的默认值），
 以及同一个键**连续两次迁移**（扫帚爬升 10 → 15 → 12，各带一个一次性布尔标记）。
 
-这 22 个 `*_MIGRATED` 标记**被当成用户可见设置留在了配置里**。
+这 10 个 `*_MIGRATED` 标记**被当成用户可见设置留在了配置里**（实测九百〇八；旧记 22 个，阶段③ 已清掉一批）。
 **建议**：迁移代码本身可以留（旧存档要能用），但标记不该暴露给用户 —— 应移出 `ModConfigSpec`。
 
 ---
@@ -296,12 +299,12 @@
 
 | 隐患 | 说明 |
 |---|---|
-| **`ProMaidExtension` 单点装配** | 779 行、几十条注册；任何新功能都要碰它 → 改动冲突高发 |
-| **大量静态可变状态** | `SelfPreservationBehavior` 的 `LAST_ATTACKERS`/`SUFFOCATE_DAMAGE`/`COMBAT_PLACED`、`MaidBuildBehavior` 约 15 个静态 Map、`MaidFreeFlightController` 的 STATE/YAW/RETREAT …… 全靠手工 `forget`/`clearAll`，**漏一处就泄漏**（注释里多次记录过因此崩服） |
-| **`BombPose` 被 11 个不相关子系统引用** | 隐藏的全局耦合点：改动它要审 11 个调用方 |
+| **`ProMaidExtension` 单点装配** | 1088 行、几十条注册；任何新功能都要碰它 → 改动冲突高发 |
+| **大量静态可变状态** | `SelfPreservationBehavior` 的 `LAST_ATTACKERS`/`SUFFOCATE_DAMAGE`（跨 tick 账本）、`MaidWorkBehavior`（④ 上提后）的按女仆状态表、`MaidFreeFlightController` 的 STATE/YAW/RETREAT …… 全靠手工 `forget`/`clearAll`，**漏一处就泄漏**（注释里多次记录过因此崩服） |
+| **`BombPose` 被 19 个别的文件引用** | 隐藏的全局耦合点：改动它要审 19 个调用方 |
 | **命令树无中央注册表** | 5 个类各自注册 `/maid_smart` 同一个字面量 |
 | **`GuideContent.CFG_LINK_RULES` 靠中文标题字符串匹配** | 手册跳转与配置面板的**行标题**强耦合，改一个标题就断链，且无编译期保护 |
-| **`BlueprintLib` 半成品拆分** | 73 个一行转发 + 14 个类带同一段用不上的 import；拆分只做了一半 |
+| **`BlueprintLib` 半成品拆分** | 80 个一行转发（占全部 94 个方法）+ 若干类带同一段用不上的 import；拆分只做了一半 |
 | **`MaidChunkLoadManager`** | 票据/跨维跟随/召唤队列/可见性四件事仍在一个类里 |
 
 ---
@@ -312,8 +315,8 @@
 |---|---|---|---|
 | **① 零风险** ✅已完成 | 删自述「可删」的 `MaidProbe`、`FlightTargetProbe`；`GuideScreen` 死视图；`ScheduleNetworking` 空段注释 | 极低（有编译校验） | GuideScreen 541→532 / 531→522 行；两树 javac 0 error；两 jar mixin 自检 186 PASS |
 | **② 低风险** | 把注释里的「历史/为什么」搬进轮次记录，代码只留「现在做什么」 | 低（纯注释） | 大幅降低阅读成本 |
-| **③ 中风险** | `*_MIGRATED` 移出用户配置；诊断类（`PlayerWaterLog`、`CompressionBoxCheck`、`MaidStrollCheck`）移出主源码 | 中 | 配置表干净、主源码只留产品代码 |
-| **④ 中风险** | 抽 `MaidWorkBehavior` 基类，让挖矿/伐木共用扫描-接近-连锁-回收 | 中（有编译+回环测试） | 砍掉约 2500 行重复 |
+| **③ 中风险**（诊断类已落刀；`*_MIGRATED` 还剩 10 个） | `*_MIGRATED` 移出用户配置；诊断类（`PlayerWaterLog`、`CompressionBoxCheck`、`MaidStrollCheck`）移出主源码 | 中 | 配置表干净、主源码只留产品代码 |
+| **④ 中风险**（可编译校验子集已落刀，见 §6.1） | 抽 `MaidWorkBehavior` 基类，让挖矿/伐木共用扫描-接近-连锁-回收 | 中（有编译+回环测试） | 砍掉约 2500 行重复 |
 | **⑤ 高风险** | 拆 `PromaidConfigScreen`（按 Section 拆成独立面板类） | 高（需实机验收 UI） | 解除 UI 改动阻塞 |
 | **⑥ 最高** | 两树共享源目录（先纯逻辑，后映射层） | 最高 | 一次改动只写一遍 |
 
@@ -324,7 +327,7 @@
 #### 6.1 ④⑤⑥ 实施蓝本（2026-10-12 测绘）
 
 **④ 抽 `MaidWorkBehavior` 基类（挖矿/伐木）**
-- 测绘确认：`task/MaidMineBehavior`(2952) 与 `task/MaidWoodBehavior`(2921) 是**系统性克隆**——公开/私有方法集一一对应，绝大多数只是 Ore↔Wood 词根替换。
+- 测绘确认：`task/MaidMineBehavior`(2329) 与 `task/MaidWoodBehavior`(2300) 是**系统性克隆**——公开/私有方法集一一对应，绝大多数只是 Ore↔Wood 词根替换。
 - 参数化点（子类差异）：`isOre/isWood`(+`isWoodState`) 判据；`OreCache/WoodCache` + `OreScanState/WoodScanState` 内部类；`load/ensure/reload{Builtin}`；`findOre/findWood`、`pickFromCache`；伐木独有的 `clearTreeTop`/`burstNearbyLeaves`/`isSaplingItem`/`firstWoodAbove`/`walkTargetFor`；提示文案 `hintNoPickaxe/hintNoAxe`；`requiredTool`/`canHarvest` 的物品集；配置键前缀（`mining.*` vs `wood.*`）。
 - 做法：抽 `abstract class MaidWorkBehavior extends Behavior<EntityMaid>`，把**无任务特异依赖**的成员上提 `protected`。**两树各做一份**（映射名不同，不能跨树共享源码）。
   - **已落刀（2026-10-12，两批共 62 个成员）**：只上提两文件**代码逐字相同**（注释差异不算）的成员，两树各一份（映射名不同，不跨树共享源码）。用「去注释/字符串后按花括号配对的精确解析器」逐成员比对，并用「引用了仍留在子类的成员 ⇒ 不可上提」做依赖封堵。
@@ -335,13 +338,13 @@
   - **不可上提（真差异，需任务特异参数化）**：`reachSq`（`MINE_REACH` vs `WOOD_REACH`）、`PLACED_TRACKER`（`MINE_PLACED_LIFETIME` vs `WOOD_PLACED_LIFETIME`）、`approachSpeed`（`MINE_MOVE_SPEED` vs `WOOD_MOVE_SPEED`），连带引用它们的 `trackPlaced`/`clearAll`/`walkToStep`。再往下的驱动逻辑两树**行数/写法均有差异**（非逐字克隆，含任务特异分支），需逐方法人工核对语义。
 - 门槛：DEBT 标注**中风险、需回环测试**。已落刀的 62 个成员是可编译校验的行为透明子集；**剩余驱动逻辑合并需开发者「部署」开闸**做实机挖矿/伐木回归。
 
-**⑤ 拆 `PromaidConfigScreen`（7659 行）**
+**⑤ 拆 `PromaidConfigScreen`（7661 行）**
 - 现状：单类含 首页 / 大类页 / 参数页 + 5 组「列表 + 条目」对（BuildBlack/Alt/Cook/Water/Food/Minable 各写一遍增删改重建）+ `client/MaidConfigRowLayout` 辅助。
 - 做法：按 Section 拆成独立面板类（每 Section 一个 `*Section`，共用基类/接口），`PromaidConfigScreen` 只做装配与分页。
 - 门槛：DEBT 标注**高风险、需实机 UI 验收**——拆完必须实机点一遍每个 Section（行高 44 / 翻页 / 手册跳转 / 控件状态）。**本轮仅测绘，未动刀。**
 
 **⑥ 两树共享源目录**
-- 第一步（**已做**）：`tools/verify/check_tree_mirror.py`（只读审计，不设门槛）。现状（④ 两批落刀后复测）：同路径 `.java` **460** 个，逐字节相同 **47** / 有差异 413（行数一致 160、行数不同 253——多为注释里的映射名引用，合法；行数差 Top 见脚本输出，最大 `GunnerTetherManager` Δ127）。
+- 第一步（**已做**）：`tools/verify/check_tree_mirror.py`（只读审计，不设门槛）。现状（④ 两批落刀后复测）：同路径 `.java` **461** 个，逐字节相同 **47** / 有差异 414（行数一致 161、行数不同 253——多为注释里的映射名引用，合法；行数差 Top 见脚本输出，最大 `GunnerTetherManager` Δ127）。
 - 第二步（未做）：把**纯逻辑、无映射依赖**的文件移入共享源目录（如 `src_shared/`），两侧 `build.gradle` 的 `srcDir` 与 `tools/build/gen_compile*.py` 一并 include。候选先取「逐字节相同」那 47 个（先逐个确认真无映射依赖；已知 `memory/AiMemorySkipList`、`tool/NaturalBlocks`、`tool/StateTables` 相同，而 `build/BlueprintStepMath` 因注释映射名而 DIFF）。**需 gradle 构建验证，本轮未动。**
 
 > ④ 的**可编译校验子集**（62 个逐字相同成员）已落刀（编译 + 护栏 + 镜像可验，见上）；⑤⑥ 仍停在**测绘**：两者都要求实机 UI / 真构建验证，而仓库规矩是「回归只在开发者开闸（『部署』）时跑」——故不在无人验收的情形下盲改。蓝本给出下一步的机械执行清单。

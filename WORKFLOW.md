@@ -35,6 +35,7 @@
 | `GIT_SYNC.md` | 同步到两个 git 镜像仓库的方向与步骤 |
 | `DEBT.md` | **唯一债务台账**：行为 bug 债（BD-*）+ 结构债（TD-*）+ 机器结构快照 §3；每轮更新（§8）。原 BUG_DEBT / TECH_DEBT / ARCHITECTURE-DEBT 已并入 |
 | `ARCHITECTURE-SWITCHES.md` | **自动生成**的配置项清单（按节 + 按主题），改行为前先查它（§3 前置四问③） |
+| `ARCHITECTURE.md` + `normify-promaid/` | **结构数据**：模块树 / API / 依赖箭头 / 交互图。产物由 `tools/arch/build_arch.py` 从 `tools/arch/arch_modules.py`（唯一真源）生成——**手改产物无效**（下一轮生成即抹掉）；`ARCHITECTURE.md` 是它的入口文档，里面的统计行由 `check_arch.py` 核对（§11） |
 | `DEDICATED_SERVER_NOTES.md` | 专服兼容根因与回归口径 |
 | `rounds/` | 每一轮的记录（§9 模板）+ 发布哈希登记 `rounds/RELEASES.tsv`（§5） |
 
@@ -188,6 +189,14 @@
 
 > 第 8~10 步的前提是明确说了「部署」；没说就只到第 7 步，并在汇报里写明"未部署、未回归"。
 > **第 8 步之后一律先停**：把包交出去、等验收——这是硬规定，不许"顺手把回归也跑了"。
+
+> **结构数据保鲜（第 7 步的分支）**：本轮若动了源码的**结构**——新增 / 改名 / 移动文件、**新开一个包**——
+> 第 7 步一并跑 `python tools/arch/build_arch.py`（重生成 `normify-promaid/` + `normify.html`），
+> 并回到 `ARCHITECTURE.md` 更新「修订 / 规模」两行与 §2 模块域表。
+> 数据只从 `tools/arch/arch_modules.py` 来：**新增包忘了登记 → 交互图上就是缺的**，
+> 且 `tools/verify/check_arch.py` 会在打包时把"整包零覆盖"顶出来（§11）。
+> 只改行为、不改结构（改方法体 / 文案 / 配置默认值）→ 不必重跑：结构数据的 `revision` 只跟
+> `promaid_src*` 的最后一次提交，重跑产物一个字节都不会变。
 
 ### 4.1 验收门（谁说了算）
 
@@ -409,20 +418,26 @@ scope 用受影响模块（combat / config / guide / build / task / schedule / f
 
 | 脚本 | 强制哪条门禁 | 当前 |
 |---|---|---|
-| `tools/verify/check_workflow.py` | §5 版本纪律与哈希登记、§9 轮次记录（**§1 排班** / §9 验证 / **§4.1 验收** / §9 边界）、§8 台账配额 | 见运行输出 |
-| `tools/verify/check_preset.py` | 预设分类表与配置项一致（DIY/默认不出错） | FAIL 0 / WARN 2 |
-| `tools/verify/check_comment_style.py` | 注释禁引语/禁超长块 | 931 文件 · 2,260 处（存量） |
+| `tools/verify/check_workflow.py` | §5 版本纪律与哈希登记、§9 轮次记录（**§1 排班** / §9 验证 / **§4.1 验收** / §9 边界）、§8 台账配额 | FAIL 0 / WARN 3（3 条均为发布登记/历史归档，见运行输出） |
+| `tools/verify/check_preset.py` | 预设分类表与配置项一致（DIY/默认不出错） | FAIL 0 / WARN 0（配置项 597 / 601；DIY 关闭 175 / 179） |
+| `tools/verify/check_panel_coverage.py` | 配置项在面板里被收录（棘轮：未收录项只减不增） | FAIL 0 / WARN 0（Forge 609/531/68、Neo 615/540/65） |
+| `tools/verify/check_comment_style.py` | 注释禁引语/禁超长块 | PASS（929 文件 · 0 处） |
 | `tools/verify/check_catch_swallow.py` | §2.4 禁静默吞异常（棘轮：未留痕吞异常只减不增，见 TD-14/TD-18） | FAIL 0 / WARN 0（0 / 0） |
 | `tools/verify/check_i18n_keys.py` | §6 配置项 key 都要有译文（棘轮：有 key 无译文只减不增，见 TD-07） | FAIL 0 / WARN 0（0 / 0） |
 | `tools/verify/check_dev_voice.py` | §6 可见文案禁开发过程/第一人称复数口吻（棘轮：`test/实测` 轮次号 + `we/our/us` 只减不增，见 TD-03） | FAIL 0 / WARN 0（0 / 0） |
 | `tools/verify/check_comment_dup.py` | §6 禁止把同一条 `.comment()` 注释复制到多处（棘轮：非白名单重复组只减不增，见 TD-02） | FAIL 0 / WARN 0（4 组，全白名单） |
 | `tools/verify/check_reflection.py` | §2.5 探针式反射棘轮：`Class.forName`/`getMethod`/`getDeclaredMethod`/`getDeclaredField` 处数只减不增（见 TD-15） | FAIL 0 / WARN 0 |
+| `tools/verify/check_arch.py` | §4 结构数据保鲜：① 产物必须**逐字节等于**真源重新生成的结果（手改产物 / 改了真源没重跑，都会 FAIL）；② 覆盖棘轮：不被任何模块 `source` 覆盖的 `.java` 只减不增（**整包不登记**会顶出来）；③④ 陈旧与 `ARCHITECTURE.md` 统计漂移（WARN） | FAIL 0 / WARN 0（neo 181 / forge 0） |
+| `tools/verify/check_tree_mirror.py` | §6.1⑥ / TD-05 两树镜像保真度（只读审计，**不设门槛**） | 同路径 461 / 逐字节相同 47 / 有差异 414 |
+| `tools/build/check_deps.py` | TD-13 编译依赖钉哈希（离线核对，未接出包链路） | FAIL 0 / WARN 0（Forge 40 / Neo 57 一致） |
 | `tools/verify/verify_jar_classes.py` | 打包含全（mixin/注入/class） | 出包时 |
 | `tools/verify/gen_switch_inventory.py` | §3.1 ③配置清单不过期 | 生成 `ARCHITECTURE-SWITCHES.md` |
 | `tools/arch/debt_report.py` | 结构债机器证据 | 刷新 `DEBT.md` §3 |
 
-全部以 `--warn` 形式接进两个 `build_promaid*.py`（历史存量未清零，先告警不阻断）；
+上表中的 `check_*` 一族全部以 `--warn` 形式接进两个 `build_promaid*.py`（历史存量未清零，先告警不阻断）；
 存量清零后去掉 `--warn` 即改为**阻断出包**。
+`verify_jar_classes.py` 是出包时的**硬阻断**（`FATAL`）；`check_tree_mirror.py` / `check_panel_coverage.py` /
+`tools/build/check_deps.py` 未接进出包链路，按需手动跑（前两者是只读审计，后者是离线核对）。
 
 ---
 
@@ -436,5 +451,7 @@ scope 用受影响模块（combat / config / guide / build / task / schedule / f
 - [ ] 台账已更新；BUGFIX 轮按 §8 决定记债或清债
 - [ ] 版本号按 §5（该升就升——本轮升了 1.3.1 并把清单 §5.5 走完）
 - [ ] jar 自检 OK + 全部护栏无**新增**违规
+- [ ] 动了源码**结构**（新增 / 改名 / 移动文件、新开包）的话：已重跑 `tools/arch/build_arch.py`，
+      `ARCHITECTURE.md` 统计行与域表已同步，`check_arch.py` 无 FAIL（§4 结构数据保鲜）
 - [ ] **部署后停下等验收**；未验收不写版本更新内容、不发版；回归**只在开发者开闸后**跑
 - [ ] 临时脚本已删；没有 commit / push
