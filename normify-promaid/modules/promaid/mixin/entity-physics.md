@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/EntitySetDeltaMovementMixin.java, line: 1, end_line: 41}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidBaubleTotemMixin.java, line: 1, end_line: 266}
   - {path: promaid_src_neo/com/maidsmart/mixin/ExplosionWindGuardMixin.java, line: 1, end_line: 89}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 1cd1f31566c3c2cb2901aa91bafb8e395a63fd1cd29a337894ea9f7a1cb4f5d9
 state: active

@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidFlightCombatBehavior.java, line: 1, end_line: 3493}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidFlightKit.java, line: 1, end_line: 1748}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidFlightRangedTask.java, line: 1, end_line: 707}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 424dce7a0820ee4d447eecfff2779aa540e1fd1ca637c5f02d41164b600b0b29
 state: active

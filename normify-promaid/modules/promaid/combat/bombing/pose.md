@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/BombPose.java, line: 1, end_line: 366}
   - {path: promaid_src_neo/com/maidsmart/combat/FlightFireworkPose.java, line: 1, end_line: 193}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: fa6f7534dd7645cfbfd56518c5e0c55569caff012ba948eb9a304d6b710db8e7
 state: active

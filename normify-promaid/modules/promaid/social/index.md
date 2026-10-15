@@ -11,7 +11,7 @@ description:
       voice, ported from maidsoulcore and Sphantosis.
 source:
   - {path: promaid_src_neo/com/maidsmart/memory, line: 1}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: db3c38748350220c26256d1e19698e7dd1c47652e7c7c39aaed5cc9cda423aa6
 state: active

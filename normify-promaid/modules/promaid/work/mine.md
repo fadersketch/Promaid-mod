@@ -16,7 +16,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidMineBehavior.java, line: 1, end_line: 2334}
   - {path: promaid_src_neo/com/maidsmart/task/MaidMineTask.java, line: 1, end_line: 73}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 24c7621ec70dcea4955b19e92d258b90250123b87aaf8a0022f3d9bc51498d7b
 state: active

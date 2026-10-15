@@ -16,7 +16,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/follow/HomePatrolHandler.java, line: 1, end_line: 116}
   - {path: promaid_src_neo/com/maidsmart/follow/HomeWorkMovementDriver.java, line: 1, end_line: 147}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: dd62f62644b4a821d86b8763e2bab1770f84a44bbad5c0ec5f3ae67fe47397b9
 state: active

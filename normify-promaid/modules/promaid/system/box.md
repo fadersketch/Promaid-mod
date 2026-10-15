@@ -18,7 +18,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/box/CompressionBoxService.java, line: 1, end_line: 544}
   - {path: promaid_src_neo/com/maidsmart/box/CompressionBoxData.java, line: 1, end_line: 339}
   - {path: promaid_src_neo/com/maidsmart/box/CompressionBoxMaidInv.java, line: 1, end_line: 315}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 3e545f6bb86aa9b331e1db81bd03d5310bceded46c9a2498fa94dda6663b0e7f
 state: active

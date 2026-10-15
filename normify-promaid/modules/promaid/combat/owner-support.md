@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidAidOwnerBehavior.java, line: 1, end_line: 1859}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidSpawnerTorchBehavior.java, line: 1, end_line: 650}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidShieldShareBehavior.java, line: 1, end_line: 146}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: b950a179257c83c9217c79b89e11195ed21dba8d44a48d780bc869282b697476
 state: active

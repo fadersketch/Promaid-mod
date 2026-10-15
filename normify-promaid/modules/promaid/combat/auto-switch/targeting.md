@@ -12,7 +12,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/AutoCombatTargeting.java, line: 1, end_line: 488}
   - {path: promaid_src_neo/com/maidsmart/combat/CombatWorkRange.java, line: 1, end_line: 184}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 9a1d903c1f9bda8a4178ed3266e8efeee51e5b913be19e4c4067fae8d2497d38
 state: active

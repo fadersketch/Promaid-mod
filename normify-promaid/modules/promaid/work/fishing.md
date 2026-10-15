@@ -12,7 +12,7 @@ description:
       onto; stale cushions are swept each second and drop nothing when destroyed.
 source:
   - {path: promaid_src_neo/com/maidsmart/fishing/FishingChairService.java, line: 1, end_line: 536}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: c788eca23fa3ddef456041d7e368e3dbaffa3fbd65f1f02b6c43051551de8714
 state: active

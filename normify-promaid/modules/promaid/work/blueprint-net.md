@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintBookBuildPackets.java, line: 1, end_line: 984}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintBookEntityPackets.java, line: 1, end_line: 818}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintBookNetworking.java, line: 1, end_line: 770}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: b621c1a1042a7919c975bf81cd1626ea02856601873b97f56bfd29f115b2df83
 state: active

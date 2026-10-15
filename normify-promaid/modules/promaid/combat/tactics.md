@@ -12,7 +12,7 @@ description:
       coordination.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidCombatTacticsBehavior.java, line: 1, end_line: 952}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f3376bca39cff972c2b101a18f510a2441e57b57d1923dde439c348a285c141a
 state: active

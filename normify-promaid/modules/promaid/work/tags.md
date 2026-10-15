@@ -13,7 +13,7 @@ description:
       important integration contract in the package.
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidWorkTags.java, line: 1, end_line: 195}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 6b6780f176b28acc9049a941e617e49767d87142327cf1d54d075129544bdde5
 state: active

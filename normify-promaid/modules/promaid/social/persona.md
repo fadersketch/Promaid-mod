@@ -12,7 +12,7 @@ description:
       templates are generated from jar resources on first launch.
 source:
   - {path: promaid_src_neo/com/maidsmart/persona/PersonaPackage.java, line: 1, end_line: 344}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 4e2d6a98443c14882b645c018167999ebbcbc4ee8d887314c1bcbc85a06a8369
 state: active

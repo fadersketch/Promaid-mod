@@ -11,7 +11,7 @@ description:
       selection, so she does not wander during custom tasks. Called from 37 sites.
 source:
   - {path: promaid_src_neo/com/maidsmart/follow/WorkAreaClamp.java, line: 1, end_line: 162}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: cc2d5a67968718bfffe59fbcafbffd52bc2c4e4895bf96e215db7265d89c7acb
 state: active

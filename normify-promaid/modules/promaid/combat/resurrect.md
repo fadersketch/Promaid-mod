@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidAutoResurrect.java, line: 1, end_line: 591}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidSoulSpellGuard.java, line: 1, end_line: 361}
   - {path: promaid_src_neo/com/maidsmart/combat/CooldownHudTracker.java, line: 1, end_line: 157}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 2e010eb6cde0196fd16885e710cb87eff10ab7f41918f4843f2d4bea9051d466
 state: active

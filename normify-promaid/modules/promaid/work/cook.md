@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidCookBehavior.java, line: 1, end_line: 1311}
   - {path: promaid_src_neo/com/maidsmart/task/MaidCookTask.java, line: 1, end_line: 64}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 7edd70e61559ef95927bcdd27e46b260421b3ca20c6df1fb7cb1574b635f4f8b
 state: active

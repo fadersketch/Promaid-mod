@@ -14,7 +14,7 @@ description:
       import block.
 source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintLib.java, line: 1, end_line: 570}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 2f2e71a477c3862d9d9a1864f57020bcd1826a277df280d88d0d750ce1170916
 state: active

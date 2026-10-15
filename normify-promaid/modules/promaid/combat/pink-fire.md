@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/PinkFireBlock.java, line: 1, end_line: 436}
   - {path: promaid_src_neo/com/maidsmart/combat/PinkFireSweep.java, line: 1, end_line: 231}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: a775e25341ced9fc6613051d29db936506a9401dee5e2c86ec9fc2cfd0b27c41
 state: active

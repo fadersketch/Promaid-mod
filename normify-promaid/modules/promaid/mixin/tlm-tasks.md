@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidFollowOwnerTickMixin.java, line: 1, end_line: 88}
   - {path: promaid_src_neo/com/maidsmart/mixin/FarmSweepMixin.java, line: 1, end_line: 285}
   - {path: promaid_src_neo/com/maidsmart/mixin/NativeTaskSmoothMixin.java, line: 1, end_line: 132}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: d59f6d2c64375e83365e60498cf7e27910bf2c58d6661e5435fb2e367783d30a
 state: active

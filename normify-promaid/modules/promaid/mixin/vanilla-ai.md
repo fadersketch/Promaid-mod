@@ -13,7 +13,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/BehaviorOwnerlessGateMixin.java, line: 1, end_line: 74}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidMoveSuppressMixin.java, line: 1, end_line: 89}
   - {path: promaid_src_neo/com/maidsmart/mixin/MoveToTargetSinkDurationMixin.java, line: 1, end_line: 29}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 5420f47e0d63e2f58e505987296a4f3949ea694e77117520101f4f551be69986
 state: active

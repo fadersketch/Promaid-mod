@@ -30,8 +30,9 @@
 | Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `main`（当前线） | v1.2.4 |
 | Heartfelt-connection | `C:\Users\Sketch\.zcode\workspace\default\heartfelt-mod` | `main` | v1.0.2 |
 
-- `promaid-mod` 另有分支 `experimental/memory-port`，**停在 v1.1.0、不含 `promaid_src_neo`**，
-  与 `main` 已分叉（不可快进）。它不是当前部署线——要发布就用 `main`。
+- `promaid-mod` 的 `experimental/memory-port` 分支已随 PR #39 合入 `main` 并于 2026-10-16 删除
+  （远端分支同步删除；它的全部提交都已在 `main` 历史里，`f2e5bfe3` 之后无独有内容）。
+  历史线只有 `main` 一条——要发布就用 `main`。
 - `origin/HEAD` 指向 `origin/main`。
 
 ## 同步流程：改完之后

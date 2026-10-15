@@ -19,7 +19,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/BuildPlan.java, line: 1, end_line: 1045}
   - {path: promaid_src_neo/com/maidsmart/build/BuildArchive.java, line: 1, end_line: 176}
   - {path: promaid_src_neo/com/maidsmart/mixin/FluidFreezeMixin.java, line: 1, end_line: 44}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: be0dbc96d4b3aef83fb009cec78e938a86bd3fc3483dbf74622fe149483d9499
 state: active

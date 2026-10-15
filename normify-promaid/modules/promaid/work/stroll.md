@@ -12,7 +12,7 @@ description:
       work/combat/restriction bounds.
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidStrollBehavior.java, line: 1, end_line: 234}
-revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
+revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f4d2933c4f5c4bc124c9e0685d690c28c59675622134cf0e6a165fb595d4316e
 state: active
