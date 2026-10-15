@@ -22,7 +22,8 @@ public final class FarmlandGuard {
     @SubscribeEvent
     public static void onFarmlandTrample(BlockEvent.FarmlandTrampleEvent event) {
         try {
-            if (com.maidsmart.config.MaidSmartConfig.MISC_FARMLAND_GUARD.get()
+            if (com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FARM.get()
+                    && com.maidsmart.config.MaidSmartConfig.MISC_FARMLAND_GUARD.get()
                     && event.getEntity() instanceof EntityMaid maid
                     && com.maidsmart.tool.MaidScope.owned(maid)) {
                 event.setCanceled(true); // v1.2.2 实测六百：无主女仆照原版踩踏农田

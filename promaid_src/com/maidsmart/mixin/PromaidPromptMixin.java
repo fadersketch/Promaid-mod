@@ -19,19 +19,21 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
  * 对话、LLMMessage 类被加载即抛 InvalidInjectionException 崩服（mixin 配置
  * required:true + defaultRequire:1，任何注入失败都致命）。改为 @ModifyVariable
  * (argsOnly=true) 在方法开头改写 String 参数——按类型匹配参数，与 jar 字节码
- * 具体内容无关，对原版/SMART 都稳健。
+ * 具体内容无关，对原版/SMART 都稳健。两个注入段各自带 MARKER，幂等且互不干扰。
  */
 @Mixin(LLMMessage.class)
 public abstract class PromaidPromptMixin {
 
     @ModifyVariable(method = "systemChat", at = @At("HEAD"), argsOnly = true)
     private static String promaid$appendWorkPosture(String setting) {
-        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_PROMPT_SITTING_WORK.get()) {
-            return setting; // v1.3.2 实测八百五十九：关 = 回原版（不追加这段）
+        String out = setting;
+        if (com.maidsmart.config.MaidSmartConfig.DIALOGUE_PROMPT_SITTING_WORK.get()
+                && !out.contains(PromaidPromptAppender.MARKER)) {
+            out = out + "\n\n" + PromaidPromptAppender.build();
         }
-        if (setting.contains(PromaidPromptAppender.MARKER)) {
-            return setting; // 幂等：已注入不重复
+        if (!out.contains(com.maidsmart.dialogue.OutputLanguage.MARKER)) {
+            out = out + "\n" + com.maidsmart.dialogue.OutputLanguage.directive();
         }
-        return setting + "\n\n" + PromaidPromptAppender.build();
+        return out;
     }
 }

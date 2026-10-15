@@ -17,7 +17,7 @@ description:
       coveredCenters so the ram reuses the very same footprint.
 source:
   - {path: promaid_src_neo/com/maidsmart/accessory/DaYunBreaker.java, line: 1, end_line: 326}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f9fa82fb48a9d28a747859904a85a6a00cd67f9976614fadef5c00ececd0e413
 state: active

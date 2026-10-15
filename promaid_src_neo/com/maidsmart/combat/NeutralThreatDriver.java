@@ -81,6 +81,7 @@ if (++this.throttle < 10) {
                 // 实测八百三十九：只收女仆的来源改 MaidRoster（按 20 tick 复用）；零女仆时零成本
                 for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(server, level)) {
                     try {
+                        CombatStallProbe.sweep(maid); // 滞留探针（诊断）：闸门没咬、也没目标时的"该跟却没跟"
                         drive(level, maid);
                     } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
                     }
@@ -105,6 +106,13 @@ if (++this.throttle < 10) {
         }
         // 排班中：不写目标、不打、不触发参战（任务全由日程表管理）
         if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+            return;
+        }
+        // 实测九百九十二【第三方玩法模式让位】：傀儡师 / 拔刀剑模式 / 战斗模式下本驱动
+        // 整个让位——不喂目标、不挥砍、不导航，只顺手收回我们喂过的目标
+        //（索敌/攻击由那个模组自己的链接管，口径见 MaidModeCompat ②）。
+        if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+            retractOurTarget(maid);
             return;
         }
         LivingEntity owner = maid.getOwner();
@@ -262,6 +270,9 @@ if (++this.throttle < 10) {
      * 不出手"的那条路径复用（隔墙继续走近找视线，而不是原地罚站）。
      */
     private static void navigateTo(EntityMaid maid, Mob threat) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TAKE_OVER_MOVEMENT.get()) {
+            return; // 实测九百九十三【接管走位·关】：本驱动不参与走位（喂目标与原地补刀照常，走位归 TLM）
+        }
         if (com.maidsmart.combat.MaidCombatTacticsBehavior.isActive(maid)) {
             return;
         }
@@ -511,5 +522,24 @@ if (++this.throttle < 10) {
     /** 实测三百四十四：查询本驱动为该女仆登记的目标（还原扫描/诊断用） */
     public static java.util.UUID assignedTargetOf(EntityMaid maid) {
         return ASSIGNED_TARGETS.get(maid.getUUID());
+    }
+
+    /**
+     * 本驱动登记的目标**此刻就是她脑里那个活着的目标**吗——"我们正喂着她"。
+     * 与 {@link #assignedTargetOf} 的区别：那个只看登记表（目标可能已经死了/被 TLM 清掉，
+     * 登记表却还留着旧值）；这里多验一道"还在她脑里且活着"。
+     */
+    public static boolean drivingFedTarget(EntityMaid maid) {
+        try {
+            java.util.UUID t = assignedTargetOf(maid);
+            if (t == null) {
+                return false;
+            }
+            LivingEntity cur = maid.getBrain()
+                    .getMemory(MemoryModuleType.ATTACK_TARGET).orElse(null);
+            return cur != null && cur.isAlive() && t.equals(cur.getUUID());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("NeutralThreatDriver", ignored);
+            return false;
+        }
     }
 }

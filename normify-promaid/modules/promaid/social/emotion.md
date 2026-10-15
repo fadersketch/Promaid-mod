@@ -15,7 +15,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/emotion/EmotionNetworking.java, line: 1, end_line: 231}
   - {path: promaid_src_neo/com/maidsmart/emotion/EmotionPoseState.java, line: 1, end_line: 53}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 9565fd16bcaa51506dccbcf952216ec46b70adf1764ab8eef982cd0e5c1843cf
 state: active

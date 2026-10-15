@@ -116,11 +116,16 @@ public final class FriendlyFireGuard {
                         maid.m_6274_().m_21936_(MemoryModuleType.f_26372_);
                         cleared = true;
                     }
-                    if (isFriendly(maid, maid.m_5448_())) {
+                    // 空目标时 isFriendly 恒 true（"空"在伤害闸那边算友方），所以这两处必须先看非空：
+                    // 否则每个当前没目标的女仆每 2 秒都被记一次"清仇恨"，日志里全是假的 clear
+                    //（实测九百八十六：排查滞留时被这条噪音反复干扰）。
+                    LivingEntity gt = maid.m_5448_();
+                    if (gt != null && isFriendly(maid, gt)) {
                         maid.m_6710_(null);
                         cleared = true;
                     }
-                    if (isFriendly(maid, maid.m_21188_())) {
+                    LivingEntity hate = maid.m_21188_();
+                    if (hate != null && isFriendly(maid, hate)) {
                         maid.m_6703_(null);
                     }
                     if (cleared) {

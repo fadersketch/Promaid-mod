@@ -856,6 +856,65 @@ public final class MaidFlightKit {
     /* ---------------- 穿戴 ---------------- */
 
     /**
+     * v1.3.2【自推鞘翅：判定与取用同一处】她能不能把那件"不需要烟花"的自推鞘翅穿到胸甲槽：
+     * 胸甲槽就是它 → true；胸甲槽被**别的**鞘翅占着 → false（equip/takeElytra 不替玩家换掉
+     * 一件能滑的鞘翅，判定不许比取用宽松）；胸甲槽空着 → 双手 / 饰品栏（Curios）/ 背包
+     * （含精妙背包、旅行者背包）里有那一件就算——取用见 {@link #takeSelfWings}，同序同源。
+     */
+    public static boolean canWearSelfWings(EntityMaid maid) {
+        if (maid == null) {
+            return false;
+        }
+        try {
+            ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
+            if (MaidSelfPropelledWings.isSelfPropelled(chest)) {
+                return true; // 胸甲槽那件在表里（与旧版一字不差）
+            }
+            if (isElytraLike(chest, maid)) {
+                return false;
+            }
+            if (isWearableSelfWings(maid.m_21205_(), maid) || isWearableSelfWings(maid.m_21206_(), maid)) {
+                return true;
+            }
+            if (CuriosElytraCompat.findElytra(maid, s -> isWearableSelfWings(s, maid)) != null) {
+                return true;
+            }
+            return hasInBackpack(maid, s -> isWearableSelfWings(s, maid));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
+            return false;
+        }
+    }
+
+    /** 能穿上胸甲槽的自推鞘翅：开关开着 + 在自推表里 + 这件自己会滑翔（{@link #isElytraLike}
+     *  ——穿上之后原版滑翔闸门认的正是它，缺这一条就会"判定说能飞、她却在往下沉"）。 */
+    private static boolean isWearableSelfWings(ItemStack stack, EntityMaid maid) {
+        return MaidSelfPropelledWings.enabled() && MaidSelfPropelledWings.isSelfPropelled(stack)
+                && isElytraLike(stack, maid);
+    }
+
+    /** 取一件自推鞘翅（背包 → 双手 → 饰品栏，与 {@link #canWearSelfWings} 同序同源）；
+     *  排在普通鞘翅各趟扫描**之前**——那件是"不需要烟花"的那一件，她有就先穿它。 */
+    private static ItemStack takeSelfWings(EntityMaid maid) {
+        try {
+            ItemStack ely = takeFromBackpack(maid, s -> isWearableSelfWings(s, maid));
+            if (!ely.m_41619_()) {
+                return ely;
+            }
+            IItemHandlerModifiable h = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            for (int slot = 0; slot <= 1; slot++) {
+                if (isWearableSelfWings(h.getStackInSlot(slot), maid)) {
+                    return h.extractItem(slot, 1, false);
+                }
+            }
+            ItemStack fromCurios = CuriosElytraCompat.takeElytra(maid,
+                    s -> isWearableSelfWings(s, maid), ItemStack.f_41583_);
+            return fromCurios == null ? ItemStack.f_41583_ : fromCurios;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
+            return ItemStack.f_41583_;
+        }
+    }
+
+    /**
      * 穿戴装备：胸甲槽穿鞘翅、主手换武器。
      *
      * v1.2.0 实测五百一十：**不再占用副手**（旧版把烟花常驻副手，导致盾牌/食物装不进去、
@@ -876,7 +935,13 @@ public final class MaidFlightKit {
             // 实测五百五十五补充【取用优先级】：背包里同时有普通鞘翅和"鞘翅胸甲"这类装备时
             // **优先穿带护甲的那件**（既滑翔又当护甲，对玩家更划算）；没有护甲型才退回普通鞘翅。
             // 两趟扫描而不是一次谓词：takeFromBackpack 取的是第一个匹配，想要"优先"必须分两趟问。
-            ItemStack ely = takeFromBackpack(maid, s -> isElytraLike(s, maid) && isArmorElytra(s));
+            // v1.3.2【第一优先级改成自推鞘翅】她有那件"不需要烟花"的自推鞘翅时先穿它；资格判定
+            // （MaidSelfPropelledWings.hasWings → canWearSelfWings）与这里必须同源，否则会出现
+            // "判定说能飞、穿上的却是另一件"（本文件的老红线：同一个口径只留一处）。
+            ItemStack ely = takeSelfWings(maid);
+            if (ely.m_41619_()) {
+                ely = takeFromBackpack(maid, s -> isElytraLike(s, maid) && isArmorElytra(s));
+            }
             if (ely.m_41619_()) {
                 ely = takeFromBackpack(maid, s -> isElytraLike(s, maid));
             }
@@ -1357,7 +1422,12 @@ public final class MaidFlightKit {
             return ItemStack.f_41583_;
         }
         try {
-            ItemStack ely = takeFromBackpack(maid, s -> isElytraLike(s, maid) && isArmorElytra(s));
+            // v1.3.2：第一优先级与 equip 同源——自推鞘翅（不需要烟花的那一件）先取，
+            // 资格判定 canWearSelfWings 与这里同序同源。
+            ItemStack ely = takeSelfWings(maid);
+            if (ely.m_41619_()) {
+                ely = takeFromBackpack(maid, s -> isElytraLike(s, maid) && isArmorElytra(s));
+            }
             if (ely.m_41619_()) {
                 ely = takeFromBackpack(maid, s -> isElytraLike(s, maid));
             }

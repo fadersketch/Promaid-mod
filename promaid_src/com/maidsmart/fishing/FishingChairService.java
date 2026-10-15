@@ -79,8 +79,10 @@ public final class FishingChairService {
      * {@link #SEAT_TARGET} 的）通常只有 0~2 只。 <p>候选集就是 {@link #SEAT_TARGET} 这张表本身（{@code recordSeatTarget} 由 mixin 写、 {@link #tickKeepSeatWalk} 在"已骑上/任务解除"时自己摘）。这里按 UUID 直接从维度实体表取 （{@code m_8791_}(uuid) = O(1) 哈希查），取不到（她卸载了/不在这个维度）就顺手摘掉。 行为与旧版逐字一致：旧版也是"对每只活着的女仆调 tickKeepSeatWalk"，只是它**遍历了所有实体**。
      */
     public static void tickKeepSeatWalkAll(net.minecraft.server.MinecraftServer server) {
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_FISHING_CHAIR.get()) {
-            return; // v1.3.2 实测八百五十九：关 = 回原版（不维持坐垫走位）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FISHING.get()
+                || !com.maidsmart.config.MaidSmartConfig.MISC_FISHING_CHAIR.get()) {
+            // 实测九百九十三【接管钓鱼·关】：回原版（不维持坐垫走位）
+            return;
         }
         if (server == null || SEAT_TARGET.isEmpty()) {
             return; // 没有人在走向坐垫 → 零开销（旧版照样扫全图）
@@ -133,7 +135,8 @@ public final class FishingChairService {
 
     /** 原 no_sit 气泡是否应被压掉（马上要生成坐垫时）——mixin lambda$start$2 用 */
     public static boolean shouldSuppressNoSit(EntityMaid maid) {
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FISHING.get()
+                || !com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
             return false;
         }
         if (!(maid.m_9236_() instanceof ServerLevel level)) {
@@ -145,7 +148,8 @@ public final class FishingChairService {
 
     /** start TAIL 主逻辑：sitEntity 为原逻辑找到的椅子/船（非 null 走原流程） */
     public static void tryAutoChair(ServerLevel world, EntityMaid maid, Entity sitEntity) {
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FISHING.get()
+                || !com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
             return;
         }
         if (sitEntity != null) {
@@ -184,11 +188,11 @@ public final class FishingChairService {
         if (stand == null) {
             // 实测五百六十二：home（不跟随/排班）模式不跑限制圈外——圈外生成的坐垫
             // 要么被原版 FindSit 的圈内过滤（isWithinRestriction）拒收、要么走向
-            // 目标被出圈清掉（60 秒弃疗循环）。提示主人把工作区域标到水边（潜行+
-            // 中键）；跟随模式没有限制圈，照旧大范围找水。
+            // 目标被出圈清掉（60 秒弃疗循环）。提示主人把工作区域标到水边（河童的
+            // 罗盘）；跟随模式没有限制圈，照旧大范围找水。
             if (maid.isHomeModeEnable()) {
                 maid.getChatBubbleManager().addTextChatBubble(
-                        "我的活动范围里没有能坐下的水边～主人可以潜行+中键水边方块，把我的工作区域标到那里");
+                        "我的活动范围里没有能坐下的水边～主人可以用河童的罗盘把我的工作区域标到那里");
                 return;
             }
             // v1.5.255：12 格内没有 → 大范围扫描最近水域（限频 30 秒——大扫描
@@ -406,8 +410,10 @@ public final class FishingChairService {
      * - 正常骑着钓鱼 → 保留。
      */
     public static void sweep(MinecraftServer server) {
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_FISHING_CHAIR.get()) {
-            return; // v1.3.2 实测八百五十九：关 = 回原版（不自动生成坐垫）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FISHING.get()
+                || !com.maidsmart.config.MaidSmartConfig.MISC_FISHING_CHAIR.get()) {
+            // 实测九百九十三【接管钓鱼·关】：回原版（不自动生成坐垫）
+            return;
         }
         try {
             // 全维度收集存活女仆（跨维度判定任务）

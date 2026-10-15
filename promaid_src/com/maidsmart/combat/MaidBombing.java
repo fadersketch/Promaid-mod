@@ -151,31 +151,47 @@ public final class MaidBombing {
     }
 
     /**
-     * v1.2.2 实测五百九十【追踪弹】：反馈原文「TNT 再加一个小型追踪功能，TNT 会朝着目标的
-     * 方向飞行（只更改方向，速度不变）直到爆炸。」
-     *
-     * 记住这一发的初速度大小，引信期间每 tick 把速度**方向**朝目标掰一点（大小不变）——
-     * 所以它是「拐弯」而不是「加速」。
-     *
-     * 【实测五百九十一改】只追踪 cfgTntTrackTicks（默认 10 tick = 0.5 秒）、且每 tick 最多转
-     * {@link #TRACK_TURN_DEG} 度——反馈"太鬼畜、运动很不自然"就是因为旧版每 tick 把方向**硬掰**
-     * 到正指目标；现在是离手后一小段平滑弧线，只为小幅修准，到点即撒手（按当前方向直飞）。
+     * v1.2.2 实测五百九十【追踪弹】：反馈「TNT 会朝着目标的方向飞行（只更改方向，速度不变）
+     * 直到爆炸」——记住初速度大小，每 tick 把方向朝目标掰一点（所以是"拐弯"不是"加速"）。
+     * 实测五百九十一改：只追 cfgTntTrackTicks（实测九百八十九起默认 20 tick = 1 秒）、每 tick
+     * 最多转 {@link #TRACK_TURN_DEG} 度——旧版每 tick 硬掰到正指目标，反馈"太鬼畜"；现在是
+     * 一小段平滑弧线，到点即撒手。
+     * 实测九百八十九【物理体积】：这条记录不管追踪开关都登记（只要她还扔 TNT）——每 tick 用
+     * 「上一 tick 位置 → 这一 tick 位置」扫掠线撞一遍路上的敌人，撞上就把引信归 1（当 tick 在
+     * 接触点引爆）；旧版 TNT 沿弹道**穿过**敌人，近身/移动目标上"扔偏"很常见。
      */
     static final class Homing {
         final ServerLevel level;
         final PrimedTnt tnt;
         final LivingEntity target;
+        /** 扔这一发的女仆（命中判定要用她的任务 / 敌我口径） */
+        final EntityMaid maid;
         /** 初速度大小（格/tick）：每 tick 只改方向，这个值保持不变 */
         final double speed;
-        /** 追踪截止时刻（gameTime）：到点就撒手（实测五百九十一：默认离手后 0.5 秒） */
+        /** 追踪截止时刻（gameTime）：到点就撒手（只停转向，不停止撞人监看） */
         final long until;
+        /** 追踪总开关：false = 只做物理体积监看，不掰方向 */
+        final boolean track;
+        /** 这条监看的失效时刻：引信早该走完还没炸（区块卸载等）就作废，防表泄漏 */
+        final long expire;
+        /** 上一 tick 的位置：命中判定用的扫掠线段起点 */
+        double lx;
+        double ly;
+        double lz;
 
-        Homing(ServerLevel level, PrimedTnt tnt, LivingEntity target, double speed, long until) {
+        Homing(ServerLevel level, EntityMaid maid, PrimedTnt tnt, LivingEntity target, double speed,
+               boolean track, long until, long expire) {
             this.level = level;
+            this.maid = maid;
             this.tnt = tnt;
             this.target = target;
             this.speed = Math.max(0.2, speed);
+            this.track = track;
             this.until = until;
+            this.expire = expire;
+            this.lx = tnt == null ? 0.0 : tnt.m_20185_();
+            this.ly = tnt == null ? 0.0 : tnt.m_20186_();
+            this.lz = tnt == null ? 0.0 : tnt.m_20187_();
         }
     }
 
@@ -249,6 +265,16 @@ public final class MaidBombing {
     static final Map<UUID, EnumMap<Kind, Phase>> PHASE = new HashMap<>();
     static final Map<UUID, Long> TNT_NEXT = new HashMap<>();
     /**
+     * 实测九百九十五【三条链路分开 · 爆点静置】：上一发没落停之前不起手下一段 / 不追投 TNT
+     *（女仆 UUID → 可释放时刻）——放置类起手记 +2 秒、TNT 离手记 +3 秒（引信 + 1 秒落停）。
+     * 三炸不再同秒释放，避免"第一炸把目标掀翻、其余两段全部打空"。
+     */
+    static final Map<UUID, Long> SETTLE_NEXT = new HashMap<>();
+    /** 放置类（水晶 / 重生锚 / 床）起手后的静置窗（tick） */
+    static final long SETTLE_PLACE_TICKS = 40L;
+    /** TNT 离手后的静置窗（tick）：引信 2 秒 + 1 秒落停 */
+    static final long SETTLE_TNT_TICKS = 60L;
+    /**
      * v1.2.2 实测五百九十二：整条轰炸链路的最短间隔下限（女仆 → 链路 → 下次可起手的 gameTime）。
      *
      * 实测六百：从"每只女仆一条"细化成"**每只女仆、每条链路各一条**"——三段并行之后，
@@ -258,8 +284,6 @@ public final class MaidBombing {
     static final List<Bomb> PENDING = new ArrayList<>();
     /** v1.2.2 实测五百九十：攻击链路收尾登记的「待投放」（女仆 UUID → 登记时刻） */
     static final Map<UUID, Long> TNT_ARMED = new HashMap<>();
-    /** 上一次扫描时她是否处于攻击冷却（无 → 有的跳变 = 刚打完一记） */
-    static final Map<UUID, Boolean> COOLDOWN_SEEN = new HashMap<>();
     /** 追踪中的 TNT（引信期间每 tick 把方向掰向目标；只改方向、不改速度） */
     static final List<Homing> HOMING = new ArrayList<>();
     /** 「待投放」的有效期（tick）：挂这么久还没投出去就作废，免得留一发陈年老弹 */
@@ -301,7 +325,7 @@ public final class MaidBombing {
         BOMB_NEXT.remove(maidId);
 
         TNT_ARMED.remove(maidId);
-        COOLDOWN_SEEN.remove(maidId);
+        SETTLE_NEXT.remove(maidId);
         SKIP_DIAG.remove(maidId);
     }
 
@@ -313,7 +337,7 @@ public final class MaidBombing {
         RECLAIMS.clear();
 
         TNT_ARMED.clear();
-        COOLDOWN_SEEN.clear();
+        SETTLE_NEXT.clear();
         HOMING.clear();
         SKIP_DIAG.clear();
         HINT_CD.clear(); // 实测五百九十四：气泡限频表（forget 不清它，见字段注释）
@@ -459,9 +483,9 @@ public final class MaidBombing {
      * 猛击命中之后调用（在 endSmash 之前）。true = 本 tick 起手成功、由轰炸相位接管；
      * 材料不齐 / 已在本段里 → false（原链路照旧：再次起飞）。
      *
-     * v1.2.2 实测六百【三段并行】：不再是"取第一个材料齐的链路"，而是**材料齐的每一段各自
-     * 起一个相位**（水晶 / 重生锚 / 床 最多三段同时在飞）——需求原文："我认为它的优先级应和
-     * 放末影水晶是一样的。两者可以同时启动。"
+     * v1.2.2 实测六百【三段并行】→ 实测九百九十五【三条链路分开】改口径：材料齐的多段不再
+     * 同时起手——一拍只起最先就绪的一段（其余段等静置窗过去再在下一拍排队），三炸不再同秒
+     * 释放（旧需求"两者可以同时启动"由本条取代：一炸把目标掀翻会让其余两段全部打空）。
      */
     public static boolean tryStartMelee(ServerLevel level, EntityMaid maid, LivingEntity target) {
         try {
@@ -519,10 +543,15 @@ public final class MaidBombing {
                 if (running != null && running.containsKey(kind)) {
                     continue; // 这一段还在飞，不重复起手
                 }
+                // 实测九百九十五【三条链路分开】：一拍只起一段（旧版 实测六百 是"材料齐的
+                // 各段同时起手"）——起完这一段就停，其余段等静置窗（SETTLE_NEXT）过去再在
+                // 下一拍排队；防止三炸同秒释放（一炸把目标掀翻、其余两段全部打空）。
                 PHASE.computeIfAbsent(id, k -> new EnumMap<>(Kind.class))
                         .put(kind, new Phase(kind, maid, level, target, now));
                 next.put(kind, now + BombConfig.cfgBombInterval());
+                SETTLE_NEXT.put(id, now + SETTLE_PLACE_TICKS);
                 started = true;
+                break;
             }
             return started;
         } catch (Throwable t) {
@@ -541,6 +570,12 @@ public final class MaidBombing {
     private static List<Kind> readyKinds(ServerLevel level, EntityMaid maid, UUID id, long now,
                                          EnumMap<Kind, Phase> running) {
         List<Kind> out = new ArrayList<>(3);
+        // 实测九百九十五【三条链路分开】：上一发还没落停（静置窗内）时不起手任何新段——
+        // 静默返回（不落"轰炸跳过"诊断日志，这不是缺料）。
+        Long settle = SETTLE_NEXT.get(id);
+        if (settle != null && now < settle) {
+            return out;
+        }
         EnumMap<Kind, Long> next = BOMB_NEXT.get(id);
         // ① 末地水晶（黑曜石 / 基岩底座）
         if (BombItems.has(maid, BombItems.ID_END_CRYSTAL) && BombItems.has(maid, BombItems.ID_OBSIDIAN, BombItems.ID_BEDROCK)

@@ -29,7 +29,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
     @Mixin({WalkNodeEvaluator.class, net.minecraft.world.level.pathfinder.FlyNodeEvaluator.class})
     public abstract class MaidDangerPathMixin {
 
-    @Inject(method = "m_7209_", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "m_7209_(Lnet/minecraft/world/level/BlockGetter;IIILnet/minecraft/world/entity/Mob;)"
+            + "Lnet/minecraft/world/level/pathfinder/BlockPathTypes;",
+            at = @At("RETURN"), cancellable = true)
     private void maidsmart$avoidDangerBlocks(BlockGetter level, int x, int y, int z, Mob mob,
                                              CallbackInfoReturnable<BlockPathTypes> cir) {
         if (!(mob instanceof EntityMaid)) {

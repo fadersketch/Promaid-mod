@@ -148,8 +148,17 @@ if (++this.tick < com.maidsmart.config.MaidSmartConfig.DIALOGUE_REPORT_CHECK.get
                     && com.maidsmart.task.MaidPlanting.isHandHolding(maid.getId())) {
                 return null; // 施肥换手中，不是真没镐——不播报
             }
-            if (hand.isEmpty() || !(hand.getItem() instanceof PickaxeItem)) {
+            // 实测九百七十七【没镐误报修复】：有没有镐看身上（主副手 + 背包 + 精妙背包），不再只看主手——
+            // 旧版主手空着（镐在背包里 / 刚和骨粉换手）就弹没有镐，实机里反复误报。
+            boolean handPick = !hand.isEmpty() && hand.getItem() instanceof PickaxeItem;
+            if (!handPick && !com.maidsmart.task.MaidToolAutoEquip.hasAnyPickaxe(maid)) {
                 return "我没有镐，没法挖矿——给我一把镐吧";
+            }
+            // 实测九百三十七【挖矿状态不报"没矿"】：挖矿行为**手上有目标**（{@link MaidMineBehavior#isMining}）
+            //   时，导航空闲只是"她正站在矿前挖 / 在垫路"，不是没矿——旧版这里照样返回"附近没有值得挖的
+            //   矿石"，实机里"一边挖一边报没矿"就是这么来的。锁定目标期间一律不播报。
+            if (com.maidsmart.task.MaidMineBehavior.isMining(maid)) {
+                return null;
             }
             return "附近没有值得挖的矿石";
         }

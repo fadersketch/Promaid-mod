@@ -289,6 +289,11 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
 
     protected static final Map<Integer, Long> LAST_RELOCATE = new HashMap<>();
 
+    /** 【实测九百三十·全链路监听】每只女仆 × 每个"原因"的最后一次打印 tick（见 {@link #traceExit}）。 */
+    protected static final Map<Integer, java.util.Map<String, Long>> TRACE_AT = new HashMap<>();
+    /** 【实测九百三十】全链路监听的限频间隔（拍）：100 拍 = 5 秒/原因/只。 */
+    protected static final long TRACE_INTERVAL = 100L;
+
     /** v1.5.113：锚点滑动迁移节流（空框时每 5 秒滑一次，防高速漂移） */
     protected static final Map<Integer, Long> SLIDE_SINCE = new HashMap<>();
 
@@ -307,26 +312,11 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
     /** v1.5.113：搭方块材料耗尽播报限频（实体 ID → 上次播报 tick） */
     protected static final Map<Integer, Long> NO_BLOCK_REPORT_SINCE = new HashMap<>();
 
-    /** v1.1.0 实测六十九：发呆看门狗——最近一次"真实进展"时刻（挖掉/垫了方块）。长时间零进展
-     *  且原地不动 = 发呆/死循环，自动整体重置该女仆的全部行为状态（等效收回魂符再放下去）。 */
-    protected static final Map<Integer, Long> LAST_PROGRESS = new HashMap<>();
-
-    /** 看门狗窗口采样（实体 ID → [窗口起点 tick, 起点 x/y/z 各自的 double 位模式]） */
-    protected static final Map<Integer, long[]> WATCH_SAMPLE = new HashMap<>();
-
-    /** 看门狗重置播报限频（实体 ID → 上次播报 tick） */
-    protected static final Map<Integer, Long> RESET_REPORT_SINCE = new HashMap<>();
-
-    /** v1.1.0 实测六十九：登记一次真实进展（挖掉/垫了方块）——给看门狗续命 */
-    protected static void markProgress(EntityMaid maid, long gameTime) {
-        LAST_PROGRESS.put(maid.m_19879_(), gameTime);
-    }
+    /** 实测九百七十七：无目标静默窗口截止 tick（实体 ID → 恢复时刻）——挖矿/伐木共用 */
+    protected static final Map<Integer, Long> IDLE_PAUSE_UNTIL = new HashMap<>();
 
     /** v1.5.87：搭方块防掉落窗口（搭块后 12 tick 内钳制，防刚搭完滑落） */
     protected int pillarGuardTicks = 0;
-
-    /** v1.5.47：刚弃置的目标（findOre 排除一次；挖掉任一矿后清除） */
-    protected BlockPos abandonedPos = null;
 
     protected BlockPos targetPos = null;
 
@@ -349,9 +339,6 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
     /** 目标扫描节流：找不到矿时每 20 tick 才扫一次，避免每 tick 全量查询 */
     protected int scanCooldown = 0;
 
-    /** 实测八百六十九：锁定目标期间的重挑倒计时（见 {@link #MINE_REPICK_INTERVAL}） */
-    protected int repickCooldown = 0;
-
     /** v1.5.113：上一次 findOre 是否做了全量重建（缓存轮=false）——只有全量重建
      *  确认框空才滑动锚点迁移（缓存轮空不迁移，等 5 秒重建再判） */
     protected boolean lastScanWasFull = true;
@@ -368,6 +355,44 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
     /** v1.5.116：上次设置的移动目标站立点——目标没变且导航行进中不重设
      *  （旧版每 8 tick 无条件重设 WalkTarget → 导航每次重新寻路 → "一走一停"鬼畜） */
     protected BlockPos lastWalkTarget = null;
+
+    /**
+     * 实测九百二十八【导航在走 ≠ 人在走】：脚下格没动的判决窗口（拍）。
+     * <p>{@link #setWalkTarget} 那句"目标没变且导航还在走就不重设"是为防"一走一停"加的，可**导航在走却走不动**
+     * （目标在墙里 / 路径第一段是死路 / 她卡在洞里）时，它与 TLM 自己的恢复通道会互相挡着、永远不重算路径
+     * ——玩家看到的就是"站在原地不动"，而且一条日志都没有。满这么多拍没挪窝就强制停导航、重发目标。
+     */
+    protected static final int WALK_STILL_TICKS = 20;
+
+    /** 上次见到的脚下格（判"有没有在挪窝"） */
+    protected BlockPos lastWalkPos = null;
+
+    /** 脚下格上一次变化的 gameTime（-1 = 还没采过样） */
+    protected long walkStillSince = -1L;
+
+    /** "走路卡住"留痕限频（gameTime，5 秒/条） */
+    protected long walkStuckLogAt = 0L;
+
+    /** 实测九百七十九【链路卡死自愈】：同一目标 + 同一双脚 + 挖掘进度一字未动，连续这么多拍
+     *  （160 拍 = 8 秒）→ 认这块真够不到，弃掉重扫。比 WALK_STILL_TICKS 那条"停导航重发"
+     *  更久：那条重发的还是同一个走不到的目标，真够不着时她会顶着它无限循环（日志里
+     *  "够不着就继续推进 / 走不到→改走接近链"反复出现、气泡一条没有、走位权一直不放）。 */
+    protected static final int STALL_GIVEUP_TICKS = 160;
+    protected BlockPos stallFeet = null;
+    protected BlockPos stallTargetRef = null;
+    protected float stallProgressRef = -1.0f;
+    protected int stallTicks = 0;
+    /** 连续自愈次数（弃目标后又卡 → 累加；她挪窝即清零） */
+    protected int stallStreak = 0;
+
+    /** 实测九百三十七【水流卡住兜底】：脚下格不变持续这么多拍即判"被水流卡住"。 */
+    protected static final int WATER_STUCK_TICKS = 40;
+    /** 上次检测到的脚下格 + 该格开始的时刻（-1 = 不在水里/刚换格）。 */
+    protected BlockPos waterStuckAt;
+    protected long waterStuckSince = -1L;
+
+    /** 实测九百三十八：目标路径有岩浆的播报节流（实体 ID → 上次 tick）。 */
+    protected static final java.util.Map<Integer, Long> LAVA_PATH_REPORT_SINCE = new java.util.HashMap<>();
 
     /** 任意维度的存活女仆站在该位置（跨维度判定；实测四十二） */
     protected static boolean anyMaidStanding(net.minecraft.server.MinecraftServer server,
@@ -439,14 +464,6 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.1.0 实测六十九：窗口起点采样 */
-    protected static long[] watchSample(long gameTime, EntityMaid maid) {
-        return new long[]{gameTime,
-                Double.doubleToLongBits(maid.m_20185_()),
-                Double.doubleToLongBits(maid.m_20186_()),
-                Double.doubleToLongBits(maid.m_20189_())};
-    }
-
     /** v1.5.102e：向周围玩家广播挖掘裂纹（ClientboundBlockDestructionPacket）——
      *  stage 0~9 = 裂纹阶段，10 = 移除。女仆不是玩家，原版不会自动发此包，
      *  不加的话方块全程无裂纹、到点瞬间消失（"秒破"观感）。
@@ -480,12 +497,35 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
      * 重设以重新激活寻路，女仆不会停在原地。
      */
     protected void setWalkTarget(EntityMaid maid, BlockPos stand, float speed) {
-        if (this.lastWalkTarget != null
+        // 实测九百二十八【导航在走 ≠ 人在走】：先采一次"脚下格变没变"——下面那句"目标没变就不重设"
+        // 只在她**确实在挪窝**时才成立（见 WALK_STILL_TICKS 的注释）。
+        BlockPos walkFeet = maid.m_20183_();
+        long walkNow = maid.m_9236_().m_46467_();
+        if (!walkFeet.equals(this.lastWalkPos)) {
+            this.lastWalkPos = walkFeet;
+            this.walkStillSince = walkNow;
+        }
+        boolean walkStill = this.walkStillSince >= 0L && walkNow - this.walkStillSince >= WALK_STILL_TICKS;
+        boolean sameWalkTarget = this.lastWalkTarget != null
                 && Math.abs(stand.m_123341_() - this.lastWalkTarget.m_123341_()) <= 1
                 && Math.abs(stand.m_123343_() - this.lastWalkTarget.m_123343_()) <= 1
-                && stand.m_123342_() == this.lastWalkTarget.m_123342_()
-                && !maid.m_21573_().m_26571_()) {
-            return; // 目标未变（±1 容差内）且导航还在走：不重设
+                && stand.m_123342_() == this.lastWalkTarget.m_123342_();
+        if (sameWalkTarget) {
+            if (!maid.m_21573_().m_26571_()) {
+                if (!walkStill) {
+                    this.traceExit(maid, "walk 沿用同一目标(导航在走)", "stand=" + stand + " feet=" + walkFeet);
+                    return; // 目标未变（±1 容差内）且导航还在走、她也在挪窝：不重设
+                }
+                // 导航自称在走，可她整整 1 秒没挪窝 → 它握着一条走不动的路径，谁也不重算。停掉再重发一次，
+                // 下面那次 moveTo 才会真正重跑 createPath（"站在原地不动"的根因之一）。
+                maid.m_21573_().m_26573_();
+            }
+            if (walkStill) {
+                // 实测九百二十九：导航**已经走完**（isDone = 压根没算出路径）也一样要留痕——旧版
+                // 这条闸只在"导航还在走"时说话，于是"无路可走"这种卡法一条日志都没有。
+                this.reportWalkStuck(maid, stand, walkNow);
+                this.walkStillSince = walkNow;   // 重发之后重新计时，免得每拍都判"卡死"
+            }
         }
         this.lastWalkTarget = stand.m_7949_();
         // v1.5.127：直接导航（借鉴 TLM 农务/伐木移动方式）——不再写 WALK_TARGET
@@ -500,6 +540,7 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
                 (stand.m_123341_() + 0.5 - maid.m_20185_()) * (stand.m_123341_() + 0.5 - maid.m_20185_())
                         + (stand.m_123343_() + 0.5 - maid.m_20189_()) * (stand.m_123343_() + 0.5 - maid.m_20189_()));
         if (hd > 14.0) {
+            this.traceExit(maid, "walk 远距离接力(>14格)", "hd=" + (long) hd + " stand=" + stand);
             double k = 12.0 / hd;
             maid.m_21573_().m_26519_(maid.m_20185_() + (stand.m_123341_() + 0.5 - maid.m_20185_()) * k,
                     maid.m_20186_(),
@@ -507,6 +548,113 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
         } else {
             maid.m_21573_().m_26519_(stand.m_123341_() + 0.5, stand.m_123342_() + 0.5,
                     stand.m_123343_() + 0.5, speed);
+        }
+    }
+
+    /** 实测九百二十八：走路卡住的留痕（5 秒/条）——"站在原地不动"必须能从日志里看出为什么。 */
+    protected void reportWalkStuck(EntityMaid maid, BlockPos stand, long now) {
+        if (now - this.walkStuckLogAt < 100L) {
+            return;
+        }
+        this.walkStuckLogAt = now;
+        try {
+            double d = Math.sqrt(maid.m_20275_(stand.m_123341_() + 0.5, stand.m_123342_() + 0.5, stand.m_123343_() + 0.5));
+            LOGGER.info("work walk stuck: maid={} target={} stand={} feet={} dist={} path={} -> stop+retarget",
+                    maid.m_20148_(), this.targetPos, stand, maid.m_20183_(), (long) d, !maid.m_21573_().m_26571_());
+        } catch (Exception e) { com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", e);
+        }
+    }
+
+    /** 实测九百七十九【链路卡死自愈】：返回 true = 本拍已自愈处理（调用方直接 return）。
+     *  <p>判据 = 同一目标 ∧ 同一双脚格 ∧ 挖掘进度一字未动，连续 {@link #STALL_GIVEUP_TICKS} 拍。
+     *  成立即：目标进 30 秒短排 → 清目标/进度/连锁 → 停导航 + 清走位目标 + **放走位权**
+     *  → 限频气泡说一声（"不报错"的另一半）；连弃 3 次交 {@link #onStallStreak} 换一片。 */
+    protected boolean stallWatchdog(ServerLevel level, EntityMaid maid, long gameTime) {
+        BlockPos feet = maid.m_20183_();
+        if (this.stallWatchdogSuppressed(level, maid)) {
+            this.stallFeet = feet;
+            this.stallTargetRef = this.targetPos;
+            this.stallProgressRef = this.destroyProgress;
+            this.stallTicks = 0;
+            return false;
+        }
+        boolean same = this.targetPos != null && feet.equals(this.stallFeet)
+                && this.targetPos.equals(this.stallTargetRef)
+                && Math.abs(this.destroyProgress - this.stallProgressRef) < 1.0E-4f;
+        if (!same) {
+            if (!feet.equals(this.stallFeet)) {
+                this.stallStreak = 0; // 挪窝了 = 在干活，连弃计数清零
+            }
+            this.stallFeet = feet;
+            this.stallTargetRef = this.targetPos;
+            this.stallProgressRef = this.destroyProgress;
+            this.stallTicks = 0;
+            return false;
+        }
+        if (++this.stallTicks < STALL_GIVEUP_TICKS) {
+            return false;
+        }
+        this.stallTicks = 0;
+        this.stallStreak++;
+        BlockPos dead = this.targetPos;
+        RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new HashMap<>())
+                .put(dead.m_7949_(), gameTime);
+        this.onStallGiveUp(level, maid, gameTime, dead);
+        this.targetPos = null;
+        this.destroyProgress = 0.0f;
+        this.chainQueue.clear();
+        this.chainBlock = null;
+        this.scanCooldown = 0;
+        this.walkRetargetCooldown = 0;
+        this.lastWalkTarget = null;
+        this.walkStillSince = -1L;
+        maid.m_21573_().m_26573_();
+        maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
+        MaidWorkTags.setChainDrive(maid, false);
+        this.notifyNoTarget(maid, gameTime, "这块我够不到，先换个地方找找～");
+        LOGGER.info("work stall self-heal: maid={} target={} feet={} streak={}",
+                maid.m_20148_(), dead, feet, this.stallStreak);
+        if (this.stallStreak >= 3) {
+            this.stallStreak = 0;
+            this.onStallStreak(level, maid, gameTime);
+        }
+        return true;
+    }
+
+    /** 卡死判定豁免（子类：分帧扫描进行中她的"站着等"是正常的，不打表） */
+    protected boolean stallWatchdogSuppressed(ServerLevel level, EntityMaid maid) {
+        return false;
+    }
+
+    /** 卡死弃目标的子类收尾（进度落盘等） */
+    protected void onStallGiveUp(ServerLevel level, EntityMaid maid, long gameTime, BlockPos dead) {
+    }
+
+    /** 连弃 3 次：换一片（子类清缓存 + 挪锚点） */
+    protected void onStallStreak(ServerLevel level, EntityMaid maid, long gameTime) {
+    }
+
+    /**
+     * 【实测九百三十·全链路监听】挖矿/伐木**每一拍走的是哪条出口**都留一行（同一"原因"5 秒一条）。
+     * <p>只写日志，**不改任何控制流**：再现"站着不动"时，把 {@code work exit:} 那几行贴出来即可定位分支。
+     * @param reason 出口名（带 {@code mine } / {@code walk } 前缀，便于筛选）
+     * @param detail 该出口的关键现场值（距离 / 目标 / 工具 / 进度 / 计数……）
+     */
+    protected void traceExit(EntityMaid maid, String reason, String detail) {
+        try {
+            int id = maid.m_19879_();
+            long now = maid.m_9236_().m_46467_();
+            java.util.Map<String, Long> per = TRACE_AT.computeIfAbsent(id, k -> new java.util.HashMap<>());
+            Long last = per.get(reason);
+            if (last != null && now - last < TRACE_INTERVAL) {
+                return;
+            }
+            per.put(reason, now);
+            LOGGER.info("work exit: maid={} reason={} detail={}", maid.m_20148_(), reason, detail);
+            if (TRACE_AT.size() > 512) {
+                TRACE_AT.clear(); // 兜底：表不会无限涨
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", ignored);
         }
     }
 
@@ -522,6 +670,134 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
         int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
         int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
         BlockWalkOn.start(maid, tx + 0.5, y, tz + 0.5);
+    }
+
+    /** 实测九百七十三：本框确认没有目标了 → 气泡告诉主人一声（30 秒/条）。
+     *  限频表复用基类的 NO_BLOCK_REPORT_SINCE（挖矿/伐木共用一份，反正一只女仆同一时刻只干一件活）。 */
+    protected void notifyNoTarget(EntityMaid maid, long gameTime, String text) {
+        Long last = NO_BLOCK_REPORT_SINCE.get(maid.m_19879_());
+        if (last != null && gameTime - last < 600L) {
+            return; // 30 秒内已经说过一次
+        }
+        NO_BLOCK_REPORT_SINCE.put(maid.m_19879_(), gameTime);
+        try {
+            maid.getChatBubbleManager().addTextChatBubble(text);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", ignored);
+        }
+    }
+
+    // 实测九百八十【删"自己写的闲逛"】：无目标静默窗口与"框空"一律不再由本模组写走位点——
+    // 只把走位权与导航让出去，这 10 秒她走的是 TLM 空闲那一套（跟随主人 / 她自己闲逛）。
+    // 旧版自写的闲逛点会抢 TLM 的跟随目标（"只跟主人两秒"），点还常常离她不到 1 格
+    // （"走一步停一步"）。
+    /** 实测九百七十七：进入无目标静默窗口（秒数取配置 mine.noTargetPause；0 = 关掉本机制）。
+     *  窗口内挖矿/伐木 tick 直接让位：清目标、还走位权、空闲闲逛，见两个子类 tick 头部。 */
+    protected void startIdlePause(EntityMaid maid, long gameTime) {
+        int sec = com.maidsmart.config.MaidSmartConfig.MINE_NO_TARGET_PAUSE.get();
+        if (sec <= 0) {
+            return;
+        }
+        IDLE_PAUSE_UNTIL.put(maid.m_19879_(), gameTime + sec * 20L);
+        // 实测九百八十二：静默窗口同时按"自主战斗切换"那套切一次任务（见下）
+        armWorkIdleSwitch(maid, gameTime, sec);
+    }
+
+
+    // ---- 实测九百八十二：无目标 → 照自主战斗切换那套「切走 → 到点切回」 ----
+    /** 待切换状态：实体 ID → [切换到期 tick, 还原 tick, 空闲时长] */
+    protected static final Map<Integer, long[]> WORK_IDLE_MEM = new HashMap<>();
+    /** 切走前她在哪个任务（还原用同一份 UID） */
+    protected static final Map<Integer, String> WORK_IDLE_PREV = new HashMap<>();
+    /** 气泡之后等这么久才切（40 拍 = 2 秒，先让主人看清那句提醒） */
+    protected static final int WORK_IDLE_DELAY_TICKS = 40;
+
+    /** 实测九百八十二：记下她当前的工作任务，{@link #WORK_IDLE_DELAY_TICKS} 拍后切空闲。
+     *  排班模式不参与（任务归排班管，与自主战斗同一口径）。 */
+    protected void armWorkIdleSwitch(EntityMaid maid, long gameTime, int sec) {
+        try {
+            if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+                return;
+            }
+            if (maid.getTask() == null || maid.getTask().getUid() == null) {
+                return;
+            }
+            int id = maid.m_19879_();
+            WORK_IDLE_PREV.put(id, maid.getTask().getUid().toString());
+            WORK_IDLE_MEM.put(id, new long[]{gameTime + WORK_IDLE_DELAY_TICKS, 0L, sec * 20L});
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", ignored);
+        }
+    }
+
+    /** 实测九百八十二：每 tick（挂在常驻 core 行为上）——到点切空闲、满协议时长切回工作。
+     *  真在战斗 / 排班接管 → 顺延让位，等它收场；被打断过也一样把她送回工作。 */
+    public static void tickWorkIdleSwitch(EntityMaid maid, long gameTime) {
+        try {
+            int id = maid.m_19879_();
+            long[] st = WORK_IDLE_MEM.get(id);
+            if (st == null) {
+                return;
+            }
+            if (st[1] == 0L) {
+                if (gameTime < st[0]) {
+                    return;
+                }
+                if (!switchMaidTask(maid, new net.minecraft.resources.ResourceLocation("touhou_little_maid", "idle"))) {
+                    WORK_IDLE_MEM.remove(id); // 切不过去（任务没了/守卫拒绝）：别赖着
+                    WORK_IDLE_PREV.remove(id);
+                    return;
+                }
+                st[1] = gameTime + st[2];
+                LOGGER.info("work idle-switch: maid={} -> idle {} tick", maid.m_20148_(), st[2]);
+                return;
+            }
+            if (gameTime < st[1]) {
+                return;
+            }
+            if (com.maidsmart.combat.AutoCombatSwitch.isReallyCombatActive(maid)
+                    || com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+                st[1] = gameTime + 20L; // 让位：战斗/排班收场后再还原
+                return;
+            }
+            String prev = WORK_IDLE_PREV.remove(id);
+            WORK_IDLE_MEM.remove(id);
+            if (prev == null) {
+                return;
+            }
+            if (switchMaidTask(maid, new net.minecraft.resources.ResourceLocation(prev))) {
+                LOGGER.info("work idle-switch: maid={} -> back {}", maid.m_20148_(), prev);
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", ignored);
+        }
+    }
+
+    /** 实测九百八十二：自动系统切任务——照自主战斗那条路（ScheduleSwitchGuard 放行内部切换） */
+    private static boolean switchMaidTask(EntityMaid maid,
+                                          net.minecraft.resources.ResourceLocation uid) {
+        try {
+            com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask task =
+                    com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager.findTask(uid).orElse(null);
+            if (task == null) {
+                return false;
+            }
+            com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(), task.getUid(),
+                    () -> maid.setTask(task));
+            return maid.getTask() != null && task.getUid().equals(maid.getTask().getUid());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", ignored);
+            return false;
+        }
+    }
+
+    /** 实测九百七十七：是否处于无目标静默窗口（到期自动清除，下 tick 恢复正常链路） */
+    protected boolean inIdlePause(EntityMaid maid, long gameTime) {
+        Long until = IDLE_PAUSE_UNTIL.get(maid.m_19879_());
+        if (until == null) {
+            return false;
+        }
+        if (gameTime >= until) {
+            IDLE_PAUSE_UNTIL.remove(maid.m_19879_());
+            return false;
+        }
+        return true;
     }
 
     /** v1.5.113（C2）：搭方块材料耗尽播报（限频 30 秒） */
@@ -559,6 +835,120 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /**
+     * 实测九百三十七【水流卡住兜底】：同上（Neo 侧同源注释）——在水里卡够 {@link #WATER_STUCK_TICKS}
+     * 拍就找一个干燥可站的落脚点挪过去。
+     */
+    protected void antiWaterStuck(net.minecraft.server.level.ServerLevel level, EntityMaid maid, long gameTime) {
+        if (!maid.m_20069_()) {
+            this.waterStuckAt = null;
+            this.waterStuckSince = -1L;
+            return;
+        }
+        BlockPos feet = maid.m_20183_();
+        if (this.waterStuckAt == null || !feet.equals(this.waterStuckAt)) {
+            this.waterStuckAt = feet;
+            this.waterStuckSince = gameTime;
+            return;
+        }
+        if (gameTime - this.waterStuckSince < WATER_STUCK_TICKS) {
+            return;
+        }
+        this.waterStuckSince = gameTime;
+        BlockPos dry = findDryStand(level, feet);
+        if (dry != null) {
+            maid.m_21573_().m_26573_();
+            maid.m_6034_(dry.m_123341_() + 0.5, dry.m_123342_(), dry.m_123343_() + 0.5);
+            this.waterStuckAt = dry;
+            LOGGER.info("work water stuck escape: maid={} from={} to={}", maid.m_20148_(), feet, dry);
+        }
+    }
+
+    /** 附近（水平 ±3、垂直 -1..+2）最近的一格【干燥可站】：本格与其上一格都不是水、本格空气、脚下实心。取不到 → null。 */
+    protected BlockPos findDryStand(net.minecraft.server.level.ServerLevel level, BlockPos feet) {
+        BlockPos best = null;
+        double bestD = Double.MAX_VALUE;
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                for (int dy = -1; dy <= 2; dy++) {
+                    BlockPos c = feet.m_7918_(dx, dy, dz);
+                    if (!level.m_8055_(c).m_60795_() || waterAt(level, c)) {
+                        continue;
+                    }
+                    if (waterAt(level, c.m_7494_())) {
+                        continue;
+                    }
+                    BlockPos under = c.m_7495_();
+                    BlockState us = level.m_8055_(under);
+                    if (us.m_60795_() || !us.m_60796_(level, under)) {
+                        continue;
+                    }
+                    double d = (double) dx * dx + (double) dz * dz + (double) dy * dy * 2.0;
+                    if (d < bestD) {
+                        bestD = d;
+                        best = c;
+                    }
+                }
+            }
+        }
+        return best;
+    }
+
+    /** 这一格是不是水（读不到 → 不算水）。 */
+    protected static boolean waterAt(net.minecraft.server.level.ServerLevel level, BlockPos p) {
+        try {
+            return level.m_8055_(p).m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_);
+        } catch (Throwable t) {
+            com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", t);
+            return false;
+        }
+    }
+
+    /** 实测九百三十八：目标"跑出检索半径"判据——同上（Neo 侧同源注释）。 */
+    protected boolean targetOutOfRadius(EntityMaid maid, BlockPos target, int radius) {
+        double dx = maid.m_20185_() - (target.m_123341_() + 0.5);
+        double dz = maid.m_20189_() - (target.m_123343_() + 0.5);
+        return dx * dx + dz * dz > (double) radius * radius;
+    }
+
+    /** 实测九百三十八：她到目标之间有没有岩浆挡着（同上）。 */
+    protected boolean lavaOnPath(net.minecraft.server.level.ServerLevel level, EntityMaid maid, BlockPos target) {
+        try {
+            double sx = maid.m_20185_();
+            double sy = maid.m_20186_() + 1.5;
+            double sz = maid.m_20189_();
+            double dx = (target.m_123341_() + 0.5) - sx;
+            double dyy = (target.m_123342_() + 0.5) - sy;
+            double dz = (target.m_123343_() + 0.5) - sz;
+            double dist = Math.sqrt(dx * dx + dyy * dyy + dz * dz);
+            int steps = Math.max(2, (int) (dist / 0.5));
+            for (int i = 1; i < steps; i++) {
+                double t = (double) i / steps;
+                BlockPos p = new BlockPos((int) Math.floor(sx + dx * t),
+                        (int) Math.floor(sy + dyy * t), (int) Math.floor(sz + dz * t));
+                if (level.m_8055_(p).m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13132_)) {
+                    return true;
+                }
+            }
+        } catch (Throwable t) {
+            com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", t);
+        }
+        return false;
+    }
+
+    /** 实测九百三十八：目标路径上有岩浆的播报（30 秒/条，同上）。 */
+    protected void reportLavaPath(EntityMaid maid, BlockPos target, long gameTime) {
+        Long last = LAVA_PATH_REPORT_SINCE.get(maid.m_19879_());
+        if (last != null && gameTime - last < 600L) {
+            return;
+        }
+        LAVA_PATH_REPORT_SINCE.put(maid.m_19879_(), gameTime);
+        LOGGER.info("work lava on path: maid={} target={}", maid.m_20148_(), target);
+        maid.getChatBubbleManager().addTextChatBubble(
+                "去目标（坐标 " + target.m_123341_() + ", " + target.m_123342_() + ", " + target.m_123343_()
+                        + "）的路上有岩浆，我先绕一下～");
+    }
+
     /** v1.5.24：取背包中数量最多的可搭方块（BlockItem + 非下落），用于搭高挖矿。
      *  v1.1.0 实测二百三十一：含手部栏（主/副手）——手里拿的方块也能垫（审计修复） */
     protected Item takeBuildBlock(EntityMaid maid) {
@@ -582,13 +972,22 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
         return __took;
     }
 
+    /**
+     * 本行为对应的任务 uid（**子类唯一事实源**）：canStart / canStillUse 都读它，不各写一份字面量。
+     *
+     * <p>实测九百一十一：成员上提时把挖矿那一份 uid 判定写死进基类 → 伐木的 canStillUse
+     * 恒 false（任务 uid 是 woodcut，永远等不上下面的 mine）→ 行为每 tick 刚启动就被停，
+     * 女仆「彻底不会砍树」（`logs/promaid.log` 里只剩反复的 `wood behavior start`）。
+     * 所以 uid 归子类，基类只问"你干的是哪个任务"。
+     */
+    protected abstract ResourceLocation workTaskUid();
+
     @Override
     protected boolean m_6737_(ServerLevel level, EntityMaid maid, long gameTime) {
-        // v1.5.113：挖矿任务期间【常驻】——目标挖完不结束，下一 tick 继续扫描/
+        // v1.5.113：工作任务期间【常驻】——目标挖完不结束，下一 tick 继续扫描/
         // 迁移（与 canStart 常驻配套）；切走任务才停止（m_6732_ 退场）。
-        // 旧版 targetPos 挖完即 false → 行为停止 → 女仆原地发呆不找下一个矿。
-        return maid.getTask() != null
-                && ResourceLocation.parse("maid_smart:mine").equals(maid.getTask().getUid());
+        // 旧版 targetPos 挖完即 false → 行为停止 → 女仆原地发呆不找下一个目标。
+        return maid.getTask() != null && workTaskUid().equals(maid.getTask().getUid());
     }
 
     /** v1.5.189：危险方块注册名（与自保 SelfPreservationBehavior.DANGER_BLOCKS 同款） */

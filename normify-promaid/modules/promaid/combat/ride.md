@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/RideBindManager.java, line: 1, end_line: 2270}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidRideKit.java, line: 1, end_line: 534}
   - {path: promaid_src_neo/com/maidsmart/combat/RideBatonItem.java, line: 1, end_line: 36}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 401f8a2164997269eb8e7548316cf0215ee855d3727224de0d7e646a9d014fd9
 state: active

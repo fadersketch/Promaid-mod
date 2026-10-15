@@ -139,8 +139,8 @@
     "apis": []
   },
   "promaid.mixin": {
-    "zh": "85 个 Mixin（mixins.promaid.json 里 68 个 common 加 17 个 client），逐一核对无孤儿。这是本模组唯一能与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。",
-    "en": "85 mixins (68 common plus 17 client in mixins.promaid.json), verified 1:1 with no orphans. This layer is the mod's only legitimate channel for deep coupling into TLM/vanilla, and the reason it can change behavior without forking TLM.",
+    "zh": "96 个 Mixin（mixins.promaid.json 里 76 个 common 加 20 个 client），逐一核对无孤儿。这是本模组唯一能与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。",
+    "en": "96 mixins (76 common plus 20 client in mixins.promaid.json), verified 1:1 with no orphans. This layer is the mod's only legitimate channel for deep coupling into TLM/vanilla, and the reason it can change behavior without forking TLM.",
     "name": {
       "zh": "注入层（Mixin）",
       "en": "Mixin Layer"
@@ -171,6 +171,11 @@
         "promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java",
         1,
         110
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java",
+        1,
+        27
       ],
       [
         "promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java",
@@ -515,8 +520,8 @@
     "apis": []
   },
   "promaid.combat.targeting": {
-    "zh": "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供 /maid_smart combat check 自助判据检查。",
-    "en": "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus the /maid_smart combat check self-test.",
+    "zh": "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供 /maid_smart combat check 自助判据检查；另挂一发**滞留探针**——走位独占咬住（或本该咬住）时把「谁在咬 / 谁没在驱动」落成一行日志，用来分清闸门问题与闸门无关的滞留。",
+    "en": "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus the /maid_smart combat check self-test and a stall probe that logs who holds (or fails to drive) the maid when she should be moving but is not.",
     "name": {
       "zh": "飞行索敌与诊断",
       "en": "Flight Targeting & Diagnostics"
@@ -526,6 +531,11 @@
         "promaid_src_neo/com/maidsmart/combat/FlightTargeting.java",
         1,
         462
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CombatStallProbe.java",
+        1,
+        null
       ],
       [
         "promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java",
@@ -1076,8 +1086,8 @@
     "apis": []
   },
   "promaid.work.base": {
-    "zh": "挖矿与伐木两个 AI 行为逐字相同的部分上提而成的抽象基类：废石白名单、开路可破白名单、per-女仆 状态表与纯工具函数。上提后两个子类各留自己的差异（矿表 vs 原木表、连锁规则），不再各抄一份。",
-    "en": "The abstract base that mining and woodcutting now both extend, holding what the two AI behaviors had verbatim in common: the junk-stone whitelist, the open-breakable whitelist, the per-maid state map and the pure helpers. After the hoist each subclass keeps only its own differences (ore table vs log table, chain rules) instead of carrying a second copy.",
+    "zh": "挖矿与伐木两个 AI 行为逐字相同的部分上提而成的抽象基类：废石白名单、开路可破白名单、per-女仆 状态表与纯工具函数。上提后两个子类各留自己的差异（矿表 vs 原木表、连锁规则），不再各抄一份。另含 MaidWorkRangeExpand：干活期间把「工作范围」圈的半径读数临时顶到罩得住「她到主人 / 到圈心」的距离，让跟随与排班/在家两条\"太远就回去\"的判据都不把她从活上拽走。",
+    "en": "The abstract base that mining and woodcutting now both extend, holding what the two AI behaviors had verbatim in common: the junk-stone whitelist, the open-breakable whitelist, the per-maid state map and the pure helpers. After the hoist each subclass keeps only its own differences (ore table vs log table, chain rules) instead of carrying a second copy. Also holds MaidWorkRangeExpand, which temporarily inflates the restrict-radius readout while mining/woodcutting so it covers the distance to the owner and to the work center, keeping both the follow task and the schedule pull-back from dragging her off the job.",
     "name": {
       "zh": "采集行为共享基类",
       "en": "Gathering Behavior Base"
@@ -1086,7 +1096,12 @@
       [
         "promaid_src_neo/com/maidsmart/task/MaidWorkBehavior.java",
         1,
-        685
+        694
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidWorkRangeExpand.java",
+        1,
+        94
       ]
     ],
     "apis": [
@@ -1115,7 +1130,7 @@
       [
         "promaid_src_neo/com/maidsmart/task/MaidMineBehavior.java",
         1,
-        2329
+        2334
       ],
       [
         "promaid_src_neo/com/maidsmart/task/MaidMineTask.java",
@@ -1136,7 +1151,7 @@
       [
         "promaid_src_neo/com/maidsmart/task/MaidWoodBehavior.java",
         1,
-        2300
+        2305
       ],
       [
         "promaid_src_neo/com/maidsmart/task/MaidWoodTask.java",
@@ -1353,6 +1368,11 @@
         "promaid_src_neo/com/maidsmart/build/BuildArchive.java",
         1,
         176
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/FluidFreezeMixin.java",
+        1,
+        44
       ]
     ],
     "apis": []
@@ -2224,6 +2244,11 @@
         53
       ],
       [
+        "promaid_src_neo/com/maidsmart/dialogue/OutputLanguage.java",
+        1,
+        143
+      ],
+      [
         "promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java",
         1,
         119
@@ -2695,8 +2720,8 @@
     ]
   },
   "promaid.core": {
-    "zh": "配置定义与面板、管理指令、LLM 指挥工具、建构安全过滤器，以及若干薄壳（文件浏览器、工位标记、第三方模式兼容、提示词追加）。",
-    "en": "Config definition and panel, admin commands, LLM command tools, build-safety filters, plus a few thin shells (file picker, work-position marker, third-party mode compat, prompt appending).",
+    "zh": "配置定义与面板、管理指令、LLM 指挥工具、建构安全过滤器，以及若干薄壳（文件浏览器、第三方模式兼容、提示词追加）。",
+    "en": "Config definition and panel, admin commands, LLM command tools, build-safety filters, plus a few thin shells (file picker, third-party mode compat, prompt appending).",
     "name": {
       "zh": "核心与配置",
       "en": "Core & Config"
@@ -2855,22 +2880,6 @@
         "promaid_src_neo/com/maidsmart/compat/MaidModeCompat.java",
         1,
         112
-      ]
-    ],
-    "apis": []
-  },
-  "promaid.core.marker": {
-    "zh": "潜行加中键标记女仆的工作锚点；会礼让 TLM 的罗盘。",
-    "en": "Sneak plus middle-click marks a maid's work anchor; yields to TLM's compass.",
-    "name": {
-      "zh": "工位标记",
-      "en": "Work-Position Marker"
-    },
-    "sources": [
-      [
-        "promaid_src_neo/com/maidsmart/marker/WorkPosMarkerClient.java",
-        1,
-        102
       ]
     ],
     "apis": []

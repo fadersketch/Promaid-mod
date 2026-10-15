@@ -267,7 +267,23 @@ public class AiMemoryManager {
         String itemName = ForgeRegistries.ITEMS.getKey(held.m_41720_()).toString().replace("minecraft:", "");
         AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
         writeParagraph(store, AiMemoryType.EVENT, "主人喂了我" + itemName,
-                "food,user_profile", 7, System.currentTimeMillis(), level.m_46467_());
+                "food,user_profile", feedSalience(held, maid), System.currentTimeMillis(), level.m_46467_());
+    }
+
+    /** TLM 的「女仆感兴趣的食物」标签（touhou_little_maid:maid_tamed_item）——原版蛋糕与各模组蛋糕族 */
+    private static final net.minecraft.tags.TagKey<net.minecraft.world.item.Item> MAID_INTEREST =
+            net.minecraft.tags.ItemTags.create(new net.minecraft.resources.ResourceLocation(
+                    "touhou_little_maid", "maid_tamed_item"));
+
+    /** 实测九百七十七【投喂重要度分档】：她感兴趣的食物（上面的 TLM 标签，含 minecraft:cake）最高 10；
+     *  其次按营养 ≥8 的高价值食物 9；其余普通食物照旧 7。分档只改重要度，内容不变——
+     *  同一种食物反复喂仍是同一 hash，会被合并而不是越堆越多。 */
+    private static int feedSalience(ItemStack held, EntityMaid maid) {
+        if (held.m_204117_(MAID_INTEREST) || com.maidsmart.task.MaidCakeEatHandler.isCake(held)) {
+            return 10;
+        }
+        net.minecraft.world.food.FoodProperties food = held.getFoodProperties(maid);
+        return food != null && food.m_38744_() >= 8 ? 9 : 7;
     }
 
     @SubscribeEvent

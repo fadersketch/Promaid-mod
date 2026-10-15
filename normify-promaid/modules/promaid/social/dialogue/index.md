@@ -13,10 +13,11 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java, line: 1, end_line: 605}
   - {path: promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java, line: 1, end_line: 53}
+  - {path: promaid_src_neo/com/maidsmart/dialogue/OutputLanguage.java, line: 1, end_line: 143}
   - {path: promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java, line: 1, end_line: 119}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: 43a89e09822085dc4582af0902ec8e6876e14d9c23c898dec6bb8268a4b6fdfd
+fingerprint: 02c297f5ce1474fa8ba3871142209f2d2cbdaa79f594ed6a22da8e8626c004cd
 state: active
 tags: [dialogue, ai]
 deps:
@@ -32,4 +33,5 @@ LLM 对话周边层：主动对话 7 阶段状态机、回复反馈学习、世�
 
 - `promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java`:1
 - `promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java`:1
+- `promaid_src_neo/com/maidsmart/dialogue/OutputLanguage.java`:1
 - `promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java`:1

@@ -97,11 +97,16 @@ public final class FriendlyFireGuard {
                         maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
                         cleared = true;
                     }
-                    if (isFriendly(maid, maid.getTarget())) {
+                    // 空目标时 isFriendly 恒 true（"空"在伤害闸那边算友方），所以这两处必须先看非空：
+                    // 否则每个当前没目标的女仆每 2 秒都被记一次"清仇恨"，日志里全是假的 clear
+                    //（实测九百八十六：排查滞留时被这条噪音反复干扰）。
+                    LivingEntity gt = maid.getTarget();
+                    if (gt != null && isFriendly(maid, gt)) {
                         maid.setTarget(null);
                         cleared = true;
                     }
-                    if (isFriendly(maid, maid.getLastHurtByMob())) {
+                    LivingEntity hate = maid.getLastHurtByMob();
+                    if (hate != null && isFriendly(maid, hate)) {
                         maid.setLastHurtByMob(null);
                     }
                     if (cleared) {

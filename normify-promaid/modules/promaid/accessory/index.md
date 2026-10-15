@@ -18,7 +18,7 @@ description:
       1200 lines, serve this single feature.
 source:
   - {path: promaid_src_neo/com/maidsmart/accessory, line: 1}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: ebaa57f78c7271dc9d2044ca1bed7857cbdf7a3baf060d39e7a3b681c7a0b8d9
 state: active

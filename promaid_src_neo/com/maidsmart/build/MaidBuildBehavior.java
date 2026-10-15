@@ -109,7 +109,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  目标格旁的安全站立格，配合挥臂动画即为"亲手摆放"观感；找不到安全站姿则不瞬移
      *  （隔空放置兜底，绝不瞬移到危险/卡身位置）。
      *  限频 4 tick → 实测五百五十六改为 **2 tick**（用户："把传送到要搭建的方块旁边的间隔减半"）
-     *  ——摆放连着出时瞬移能跟上每一次落块；极速模式仍是放置冷却本身在控节奏，不会连闪到失控。 */
+     *  → 实测九百六十四曾改为 1 tick（"频率改为原来的4倍"）→ 实测九百六十六按开发者指令
+     *  **回退 2 tick**（反馈：×1 档下她不瞬移；1 tick 只会比 2 tick 放行更多，是否同因未定论）。 */
     private static final java.util.Map<java.util.UUID, Long> LAST_TELEPORT = new java.util.HashMap<>();
     private static final int TELEPORT_MIN_INTERVAL = 2;
 
@@ -630,11 +631,13 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             // 由活放置收敛到设计态；普通建筑保持 flag 2 静默 + 原状态。
             boolean machineLive = BlueprintLib.isMachineBlueprint(ps.blueprintId)
                     && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
-            String machineState = machineLive
-                    ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt;
+            // 【实测九百八十五】发射器/投掷器一律以“已触发”态落地（见 safeDispenserState）：
+            // 机器活建造里红石往往最后落位——一通电它就吐一个盒子里的东西出来。
+            String machineState = BlueprintLib.safeDispenserState(blockId,
+                    machineLive ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt);
             // v1.1.0 实测二百七十二：先瞬移到工地旁（方案 B）——放置前把女仆传到
             // 目标格旁的安全站立格，配合挥臂动画即"亲手摆放"观感；无安全站姿/已
-            // 在旁边则不瞬移（隔空放置兜底）。限频 4 tick（极速模式不连闪）。
+            // 在旁边则不瞬移（隔空放置兜底）。限频 2 tick。
             teleportToWorkSite(level, maid, target);
             if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
                     prog.plannedPositions(plan), false, planMainBlock(ps, plan), machineLive)) {
@@ -876,8 +879,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 // v1.5.316：机器活建造（同主循环——flag 3 活放置 + 状态归一化）
                 boolean machineLive = BlueprintLib.isMachineBlueprint(ps.blueprintId)
                         && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
-                String machineState = machineLive
-                        ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt;
+                // 【实测九百八十五】发射器/投掷器一律以“已触发”态落地（见 safeDispenserState）：
+                // 机器活建造里红石往往最后落位——一通电它就吐一个盒子里的东西出来。
+                String machineState = BlueprintLib.safeDispenserState(blockId,
+                        machineLive ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt);
                 // v1.1.0 实测二百七十二：先瞬移到工地旁（方案 B）——同主循环
                 teleportToWorkSite(level, maid, target);
                 if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
@@ -923,6 +928,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                             // 不触发）。超时走跳过兜底，缺口由重新下达蓝图补建。
                             if (supPos != null && !level.isLoaded(supPos)) {
                                 reorder.add(idx); // 支撑格区块未加载 → 延后等区块
+                                continue;
+                            }
+                            // v1.5.399：支撑格 = 蓝图里的液体步骤（水/岩浆）——液体一律排到计划
+                            // 末尾（见 BlueprintStepMath.moveFluidsLast），附着块必然先于它被扫到；
+                            // 这里必须等到底（旧的 10 次上限在大型蓝图里会在水放下来之前就把
+                            // 睡莲这类流体支撑的附着块当成悬空跳过）
+                            if (supPos != null && BlueprintLib.isFluidStepAt(plan, origin, supPos)) {
+                                reorder.add(idx);
                                 continue;
                             }
                             if (fails < 10) {
@@ -1024,6 +1037,15 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     return;
                 }
             }
+            // 实测九百六十一：完工「后门」——先把她刚建好的这一片静默清空（无粒子、
+            // 无音效、不触发邻居更新；流体一起清），再按蓝图整片重放一遍，终态 = 蓝图本身。
+            // 建造顺序留下的中间态（活塞被推走/信号误触/水流冲散/补支撑多出的石头）
+            // 就此抹平——"机器因为建造顺序而失效"从根上不再可能。build.snapFinish
+            // 关闭或步数超上限时自动跳过；放在开入口之前，免得刚开的门洞又被补齐。
+            // 【实测九百八十五·点1】先问一句“这批材料用过等价替代吗”：altUsed 非空 =
+            // 她缺料时用等价族里的别的方块顶替过 → 重放会把替代品整片换回图纸原材料，
+            // 建筑就变样了（“如果玩家使用了等价材料组进行替换，那么这个功能是不生效的”）。
+            BlueprintLib.snapFinish(level, origin, plan, machineSmart, !prog.altUsed.isEmpty());
             // v1.5.28：自动开入口（蓝图无门时在主人方向外墙开门洞）
             // v1.5.287：红石机器蓝图豁免——machine_ 前缀不开门洞（围壳可能被打穿，
             // 机器内部结构（活塞/漏斗/红石）被破坏）
@@ -1042,9 +1064,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 //（此处保留——补建完成的最终路径再次激活，幂等）
                 BlueprintLib.recalcRedstone(level, origin, plan);
             }
-            // v1.5.317：所有计划完工统一批激活水/岩浆源（水源静默放置为源块，重放
+            // v1.5.317：所有计划完工统一批激活流体源（水源静默放置为源块，重放
             // flag 3 → 流动/气泡柱成形——机器水道/冰道与建筑水池都需要；旧版机器
             // 计划无水、activateWater 空转的根因已在 v1.5.317 导入层修复）
+            // 【实测九百六十八】岩浆一并激活（此前只认水）。这一段的整条流水线（分工见
+            // FluidFreezeMixin / snapFinish 的注释）：建造期女仆一块一块放（含流体）→ 全程静止
+            //（随机刻/重力/流体/树叶/TNT 四档冻结；普通建筑连机械都静默）→ 全部放完后**静默整片重放**
+            //（终态 = 图纸）→ 这里**流体统一激活**（水 + 岩浆，flag 3）→ TNT 结算 → 清掉落 →
+            // 删区块 → 宣布完成。激活时区域若还在冻结中，那几拍流动会被暂缓到删区块之后照常发生。
             BlueprintLib.activateWater(level, origin, plan);
             // v1.5.331：完工 TNT 点火结算——保护窗口内压制了建造期/激活期点火，
             // 这里只点燃【当前邻接带电】的 TNT，恢复正确终态：轰炸机（矿车压轨
@@ -1239,7 +1266,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // 后由完工 activateWater 批激活 → 统一流动/气泡柱成形（逐个活放会因相邻 水源先流过来而跳过后续源块 → 气泡柱/水道不完整）。 无条件调 onPlace，字节码实证）——TNT 放置改走 placeTntSafe 挂护栏 （MixinTntBuildGuard 在 onPlace 头部 cancel），TNT 以稳定方块落地； 机器运行时红石翻转/触发走 neighborChanged 正常点燃。 支撑由 v1.5.51 补支撑保证；掉落验证仍兜底。
         int flag = 2;
         if (live && !(placed instanceof net.minecraft.world.level.block.TntBlock)
-                && !(placed instanceof net.minecraft.world.level.block.LiquidBlock)) {
+                && !BlueprintStepMath.isFluid(placed)) {
             flag = 3;
         }
         placeTntSafe(level, target, placeState, flag);

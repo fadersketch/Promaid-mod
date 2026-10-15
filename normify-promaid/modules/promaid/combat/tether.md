@@ -13,7 +13,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/GunnerTetherManager.java, line: 1, end_line: 1946}
   - {path: promaid_src_neo/com/maidsmart/combat/GunnerTetherNetworking.java, line: 1, end_line: 113}
   - {path: promaid_src_neo/com/maidsmart/combat/CombatLeashItem.java, line: 1, end_line: 36}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 39055d2ce14f76a3b88c6d6d687f29722decd7b4c064fe8c207f3c1d03a267fc
 state: active

@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/memory/AiMemoryIndexStore.java, line: 1, end_line: 171}
   - {path: promaid_src_neo/com/maidsmart/memory/AiMemorySearch.java, line: 1, end_line: 221}
   - {path: promaid_src_neo/com/maidsmart/memory/AiMemorySkipList.java, line: 1, end_line: 126}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f1277caaed79a573c75b19405f430a5dfd1fe7eb06d9fabf169c1e348d98ad20
 state: active

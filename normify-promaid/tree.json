@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "generated_at": "2026-10-01T00:00:00Z",
-  "revision": "8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f",
+  "revision": "f94c12de83c73b74b57c4d736c614ed6bca9d571",
   "trees": [
     {
       "name": "promaid",
       "root": "promaid",
-      "modules": 120
+      "modules": 119
     },
     {
       "name": "promaid-forge",
@@ -150,7 +150,7 @@
       "tags": [
         "mixin"
       ],
-      "fingerprint": "c89862942f6a265c7bf663921388d1786eb3ec1b56bba930b06657e7bd2b0aa3",
+      "fingerprint": "632f4cca034ae0d8ab83619a883c19f407b183b90656e4a2984d3aba19dde15b",
       "apis": 2,
       "deps": 2
     },
@@ -404,9 +404,9 @@
         "combat",
         "diagnostics"
       ],
-      "fingerprint": "0102c0ae0d170158005c3b3c0ff258db7107623923957aa320d973585ed08339",
+      "fingerprint": "87aafe6af4501357e9a21e0701cfa7b8ff2418f200644ff0dc1f0702cdc3f3ad",
       "apis": 0,
-      "deps": 2
+      "deps": 5
     },
     "promaid.combat.flight-raid": {
       "uid": "bc08a9f6",
@@ -813,7 +813,7 @@
         "work",
         "shared"
       ],
-      "fingerprint": "a9d3b7eda1f1842c3eecd2f49f97f4bb5892c455b7373c7e60cdd481ecf17a41",
+      "fingerprint": "f92cbdc45694e103cc72abb0b16d51908b469c3d01874f295942276b9102f454",
       "apis": 2,
       "deps": 0
     },
@@ -1033,7 +1033,7 @@
       "tags": [
         "build"
       ],
-      "fingerprint": "d28afba3bece0d7936d47f126efa2753a8eb9785795eccf8ce78a3e40e38fa3d",
+      "fingerprint": "be0dbc96d4b3aef83fb009cec78e938a86bd3fc3483dbf74622fe149483d9499",
       "apis": 0,
       "deps": 0
     },
@@ -1659,7 +1659,7 @@
         "dialogue",
         "ai"
       ],
-      "fingerprint": "43a89e09822085dc4582af0902ec8e6876e14d9c23c898dec6bb8268a4b6fdfd",
+      "fingerprint": "02c297f5ce1474fa8ba3871142209f2d2cbdaa79f594ed6a22da8e8626c004cd",
       "apis": 0,
       "deps": 2
     },
@@ -2149,25 +2149,6 @@
       "apis": 0,
       "deps": 0
     },
-    "promaid.core.marker": {
-      "uid": "13495dcc",
-      "id": "promaid.core.marker",
-      "parent": "promaid.core",
-      "tree": "promaid",
-      "name": {
-        "zh": "工位标记",
-        "en": "Work-Position Marker"
-      },
-      "path": "modules/promaid/core/marker.md",
-      "leaf": true,
-      "tags": [
-        "core",
-        "client"
-      ],
-      "fingerprint": "3e0cadeeb44ec48d98131da1e81969a3cb092fce8b28607118bbb96028cc6067",
-      "apis": 0,
-      "deps": 0
-    },
     "promaid.core.prompt": {
       "uid": "5d7d787c",
       "id": "promaid.core.prompt",
@@ -2511,6 +2492,33 @@
       "label": {
         "zh": "工作范围",
         "en": "Work range"
+      }
+    },
+    {
+      "from": "promaid.combat.targeting",
+      "to": "promaid.work.tags",
+      "kind": "call",
+      "label": {
+        "zh": "独占标记",
+        "en": "Chain-drive tag"
+      }
+    },
+    {
+      "from": "promaid.combat.targeting",
+      "to": "promaid.combat.tactics",
+      "kind": "call",
+      "label": {
+        "zh": "驱动判定",
+        "en": "Pilot check"
+      }
+    },
+    {
+      "from": "promaid.combat.targeting",
+      "to": "promaid.combat.self-preservation",
+      "kind": "call",
+      "label": {
+        "zh": "自保判定",
+        "en": "Preserve check"
       }
     },
     {
@@ -2965,16 +2973,16 @@
     }
   ],
   "stats": {
-    "modules": 121,
-    "leaves": 103,
+    "modules": 120,
+    "leaves": 102,
     "containers": 18,
     "apis": 61,
-    "edges": 73,
+    "edges": 76,
     "depth": 3
   },
   "diagnostics": {
     "errors": 0,
-    "warnings": 72,
+    "warnings": 71,
     "warning_list": [
       {
         "severity": "warning",
@@ -3449,13 +3457,6 @@
         "severity": "warning",
         "code": "structure/leaf-too-coarse",
         "subject": "promaid.core.compat",
-        "message": "叶子未声明 API（建议 3–5 条）",
-        "evidence": ""
-      },
-      {
-        "severity": "warning",
-        "code": "structure/leaf-too-coarse",
-        "subject": "promaid.core.marker",
         "message": "叶子未声明 API（建议 3–5 条）",
         "evidence": ""
       },

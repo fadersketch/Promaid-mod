@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/BombExplosion.java, line: 1, end_line: 190}
   - {path: promaid_src_neo/com/maidsmart/combat/BombTntTick.java, line: 1, end_line: 193}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidTntBlastGuard.java, line: 1, end_line: 299}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 80906e7587adae2e6ec29e99e9f77c70c2ae6f089c6c55feefa98327cb070553
 state: active

@@ -27,10 +27,11 @@ public final class MaidConfigPreset {
     private static final java.util.Set<String> SKIP = java.util.Set.of();
 
     /**
-     * DIY 不动的项：纯附加子系统、护栏、修复，以及"关掉反而更危险 / 只是把 bug 放回来"的那些。
-     *
-     * <p>判据 = 它不动 TLM 的女仆行为（只加我们自己的系统/显示/播报）；会改变女仆行为且有配置项的
-     * 一律不收——它们随 DIY 关，代价是有意的：卡住不自愈、骑乘照原版搭方块、模组原木只认名单、不自取光源。
+     * DIY 不动的项：纯附加子系统、护栏、修复，以及"关掉反而更危险 / 只是把 bug 放回来"的那些
+     * （判据 = 它不动 TLM 的女仆行为，只加我们自己的系统 / 显示 / 播报）。
+     * <p>DIY 新规起「新任务（挖矿/伐木/建造/扫帚/宰杀/空袭）与新物品」整块排除在 DIY 之外，
+     * 走 {@link #DIY_KEEP_PREFIX} / {@link #DIY_KEEP_EXACT}，不再逐条往这张表里搬——
+     * DIY 之后 = TLM 原版的女仆行为 + 我们新增的任务与物品照常可用。
      */
     private static final java.util.Set<String> KEEP = java.util.Set.of(
             // ---- 建造：自己的道具与只在客户端画的投影；不强制 home 是"少管"的一档 ----
@@ -65,7 +66,7 @@ public final class MaidConfigPreset {
             // ---- 保护玩家已有配置 / 修 bug：罗盘圈不被覆盖、传送后重建、背包溢出兜底 ----
             "misc.compassPriority", "misc.maidTeleportRebuild", "misc.backpackOverflow",
             // ---- 自己的显示与标记 ----
-            "misc.cooldownHud", "misc.workPosMarker", "misc.scheduleBubbleEnabled",
+            "misc.cooldownHud", "misc.scheduleBubbleEnabled",
             // ---- 放置护栏：悬空禁搭、不搭在主人身上 ----
             "misc.noPlaceInAir", "misc.noPlaceOnOwner",
             // ---- 投弹/搭路的安全档 ----
@@ -73,6 +74,50 @@ public final class MaidConfigPreset {
             "bridge.buildOnlyNatural",
             // ---- 本项自身（只记录模式；模式的两个伴生总闸与它同源，DIY 时要一起关，故不进保留表） ----
             PATH_PRESET_MODE);
+
+    /**
+     * 实测九百四十七【DIY 新规】：「新功能」的前缀表——这些前缀下的项 DIY **一概不动**。
+     *
+     * <p>它们是「本模组**新加的功能**」，不是「本模组对女仆原有行为的改动」，所以不吃 DIY：
+     * 新任务（挖矿 / 伐木 / 建造 / 扫帚 / 空袭 + 接敌机动）、新物品（武装拴绳 / 骑乘指挥棒 /
+     * 压缩盒 / 饰品「大运」）。判据用**前缀**而不是逐条列，因为一个功能往往有十几到几十个配置项
+     * （空袭 48 + 轰炸 25 + 骑乘 18 + 扫帚 17 …），逐条维护必然漂。
+     */
+    private static final java.util.Set<String> DIY_KEEP_PREFIX = java.util.Set.of(
+            "mine.", "wood.", "build.",           // 新任务：挖矿 / 伐木 / 建造
+            "broom.",                              // 新任务：扫帚模式
+            "bombing.", "airRaid.", "maneuver.",   // 新任务：空袭（投放 / 数值 / 空中接敌机动）
+            "tether.", "ride.",                    // 新物品：武装拴绳 / 骑乘指挥棒
+            "compressionBox.", "accessory.");      // 新物品：压缩盒 / 饰品「大运」
+
+    /**
+     * 新任务里挂在 {@code misc.*} 下的那些项（宰杀 / 农场整片与连锁 / 烹饪 / 酿造）——同样 DIY 不动。
+     * 它们没有独立前缀（历史上都写进 misc 段），所以只能点名列出。
+     */
+    private static final java.util.Set<String> DIY_KEEP_EXACT = java.util.Set.of(
+            "misc.slaughterCount", "misc.slaughterRadius",
+            "misc.produceTaskEnhance", "misc.chainHarvest", "misc.chainHarvestLimit",
+            "misc.batchPlant", "misc.batchPlantLimit",
+            "misc.maidBonemealFarm", "misc.maidBonemealSapling", "misc.autoCollect",
+            "misc.cookBurnWood", "misc.cookFuelAllow", "misc.cookFuelDeny", "misc.cookRadius",
+            "misc.cookSmeltAllow", "misc.cookSmeltAny", "misc.cookSmeltDeny", "misc.cookSmeltOres",
+            "misc.cookSmokerBlast", "misc.brewAuto", "misc.brewRadius");
+
+    /** 这个路径是不是「新功能」（新任务 / 新物品）→ DIY 不动它。 */
+    static boolean isNewFeature(String path) {
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        if (DIY_KEEP_EXACT.contains(path)) {
+            return true;
+        }
+        for (String pre : DIY_KEEP_PREFIX) {
+            if (path.startsWith(pre)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /** 反语义项：默认 false 恰恰等于"我们介入了"，DIY 要显式置 true（回 TLM 原版惊慌） */
     private static final java.util.Set<String> FORCE_ON = java.util.Set.of("combat.fleeWithSaveItem");
@@ -85,11 +130,10 @@ public final class MaidConfigPreset {
     private static final java.util.Map<String, Object> VALUES = java.util.Map.of(
             "combat.playerDamageMode", 0,        // 0 = TLM 原版规则：玩家伤害 ÷5、上限 2
             "combat.combatWorkRange", 0,         // 0 = 不接管战斗工作圈
-            "combat.assistRadius", 0,            // 0 = 不援护、不撒手
-            "combat.flightRecallDistance", 0,    // 0 = 空袭牵引绳关闭
-            "broom.recallDistance", 0,           // 0 = 扫帚牵引绳关闭
-            "build.speedTier", "x1",
-            "ride.startupDelaySeconds", 0.0);            // x1 = 原速档（非加速档）
+            "combat.assistRadius", 0);           // 0 = 不援护、不撒手
+            // 实测九百四十七：空袭牵引绳（combat.flightRecallDistance）、扫帚牵引绳（broom.recallDistance）、
+            // 建造速度档（build.speedTier）、骑乘启动延迟（ride.startupDelaySeconds）**已从本表移出**——
+            // 空袭 / 扫帚 / 建造 / 骑乘属「新功能」，DIY 下与默认模式一模一样（见 DIY_KEEP_PREFIX）。
 
     /** 恢复出厂默认时要保留的项：个人凭据（重置不该丢钥匙） */
     private static final java.util.Set<String> RESET_KEEP = java.util.Set.of(
@@ -103,7 +147,7 @@ public final class MaidConfigPreset {
     }
 
     /** 反射取全部配置项（静态 ConfigValue 字段）；失败返回空表（预设退化为什么都不做） */
-    private static java.util.List<Object[]> fields() {
+    static java.util.List<Object[]> fields() {
         java.util.List<Object[]> local = FIELDS;
         if (local != null) {
             return local;
@@ -154,6 +198,11 @@ public final class MaidConfigPreset {
         for (Object[] e : fields()) {
             String path = (String) e[0];
             if (SKIP.contains(path) || PATH_PRESET_MODE.equals(path)) {
+                continue;
+            }
+            // 实测九百四十七【DIY 新规】：新任务 / 新物品整块不参与 DIY——
+            // 它们的开关与数值在 DIY 下与默认模式**逐项相同**。
+            if (isNewFeature(path)) {
                 continue;
             }
             Object cur = read(e[1]);

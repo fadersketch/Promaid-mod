@@ -40,6 +40,8 @@ public final class ScheduleTaskAvailability {
     private static final ResourceLocation COOK = ResourceLocation.parse("maid_smart:cook");
     private static final ResourceLocation BREW = ResourceLocation.parse("maid_smart:brew");
 
+    private static final TagKey<Block> ORE_TAG_FORGE = BlockTags.create(ResourceLocation.parse("forge:ores"));
+    private static final TagKey<Block> ORE_TAG_COMMON = BlockTags.create(ResourceLocation.parse("c:ores"));
     private static final TagKey<Block> LOGS_TAG = BlockTags.create(ResourceLocation.parse("minecraft:logs"));
     private static final TagKey<Block> BAMBOO_TAG = BlockTags.create(ResourceLocation.parse("minecraft:bamboo_blocks"));
 
@@ -115,7 +117,8 @@ public final class ScheduleTaskAvailability {
     private static boolean hasOreInRange(EntityMaid maid) {
         Set<String> ores = keySetOf(com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get());
         if (ores.isEmpty()) {
-            return true; // 挖矿表为空（加载时序/玩家清空）：无法判定，放行
+            // 实测九百八十：面板是唯一来源——矿物表空 = 她不会挖任何东西，任务判为不可用
+            return false;
         }
         int r = Math.max(1, com.maidsmart.config.MaidSmartConfig.MINE_SEARCH_RADIUS.get());
         int down = Math.max(0, com.maidsmart.config.MaidSmartConfig.MINE_DOWN_RANGE.get());
@@ -132,8 +135,14 @@ public final class ScheduleTaskAvailability {
                     if (!level.m_46749_(p)) {
                         continue; // 未加载不触发加载
                     }
-                    Block b = level.m_8055_(p).m_60734_();
-                    if (b != null && ores.contains(keyOf(b))) {
+                    BlockState st = level.m_8055_(p);
+                    if (st.m_60795_()) {
+                        continue;
+                    }
+                    // 实测九百七十三：判据收敛到挖矿行为那一份（含"显式拉黑"）——旧版这里
+                    // 自己写了一份"名单 + tag 自动"，与行为里的判定各漏一半：玩家把某矿
+                    // 从表里删掉后，排班依旧认为"这儿有矿"，切过去就是站桩
+                    if (com.maidsmart.task.MaidMineBehavior.isTargetOre(st)) {
                         return true;
                     }
                 }
@@ -144,9 +153,9 @@ public final class ScheduleTaskAvailability {
 
     private static boolean hasWoodInRange(EntityMaid maid) {
         Set<String> woods = keySetOf(com.maidsmart.config.MaidSmartConfig.WOOD_VALUES.get());
-        boolean tagAuto = com.maidsmart.config.MaidSmartConfig.WOOD_TAG_AUTO.get();
-        if (woods.isEmpty() && !tagAuto) {
-            return true; // 既无名单、又关 tag 自动识别：无法判定，放行
+        if (woods.isEmpty()) {
+            // 实测九百八十（同矿）：木材表空 = 任务不可用
+            return false;
         }
         int r = Math.max(1, com.maidsmart.config.MaidSmartConfig.WOOD_SEARCH_RADIUS.get());
         int down = Math.max(0, com.maidsmart.config.MaidSmartConfig.WOOD_DOWN_RANGE.get());
@@ -167,9 +176,8 @@ public final class ScheduleTaskAvailability {
                     if (st.m_60795_()) {
                         continue;
                     }
-                    Block b = st.m_60734_();
-                    if (woods.contains(keyOf(b))
-                            || (tagAuto && (st.m_204336_(LOGS_TAG) || st.m_204336_(BAMBOO_TAG)))) {
+                    // 实测九百七十三：同挖矿——判据收敛到伐木行为那一份
+                    if (com.maidsmart.task.MaidWoodBehavior.isTargetWood(st)) {
                         return true;
                     }
                 }

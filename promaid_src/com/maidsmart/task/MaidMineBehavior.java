@@ -38,48 +38,70 @@ import java.util.Map;
  * - **破坏音效**：挖完用 levelEvent 2001（与玩家挖矿完全相同的方块破坏音+粒子）
  * - 只开采白名单矿石，不破坏地形
  * - 掉落物走女仆拾取模式，不凭空生成
- * - v1.5.4（借鉴 numen MiningEconomics）：目标选择 = 距离平方 + 深度惩罚
- *   (3.0/格，越深越远成本越高) - 矿石价值加成（钻石/绿宝石 > 金/铁 > 煤/石英）
+ * - v1.5.4（借鉴 numen MiningEconomics）：目标选择 = 她到矿的距离平方（最近优先）
+ *   实测九百一十三起：旧的"深度惩罚/价值加成"两项已废除——圈内最近的那块就是目标
  */
 public class MaidMineBehavior extends MaidWorkBehavior {
-    /** 矿石价值（分数减项，越高越优先）；v1.5.102：价值权重/深度惩罚从配置面板读取（mine 段） */
+    /** 矿石价值（仅用于"挖不动时的播报挑哪块报"——v1.5.102 起不再参与选矿排序） */
     private static final Map<Block, Integer> ORE_VALUE = new HashMap<>();
 
-    static {
-        reloadBuiltinOres(); // 初始默认矿表；首次 loadCustomOres() 后完全由配置接管
+    // 实测九百八十【面板 = 唯一来源】：内置矿表 / 标签自动识别 / `!id` 拉黑三条旧入口全删——
+    // 现在"什么是矿"只有一个答案：配置里那张目标矿物表（面板上绿框勾中的那些），由
+    // loadCustomOres() 读进下面的 ORE_VALUE；默认值来自 MaidSmartConfig.DEFAULT_ORE_VALUES。
+
+    /** 方块能不能当矿——**本模组唯一判据**（挖矿行为与排班探测共用这一份，不再各写一套）。 */
+    public static boolean isTargetOre(BlockState state) {
+        return oreValueOf(state) != null;
     }
 
-    private static void setValue(String id, int value) {
-        Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(id));
-        if (block != null) {
-            ORE_VALUE.put(block, value);
+    /** 注册名 → 方块（矿表行 / 拉黑行共用；取不到给 null） */
+    private static Block blockOf(String id) {
+        try {
+            return ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(id.trim()));
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
+            return null;
         }
     }
 
     /**
-     * 内置矿表（默认占位；一旦 loadCustomOres 从配置重建，仅配置为唯一事实源）。
+     * 【实测九百九十九】标签行（`#命名空间:标签`，矿表 / 木材表共用）→ 该方块标签下全部方块的注册名。
+     *
+     * <p>取不到 / 标签不存在 / 任何异常 → 空表（恒不命中的标签什么都不影响）。直接查注册表的
+     * tag 视图，不做全表扫描；服务端与客户端（面板绿勾判定）都可用。
      */
-    private static void reloadBuiltinOres() {
-        setValue("minecraft:diamond_ore", 500);
-        setValue("minecraft:deepslate_diamond_ore", 500);
-        setValue("minecraft:emerald_ore", 450);
-        setValue("minecraft:deepslate_emerald_ore", 450);
-        setValue("minecraft:gold_ore", 250);
-        setValue("minecraft:deepslate_gold_ore", 250);
-        setValue("minecraft:nether_gold_ore", 250);
-        setValue("minecraft:iron_ore", 250);
-        setValue("minecraft:deepslate_iron_ore", 250);
-        setValue("minecraft:copper_ore", 200);
-        setValue("minecraft:deepslate_copper_ore", 200);
-        setValue("minecraft:redstone_ore", 200);
-        setValue("minecraft:deepslate_redstone_ore", 200);
-        setValue("minecraft:lapis_ore", 200);
-        setValue("minecraft:deepslate_lapis_ore", 200);
-        setValue("minecraft:coal_ore", 100);
-        setValue("minecraft:deepslate_coal_ore", 100);
-        setValue("minecraft:nether_quartz_ore", 100);
+    public static java.util.List<String> blockIdsInTag(String line) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        try {
+            String name = line == null ? "" : line.trim();
+            if (name.startsWith("#")) {
+                name = name.substring(1);
+            }
+            if (name.isEmpty()) {
+                return out;
+            }
+            net.minecraft.tags.TagKey<net.minecraft.world.level.block.Block> tag =
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse(name));
+            for (net.minecraft.core.Holder<net.minecraft.world.level.block.Block> h : net.minecraft.core.registries.BuiltInRegistries.f_256975_.m_206058_(tag)) {
+                net.minecraft.resources.ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(h.m_203334_());
+                if (id != null) {
+                    out.add(id.toString());
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
+        }
+        return out;
     }
 
+    /** 矿值查询（**唯一判据**）：只认配置里那张目标矿物表——不在表里就不是矿。
+     *  实测九百八十：旧的"标签自动识别"（forge:ores / c:ores 兜底）已删，面板上没勾的
+     *  方块一律不算矿（开发者口径："自动识别只会把绿色框里面的矿物识别为有效矿物"）。
+     *  首次调用会懒加载配置，早于任何扫描也能拿到正确的表。 */
+    private static Integer oreValueOf(BlockState state) {
+        if (!customOresLoaded) {
+            ensureCustomOres();
+        }
+        return ORE_VALUE.get(state.m_60734_());
+    }
 
     /**
      * 自定义矿表——适配其他 mod 的矿石。首次扫描/配置保存后调用。
@@ -92,13 +114,32 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         try {
             ORE_VALUE.clear(); // v1.0.3.1：先清空——保证移除/取消勾选生效
             for (String line : com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get()) {
-                String[] parts = line.split("=", 2);
+                if (line == null) {
+                    continue;
+                }
+                String raw = line.trim();
+                // 实测九百八十：只认 `id=价值` 行；实测九百九十九起 `#命名空间:标签` 的标签行
+                // 也认（展开成整条标签的方块，见 blockIdsInTag）。旧版写下的 `!id`（拉黑行）在这里
+                // 被跳过 = 不进表 = 不挖，与旧行为完全一致（"拉黑"这个概念本身已删）。
+                String[] parts = raw.split("=", 2);
                 if (parts.length != 2) {
                     continue;
                 }
                 try {
                     int v = Integer.parseInt(parts[1].trim());
-                    Block b = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(parts[0].trim()));
+                    // 实测九百九十九：`#` 开头的标签行——整条方块标签按同一价值一起进表
+                    // （默认表尾两条就是矿物标签，模组矿石不必逐块添加）；取不到的标签整行跳过。
+                    String key = parts[0].trim();
+                    if (key.startsWith("#")) {
+                        for (String tid : blockIdsInTag(key)) {
+                            Block tb = blockOf(tid);
+                            if (tb != null) {
+                                ORE_VALUE.put(tb, v);
+                            }
+                        }
+                        continue;
+                    }
+                    Block b = blockOf(key);
                     if (b != null) {
                         ORE_VALUE.put(b, v);
                     }
@@ -130,10 +171,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         return r * r;
     }
 
-    /** 实测八百六十八：本锚点内【暂时放弃】的矿——换锚点（relocate/slideAnchor）时才清空。
-     *  与 RECENT_DISCARD 不同：那个是 30 秒短排、挖掉任一块即清，会"弃→挖→再弃"打转；
-     *  这个在框没换之前不再回头啃同一块（参考 maid_mining 的 ABANDONED 集合）。 */
-    private static final Map<Integer, java.util.Set<BlockPos>> ABANDONED = new HashMap<>();
     /** 实测八百六十九：没镐不启动的气泡提示限频（实体 ID → 上次提示 tick） */
     private static final Map<Integer, Long> NO_PICK_REPORT_SINCE = new HashMap<>();
 
@@ -141,6 +178,12 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     private static final Map<Integer, OreCache> ORE_CACHE = new HashMap<>();
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
     private static final long ORE_CACHE_TTL = 100L;
+
+    /** 实测九百三十六：这条挡路块"走不到"记下的位置 + 记住到哪一拍（见挡路块分支，防来回横跳）。 */
+    private BlockPos unreachableBlocker;
+    private long unreachableBlockerUntil;
+    /** 挡路块"走不到"的记忆时长（拍）：这几十拍内不再试它，直接交给接近链。 */
+    private static final long MINE_BLOCKER_UNREACHABLE_TICKS = 40L;
 
     /**
      * v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描的分帧游标状态
@@ -177,15 +220,12 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         TARGET_SINCE.remove(maidEntityId);
         SKIP_REPORT_SINCE.remove(maidEntityId);
         BLOCKED_REPORT_SINCE.remove(maidEntityId);
-        RECENT_DISCARD.remove(maidEntityId);
-        ABANDONED.remove(maidEntityId); // 实测八百六十八：本锚点排除表一并清
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
+        IDLE_PAUSE_UNTIL.remove(maidEntityId); // 实测九百七十七：无目标静默窗口一并清
         NO_PICK_REPORT_SINCE.remove(maidEntityId); // 实测八百六十九
         ORE_CACHE.remove(maidEntityId);
         MINE_SCANS.remove(maidEntityId); // 实测六十一：分帧扫描游标一并清
-        LAST_PROGRESS.remove(maidEntityId); // 实测六十九：看门狗三表一并清
-        WATCH_SAMPLE.remove(maidEntityId);
-        RESET_REPORT_SINCE.remove(maidEntityId);
+        RECENT_DISCARD.remove(maidEntityId); // 实测九百四十一：停滞弃置表（与伐木共表）
     }
 
     /** 审计 P-9：按 UUID 清理 MINING 集合（int 表与 UUID 表分开清理） */
@@ -221,15 +261,24 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     private String skippedOreTool = null;
     private int skippedOreValue = -1;
 
-    /** 实测八百六十九【锁定期间的重挑间隔】（tick，100 = 5 秒）：见 tick() 的持续重挑块 */
-    private static final int MINE_REPICK_INTERVAL = 100;
-    /** v1.1.0 实测四十三：走路卡死检测——接近矿期间位置长期不变（导航有路径但
-     *  实体被地形卡住原地踏步）→ 模拟"收回重放"强制重寻路；多次仍卡 → 判不可达弃置 */
+    /** 实测九百四十一【"卡死脱困"补回，但只认真的没挪窝】：九百三十二 把弃置整段删了
+     *  （当时口径：她有镐有方块、不存在够不着，推进链必须自己送她上去）——可实机里站位在矿
+     *  下方、头顶那格刨不动、导航又给不出路径这三件事同时成立时，推进链的三个出口（垫高 /
+     *  挖开头顶 / 走位）全落空，她会顶着 mine 够不着-继续推进 与 work walk stuck … path=false
+     *  这一对日志原地卡死（17:34 实测 ≥25 秒，直到退出游戏）。这里按伐木同款补回"停滞检测"，
+     *  判据收紧为【同一目标 + 双脚位置连续 MINE_WEDGE_TICKS 拍一字未动】——她只要在推进
+     *  （垫高 / 走位 / 开挖）双脚就一直在变，不会被误弃。见 distSq > reachSq 分支。 */
+    private static final int MINE_WEDGE_TICKS = 40;
     private BlockPos lastStuckPos = null;
     private int stuckTicks = 0;
-    private int repathAttempts = 0;
-    /** 卡死检测针对的当前目标（换目标后计数重新开始） */
     private BlockPos stuckTarget = null;
+    private int wedgeStreak = 0;
+    private long lastWedgeAt = 0L;
+
+    /** 实测九百二十九：弃置留痕限频（拍，5 秒/条）。 */
+    private long giveUpLogAt = 0L;
+    /** 实测九百二十六：框空换框时「主人在锚点上」用的 8 向轮转计数（每滑一次转 45°）。 */
+    private int slideTurn = 0;
     /** v1.5.25：本次自己搭过的位置（搭高/斜坡/搭桥）——10 秒后自动销毁，绝不挖自然地形。
      *  v1.5.28：改为【全局静态追踪器】——旧版挂在行为实例上，行为停止（挖完矿
      *  canContinue=false）后 expirePlacedBlocks 不再运行 → 搭的方块永久残留。
@@ -247,7 +296,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     /** v1.5.28：登记一个挖矿搭的方块（每块从自己放置时刻起单独计时，满 10 秒各自销毁） */
     private static void trackPlaced(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
         PLACED_TRACKER.track(level, pos, block, maid);
-        markProgress(maid, level.m_46467_()); // 实测六十九：垫方块也是进展
     }
 
     /** v1.5.28：销毁所有放置超过 10 秒的挖矿搭方块（玩家同款破坏音效+粒子+掉落物）。
@@ -266,7 +314,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         PLACED_TRACKER.expirePlaced(server, gameTime,
                 pos -> anyMaidStanding(server, pos, m -> MINING.contains(m.m_20148_())));
     }
-
 
     /** v1.1.0 实测四十二：supportsAnyMiner 已由 PlacedBlockTracker.anyMaidStanding 取代 */
 
@@ -292,14 +339,9 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             ids.addAll(TARGET_SINCE.keySet());
             ids.addAll(SKIP_REPORT_SINCE.keySet());
             ids.addAll(BLOCKED_REPORT_SINCE.keySet());
-            ids.addAll(RECENT_DISCARD.keySet());
-            ids.addAll(ABANDONED.keySet()); // 实测八百六十八：本锚点排除表
             ids.addAll(NO_BLOCK_REPORT_SINCE.keySet());
             ids.addAll(NO_PICK_REPORT_SINCE.keySet()); // 实测八百六十九
             ids.addAll(ORE_CACHE.keySet());
-            ids.addAll(LAST_PROGRESS.keySet()); // 实测六十九
-            ids.addAll(WATCH_SAMPLE.keySet());
-            ids.addAll(RESET_REPORT_SINCE.keySet());
             java.util.Set<Integer> alive = new java.util.HashSet<>();
             for (int id : ids) {
                 for (ServerLevel lvl : server.m_129785_()) {
@@ -317,14 +359,10 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             TARGET_SINCE.keySet().removeIf(id -> !alive.contains(id));
             SKIP_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             BLOCKED_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
-            RECENT_DISCARD.keySet().removeIf(id -> !alive.contains(id));
             NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             NO_PICK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id)); // 实测八百六十九
             ORE_CACHE.keySet().removeIf(id -> !alive.contains(id));
             MINE_SCANS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十一
-            LAST_PROGRESS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十九
-            WATCH_SAMPLE.keySet().removeIf(id -> !alive.contains(id));
-            RESET_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
         }
     }
@@ -378,12 +416,17 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         return best;
     }
 
-
     public MaidMineBehavior() {
         // v1.5.124：无限运行时长——旧版 super(emptyMap) 默认 60 tick 上限，
         // 行为每 3 秒自动停止再启动（m_6735_ 反复执行、实例状态反复重置，
         // 日志刷屏）；挖矿是常驻行为（任务期间持续运行），不应自动重启
         super();
+    }
+
+    /** 本行为只认挖矿任务：uid 取自任务类本身（实测九百一十一——不再与伐木共用一份字面量） */
+    @Override
+    protected ResourceLocation workTaskUid() {
+        return MaidMineTask.UID;
     }
 
     @Override
@@ -392,8 +435,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         // 换镐、滑动迁移全部收敛到 doTick 统一处理。旧版 canStart 无矿即返回
         // false → 行为停止 → doTick 不再运行 → 空框时女仆原地发呆、永不迁移
         // （"矿挖完就站住不动"根因）。
-        if (maid.getTask() == null
-                || !ResourceLocation.parse("maid_smart:mine").equals(maid.getTask().getUid())) {
+        if (maid.getTask() == null || !workTaskUid().equals(maid.getTask().getUid())) {
             return false;
         }
         // 实测八百六十九【没镐不启动，对齐参考 mod 官方流程图「身上有镐子吗」】：手/背包
@@ -438,7 +480,10 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     /** v1.5.87：行为停止 → 退出"正在挖矿"（拾取任务恢复） */
     @Override
     protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
+        LOGGER.info("mine behavior stop: maid={} target={} progress={} feet={}", maid.m_20148_(), this.targetPos, this.destroyProgress, maid.m_20183_());
         MINING.remove(maid.m_20148_());
+        // 实测九百一十三：停手即让出"链路走位独占"——下 tick TLM 的走路逻辑（跟随/闲逛）恢复
+        com.maidsmart.task.MaidWorkTags.setChainDrive(maid, false);
         // v1.5.161：停止时清连锁队列（任务切换/被抢占后不残留过期矿位）
         this.chainQueue.clear();
         this.chainBlock = null;
@@ -447,16 +492,29 @@ public class MaidMineBehavior extends MaidWorkBehavior {
 
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
+        // 实测九百一十三【链路走位独占】：手上锁着矿 = 本模组的链路在驱动她 → 原版 TLM 的
+        // 走路逻辑（跟随把她写回主人、排班把她拉回工位）整体让位；没目标时立刻还权
+        //（"没有矿物 → 回归空闲走路逻辑"）。
+        com.maidsmart.task.MaidWorkTags.setChainDrive(maid, this.targetPos != null);
         // v1.5.25f：每 tick 防窒息兜底（移植自保 antiSuffocate）——半身卡进方块
         // 立即强制上移到方块顶面之上。搭高挖矿时实体位移滞后/放偏，头顶检查
         // 拦不住横向卡入，这是最后一道保险：宁可瞬移半步也不被自己搭的方块闷住
         this.antiSuffocate(maid);
-        // v1.1.0 实测六十九：发呆看门狗——长时间零进展且原地不动时整体重置状态。
-        // 与伐木同款（实测四十三的走路卡死检测只覆盖接近阶段，这里兜住挖掘/扫描/
-        // 迁移全流程的死循环），不再需要收回魂符重放来救
-        if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_WATCHDOG.get()
-                && this.stuckReset(level, maid, gameTime)) {
-            return; // 本 tick 已重置，下 tick 从头评估
+        this.antiWaterStuck(level, maid, gameTime);
+        // 实测九百七十七：无目标静默窗口内整条工作链路让位。
+        // 实测九百八十【照办：让 TLM 的空闲逻辑自己接管】——旧版在这里另写一个闲逛点，既抢
+        // TLM 的跟随目标（实机"只跟主人两秒"），点又常常离她不到 1 格（"走一步停一步"）。
+        // 现在什么都不写：清目标、停导航、交回走位权，这 10 秒她走的完全是空闲那一套。
+        if (this.inIdlePause(maid, gameTime)) {
+            this.targetPos = null;
+            this.destroyProgress = 0.0f;
+            maid.m_21573_().m_26573_();
+            com.maidsmart.task.MaidWorkTags.setChainDrive(maid, false);
+            return;
+        }
+        // 实测九百七十九：链路卡死自愈——同一目标 + 没挪窝 + 进度不动满 8 秒 → 弃目标重扫
+        if (this.stallWatchdog(level, maid, gameTime)) {
+            return;
         }
         // v1.5.109：移除 pullTowardTarget（setDeltaMovement 直接注入速度）——
         // 它与导航互相覆盖、搭高时把女仆从柱子上推走（"移速过快疯狂漂移"根因）。
@@ -483,6 +541,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         BlockPos anchor = this.resolveAnchor(level, maid);
         if (anchor == null) {
             this.targetPos = null;
+            this.giveUpLog(maid, "锚点解析不出来", null, gameTime);
             return;
         }
         if (this.targetPos == null) {
@@ -506,29 +565,51 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                 // v1.5.127：10 → 5 tick——缓存轮空时 findOre 已改为立即全量重建，
                 // 此节流只控制"挖完后重新评估"的频率，再减半让块间衔接更紧凑
                 if (!MINE_SCANS.containsKey(maid.m_19879_()) && this.scanCooldown-- > 0) {
+                    this.traceExit(maid, "mine 扫描节流(等5拍)", "cooldown=" + this.scanCooldown);
                     return;
                 }
                 this.scanCooldown = 5;
                 this.targetPos = this.findOre(level, maid, anchor);
                 if (this.targetPos == null && MINE_SCANS.containsKey(maid.m_19879_())) {
+                    this.traceExit(maid, "mine 分帧扫描进行中(等扫描)", "anchor=" + anchor);
                     // v1.1.0 实测六十二（自查修复）：分帧扫描进行中——只等扫描，不做
                     // 迁移/播报（低扫描预算下单轮扫描超过 5 秒时，旧逻辑会把锚点滑走
                     // → 游标状态因锚点变化作废 → 重扫再滑 → 永远扫不完）
                     return;
                 }
                 if (this.targetPos == null) {
+                // 实测九百一十六【套用伐木的抬头兜底】：扫描框/排除表都给不出目标时，先抬头看一眼
+                // 脚下正上方同柱还有没有矿（挖穿的矿洞最终兜底：挖掉几节后站进洞里，剩余矿就在头顶，
+                // 不该对着它发呆）。实测九百三十二：不再看"刚弃置"表（弃置已删）。
+                BlockPos aboveIdle = this.firstOreAbove(level, maid);
+                if (aboveIdle != null) {
+                    this.traceExit(maid, "mine 抬头兜底选中", "above=" + aboveIdle);
+                    this.targetPos = aboveIdle;
+                    TARGET_SINCE.put(maid.m_19879_(), gameTime);
+                    MINING.add(maid.m_20148_());
+                    return;
+                }
                 // v1.5.140：挖矿空闲（附近无矿）→ 退出"挖矿中"标记，拾取任务恢复正常
                 //（反馈：空闲时捡东西积极性太低；空闲 = 与其他工作任务的空闲一致）
                 MINING.remove(maid.m_20148_());
                 // v1.5.85：框内有矿但镐子挖不动 → 不迁移（换镐还是挖不动）：
                 // 气泡+主人聊天栏播报一次（限频）等玩家换镐
                 if (this.skippedOrePos != null) {
+                    this.traceExit(maid, "mine 只剩挖不动的矿", "ore=" + this.skippedOreName
+                            + " need=" + this.skippedOreTool + " at=" + this.skippedOrePos);
                     this.reportSkippedOre(maid, gameTime);
                     return;
                 }
                 // v1.5.113：只有【全量重建】确认本框没矿才迁移——缓存轮空不迁移
                 // （等 5 秒重建再判，防锚点高速滑动）
+                this.traceExit(maid, "mine 框空", "full=" + this.lastScanWasFull
+                        + " blocked=" + this.blockedOres.size() + " anchor=" + anchor);
                 if (this.lastScanWasFull) {
+                    // 实测九百七十三：确认这一片没矿——气泡提醒主人一次（30 秒/条），
+                    // 并把走位交回"空闲"那一套（工作圈内闲逛），不再原地站桩
+                    this.notifyNoTarget(maid, gameTime,
+                            "这片区域没有目标矿物了，我先在这边活动～");
+                    this.startIdlePause(maid, gameTime);
                     // v1.5.102d：此前有被硬物挡住的矿 → 上报一次挡路原因
                     if (!this.blockedOres.isEmpty()) {
                         this.reportBlockedArea(maid, level);
@@ -536,7 +617,13 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                     // v1.5.113（B1/B2）：框内挖空 → 锚点朝主人方向滑动一个环宽
                     // （不走路、不原地重埋——旧版"朝主人走走出旧框"被墙堵住时
                     // 原地重埋与旧框重合 → 死循环；纯走路又零产出）
-                    this.slideAnchor(level, maid, anchor);
+                    if (this.slideAnchor(level, maid, anchor)) {
+                        BlockPos next = ANCHORS.get(maid.m_19879_());
+                        if (next != null) {
+                            LOGGER.info("mine relocate (box empty → fresh box): maid={} next={}",
+                                    maid.m_20148_(), next);
+                        }
+                    }
                 }
                 return;
             }
@@ -547,37 +634,31 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             MINING.add(maid.m_20148_());
             }
         }
-        // 实测八百六十九【锁定期间持续重挑，对齐参考 mod 官方流程图「持续检测」】：每
-        // MINE_REPICK_INTERVAL（5 秒）从缓存里廉价重挑一次，发现更优的矿就切过去；挖掘进行中
-        //（destroyProgress>0）不打扰。关键：切换【不】重置 TARGET_SINCE——旧版换目标就重置，
-        // 两块分数接近的矿抖动时超时永远清零（"锁定能力差"根因）；不重置则抖动时钟继续走，
-        // 够不着的矿终会超时弃置。目标仍在下述三条里释放：①失效 ②锁定超时 ③判不可达。
-        if (this.targetPos != null && this.destroyProgress <= 0.0f
-                && com.maidsmart.config.MaidSmartConfig.MINE_REPICK.get()
-                && --this.repickCooldown <= 0) {
-            this.repickCooldown = MINE_REPICK_INTERVAL;
-            BlockPos repicked = this.findOre(level, maid, anchor);
-            if (repicked != null && !repicked.equals(this.targetPos)) {
-                this.targetPos = repicked;
-                MaidToolAutoEquip.ensureForTarget(maid, level.m_8055_(this.targetPos));
-            }
-        }
-        // v1.5.47：弃置检查——够不着且无任何破坏进度、且已超过"挖完这块要多久"的估算时长 → 弃置重选。
-        // 实测八百六十八：超时从固定 15 秒改成按破坏速度放大（见 targetTimeoutTicks）——深板岩钻石
-        // 这类硬矿不再还没挖完就被当"够不着"弃掉；弃置同时记本锚点排除表（ABANDONED），不再回头啃。
-        Long since = TARGET_SINCE.get(maid.m_19879_());
-        if (since != null && gameTime - since >= this.targetTimeoutTicks(maid, this.targetPos)
-                && this.destroyProgress <= 0.0f
-                && distSqToBlock(maid, this.targetPos) > reachSq()) {
-            this.abandon(maid, this.targetPos, gameTime);
-            markProgress(maid, gameTime); // 实测七十四：弃置也是前进（防看门狗误伤长舞蹈）
+        // 实测九百三十二【删"弃置"】：旧版这里有"锁定超时够不着 → 弃置重选"（targetTimeoutTicks
+        // 按破坏速度放大）。开发者口径：她有镐、有垫脚方块时**不存在够不着**——真够不着必然是
+        // "走位逻辑少了一个动作"，不该用超时把目标丢掉（丢了换下一块、下一块同样够不着 →
+        // 原地打转，就是实机 12:49 那个循环）。现在一律不丢目标：走位 / 垫高 / 挖开头顶三步把
+        // 她送到矿前；真正走不到的（头顶是挖不开的方块）由下面"硬挡路"那条另算。
+        // v1.5.47：目标失效检查——矿 或 开路废石（穿透挖掘的临时目标）
+        // 实测九百三十八【目标跑出检索半径 → 单独清空一次，不进任何排除表】：她走开了 / 目标在框外，
+        //   "发现自己锁的矿在检索半径外"就放弃它、重新走一遍链路（下次扫描照旧可能重选，不留记忆）。
+        if (this.targetPos != null && targetOutOfRadius(maid, this.targetPos,
+                com.maidsmart.config.MaidSmartConfig.MINE_SEARCH_RADIUS.get())) {
+            this.traceExit(maid, "mine 目标跑出检索半径→清空并弃框", "target=" + this.targetPos);
             this.targetPos = null;
             this.destroyProgress = 0.0f;
-            this.saveProgressNow(maid);
+            // 实测九百八十【断掉循环】：光清目标不够——缓存与分帧游标里还留着同一个格，下一轮
+            // 又把它选回来（实机 00:34:54~00:35:31 原地站 37 秒）。一并弃框 + 把扫描框挪到她
+            // 自己脚下，下一轮从她当前位置重新判定"这一片到底有没有矿"。
+            this.dropStaleScan(maid);
             return;
         }
-        // v1.5.47：目标失效检查——矿 或 开路废石（穿透挖掘的临时目标）
+        // 实测九百三十八【目标路径上有岩浆 → 汇报一次】
+        if (this.targetPos != null && lavaOnPath(level, maid, this.targetPos)) {
+            this.reportLavaPath(maid, this.targetPos, gameTime);
+        }
         if (!isOre(level, this.targetPos) && !this.isOpenStone(level, this.targetPos)) {
+            this.traceExit(maid, "mine 目标已不是矿/废石", "pos=" + this.targetPos + " block=" + net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(level.m_8055_(this.targetPos).m_60734_()));
             this.targetPos = null;
             this.destroyProgress = 0.0f;
             return;
@@ -586,6 +667,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         // 能挖的镐（v1.5.107 按需换镐），换不到才弃目标重选
         // v1.5.113（C3）：换不到镐 → 立即记录并播报"需要更高镐"（不用等 15 秒目标超时）
         if (isOre(level, this.targetPos) && !canHarvest(maid, level.m_8055_(this.targetPos))) {
+            this.traceExit(maid, "mine 主手挖不动(试着换镐)", "pos=" + this.targetPos
+                    + " block=" + net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(level.m_8055_(this.targetPos).m_60734_()) + " hand=" + net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(maid.m_21205_().m_41720_()));
             boolean swapped = MaidToolAutoEquip.ensureForTarget(maid, level.m_8055_(this.targetPos));
             if (!swapped || !canHarvest(maid, level.m_8055_(this.targetPos))) {
                 this.recordSkippedOre(maid, this.targetPos, level.m_8055_(this.targetPos));
@@ -606,24 +689,16 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         // 现在只要"挡路块"在伸手范围内就开挖，挖穿一层再评估下一层，逐层推进到矿。
         Blocker blocker = null;
         if (isOre(level, this.targetPos)) {
-            // v1.0.4：关闭透视时，已锁定目标也不隔墙挖——从当前眼睛位置看不到该矿
-            // 立即放弃。否则 findBlockingBlock 会把它当挡路块：墙在障碍物名单里就
-            // 挖穿（=女仆再次获得透视），不在名单里才报点弃置（"勾选障碍物后透视
-            // 失效"根因）。视线被挡的矿本就不该被发现/继续挖；正在挖的挡路块不在此
-            // 检查范围，当前块挖完后 targetPos 置空，下 tick 重选时自然被视线过滤。
-            if (!com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
-                    && !this.hasClearSight(level, maid, this.targetPos)) {
-                // v1.1.0 实测六十九：视线被挡的目标进 30 秒短排——旧版只丢目标不记录，
-                // 扫描层几 tick 后又选中同一块，"选中→看不见→丢弃"无限循环站桩发呆
-                // 实测八百六十八：同时记本锚点排除表（换锚点才清）——不再反复回到这块看不见的矿
-                this.abandon(maid, this.targetPos, gameTime);
-                markProgress(maid, gameTime); // 实测七十四：弃置也是前进（防看门狗误伤长舞蹈）
-                this.targetPos = null;
-                this.destroyProgress = 0.0f;
-                this.saveProgress(maid);
-                return;
+            // v1.0.4：关闭透视时，已锁定目标也不隔墙挖——看不见就不找挡路块（否则
+            // findBlockingBlock 会把墙当挡路块挖穿 = 女仆再次获得透视，"勾选障碍物后
+            // 透视失效"根因）。
+            // 实测九百三十二【不再弃置】：旧版在这里把目标丢掉，于是"选中→看不见→丢弃→
+            // 又选中"原地打转。现在只**不隔墙挖**、目标照留——她照常朝它走（走过去自然
+            // 重新看见），到跟前要么看见开挖、要么交给下面的挡路/推进逻辑。
+            if (com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
+                    || this.hasClearSight(level, maid, this.targetPos)) {
+                blocker = this.findBlockingBlock(level, maid, this.targetPos);
             }
-            blocker = this.findBlockingBlock(level, maid, this.targetPos);
         }
         if (blocker != null && blocker.openable()) {
             double bDistSq = maid.m_20275_(blocker.pos().m_123341_() + 0.5,
@@ -635,13 +710,50 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             } else {
                 // 挡路块还够不着 → 朝挡路块推进（目标 = 挡路块脚下，不朝矿——
                 // 矿在岩壁深处，以矿为终点永远走不到）
-                this.walkToBlockFace(level, maid, blocker.pos());
+                // 实测九百三十二：这里原来挂着"2 秒没挪窝就弃置"（九百三十一 补的）——弃置已删；
+                // 挡路块在头顶爬不上去由下面的搭高接管（搭不上还有 approachOre 的挖开头顶）。
+                // 挡路块在她上方且够不着 → 先试着搭高抬升（与 approachOre 的 dy>=1 同一条能力；
+                // 放不上去/没料返回 false，落到下面的走位兜底）
+                if (blocker.pos().m_123342_() > maid.m_20183_().m_123342_() && this.pillarUpStep(level, maid)) {
+                    maid.m_21573_().m_26573_();
+                    this.traceExit(maid, "mine 朝挡路块搭高", "blocker=" + blocker.pos()
+                            + " feet=" + maid.m_20183_());
+                    return;
+                }
+                // 实测九百三十四【搭不上就挖开头顶】：pillarUpStep 失败的头号原因是"头顶那两格是实心
+                // 方块"（垫不上去）。这条"挖开头顶"原来只在 approachOre 的 dy>=1 分支里接了，挡路块
+                // 这条路漏了——实机日志里她顶着 "mine 朝挡路块推进(够不着矿) path=false" 站了 15 秒不动：
+                // 够不着、搭不上、又不挖头顶，只能一遍遍 stop+retarget。现在搭不上就试一次挖开正上方的方块。
+                if (blocker.pos().m_123342_() > maid.m_20183_().m_123342_() && this.digUpCap(level, maid)) {
+                    maid.m_21573_().m_26573_();
+                    return;
+                }
+                // 实测九百三十五【走不到就换动作】：实机日志里她顶着 "mine 朝挡路块推进(够不着矿) …
+                // path=false" 站了 52 秒（周围明明空着）——因为"朝挡路块脚下走"这条路的落脚点
+                // 导航给不出路径。走不到就改走 approachOre 的接近链（下沉 / 搭高 / 垫桥 / 挖开
+                // 头顶都在那条链上），给她一个真能动的动作，而不是原地等下一步。
+                // 实测九百三十六【别来回横跳】：同上（Neo 侧同源注释）——走不到就记住这条挡路块，
+                // 几十拍内直接交给接近链，不再与"朝挡路块推进"来回翻。
+                if (!blocker.pos().equals(this.unreachableBlocker) || gameTime >= this.unreachableBlockerUntil) {
+                    this.walkToBlockFace(level, maid, blocker.pos());
+                    if (!maid.m_21573_().m_26571_()) {
+                        this.traceExit(maid, "mine 朝挡路块推进(够不着矿)", "blocker=" + blocker.pos()
+                                + " target=" + this.targetPos);
+                        return;
+                    }
+                    this.unreachableBlocker = blocker.pos().m_7949_();
+                    this.unreachableBlockerUntil = gameTime + MINE_BLOCKER_UNREACHABLE_TICKS;
+                }
+                this.approachOre(level, maid);
+                this.traceExit(maid, "mine 挡路块走不到→改走接近链", "blocker=" + blocker.pos()
+                        + " target=" + this.targetPos);
                 return;
             }
         } else if (blocker != null
                 && com.maidsmart.config.MaidSmartConfig.MINE_HARD_BLOCK_REPORT.get()) {
             // v1.5.87：硬挡路——报点（气泡+主人聊天栏）+ 弃置该矿（持续排除，不再反复选中）
             this.blockedOres.add(this.targetPos);
+            this.giveUpLog(maid, "硬挡路", this.targetPos, gameTime);
             this.reportBlockedOre(maid, level, this.targetPos, blocker.pos());
             this.targetPos = null;
             this.destroyProgress = 0.0f;
@@ -650,38 +762,45 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         }
         double distSq = distSqToBlock(maid, this.targetPos);
         if (distSq > reachSq()) {
-            // v1.5.25：够不着（超过玩家手长 4.5 格）→ 三选一搭路决策
-            //（向上搭高 / 向前搭斜坡 / 搭桥+走过去），每 tick 重算直到够得着
-            // v1.1.0 实测四十三：走路卡死检测——够不着且 2 秒位置没挪过 = 导航被
-            // 地形卡住（有路径走不动）。实测"收回重放立刻恢复"正是因为重放
-            // 清空了导航状态强制重寻路；这里在 tick 内做同款软复位：清移动记忆
-            // → 下一次 setWalkTarget 必定重设（重寻路）。多次仍卡 = 真不可达，
-            // 走目标超时弃置流程，不再原地磨蹭
-            BlockPos feet = maid.m_20183_();
-            if (!feet.equals(this.lastStuckPos)
+            // 实测九百四十一【停滞检测】：够不着时推进链本该送她上去（垫高 / 挖开头顶 / 走位），
+            // 但站位在矿下方、头顶那格刨不动、导航又无路三者同时成立时三个出口全落空 → 原地卡死
+            // （见字段注释里的 17:34 实测）。同一目标 + 双脚连续 MINE_WEDGE_TICKS 拍一字未动 →
+            // 认这块真够不到：当场弃置（记 30 秒短排，下一拍立刻重扫），不再一遍遍 stop+retarget
+            // 同一块。连弃 3 次 = 这一框没戏 → 清缓存走"框空"迁移换框。
+            BlockPos stuckFeet = maid.m_20183_();
+            if (!stuckFeet.equals(this.lastStuckPos)
                     || this.stuckTarget == null || !this.stuckTarget.equals(this.targetPos)) {
-                this.lastStuckPos = feet;
+                this.lastStuckPos = stuckFeet;
                 this.stuckTicks = 0;
-                this.repathAttempts = 0;
                 this.stuckTarget = this.targetPos;
             } else {
                 this.stuckTicks++;
             }
-            if (this.stuckTicks >= 40) {
-                this.stuckTicks = 0;
-                this.repathAttempts++;
-                this.lastWalkTarget = null; // 软复位：强制 setWalkTarget 重寻路
-                maid.m_21573_().m_26573_(); // 停导航（与"收回重放"清状态等效）
-                if (this.repathAttempts >= 3) {
-                    // 3 次重寻路仍原地不动 → 判不可达，弃置该矿（短时排除 + 本锚点排除防反复选中）
-                    this.abandon(maid, this.targetPos, gameTime);
-                    markProgress(maid, gameTime); // 实测七十四：弃置也是前进
-                    this.targetPos = null;
-                    this.destroyProgress = 0.0f;
-                    this.saveProgressNow(maid);
-                    return;
+            if (this.stuckTicks >= MINE_WEDGE_TICKS) {
+                this.wedgeStreak = gameTime - this.lastWedgeAt <= 200L ? this.wedgeStreak + 1 : 1;
+                this.lastWedgeAt = gameTime;
+                this.giveUpLog(maid, "够不着且没挪窝", this.targetPos, gameTime);
+                RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
+                        .put(this.targetPos.m_7949_(), gameTime);
+                this.targetPos = null;
+                this.destroyProgress = 0.0f;
+                this.lastWalkTarget = null;
+                this.scanCooldown = 0;   // 下一拍立刻重扫
+                this.saveProgressNow(maid);
+                if (this.wedgeStreak >= 3) {
+                    this.wedgeStreak = 0;
+                    ORE_CACHE.remove(maid.m_19879_());
+                    MINE_SCANS.remove(maid.m_19879_());
+                    LOGGER.info("mine box unreachable (3 连弃置、零破坏) → fresh box: maid={} anchor={}",
+                            maid.m_20148_(), anchor);
+                    this.slideAnchor(level, maid, anchor);
                 }
+                return;
             }
+            // 实测九百二十七【咬住不放】：够不着就每 tick 继续推进（approachOre 下走位 / 垫路指令 /
+            // 挖开头顶）。
+            this.traceExit(maid, "mine 够不着-继续推进", "target=" + this.targetPos
+                    + " dist=" + (long) Math.sqrt(distSq) + " reach=" + (long) Math.sqrt(reachSq()));
             this.approachOre(level, maid);
             return;
         }
@@ -699,6 +818,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                 this.destroyProgress = 0.0f;
                 this.saveProgressNow(maid);
             }
+            this.traceExit(maid, "mine 主手不是镐(暂停挖掘)", "hand=" + net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(mainHand.m_41720_())
+                    + " 背包能挖=" + MaidToolAutoEquip.canHarvestWithHandOrBackpack(maid, level.m_8055_(this.targetPos)));
             return; // 镐被换走/碎裂，暂停挖掘
         }
         // v1.5.19 渐进挖掘；v1.5.22 重写——直接公式，不依赖 FakePlayer
@@ -706,6 +827,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         BlockState state = level.m_8055_(this.targetPos);
         float hardness = state.m_60734_().m_7749_(state, level, this.targetPos); // Block.getDestroySpeed
         if (hardness <= 0.0f || hardness == Float.MAX_VALUE) {
+            this.traceExit(maid, "mine 硬度≤0/不可破坏", "pos=" + this.targetPos + " block=" + net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(level.m_8055_(this.targetPos).m_60734_())
+                    + " hardness=" + hardness);
             this.targetPos = null; // 不可破坏，换目标
             this.destroyProgress = 0.0f;
             this.saveProgress(maid);
@@ -743,6 +866,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         this.broadcastCrack(level, maid, this.targetPos,
                 Math.max(0, Math.min(9, (int) (this.destroyProgress * 10.0f))));
         if (this.destroyProgress < 1.0f) {
+            this.traceExit(maid, "mine 挖掘中(健康)", "pos=" + this.targetPos + " block=" + net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(level.m_8055_(this.targetPos).m_60734_())
+                    + " progress=" + this.destroyProgress);
             return; // 还在挖掘中，下一 tick 继续
         }
         // 实测二百二十四：挖掉前登记是不是矿（m_7731_ 换成空气后就判不了了）
@@ -781,6 +906,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         boolean softNoDur = com.maidsmart.config.MaidSmartConfig.MINE_SOFT_NO_DURABILITY.get();
         if (!mainHand.m_41619_() && (!softNoDur || !isSoft(mainHand, state))) {
             final ItemStack damaged = mainHand;
+            com.maidsmart.task.MaidToolAutoEquip.recordDurabilityBreak(maid, damaged);
             damaged.m_41622_(1, maid, broken -> {
                 maid.m_6674_(InteractionHand.MAIN_HAND);
                 try {
@@ -790,11 +916,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                 }
             });
         }
-        // v1.5.47：挖掉任一矿/开路块 → 清除弃置记录（弃置理由随地形变化失效）
-        this.abandonedPos = null;
-        // v1.5.113（B4）：挖掉任一方块 → 清短时排除（刚才够不着的矿可能已能到达）
-        RECENT_DISCARD.remove(maid.m_19879_());
-        // v1.5.87：硬挡弃置同样清除（开路改变了地形，阻挡可能已解除）
+        // v1.5.87：硬挡排除清除（开路改变了地形，阻挡可能已解除）
         this.blockedOres.clear();
         // v1.5.25h：挖到矿后不再主动清理/下柱（旧 cleanupStep/descendStep 已移除）——
         // 搭的方块统一由 expirePlacedBlocks 在放置 10 秒后自动销毁变掉落物回收。
@@ -803,6 +925,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         // 同族矿挖完一块自动接下一块，直到挖完矿脉）；开关关闭时清空队列走正常找矿
         // 实测二百二十四：连锁扩展到障碍物——挖开的挡路块（同类可挖穿）同样连锁，
         // 与矿脉共用开关与上限（mine.chainMining / mine.chainLimit）
+        this.traceExit(maid, "mine 挖掉一块", "pos=" + this.targetPos + " block=" + net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(state.m_60734_())
+                + " ore=" + dugOre);
         this.chainBlock = state.m_60734_();
         if (dugOre) {
             this.refillChainQueue(level, maid);
@@ -814,107 +938,9 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             this.refillObstacleChainQueue(level, maid);
             this.obstacleChainBreakAll(level, maid, mainHand);
         }
-        markProgress(maid, gameTime); // 实测六十九：喂看门狗（真实进展）
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
-    }
-
-
-    /**
-     * v1.1.0 实测六十九：发呆看门狗判定（与伐木同款）。窗口到期（默认 45 秒）结算：
-     * 期间【挪动过 ≥1.5 格】或【有过真实进展（挖掉/垫方块）】= 正常工作，续窗；否则判发呆，
-     * 整体重置该女仆在本行为里的全部状态并返回 true。深井走路赶路位置一直在变，不误触发。
-     */
-    private boolean stuckReset(ServerLevel level, EntityMaid maid, long gameTime) {
-        int id = maid.m_19879_();
-        long window = com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() * 20L;
-        if (window <= 0) {
-            return false;
-        }
-        long[] sample = WATCH_SAMPLE.get(id);
-        if (sample == null) {
-            WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
-            LAST_PROGRESS.putIfAbsent(id, gameTime);
-            return false;
-        }
-        if (gameTime - sample[0] < window) {
-            return false; // 窗口未到期
-        }
-        double moved = Math.sqrt(
-                Math.pow(maid.m_20185_() - Double.longBitsToDouble(sample[1]), 2)
-                        + Math.pow(maid.m_20186_() - Double.longBitsToDouble(sample[2]), 2)
-                        + Math.pow(maid.m_20189_() - Double.longBitsToDouble(sample[3]), 2));
-        Long lastProg = LAST_PROGRESS.get(id);
-        if (moved >= 1.5 || (lastProg != null && lastProg >= sample[0])) {
-            WATCH_SAMPLE.put(id, watchSample(gameTime, maid)); // 有在干活：续窗
-            return false;
-        }
-        this.hardResetStuck(level, maid, gameTime);
-        return true;
-    }
-
-    /**
-     * v1.1.0 实测六十九：发呆整体重置——forget 清空本女仆的全部静态表，实例字段
-     * （目标/进度/连锁队列/挡路名单/走路记忆/卡死计数等）一并归零，等效收回魂符再放下去。
-     */
-    private void hardResetStuck(ServerLevel level, EntityMaid maid, long gameTime) {
-        int id = maid.m_19879_();
-        long idleTicks = gameTime - LAST_PROGRESS.getOrDefault(id, gameTime);
-        // 实测七十四：保留 30 秒短排表——那是"学到的不可达知识"（600 tick 自过期）。
-        // 旧版连它一起清：够不着目标的长舞蹈（每个候选 15 秒超时）会被看门狗反复
-        // 打断归零，形成"每 30 秒重置一次"的新死循环
-        java.util.Map<BlockPos, Long> keptDiscard = RECENT_DISCARD.get(id);
-        java.util.Set<BlockPos> keptAbandoned = ABANDONED.get(id);
-        BlockPos keptTarget = this.targetPos;
-        forget(id);
-        if (keptDiscard != null && !keptDiscard.isEmpty()) {
-            RECENT_DISCARD.put(id, keptDiscard);
-        }
-        if (keptAbandoned != null && !keptAbandoned.isEmpty()) {
-            ABANDONED.put(id, keptAbandoned);
-        }
-        // 实测八百六十八【看门狗不再把死目标留下】：旧版把 targetPos 与超时时钟一并保留
-        // （实测七十五），可卡死的根因往往正是"锁了一块够不着的矿"——于是看门狗只清了计数器、
-        // 目标照旧，等于没救（「看门狗也没什么用」就是这一条）。现在把它并入本锚点排除表
-        // （换锚点才清）+ 30 秒短排，targetPos 置空，下一 tick 重新评估换一块。
-        if (keptTarget != null) {
-            RECENT_DISCARD.computeIfAbsent(id, k -> new java.util.HashMap<>())
-                    .put(keptTarget.m_7949_(), gameTime);
-            ABANDONED.computeIfAbsent(id, k -> new java.util.HashSet<>()).add(keptTarget.m_7949_());
-        }
-        this.targetPos = null;
-        this.destroyProgress = 0.0f;
-        this.saveProgressNow(maid);
-        this.abandonedPos = null;
-        this.blockedOres.clear();
-        this.skippedOrePos = null;
-        this.skippedOreName = null;
-        this.skippedOreTool = null;
-        this.skippedOreValue = -1;
-        this.chainQueue.clear();
-        this.chainBlock = null;
-        this.lastWalkTarget = null;
-        this.scanCooldown = 0;
-        this.pillarCooldown = 0;
-        this.walkRetargetCooldown = 0;
-        this.lastStuckPos = null;
-        this.stuckTicks = 0;
-        this.repathAttempts = 0;
-        this.stuckTarget = null;
-        if (this.lastCrackPos != null) {
-            this.broadcastCrack(level, maid, this.lastCrackPos, 10); // 清残留挖掘裂纹
-        }
-        this.lastCrackPos = null;
-        this.lastCrackStage = -1;
-        LAST_PROGRESS.put(id, gameTime);
-        WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
-        LOGGER.info("mine stuck-reset: maid={} idle={}t pos={}", id, idleTicks, maid.m_20183_());
-        Long lastReport = RESET_REPORT_SINCE.get(id);
-        if (lastReport == null || gameTime - lastReport >= 1200L) {
-            RESET_REPORT_SINCE.put(id, gameTime);
-            maid.getChatBubbleManager().addTextChatBubble("好像走神了……我重新理一下思路，继续干活！");
-        }
     }
 
     /**
@@ -973,6 +999,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             return true; // 已经空手（上一块挖碎了）→ 别继续
         }
         final ItemStack damaged = mainHand;
+        com.maidsmart.task.MaidToolAutoEquip.recordDurabilityBreak(maid, damaged);
         damaged.m_41622_(1, maid, brokenItem -> {
             maid.m_6674_(InteractionHand.MAIN_HAND);
             try {
@@ -985,11 +1012,10 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     }
 
     /**
-     * v1.5.25 搭路决策：向上搭 vs 向前搭 的判定链。
-     * 目标够不着时的三种接近策略（每 tick 重算，垫一块就重新评估，直到够得着）：
-     * 1. 上方矿 + 水平近（dy≥2 且 hDist≤2.5）→ 脚下搭高（垫高自己）
-     * 2. 斜上方矿（dy≥1 且 2.5<hDist≤4.5）→ 向前垫台阶（斜坡逼近，水平+垂直同时接近）
-     * 3. 其他（太远 / 在下方）→ 走过去；目标方向前方脚下悬空（断崖/水）→ 先搭桥
+     * 目标够不着时的接近策略（每 tick 重算，垫一块就重新评估，直到够得着）：
+     * ① 高度优先——dy≥1 原地搭高、dy≤−1 逐级下降，**先把高度对齐**；
+     * ② 高度一致（dy==0）后再水平靠近——目标方向前方脚下悬空（断崖/水）先搭桥，否则走过去；
+     * ③ 高度一致且水平进了可交互圈 → 原地不动，交给挖掘入口。
      * 搭高失败（没料/头顶堵）不立刻放弃——退到"走过去"兜底，走不通由导航处理。
      */
     private void approachOre(ServerLevel level, EntityMaid maid) {
@@ -1004,21 +1030,61 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         double hz = t.m_123343_() + 0.5 - maid.m_20189_();
         double hDist = Math.sqrt(hx * hx + hz * hz);
         int dy = t.m_123342_() - maid.m_20183_().m_123342_();
+        double close = Math.min(2.5, Math.max(1.0, Math.sqrt(reachSq()) - 0.5));
+        // 实测九百一十五【到位就停】高度已一致 + 水平进了可交互圈 → 不再走/垫，交给挖掘入口。
+        // 旧版没有这道闸：她在目标轴附近一抖，方向单位量就翻号 → 朝【身后】垫块再走回去，
+        // 两个位置反复横跳（反馈的"迈克尔杰克逊步"）。
+        if (dy == 0 && hDist <= close && this.hasClearSight(level, maid, t)) {
+            return;
+        }
         // v1.5.111：搭高【站桩】——停掉直接导航（v1.5.127：旧版清 WALK_TARGET 记忆，
         // 现在改为停导航，语义一致：原地站定让 pillarGuard 钳位，垂直列干净成型）
-        if (dy >= 2 && hDist <= 2.5) {
+        if (dy >= 1) {
             if (this.pillarUpStep(level, maid)) {
                 maid.m_21573_().m_26573_();
                 return;
             }
-        }
-        // 2) 斜上方矿：向前垫台阶（斜坡），水平+垂直同时逼近
-        // v1.5.113：垫完【走一步到刚垫的台阶上】——旧版垫完只 walkToOreBase
-        // （目的地可能隔着未垫完的沟，导航找不到路 → 站着不动）；改走一步再评估
-        // v1.1.0 实测一百九十二：走上去改【持续推送】——寻路跨沟半路折断是死循环根因
-        if (dy >= 1 && hDist > 2.5 && hDist <= 8.0) {
-            if (this.slopeStep(level, maid, hx, hz, hDist)) {
-                this.startStepOn(maid, hx, hz, hDist);
+            // 实测九百三十二【垫不上去就先挖开头顶】：pillarUpStep 失败的头号原因是"头顶那两格
+            // 是实心会窒息的方块"（她在矿洞里、上面就是岩层）。她有镐 → 把脚下正上方第一块可挖开
+            // 的方块挖掉，下一拍头顶空了、垫高自然成立（一格一格开天窗往上走）。
+            // 这一步是"删掉弃置"的前提：矿在她上方、头顶又是岩石时，旧链路只剩"走过去"（落脚点
+            // 在岩层里、导航必失败）→ 她会永久站住；有了它，"够不着"永远有动作可做。
+            if (this.digUpCap(level, maid)) {
+                return;
+            }
+            // 实测九百一十六【套用伐木的搭高失败兜底】：垫不上去（没料/头顶堵）时改把目标换成
+            // 头顶正上方第一块矿（下一 tick 走正常挖掘入口——够得着直接挖掉、逐节往上啃完整列，
+            // 不需要垫方块）；水平偏开 >1 格就先走到矿柱底最近可站格（沿柱向下找第一个可站空气），
+            // 走位到正下方后挖掘入口自然接管。旧版这里直接跌进 walkToOreBase → 目标可能是
+            // 墙里/悬空的格 → 走到垃圾目标 = 发呆。
+            BlockPos above = this.firstOreAbove(level, maid);
+            if (above != null) {
+                if (!above.equals(t)) {
+                    this.targetPos = above;
+                    TARGET_SINCE.put(maid.m_19879_(), level.m_46467_());
+                    return;
+                }
+                double hx2 = t.m_123341_() + 0.5 - maid.m_20185_();
+                double hz2 = t.m_123343_() + 0.5 - maid.m_20189_();
+                if (Math.sqrt(hx2 * hx2 + hz2 * hz2) > 1.0) {
+                    BlockPos stand = null;
+                    for (int dy2 = -1; dy2 >= -10; dy2--) {
+                        BlockPos c = t.m_7918_(0, dy2, 0);
+                        if (level.m_8055_(c).m_60795_()) {
+                            BlockPos uc = c.m_7918_(0, -1, 0);
+                            if (!level.m_8055_(uc).m_60795_()
+                                    && level.m_8055_(uc).m_60796_(level, uc)) {
+                                stand = c;
+                            }
+                            break;
+                        }
+                    }
+                    if (stand == null) {
+                        this.walkToOreBase(level, maid, t);
+                    } else {
+                        this.setWalkTarget(maid, stand, approachSpeed(maid, t));
+                    }
+                }
                 return;
             }
         }
@@ -1026,7 +1092,9 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         // 逐级降低高度接近矿物（旧版只能垫平/垫高，y 永不下降）
         if (dy <= -1) {
             if (this.descendStep(level, maid, hx, hz, hDist)) {
-                this.startStepOn(maid, hx, hz, hDist, -1);
+                if (!BlockWalkOn.isActive(maid)) {
+                    this.startStepOn(maid, hx, hz, hDist, -1);
+                }
                 return;
             }
             // 下不去（下面有地可走 / 危险 / 没料）→ 走位兜底。绝不再走到 bridgeToOre：
@@ -1043,7 +1111,9 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         // v1.5.113：搭桥后【走一步上桥】——旧版搭完直接 return（无移动目标）
         // → 女仆站在桥头"搭一格就站着不动"根因
         if (this.bridgeToOre(level, maid, hx, hz, hDist)) {
-            this.startStepOn(maid, hx, hz, hDist);
+            if (!BlockWalkOn.isActive(maid)) {
+                this.startStepOn(maid, hx, hz, hDist);
+            }
             return;
         }
         // v1.5.87：走路目标 = 矿基座（矿下方 1 格）——旧版目标是矿本身（常在空中/岩壁内），
@@ -1064,7 +1134,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         }
     }
 
-
     /**
      * v1.5.87：朝矿基座推进——搭高/垫台阶成功后立刻走，让女仆在水平方向持续贴近矿物。
      * v1.5.113（B5/C1）：站立点改为【矿 6 方向最近的可站空气格】——旧版只向上找
@@ -1074,11 +1143,34 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     private void walkToOreBase(ServerLevel level, EntityMaid maid, BlockPos t) {
         BlockPos stand = findStandNearOre(level, maid, t);
         if (stand == null) {
-            // 矿被完全包住（6 方向都无立足点）→ 不设移动目标，挡路挖掘（blocker）
-            // 下一 tick 接管：够得着的可挖穿方块会被逐层挖开，直到矿暴露
-            return;
+            // 实测九百一十六【套用伐木】：找不到立足点就【直接朝矿坐标走】——旧版"不设移动目标"
+            // = 站桩干等的来源之一；走过去后挡路挖掘 / 搭高接管
+            stand = t;
         }
         this.setWalkTarget(maid, stand, approachSpeed(maid, t));
+    }
+
+    /** 实测九百一十六【套用伐木的抬头兜底】：脚下正上方同柱还有矿吗——扫描框/排除表都给不出目标、
+     *  或搭高失败时，先抬头看一眼头顶同一柱的矿，有就直接当目标（挖穿挡路块 + 逐节往上啃，不必垫
+     *  方块）。被硬挡路弃置的（{@code blockedOres}）不回选，防"抬头选中→硬挡弃置→再抬头"死循环。 */
+    private BlockPos firstOreAbove(ServerLevel level, EntityMaid maid) {
+        BlockPos feet = maid.m_20183_();
+        int[][] colOrder = {{0, 0},
+                {1, 0}, {-1, 0}, {0, 1}, {0, -1},
+                {1, 1}, {-1, 1}, {1, -1}, {-1, -1},
+                {2, 0}, {-2, 0}, {0, 2}, {0, -2},
+                {2, 1}, {1, 2}, {-1, 2}, {-2, 1}, {-2, -1}, {-1, -2}, {1, -2}, {2, -1},
+                {2, 2}, {-2, 2}, {-2, -2}, {2, -2}};
+        for (int[] off : colOrder) {
+            for (int dy = 1; dy <= 10; dy++) {
+                BlockPos p = feet.m_7918_(off[0], dy, off[1]);
+                if (this.isOre(level, p) && !isMiningPlaced(level, p)
+                        && !this.blockedOres.contains(p)) {
+                    return p;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -1113,17 +1205,11 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         if (best != null) {
             return best;
         }
-        // 兜底：矿正上方向上的最近空气（旧逻辑；仅当 15 个候选都无立足点时）
-        int sy = t.m_123342_();
-        for (int y = sy + 1; y < sy + 5; y++) {
-            BlockPos cand = new BlockPos(t.m_123341_(), y, t.m_123343_());
-            if (level.m_8055_(cand).m_60795_()) {
-                return cand;
-            }
-        }
-        // 实测八百六十八：以上都找不到立足点也【必须给个移动目标】——直接朝矿本身走（导航会尽量贴近，
-        // 够不着时的"挖穿挡路块"分支下一 tick 接管）。旧版返回 null → 调用方不设目标 → 她站在原地看着矿发呆
-        return t;
+        // 实测九百一十六【套用伐木】：删掉"矿正上方向上的最近空气"兜底——岩壁里矿上方那格是
+        // 【导航去不了的悬空空气】（无支撑），设为移动目标后寻路必失败 → 女仆站着发呆；而且旧版
+        // 末尾无条件 `return t` 把矿本身当移动目标（也在墙里/悬空）→ 同样走不到。改返回 null：
+        // walkToOreBase 对 null 的处理是直接朝矿坐标走（走到跟前，够得着就挖、够不着搭高接管）。
+        return null;
     }
 
     /**
@@ -1169,9 +1255,12 @@ public class MaidMineBehavior extends MaidWorkBehavior {
      * 矿正上方往下挖"（那是埋地矿专用的）；脚下悬空才退回 walkToOreBase 兜底。
      */
     private void walkToBlockFace(ServerLevel level, EntityMaid maid, BlockPos b) {
+        // 实测九百三十六【"支撑"取错格】：同上（Neo 侧同源注释）——站位是空气 ∧ 脚下实心才走过去。
         BlockPos stand = new BlockPos(b.m_123341_(), b.m_123342_() - 1, b.m_123343_());
-        BlockState below = level.m_8055_(stand);
-        if (below.m_60795_() || !below.m_60796_(level, stand)) {
+        BlockPos support = stand.m_7495_();
+        BlockState at = level.m_8055_(stand);
+        BlockState under = level.m_8055_(support);
+        if (!at.m_60795_() || under.m_60795_() || !under.m_60796_(level, support)) {
             this.walkToOreBase(level, maid, b);
             return;
         }
@@ -1377,31 +1466,34 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             return true; // 冷却中：下 tick 再垫（v1.5.113 B6：成功放置才设冷却）
         }
         BlockPos pos = maid.m_20183_();
-        // v1.5.25b：选择放置格——脚下悬空 → 垫所在格 pos（站上去升高）；
-        // 脚下实心（平地）→ 垫身体格 pos+1（挤压顶起一格，不碰地面）。
-        // 旧版要求"所在格必须空气"：女仆站在矿洞底平地上脚部格是地面方块
-        // → 搭高永远失败 → 一直"走过去"死循环（"搭方块取钻石成功率低"根因）。
-        BlockPos place;
-        boolean posAir = level.m_8055_(pos).m_60795_();
-        if (posAir) {
-            place = pos; // 悬空：垫所在格，站上去升高
-        } else {
-            place = pos.m_7918_(0, 1, 0); // 平地：垫身体格顶起
+        // 实测九百五十八【垫块只盖下半身】：放置格一律取她【脚下那一格】——方块最多盖住
+        // 下半身（腿/脚），下一拍被游戏顶起一格升高。旧版在"脚下那格不是空气"（站在水里/
+        // 树叶里/雪层上）时改垫 pos+1 = 她的上半身/脑袋，顶起稍有滞后就是自己把自己闷住
+        //（反馈："垫方块可以覆盖到自己的脑袋→自己把自己弄窒息了"）。
+        // 脚下那格本身是会窒息的实心块（异常态）或岩浆时不垫——交给 antiSuffocate / 自保链。
+        BlockPos place = pos;
+        if (this.suffocates(level, pos)
+                || level.m_8055_(pos).m_60819_()
+                .m_205070_(net.minecraft.tags.FluidTags.f_13132_)) {
+            return false;
         }
-        // 防窒息：放置格 + 上方 2 格必须空气（顶起后的身体空间 + 头顶空间）
-        if (!level.m_8055_(place).m_60795_()
-                || !level.m_8055_(place.m_7918_(0, 1, 0)).m_60795_()
-                || !level.m_8055_(place.m_7918_(0, 2, 0)).m_60795_()) {
+        // 防窒息：头顶空间（place+1/place+2）放宽——目标矿所在格排除（搭高就是
+        // 为了够它，垫块后头短暂插进矿里，下一 tick 挖掘入口立即挖掉，属预期），只拦真正会闷住她的
+        // 实心满块（isSuffocating）。实测九百一十六：旧版严格 isAir 检查在"正上方就是矿"时必然
+        // 失败 → 搭高永远失败、原地等到超时。
+        if ((this.suffocates(level, place.m_7918_(0, 1, 0)) && !place.m_7918_(0, 1, 0).equals(this.targetPos))
+                || (this.suffocates(level, place.m_7918_(0, 2, 0)) && !place.m_7918_(0, 2, 0).equals(this.targetPos))) {
             return false;
         }
         // v1.5.25e 借鉴自保 buildUp：女仆实际头顶（bounding box 顶面）上方必须空旷——
         // 快速连续搭高时实体位移滞后，blockPosition 检查不够，必须按真实位置判定，
-        // 否则"搭太快把自己埋了"窒息（挖矿搭高也会踩同一坑）
+        // 否则"搭太快把自己埋了"窒息（挖矿搭高也会踩同一坑）。headPos/headPos+1 同口径排除目标矿。
         double headY = maid.m_20191_().m_82374_(net.minecraft.core.Direction.Axis.Y);
         BlockPos headPos = new BlockPos((int) maid.m_20185_(), (int) (headY + 0.05), (int) maid.m_20189_());
-        if (!level.m_8055_(headPos).m_60795_()
-                || !level.m_8055_(headPos.m_7918_(0, 1, 0)).m_60795_()) {
-            return false; // 实际头顶被堵（正在被顶起中）→ 等站稳再垫，防窒息
+        if ((this.suffocates(level, headPos) && !headPos.equals(this.targetPos))
+                || (this.suffocates(level, headPos.m_7918_(0, 1, 0))
+                && !headPos.m_7918_(0, 1, 0).equals(this.targetPos))) {
+            return false; // 实际头顶被会窒息的实心块堵住（正在被顶起中）→ 等站稳再垫，防窒息
         }
         // 目标矿在正上方时不误判为"障碍"（v1.5.25：头顶检查放宽，不检查矿所在格）
         // 实测五百三十六：目标格被主人碰撞箱占着就不搭
@@ -1432,6 +1524,42 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         return true;
     }
 
+    /** 实测九百一十六【套用伐木】：该格是否【会窒息】——isSuffocating（m_60796_）为 true 的实心
+     *  满块（石头/泥土/矿石等）会闷住女仆；空气/水/火把/树叶等不窒息。搭高防窒息检查用它替代
+     *  isAir：目标矿在正上方时 isAir 检查让搭高永远失败。 */
+    private boolean suffocates(ServerLevel level, BlockPos pos) {
+        BlockState st = level.m_8055_(pos);
+        return !st.m_60795_() && st.m_60796_(level, pos);
+    }
+
+    /**
+     * 实测九百三十二【垫不上去就先挖开头顶】——目标在她上方、头顶又是岩层时的唯一出路。
+     * 把脚下正上方第一块**可挖开**的方块当临时目标挖掉（下一拍头顶空了，垫高自然成立，
+     * 一格一格开天窗往上走）。挖矿 tick 的"目标可挖"判据本就认可开路石，挖掉后自动连锁同族。
+     * <p>正上方就是矿（那是正常目标）或那块挖不开（基岩/箱子/机器）时返回 false，交给调用方
+     * 继续走位——挖不开的那条才是真正的走不到（唯一合法的"够不着"）。
+     * @return true = 已把头顶那块设为临时目标（本拍不要再走位）
+     */
+    private boolean digUpCap(ServerLevel level, EntityMaid maid) {
+        BlockPos feet = maid.m_20183_();
+        for (int dy = 1; dy <= 3; dy++) {
+            BlockPos cap = feet.m_7918_(0, dy, 0);
+            if (level.m_8055_(cap).m_60795_()) {
+                continue;   // 这格已经通了，继续往上看
+            }
+            if (this.isOre(level, cap)) {
+                return false;   // 正上方就是矿 → 交给主链路（正常目标），这里不抢
+            }
+            if (!this.isOpenStone(level, cap)) {
+                return false;   // 挖不开（基岩/箱子/机器）→ 这条才是真走不到
+            }
+            this.targetPos = cap.m_7949_();
+            TARGET_SINCE.put(maid.m_19879_(), level.m_46467_());
+            this.traceExit(maid, "mine 头顶压住挖开", "cap=" + cap + " feet=" + feet);
+            return true;
+        }
+        return false;
+    }
 
     /** 实测八百六十九【没镐不启动】：挖矿任务因没镐不启动时气泡提示（限频 30 秒，不刷屏） */
     private void hintNoPickaxe(EntityMaid maid, ServerLevel level) {
@@ -1446,57 +1574,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     }
 
     /**
-     * v1.5.25 斜坡逼近：目标在斜上方（水平 2.5~4.5、垂直差 ≥1）时，
-     * 在朝目标方向的前方 1 格脚下垫方块形成台阶——女仆走上去后水平+垂直同时接近，
-     * 反复垫直到够得着。前方脚下是平地（不悬空）→ 不需要垫，直接走过去即可。
-     */
-    private boolean slopeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
-        if (com.maidsmart.tool.MaidPlaceGuard.seatedBlocked(maid)) {
-            return false; // 骑乘/坐下中不搭方块（v1.1.0 实测一百五十六；v1.2.4 实测六百三十五 并入统一闸口）
-        }
-        if (this.pillarCooldown > 0) {
-            this.pillarCooldown--;
-            return true; // v1.5.113（B6）：冷却中——等一步走完再垫（不重复消耗）
-        }
-        int y = maid.m_20183_().m_123342_();
-        int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
-        int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
-        BlockPos ahead = new BlockPos(tx, y, tz);
-        BlockPos fill = ahead.m_7918_(0, -1, 0);
-        BlockState below = level.m_8055_(fill);
-        // 前方脚下悬空（空气/水）且前方格本身可走 → 垫台阶/桥
-        boolean gap = below.m_60795_() || below.m_60734_()
-                == ForgeRegistries.BLOCKS.getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
-        if (gap && level.m_8055_(ahead).m_60795_()) {
-            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
-            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
-            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
-                return false;
-            }
-            Item item = this.takeBuildBlock(maid);
-            if (item == null) {
-                this.notifyNoBuildBlock(maid); // v1.5.113（C2）
-                return false;
-            }
-            Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
-            if (block == null) {
-                return false;
-            }
-            level.m_7731_(fill, block.m_49966_(), 3);
-            trackPlaced(level, fill, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
-            // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
-            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
-            this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
-            this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.MINE_PILLAR_COOLDOWN.get(); // v1.5.113（B6）
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * 形成下行台阶（比 slopeStep 的垫块低一层），女仆踩下去后高度降低 1 格；反复执行
-     * 即可逐级下降接近矿物。其余逻辑（取料/摆臂/音效/冷却/回收）与 slopeStep 完全一致。
+     * 形成下行台阶（比普通垫块低一层），女仆踩下去后高度降低 1 格；反复执行
+     * 即可逐级下降接近矿物。其余逻辑（取料/摆臂/音效/冷却/回收）与普通垫块一致。
      * 触发条件（缺一不可）：
      *  - 前方一格【落脚层 y-1】为空气（能站）且【身体层 y】为空气（身体过得了）；
      *  - 落脚层脚下 (y-2) 无支撑（空气/水）→ 需要垫一块才能踩下去；
@@ -1504,7 +1583,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
      */
     private boolean descendStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
         if (com.maidsmart.tool.MaidPlaceGuard.seatedBlocked(maid)) {
-            return false; // 骑乘/坐下中不搭方块（实测六百三十五：统一闸口，与 slopeStep 同口径）
+            return false; // 骑乘/坐下中不搭方块（实测六百三十五：统一闸口，与普通垫块同口径）
         }
         if (hDist < 1.0) {
             return false;
@@ -1539,6 +1618,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, support)) {
             return false;
         }
+        // 实测九百七十八：下行台阶同理——先转身再垫那一格
+        com.maidsmart.task.BlockWalkOn.faceToward(maid, tx + 0.5, tz + 0.5);
         Item item = this.takeBuildBlock(maid);
         if (item == null) {
             this.notifyNoBuildBlock(maid);
@@ -1586,6 +1667,9 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
                 return false;
             }
+            // 实测九百七十八：垫桥块之前先把身子转到要垫的那一格——旧版只垫不转身，
+            // 垫完靠直推走过去，头朝向和前进方向无关（"倒着搭、倒着走"）
+            com.maidsmart.task.BlockWalkOn.faceToward(maid, tx + 0.5, tz + 0.5);
             Item item = this.takeBuildBlock(maid);
             if (item == null) {
                 this.notifyNoBuildBlock(maid); // v1.5.113（C2）
@@ -1606,7 +1690,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         }
         return false;
     }
-
 
     /**
      * v1.5.87：搭方块防掉落（仅在挖矿搭方块时生效，效果照搬玩家潜行、移速不变）——
@@ -1636,7 +1719,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     }
 
     private boolean isOre(ServerLevel level, BlockPos pos) {
-        return ORE_VALUE.containsKey(level.m_8055_(pos).m_60734_());
+        return oreValueOf(level.m_8055_(pos)) != null;
     }
 
     /**
@@ -1731,28 +1814,28 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         }
         ANCHORS.put(id, anchorPos.m_7949_());
         OUT_SINCE.remove(id);
-        ABANDONED.remove(id); // 实测八百六十八：换锚点了，本框排除表作废（重新看这片区域）
     }
 
     /**
-     * 一个搜索环宽（新框与旧框错开一半以上），女仆无需走路、马上能挖新框的矿。
-     * ① 被墙/悬崖堵住走不动 → 30 秒停滞就地重埋 → 新框与旧框重合 → 又空 → 又迁移
-     *    （死循环）；② 迁移期纯走路零产出。
-     * 每 5 秒最多滑一次（SLIDE_SINCE 节流），空旷地形也不会高速漂移。
-     * 同时清 ORE_CACHE（新框未扫描）并朝新框中心设一个移动目标（赶路不干等）。
+     * 一个搜索环宽（新框与旧框错开一半以上），女仆无需走路、马上能挖新框的矿。① 被墙/悬崖堵住走不动 → 30 秒停滞就地重埋 → 新框与旧框重合 → 又空 → 又迁移（死循环）；② 迁移期纯走路零产出。
+     * 每 5 秒最多滑一次（SLIDE_SINCE 节流），空旷地形也不会高速漂移。清 ORE_CACHE（新框未扫描）；**不设移动目标**（实测九百一十三：框空不该赶路）。
+     * <p>实测九百二十六【必须真的滑走】：主人在锚点上（她守在主人脚边干活）时，旧版把方向算成 (0,0) → 锚点原地不动 → 同一片空框反复全量扫、她永远没目标（实机 03:24:09 起 27 秒零动作）。
+     * 现在改成 8 向轮转取方向：框绕着主人一格一格转着找，既不原地不动、也不会越挖越远。
      */
-    private void slideAnchor(ServerLevel level, EntityMaid maid, BlockPos old) {
+    private boolean slideAnchor(ServerLevel level, EntityMaid maid, BlockPos old) {
         int id = maid.m_19879_();
         long now = level.m_46467_();
         Long last = SLIDE_SINCE.get(id);
         if (last != null && now - last < 100L) {
-            return; // 5 秒一次
+            return false; // 5 秒一次
         }
         SLIDE_SINCE.put(id, now);
         // 实测五百六十二：home 模式锚点固定在工作区域内——迁移正是"挖矿女仆越走越远"
         // 的源头（框框相连追出去半个地图），圈挖空就待在圈里等（区块刷新/换任务）
         if (maid.m_21536_()) {
-            return; // hasRestriction——home 模式不迁移
+            LOGGER.info("mine box empty but home-restricted (pinned work area, no migration): maid={} anchor={}",
+                    id, old);
+            return false; // home 模式不迁移：工作圈钉死（圈内挖空就等区块刷新/换任务）
         }
         int step = Math.max(4, com.maidsmart.config.MaidSmartConfig.MINE_SEARCH_RADIUS.get());
         int dirX = 1;
@@ -1764,8 +1847,17 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             double dx = owner.m_20185_() - old.m_123341_();
             double dz = owner.m_20189_() - old.m_123343_();
             if (Math.abs(dx) < 1.0 && Math.abs(dz) < 1.0) {
-                dirX = 0;
-                dirZ = 0; // 主人在身边 → 不迁移（以主人脚下为新框）
+                // 实测九百二十六【框空站桩的死路】：主人在锚点上（她就守在主人脚边干活）时，
+                // 旧版把方向算成 (0,0) = 锚点原地不动，于是同一片空框反复全量扫、她永远没目标
+                //（实机 03:24:09 起 27 秒零动作、看门狗每 8 秒重置一次）。改成按 8 向轮转取一个
+                // 方向：框绕着主人一格一格转着找，既不原地不动、也不会越挖越远。
+                this.slideTurn++;
+                double ang = (this.slideTurn % 8) * Math.PI / 4.0;
+                dirX = (int) Math.round(Math.cos(ang));
+                dirZ = (int) Math.round(Math.sin(ang));
+                if (dirX == 0 && dirZ == 0) {
+                    dirX = 1;
+                }
             } else {
                 dirX = dx >= 0 ? 1 : -1;
                 dirZ = dz >= 0 ? 1 : -1;
@@ -1775,16 +1867,15 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                 old.m_123342_(), old.m_123343_() + dirZ * step).m_7949_();
         ANCHORS.put(id, na);
         OUT_SINCE.remove(id);
-        ABANDONED.remove(id); // 实测八百六十八：滑到新框了，本框排除表作废
         ORE_CACHE.remove(id); // 新框未扫描，强制重建
-        // 朝新框中心走（空框时也在赶路，不原地干等；0.6 = 伐木同款基础速度，v1.5.118）
-        this.setWalkTarget(maid, na, 0.6f);
+        // 实测九百一十三：框空 = 没找到矿 → 【不再朝新框赶路】——原版 TLM 的走路逻辑
+        // （空闲闲逛 / 跟随主人）接管；她走到哪，下一轮 relocate 就把搜索框埋回她脚下。
+        return true;
     }
-
 
     /** v1.5.85：记录本次扫描中镐子挖不动的矿（只保留价值最高的一个，用于播报） */
     private void recordSkippedOre(EntityMaid maid, BlockPos pos, BlockState state) {
-        Integer value = ORE_VALUE.get(state.m_60734_());
+        Integer value = oreValueOf(state);
         if (value == null || (this.skippedOrePos != null && value <= this.skippedOreValue)) {
             return;
         }
@@ -1794,7 +1885,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         this.skippedOreName = blockCnName(state.m_60734_());
         this.skippedOreTool = requiredTool(state);
     }
-
 
     /**
      * v1.5.85：播报"附近有矿但镐子挖不动"——气泡 + 主人聊天栏（v1.5.68 气泡同步），
@@ -1816,6 +1906,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             net.minecraft.resources.ResourceLocation hk = ForgeRegistries.ITEMS.getKey(hand.m_41720_());
             handName = hk != null ? com.maidsmart.build.BlueprintLib.cnName(hk.toString()) : hand.m_41720_().toString();
         }
+        LOGGER.info("mine skip-report: maid={} ore={} at={} need={} hand={}",
+                maid.m_20148_(), this.skippedOreName, this.skippedOrePos, this.skippedOreTool, handName);
         maid.getChatBubbleManager().addTextChatBubble(
                 "我发现了一个" + this.skippedOreName + "（坐标 " + this.skippedOrePos.m_123341_()
                         + ", " + this.skippedOrePos.m_123342_() + ", " + this.skippedOrePos.m_123343_()
@@ -1838,6 +1930,8 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         String name = blockCnName(level.m_8055_(blockerPos).m_60734_());
         // v1.5.143：被挡的矿物名也报中文（旧版只说"挡住了矿物"，不说挡住的是哪种矿）
         String oreName = blockCnName(level.m_8055_(orePos).m_60734_());
+        LOGGER.info("mine blocked-report: maid={} ore={} at={} blocker={} at={}",
+                maid.m_20148_(), oreName, orePos, name, blockerPos);
         maid.getChatBubbleManager().addTextChatBubble(
                 "前方有" + name + "（坐标 " + blockerPos.m_123341_() + ", " + blockerPos.m_123342_()
                         + ", " + blockerPos.m_123343_() + "）挡住了" + oreName + "（坐标 " + orePos.m_123341_()
@@ -1856,6 +1950,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             return;
         }
         BLOCKED_REPORT_SINCE.put(maid.m_19879_(), now);
+        LOGGER.info("mine blocked-area: maid={} blockedCount={}", maid.m_20148_(), this.blockedOres.size());
         maid.getChatBubbleManager().addTextChatBubble(
                 "附近有矿物被硬方块挡住（基岩/箱子等），我挖不过去，暂时没有可挖的矿物～");
         if (maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer owner) {
@@ -1868,53 +1963,31 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         }
     }
 
-    /**
-     * score = 距离平方 + 深度惩罚 - 价值加成，取最低分。
-     * 穿透预算：女仆到矿之间实心挡路方块 ≤MAX_BREAK_BUDGET 可选（借鉴 maidmining）；
-     * 刚弃置的目标跳过一次。 - 全量扫描（8.9 万格）每 5 秒一次（ORE_CACHE_TTL），期间缓存轮只校验 已记录的矿（存在性/框内/可挖性），廉价得多（旧版每 3 tick 全量扫）； - 挡路预算按矿坐标缓存（缓存轮复用），不再对每个候选重算视线； - 镐能力判定：主手先查（零开销），主手不够才查背包最高级镐（一次遍历）； - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
-     */
-    /**
-     * （换锚点才清）。三处弃置（锁定超时 / 视线被挡 / 走路卡死 3 次）与看门狗重置统一走这里。
-     */
-    private void abandon(EntityMaid maid, BlockPos p, long gameTime) {
-        if (p == null) {
+    /** 实测九百二十九【弃置必须留痕】：每一次"这块/这棵不要了"都留一行（5 秒/条）。
+     *  旧版六条弃置路径**一条日志都没有**——实机里"她站着不动二十五秒、日志零行"就是这么来的，
+     *  连着两轮都在猜根因。留痕口径与走路那条（{@code work walk stuck}）一致。 */
+    private void giveUpLog(EntityMaid maid, String reason, BlockPos p, long gameTime) {
+        if (gameTime - this.giveUpLogAt < 100L) {
             return;
         }
-        this.abandonedPos = p;
-        int id = maid.m_19879_();
-        RECENT_DISCARD.computeIfAbsent(id, k -> new java.util.HashMap<>()).put(p.m_7949_(), gameTime);
-        ABANDONED.computeIfAbsent(id, k -> new java.util.HashSet<>()).add(p.m_7949_());
-    }
-
-    /**
-     * 实测八百六十八【锁定超时按破坏速度放大，借鉴 maid_mining】：旧版固定 mine.targetTimeout
-     * （默认 15 秒）——深板岩钻石这类硬矿还没挖完就被当"够不着"弃置，选中→弃置→再选中打转。
-     * 新口径 = {@code max(配置下限, 3×估算挖掘 tick)}，上限 1200 tick（60 秒）；估算复用挖掘公式。
-     */
-    private int targetTimeoutTicks(EntityMaid maid, BlockPos pos) {
-        int floor = com.maidsmart.config.MaidSmartConfig.MINE_TARGET_TIMEOUT.get();
+        this.giveUpLogAt = gameTime;
         try {
-            net.minecraft.world.level.Level lvl = maid.m_9236_();
-            BlockState state = lvl.m_8055_(pos);
-            ItemStack tool = maid.m_21205_();
-            float hardness = state.m_60734_().m_7749_(state, lvl, pos);
-            if (tool.m_41619_() || hardness <= 0.0f || hardness == Float.MAX_VALUE) {
-                return floor;
-            }
-            boolean correct = tool.m_41720_() instanceof net.minecraft.world.item.DiggerItem
-                    && ((net.minecraft.world.item.DiggerItem) tool.m_41720_()).m_8096_(state);
-            float digSpeed = Math.max(1.0f, tool.m_41691_(state));
-            float delta = digSpeed / hardness / (correct ? 30.0f : 100.0f)
-                    * (float) (double) com.maidsmart.config.MaidSmartConfig.MINE_SPEED_FACTOR.get();
-            delta = Math.min(delta, 0.25f);
-            if (delta <= 0.0f) {
-                return floor;
-            }
-            int limit = (int) Math.ceil(3.0 / delta);
-            return Math.max(floor, Math.min(limit, 1200));
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ignored);
-            return floor;
+            double d = p == null ? -1.0 : Math.sqrt(this.distSqToBlock(maid, p));
+            LOGGER.info("mine give-up: maid={} reason={} target={} dist={} feet={} progress={}",
+                    maid.m_20148_(), reason, p, (long) d, maid.m_20183_(), this.destroyProgress);
+        } catch (Exception ex) { com.maidsmart.diag.Diag.swallow("MaidMineBehavior", ex);
         }
+    }
+    // 实测九百三十二【删"弃置"】：原 abandon() / wedgeAbandon() / targetTimeoutTicks() 三个方法
+    // 整体删除——"够不着就丢掉这块、记 30 秒短排、连弃 3 次换框"全部取消。
+
+    /** 实测九百八十：丢弃过期扫描状态、把扫描框挪到她自己脚下（目标跑出检索半径时用）。
+     *  只动"框"和缓存，不碰世界、不碰游标以外的任何状态。 */
+    private void dropStaleScan(EntityMaid maid) {
+        int id = maid.m_19879_();
+        ORE_CACHE.remove(id);
+        MINE_SCANS.remove(id);
+        ANCHORS.put(id, maid.m_20183_().m_7949_());
     }
 
     private BlockPos findOre(ServerLevel level, EntityMaid maid, BlockPos anchor) {
@@ -1925,7 +1998,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         this.skippedOreName = null;
         this.skippedOreTool = null;
         this.skippedOreValue = -1;
-        // v1.5.113（B4）：修剪过期的短时排除（30 秒）
+        // 实测九百四十一：修剪过期的短时排除（30 秒）——与伐木同表同口径（RECENT_DISCARD）。
         java.util.Map<BlockPos, Long> disc = RECENT_DISCARD.get(id);
         if (disc != null) {
             disc.entrySet().removeIf(e -> now - e.getValue() > 600L);
@@ -1967,7 +2040,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
      */
     private BlockPos fullScanOres(ServerLevel level, EntityMaid maid, BlockPos anchor, long now) {
         int id = maid.m_19879_();
-        int feetY = anchor.m_123342_();
         int radius = com.maidsmart.config.MaidSmartConfig.MINE_SEARCH_RADIUS.get();
         int down = com.maidsmart.config.MaidSmartConfig.MINE_DOWN_RANGE.get();
         int up = com.maidsmart.config.MaidSmartConfig.MINE_UP_RANGE.get();
@@ -1980,10 +2052,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         }
         int budget = com.maidsmart.config.MaidSmartConfig.MINE_SCAN_BUDGET.get();
         int breakBudget = com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get();
-        double valueWeight = com.maidsmart.config.MaidSmartConfig.MINE_VALUE_WEIGHT.get();
-        double depthPenalty = com.maidsmart.config.MaidSmartConfig.MINE_DEPTH_PENALTY.get();
         java.util.Map<BlockPos, Long> disc = RECENT_DISCARD.get(id);
-        java.util.Set<BlockPos> aband = ABANDONED.get(id); // 实测八百六十八：本锚点排除表
         int processed = 0;
         while (st.dy <= up && processed < budget) {
             BlockPos p = anchor.m_7918_(st.dx, st.dy, st.dz);
@@ -1998,13 +2067,12 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                 st.dy++;
             }
             processed++;
-            if (p.equals(this.abandonedPos) || this.blockedOres.contains(p)
-                    || (disc != null && disc.containsKey(p.m_7949_()))
-                    || (aband != null && aband.contains(p.m_7949_()))) {
-                continue; // v1.5.47：刚弃置跳过；v1.5.87：硬挡路持续排除；v1.5.113：短时排除；实测八百六十八：本锚点排除
+            if (this.blockedOres.contains(p)
+                    || (disc != null && disc.containsKey(p.m_7949_()))) {
+                continue; // v1.5.87：硬挡路持续排除；实测九百四十一：再加"短时排除"（停滞弃置 30 秒）
             }
             BlockState oreState = level.m_8055_(p);
-            Integer value = ORE_VALUE.get(oreState.m_60734_());
+            Integer value = oreValueOf(oreState);
             if (value == null) {
                 continue;
             }
@@ -2042,11 +2110,17 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             }
             st.blockingCache.put(p.m_7949_(), blocking); // v1.5.113（A3）：缓存轮复用
             st.found.add(p.m_7949_());
+            // 实测九百八十【同上·口径统一】：框内但在她自己检索半径外的格不进候选——
+            // 否则外层"跑出检索半径"清空它、下一轮又从缓存选回同一格（原地循环的根因）。
+            // 仍记进 found（缓存保持完整）：等她走近了下一轮缓存校验自然会放行。
+            if (this.targetOutOfRadius(maid, p, radius)) {
+                continue;
+            }
             // 实测八百六十八：排序基准从"锚点"改成"她当前位置"（与 maid_mining 同口径），
             // 并删掉旧的 reachBonus（-400 会随她移动实时翻转目标 = "锁定能力差"根因之一）
-            double score = distSqToBlock(maid, p)
-                    + depthPenalty * Math.max(0, feetY - p.m_123342_())
-                    - value * valueWeight;
+            // 实测九百一十三【最近优先】：连价值/深度两项也一并废除——只按"她到矿的距离²"
+            // 排序，圈内最近的那块就是目标（配置项 mine.valueWeight / mine.depthPenalty 已删）。
+            double score = distSqToBlock(maid, p);
             if (score < st.bestScore) {
                 st.bestScore = score;
                 st.best = p.m_7949_();
@@ -2056,6 +2130,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             return null; // 预算用尽，下 tick 续扫
         }
         // 扫描完成：写缓存（与旧版同口径），清游标状态
+        this.traceExit(maid, "mine 全量扫描完成", "found=" + st.found.size() + " best=" + st.best);
         MINE_SCANS.remove(id);
         ORE_CACHE.put(id, new OreCache(now, st.found, st.blockingCache));
         return st.best;
@@ -2065,22 +2140,16 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     private BlockPos pickFromCache(ServerLevel level, EntityMaid maid, BlockPos anchor, OreCache cache) {
         int id = maid.m_19879_();
         long now = level.m_46467_();
-        int feetY = anchor.m_123342_();
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
         int radius = com.maidsmart.config.MaidSmartConfig.MINE_SEARCH_RADIUS.get();
         int down = com.maidsmart.config.MaidSmartConfig.MINE_DOWN_RANGE.get();
         int up = com.maidsmart.config.MaidSmartConfig.MINE_UP_RANGE.get();
         int budget = com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get();
-        double valueWeight = com.maidsmart.config.MaidSmartConfig.MINE_VALUE_WEIGHT.get();
-        double depthPenalty = com.maidsmart.config.MaidSmartConfig.MINE_DEPTH_PENALTY.get();
         java.util.Map<BlockPos, Long> disc = RECENT_DISCARD.get(id);
-        java.util.Set<BlockPos> aband = ABANDONED.get(id); // 实测八百六十八：本锚点排除表
         for (BlockPos p : cache.ores) {
-            if (p.equals(this.abandonedPos) || this.blockedOres.contains(p)
-                    || (disc != null && disc.containsKey(p))
-                    || (aband != null && aband.contains(p))) {
-                continue;
+            if (this.blockedOres.contains(p) || (disc != null && disc.containsKey(p.m_7949_()))) {
+                continue; // 实测九百三十二：只留硬挡路；实测九百四十一：再加"短时排除"（停滞弃置 30 秒）
             }
             if (!this.isOre(level, p)) {
                 continue; // 已被挖掉
@@ -2115,15 +2184,21 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             if (this.isDangerAt(level, p)) {
                 continue;
             }
-            Integer value = ORE_VALUE.get(st.m_60734_());
+            Integer value = oreValueOf(st);
             int blocking = cache.blocking.getOrDefault(p, budget + 1);
             if (value == null || blocking > budget) {
                 continue;
             }
+            // 实测九百八十【口径统一】：缓存的"框"是相对【锚点】算的，她挖远之后同一个格可能已经
+            // 在她自己的检索半径外——外层判据（她到格）会把它清掉，可缓存下一轮又把同一格选回来，
+            // 于是"选中 → 跑出半径 → 清空 → 再选中"无限循环（实机 00:34:54 起原地站了 37 秒、
+            // 无气泡无日志，只能收放魂符一次）。缓存轮必须按【她到格】的同一口径筛一遍。
+            if (this.targetOutOfRadius(maid, p, radius)) {
+                continue;
+            }
             // 实测八百六十八：与全量扫描同口径——按到女仆的距离² 排序、去掉 reachBonus
-            double score = distSqToBlock(maid, p)
-                    + depthPenalty * Math.max(0, feetY - p.m_123342_())
-                    - value * valueWeight;
+            // 实测九百一十三【最近优先】：价值/深度两项一并废除（配置项已删），只看距离²
+            double score = distSqToBlock(maid, p);
             if (score < bestScore) {
                 bestScore = score;
                 best = p;
@@ -2131,7 +2206,6 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         }
         return best;
     }
-
 
     /**
      * 从眼睛到矿物中心采样（每 0.5 格，与 countBlocking 同一口径），到达矿物前碰到任何
@@ -2232,7 +2306,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                 blocking++;
                 continue;
             }
-            if (ORE_VALUE.containsKey(st.m_60734_())) {
+            if (oreValueOf(st) != null) {
                 continue; // 矿石不挡
             }
             if (isMiningPlaced(level, sample)) {
@@ -2241,11 +2315,15 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             if (!st.m_60796_(level, sample)) {
                 continue; // 非满块（楼梯/台阶/花/草）不挡；水不算
             }
-            // v1.1.0 实测七十二（反馈："穿透默认太高，矿洞里一直往下打洞"）：
-            // 实心可开路方块（石头/泥土/深板岩等）重新计入阻挡层数——旧版跳过它们，
-            // 地下到处是石头 = 0 阻挡，预算形同虚设，隔地板的矿全都入选 → 女仆对着
-            // 脚下连凿竖井。现在预算真正约束"穿几层实心方块"（默认 6），更远的矿
-            // 先走近再评估；箱子/机器等硬挡路照旧计数，熔岩照旧计数
+            // 实测九百一十七【套用伐木的穿透预算口径】：可开路方块（石头/泥土/深板岩/安山岩等
+            // OPEN_BREAKABLE + 徒手可挖软方块）不计阻挡——它们本就是"挖穿开路"的对象，不是
+            // 障碍。旧版把它们逐层计满预算，而隔墙透视一开、入选的矿几乎全埋在石头里，预算
+            // 当场爆掉 → 一块也选不出来（反馈"开了透视还是站着发呆"）。伐木侧一直就是这个
+            // 口径（见 MaidWoodBehavior.countBlocking 放行 isSoft/isOpenStone）。真硬挡路
+            // （箱子/机器/基岩等）与岩浆照旧计数。
+            if (isSoft(maid.m_21205_(), st) || this.isOpenStone(level, sample)) {
+                continue;
+            }
             blocking++;
         }
         return blocking;
@@ -2277,7 +2355,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
                 return null; // 无挡路
             }
             BlockState st = level.m_8055_(sample);
-            if (st.m_60795_() || ORE_VALUE.containsKey(st.m_60734_()) || !st.m_60796_(level, sample)) {
+            if (st.m_60795_() || oreValueOf(st) != null || !st.m_60796_(level, sample)) {
                 continue;
             }
             // v1.1.0 实测二十三：岩浆格视作硬阻挡——湖心矿若因缓存轮/预算恰好被
@@ -2299,13 +2377,37 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         return null;
     }
 
-
     /** v1.1.0 实测二十三：是否岩浆方块（静态/流动都是 minecraft:lava，与自保
      *  SelfPreservationBehavior.isLavaBlock 同款判定） */
     private static boolean isLavaBlock(net.minecraft.world.level.block.Block b) {
         net.minecraft.resources.ResourceLocation key =
                 net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(b);
         return key != null && "minecraft:lava".equals(key.toString());
+    }
+
+    /** 实测九百七十九：分帧扫描进行中她的"站着等"是正常的，不打卡死表 */
+    @Override
+    protected boolean stallWatchdogSuppressed(ServerLevel level, EntityMaid maid) {
+        return MINE_SCANS.containsKey(maid.m_19879_());
+    }
+
+    /** 实测九百七十九：卡死弃目标的收尾——把这轮进度落盘（目标本身已进 30 秒短排） */
+    @Override
+    protected void onStallGiveUp(ServerLevel level, EntityMaid maid, long gameTime, BlockPos dead) {
+        this.saveProgressNow(maid);
+    }
+
+    /** 实测九百七十九：连卡 3 次 = 这一框没戏 → 清缓存 + 挪锚点换一片 */
+    @Override
+    protected void onStallStreak(ServerLevel level, EntityMaid maid, long gameTime) {
+        ORE_CACHE.remove(maid.m_19879_());
+        MINE_SCANS.remove(maid.m_19879_());
+        this.scanCooldown = 0;
+        BlockPos anchor = this.resolveAnchor(level, maid);
+        if (anchor != null) {
+            this.slideAnchor(level, maid, anchor);
+        }
+        LOGGER.info("mine stall x3 -> fresh box: maid={} anchor={}", maid.m_20148_(), anchor);
     }
 
     /** v1.5.47：废石丢弃——每种保留 JUNK_KEEP 份，超出直接销毁（不生成掉落物，防被捡回）

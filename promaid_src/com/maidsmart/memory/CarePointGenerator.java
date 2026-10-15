@@ -48,11 +48,15 @@ public final class CarePointGenerator {
             }
         }
         if (affect != null) {
-            if (affect.hurtDebt > 0.3 || affect.repairDebt > 0.3) {
-                out.add("关系里还有受伤或生气的残留，不要假装一切已经没发生");
+            // 实测九百六十九：两种"委屈"分开（与 AffectManager.render 同口径），并修掉"主人心情偏低"
+            // 这个把女仆情绪写成主人情绪的笔误。
+            if (affect.repairDebt > 0.2) {
+                out.add("主人伤过她、这笔债还没还上：先认错、再哄，别装作无事发生");
+            } else if (affect.hurtDebt > 0.3) {
+                out.add("她最近在外面受了委屈（不是主人的错）：语气护着她一点");
             }
             if (affect.valence < 0.25) {
-                out.add("主人心情偏低时先轻轻确认状态，不要一上来讲方案");
+                out.add("她心情偏低时先轻轻确认状态，不要一上来讲方案");
             }
             if (affect.intimacy > 0.6 && affect.longing > 0.5 && affect.conflict < 0.1) {
                 out.add("可以更温柔更粘人一点，但不要无视当前事实");

@@ -9,6 +9,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -84,7 +85,10 @@ public abstract class MaidConfigGoetyMixin {
         }
     }
 
-    /** 按钮值文本：客户端缓存优先；未知 = 关（服务端 S2C 到了会纠正） */
+    /** 按钮值文本：客户端缓存优先；未知 = 关（服务端 S2C 到了会纠正）。
+     *  <p>【实测九百二十三 {@code @Unique}】同一个目标 {@link MaidConfigFreeFlightMixin} 也有同名私有助手——
+     *  不标 {@code @Unique} 就按同名方法并入目标、本条被 Mixin 判"重复覆写"整条丢弃（启动日志 Method overwrite conflict）。 */
+    @Unique
     private static String promaid$value(String uid) {
         Boolean cur = MaidGoetyAuto.cachedClient(uid);
         return (cur != null && cur) ? "\u00a7a\u5f00" : "\u00a77\u5173";
@@ -94,7 +98,9 @@ public abstract class MaidConfigGoetyMixin {
      * 反射调用 Screen.addRenderableWidget（继承方法，无 refmap 时 @Shadow 定位不到）。
      *
      * 【1.20.1 用 SRG 字段名】本树手工编译、生产环境跑的是 SRG 类，所以查的是 {@code m_142416_}。
+     * <p>【实测九百二十三】与值文本同因，标 {@code @Unique} 免得与 {@link MaidConfigFreeFlightMixin} 的同名助手撞名被丢。
      */
+    @Unique
     private static void promaid$addRenderable(Screen screen,
                                               net.minecraft.client.gui.components.events.GuiEventListener widget) {
         try {

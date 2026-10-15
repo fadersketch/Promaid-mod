@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidToolAutoEquip.java, line: 1, end_line: 934}
   - {path: promaid_src_neo/com/maidsmart/task/MaidToolAutoEquipBehavior.java, line: 1, end_line: 122}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: ba2835c006af8c128d7d3af8caa4edd98afcafa256d7fa45b51accd8ab8e0f7a
 state: active

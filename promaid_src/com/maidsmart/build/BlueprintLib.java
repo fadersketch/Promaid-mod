@@ -220,9 +220,8 @@ public final class BlueprintLib {
                 }
                 net.minecraft.nbt.CompoundTag stateTag = palette.get(stateIndex);
                 String blockName = stateTag.m_128461_("Name");
-                // v1.5.317：机器蓝图（keepFluids）保留水/岩浆；其余黑名单照旧剥离
-                boolean fluidKept = keepFluids && ("minecraft:water".equals(blockName)
-                        || "minecraft:lava".equals(blockName));
+                // v1.5.317：机器蓝图（keepFluids）保留流体；其余黑名单照旧剥离
+                boolean fluidKept = keepFluids && BlueprintStepMath.isFluidBlock(blockName);
                 if (FORBIDDEN.contains(blockName) && !fluidKept) {
                     continue;
                 }
@@ -251,7 +250,7 @@ public final class BlueprintLib {
                 // issue #12 的现场（反馈者观察到"过滤没拦住"）；材料侧已在实测五百八十三
                 // 修好（itemForBlock 做 wall_ 归一）。现在这里统一走**同一个** itemForBlock()：
                 // 判据与材料链完全一致，真正没有物品形式的方块（火/传送门…）才跳过， 跳过的格数由调用方写进日志（旧版静默——反馈）。
-                boolean fluidBlock = "minecraft:water".equals(blockName) || "minecraft:lava".equals(blockName);
+                boolean fluidBlock = BlueprintStepMath.isFluidBlock(blockName);
                 if (block == null || (fluidBlock && !fluidKept) || itemForBlock(blockName) == null) {
                     BlueprintStructureCodec.noItemCells++;
                     continue;
@@ -301,7 +300,7 @@ public final class BlueprintLib {
     /** v1.5.45：附着方块的支撑方向（null = 无需支撑） —— 实现见 BlueprintPlacement.supportDirection（v1.2.4 拆分）。 */
     public static net.minecraft.core.Direction supportDirection(net.minecraft.world.level.block.state.BlockState state) { return BlueprintPlacement.supportDirection(state); }
 
-    /** v1.5.349：蓝图指定世界坐标是否为【流体步骤】(水/岩浆)——识别"设计意图的流体支撑"：村民机水闸活板门等，顶部活板门上方就是水（原版 canSurvi —— 实现见 BlueprintPlacement.isFluidStepAt（v1.2.4 拆分）。 */
+    /** v1.5.349：蓝图指定世界坐标是否为【流体步骤】(按方块流体状态判，含模组流体)——识别"设计意图的流体支撑"：村民机水闸活板门等，顶部活板门上方就是水（原版 canSurvi —— 实现见 BlueprintPlacement.isFluidStepAt（v1.2.4 拆分）。 */
     public static boolean isFluidStepAt(List<String> plan, net.minecraft.core.BlockPos origin, net.minecraft.core.BlockPos worldPos) { return BlueprintPlacement.isFluidStepAt(plan, origin, worldPos); }
 
     /** v1.5.79：统计建造完成时仍悬空的重力方块数（沙子/沙砾/混凝土粉末/铁砧）——图纸的悬浮设计在原版物理中不成立：建造期间被重力冻结（GravityFree —— 实现见 BlueprintPlacement.countSuspendedGravity（v1.2.4 拆分）。 */
@@ -521,7 +520,12 @@ public final class BlueprintLib {
     /** 以女仆为中心：把蓝图步骤整体平移，使蓝图的平面中心落在原点（原点 = 女仆脚下，由调用方给出） —— 实现见 BlueprintStepMath.trimTerrainLayers（v1.2.4 拆分）。 */
     public static List<String> trimTerrainLayers(List<String> steps) { return BlueprintStepMath.trimTerrainLayers(steps); }
 
-    public static List<String> centerSteps(List<String> steps) { return BlueprintStepMath.centerSteps(steps); }
+    /** 以女仆为中心：把蓝图步骤整体平移，使蓝图的平面中心落在原点（原点 = 女仆脚下，由调用方给出）；
+     *  v1.5.399：平移后统一把流体步骤挪到计划末尾（先立结构、最后放液体，见 BlueprintStepMath.moveFluidsLast）。
+     *  —— 实现见 BlueprintStepMath.centerSteps（v1.2.4 拆分）。 */
+    public static List<String> centerSteps(List<String> steps) {
+        return BlueprintStepMath.moveFluidsLast(BlueprintStepMath.centerSteps(steps));
+    }
 
     /** v1.5.57：建造完成 → 红石统一激活 —— 实现见 BlueprintPlacement.recalcRedstone（v1.2.4 拆分）。 */
     public static void recalcRedstone(net.minecraft.server.level.ServerLevel level, BlockPos origin, List<String> plan) { BlueprintPlacement.recalcRedstone(level, origin, plan); }
@@ -551,14 +555,24 @@ public final class BlueprintLib {
     /** v1.5.316：机器模式状态归一化——丢弃蓝图导出时的冻结瞬态（伸出活塞/通电铁轨/冻结 power/lit），让方块以自然初始态落地，由活放置（flag 3 —— 实现见 BlueprintMachineFinish.normalizeMachineState（v1.2.4 拆分）。 */
     public static String normalizeMachineState(String blockId, String stateSnbt) { return BlueprintMachineFinish.normalizeMachineState(blockId, stateSnbt); }
 
+    /** 【实测九百八十五】发射器/投掷器状态归一：triggered → true（“已触发”稳态，防红石重放把它盒子里的东西吐一地）。 —— 实现见 BlueprintMachineFinish.safeDispenserState（v1.2.4 拆分）。 */
+    public static String safeDispenserState(String blockId, String stateSnbt) { return BlueprintMachineFinish.safeDispenserState(blockId, stateSnbt); }
+
     /** v1.5.316：轰炸机家族完工自动启动——在蓝图全部探测铁轨上生成矿车（探测铁轨被矿车压住才带电，是 TNT 复制循环的触发条件） —— 实现见 BlueprintMachineFinish.spawnStartMinecarts（v1.2.4 拆分）。 */
     public static int spawnStartMinecarts(net.minecraft.server.level.ServerLevel level, net.minecraft.core.BlockPos origin, List<String> plan, String family, EntityMaid maid) { return BlueprintMachineFinish.spawnStartMinecarts(level, origin, plan, family, maid); }
 
-    /** v1.5.315：重放蓝图内全部水方块（flag 3）→ 触发流动计算/灵魂沙气泡柱生成 —— 实现见 BlueprintMachineFinish.activateWater（v1.2.4 拆分）。 */
+    /** v1.5.315：重放蓝图内全部流体方块（水 / 岩浆 / 模组流体，flag 3）→ 触发流动计算/灵魂沙气泡柱生成
+     *  —— 实现见 BlueprintMachineFinish.activateWater（v1.2.4 拆分）。 */
     public static void activateWater(net.minecraft.server.level.ServerLevel level, net.minecraft.core.BlockPos origin, List<String> plan) { BlueprintMachineFinish.activateWater(level, origin, plan); }
 
     /** v1.5.331：完工 TNT 点火结算——遍历蓝图 TNT 步骤，只点燃【当前邻接带电】的TNT（恢复正确终态）：轰炸机（矿车压轨带电）当场启动复制循环；天机 —— 实现见 BlueprintMachineFinish.settleTntIgnition（v1.2.4 拆分）。 */
     public static void settleTntIgnition(net.minecraft.server.level.ServerLevel level, net.minecraft.core.BlockPos origin, List<String> plan) { BlueprintMachineFinish.settleTntIgnition(level, origin, plan); }
+
+    /** 实测九百六十一：完工「后门」——完工瞬间静默清空她建的这片（含流体）+ 按蓝图整片重放，终态严格等于蓝图 —— 实现见 BlueprintMachineFinish.snapFinish（v1.2.4 拆分）。 */
+    public static boolean snapFinish(net.minecraft.server.level.ServerLevel level, BlockPos origin, List<String> plan, boolean live) { return BlueprintMachineFinish.snapFinish(level, origin, plan, live); }
+
+    /** 【实测九百八十五】带“用过等价替代材料”判据的重载（普通建筑再拿世界状态兜一层，见实现）。 —— 实现见 BlueprintMachineFinish.snapFinish（v1.2.4 拆分）。 */
+    public static boolean snapFinish(net.minecraft.server.level.ServerLevel level, BlockPos origin, List<String> plan, boolean live, boolean altSubstituted) { return BlueprintMachineFinish.snapFinish(level, origin, plan, live, altSubstituted); }
 
     /** v1.5.25：过滤掉已建好的步骤（目标格已是目标方块或等价族内替代品），返回"尚未建造"的步骤列表 —— 实现见 BlueprintPlacement.filterBuilt（v1.2.4 拆分）。 */
     public static List<String> filterBuilt( net.minecraft.world.level.Level level, BlockPos origin, List<String> steps) { return BlueprintPlacement.filterBuilt(level, origin, steps); }

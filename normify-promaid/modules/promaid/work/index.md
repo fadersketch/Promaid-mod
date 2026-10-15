@@ -12,7 +12,7 @@ description:
       TLM's IMaidTask rather than self-hooking.
 source:
   - {path: promaid_src_neo/com/maidsmart/task, line: 1}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: de1a1515ba8dc22e0e7098cf4da92891c3d71e7b71e4d44e6497a223764166d8
 state: active

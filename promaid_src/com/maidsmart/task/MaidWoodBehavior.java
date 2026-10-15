@@ -27,90 +27,55 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 伐木行为（v1.1.0）：找最近且最有价值的木材 → 走过去 → 手持斧渐进开采。
+ * 伐木行为（v1.1.0）：找**最近**的木材 → 走过去 → 手持斧渐进开采。
  * 架构完整克隆挖矿（MaidMineBehavior），木材特化差异：
  * - 目标表 = 木材表（原木/菌柄/竹/去皮变体；wood 段配置接管）
  * - 工具 = 斧（空手/非斧才从背包装备——玩家手中放的斧不动；完全没斧也照样空手
  *   慢速砍（v1.1.0 终审三：木材无挖掘等级，不因空手拒绝工作）
  * - **树叶不挡视线/不计阻挡**——树冠内的树干照常可见可挖（砍树核心场景）
- * - 深度惩罚默认 0（树在地表，不偏好浅层）
+ * - 最近优先（实测九百一十三）：排序只看她到目标的距离²，旧的深度惩罚/价值权重已废除
  * - 连锁采集天然适配整棵树（同 Block BFS 沿树干蔓延砍完）
  * - 废石策略与挖矿一致（挖穿泥土/石头开路产生的废石照常限量丢弃）
  */
 public class MaidWoodBehavior extends MaidWorkBehavior {
-    /** 木材价值（分数减项，越高越优先）；价值权重/深度惩罚从配置面板读取（wood 段） */
+    /** 木材价值（仅用于"挖不动时的播报挑哪块报"——实测九百一十三起不再参与选材排序） */
     private static final Map<Block, Integer> WOOD_VALUE = new HashMap<>();
 
-    static {
-        reloadBuiltinWoods(); // 初始默认木材表；首次 loadCustomWoods() 后完全由配置接管
-    }
-
-    /** v1.1.0：模组原木自动识别——原版 tag 键（与手册木材网格过滤同一套，TagKey 按注册名等值） */
-    private static final net.minecraft.tags.TagKey<Block> LOGS_TAG = net.minecraft.tags.BlockTags.create(
-            ResourceLocation.parse("minecraft:logs"));
-    private static final net.minecraft.tags.TagKey<Block> BAMBOO_TAG = net.minecraft.tags.BlockTags.create(
-            ResourceLocation.parse("minecraft:bamboo_blocks"));
+    // 实测九百八十【面板 = 唯一来源】：内置木材表 / 标签自动识别 / `!id` 拉黑三条旧入口全删——
+    // 现在"什么是木材"只有一个答案：配置里那张可砍伐木材表，由 loadCustomWoods() 读进
+    // WOOD_VALUE。默认值来自 MaidSmartConfig 里木材表的默认项。
     /** v1.1.0 实测五：树苗 tag（原版+模组树苗都带 #minecraft:saplings） */
     private static final net.minecraft.tags.TagKey<Block> SAPLINGS_TAG = net.minecraft.tags.BlockTags.create(
             ResourceLocation.parse("minecraft:saplings"));
 
-    /** 可砍判定：名单内；或 wood.tagAuto 开时带原版 logs/bamboo_blocks 标签（模组原木照砍） */
+    /** 方块能不能当木材——**本模组唯一判据**（伐木行为与排班探测共用这一份）。 */
+    public static boolean isTargetWood(BlockState state) {
+        return woodValueOf(state) != null;
+    }
+
+    /** 可砍判定（形状判据用：挡路块/树叶判定调的就是这一份）。 */
     private static boolean isWoodState(BlockState state) {
-        if (WOOD_VALUE.containsKey(state.m_60734_())) {
-            return true;
-        }
-        return com.maidsmart.config.MaidSmartConfig.WOOD_TAG_AUTO.get()
-                && (state.m_204336_(LOGS_TAG) || state.m_204336_(BAMBOO_TAG));
+        return woodValueOf(state) != null;
     }
 
-    /** 木材价值：名单值优先；tag 自动识别（不在名单）= 300（与内置原木同价） */
+    /** 注册名 → 方块（取不到给 null） */
+    private static Block blockOf(String id) {
+        try {
+            return ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(id.trim()));
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
+            return null;
+        }
+    }
+
+    /** 木材价值（**唯一判据**）：只认配置里那张可砍伐木材表——不在表里就不是木材。
+     *  实测九百八十：旧的"标签自动识别"（#logs / #bamboo_blocks 兜底）已删，面板上没勾的
+     *  方块一律不算木材。首次调用会懒加载配置，早于任何扫描也能拿到正确的表。 */
     private static Integer woodValueOf(BlockState state) {
-        Integer v = WOOD_VALUE.get(state.m_60734_());
-        if (v != null) {
-            return v;
+        if (!customOresLoaded) {
+            ensureCustomWoods();
         }
-        if (com.maidsmart.config.MaidSmartConfig.WOOD_TAG_AUTO.get()
-                && (state.m_204336_(LOGS_TAG) || state.m_204336_(BAMBOO_TAG))) {
-            return Integer.valueOf(300);
-        }
-        return null;
+        return WOOD_VALUE.get(state.m_60734_());
     }
-
-    private static void setValue(String id, int value) {
-        Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(id));
-        if (block != null) {
-            WOOD_VALUE.put(block, value);
-        }
-    }
-
-    /**
-     * 内置木材表（默认占位；一旦 loadCustomWoods 从配置重建，仅配置为唯一事实源）。
-     * 全部原版原木/菌柄/竹/去皮变体——模组木材通过配置面板加入（创造网格已按木质 tag 过滤）。
-     */
-    private static void reloadBuiltinWoods() {
-        setValue("minecraft:oak_log", 300);
-        setValue("minecraft:spruce_log", 300);
-        setValue("minecraft:birch_log", 300);
-        setValue("minecraft:jungle_log", 300);
-        setValue("minecraft:acacia_log", 300);
-        setValue("minecraft:dark_oak_log", 300);
-        setValue("minecraft:mangrove_log", 300);
-        setValue("minecraft:cherry_log", 300);
-        setValue("minecraft:crimson_stem", 300);
-        setValue("minecraft:warped_stem", 300);
-        setValue("minecraft:bamboo_block", 300);
-        setValue("minecraft:stripped_oak_log", 300);
-        setValue("minecraft:stripped_spruce_log", 300);
-        setValue("minecraft:stripped_birch_log", 300);
-        setValue("minecraft:stripped_jungle_log", 300);
-        setValue("minecraft:stripped_acacia_log", 300);
-        setValue("minecraft:stripped_dark_oak_log", 300);
-        setValue("minecraft:stripped_mangrove_log", 300);
-        setValue("minecraft:stripped_cherry_log", 300);
-        setValue("minecraft:stripped_crimson_stem", 300);
-        setValue("minecraft:stripped_warped_stem", 300);
-    }
-
 
     /**
      * 自定义矿表——适配其他 mod 的矿石。首次扫描/配置保存后调用。
@@ -123,13 +88,32 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         try {
             WOOD_VALUE.clear(); // v1.0.3.1：先清空——保证移除/取消勾选生效
             for (String line : com.maidsmart.config.MaidSmartConfig.WOOD_VALUES.get()) {
-                String[] parts = line.split("=", 2);
+                if (line == null) {
+                    continue;
+                }
+                String raw = line.trim();
+                // 实测九百八十：只认 `id=价值` 行；实测九百九十九起 `#命名空间:标签` 的标签行
+                // 也认（展开见 MaidMineBehavior.blockIdsInTag）。旧版写下的 `!id`（拉黑行）在这里
+                // 被跳过 = 不进表 = 不砍，与旧行为完全一致（"拉黑"这个概念本身已删）。
+                String[] parts = raw.split("=", 2);
                 if (parts.length != 2) {
                     continue;
                 }
                 try {
                     int v = Integer.parseInt(parts[1].trim());
-                    Block b = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(parts[0].trim()));
+                    // 实测九百九十九：`#` 开头的标签行——整条方块标签按同一价值一起进表
+                    // （默认表尾两条就是木材标签，模组原木不必逐块添加）；取不到的标签整行跳过。
+                    String key = parts[0].trim();
+                    if (key.startsWith("#")) {
+                        for (String tid : com.maidsmart.task.MaidMineBehavior.blockIdsInTag(key)) {
+                            Block tb = blockOf(tid);
+                            if (tb != null) {
+                                WOOD_VALUE.put(tb, v);
+                            }
+                        }
+                        continue;
+                    }
+                    Block b = blockOf(key);
                     if (b != null) {
                         WOOD_VALUE.put(b, v);
                     }
@@ -170,10 +154,13 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
     private static final long WOOD_CACHE_TTL = 100L;
 
     /**
-     * v1.3.2 实测八百五十八【锁定期间的目标重评估间隔】（tick = 5 秒）——与挖矿
-     * `MaidMineBehavior.MINE_REPICK_INTERVAL` 同款同口径（反馈"砍树同理"）。详见那边的说明。
+     * 实测九百二十七【咬住不放】：够不着目标时**每 tick 都在推进**（approachOre/approachWood 下走位、
+     * 垫路指令）；只有"整整 {@link #WOOD_WEDGE_TICKS}（40 拍 = 2 秒）一动没动"才认这块真走不到——**当场**弃掉
+     *（记 30 秒短排）换下一块/下一棵，绝不做"原地重寻路再等几次"的阶梯。旧版那条阶梯（40 拍 × 最多
+     * 3 次 = 六秒站着不动）正是玩家看到的"发呆几秒 → 语音「我走神了」→ 才继续"里的发呆；8 秒看门狗
+     *（mine.stuckWatchdog / wood.stuckWatchdog）只是替它收尾，本轮一并删掉。
      */
-    private static final int WOOD_REPICK_INTERVAL = 100;
+    private static final int WOOD_WEDGE_TICKS = 40;
 
     /** 审计M4修复（v1.5.383）：女仆实体卸载时清理其全部行为状态表（防长会话泄漏） */
     public static void forget(int maidEntityId) {
@@ -186,13 +173,11 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         BLOCKED_REPORT_SINCE.remove(maidEntityId);
         RECENT_DISCARD.remove(maidEntityId);
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
+        IDLE_PAUSE_UNTIL.remove(maidEntityId); // 实测九百七十七：无目标静默窗口一并清
         NO_AXE_REPORT_SINCE.remove(maidEntityId);
         com.maidsmart.task.MaidPlanting.forget(maidEntityId); // 实测二百二十八：随手种树冷却表
         WOOD_CACHE.remove(maidEntityId);
         WOOD_SCANS.remove(maidEntityId); // 实测六十一：分帧扫描游标一并清
-        LAST_PROGRESS.remove(maidEntityId); // 实测六十九：看门狗三表一并清
-        WATCH_SAMPLE.remove(maidEntityId);
-        RESET_REPORT_SINCE.remove(maidEntityId);
     }
 
     /** 审计 P-9：按 UUID 清理 WOODING 集合（int 表与 UUID 表分开清理） */
@@ -249,6 +234,20 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
 
     /** v1.5.87：被硬挡路（箱子/机器等）弃置的矿——持续排除，不再反复选中报点 */
     private final java.util.Set<BlockPos> blockedWoods = new java.util.HashSet<>();
+    /** 实测九百二十七：走路卡死检测（与挖矿同款）——够不着这棵树期间位置长期不变 = 真走不到 */
+    private BlockPos lastStuckPos = null;
+    private int stuckTicks = 0;
+    /** 卡死检测针对的当前目标（换目标后计数重新开始） */
+    private BlockPos stuckTarget = null;
+    /** 实测九百二十九：连着"够不着 → 2 秒没挪窝"弃掉了几棵（破掉任意一棵即清零）。 */
+    private int wedgeStreak = 0;
+
+    /** 实测九百二十九：上一次楔形弃置的时刻（拍）——判"连着卡"用。 */
+    private long lastWedgeAt = 0L;
+
+    /** 实测九百二十九：弃置留痕限频（拍，5 秒/条）。 */
+    private long giveUpLogAt = 0L;
+    private int slideTurn = 0;
     /** v1.5.85：本次扫描中镐子挖不动的矿（记录价值最高的一个，用于播报） */
     private BlockPos skippedWoodPos = null;
     private String skippedWoodName = null;
@@ -276,7 +275,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
     /** v1.5.28：登记一个挖矿搭的方块（每块从自己放置时刻起单独计时，满 10 秒各自销毁） */
     private static void trackPlaced(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
         PLACED_TRACKER.track(level, pos, block, maid);
-        markProgress(maid, level.m_46467_()); // 实测六十九：垫方块也是进展
     }
 
     /** v1.5.28：销毁所有放置超过 10 秒的挖矿搭方块。
@@ -285,7 +283,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         PLACED_TRACKER.expirePlaced(server, gameTime,
                 pos -> anyMaidStanding(server, pos, m -> WOODING.contains(m.m_20148_())));
     }
-
 
     /** v1.5.28：服务器停止时清场——内存追踪器会随进程消失，残留方块立即销毁回收
      *  （不等待 10 秒；重进存档不会看到"永不消失"的搭方块）
@@ -314,9 +311,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             ids.addAll(NO_AXE_REPORT_SINCE.keySet());
             ids.addAll(com.maidsmart.task.MaidPlanting.knownIds()); // v1.1.0 实测二百二十八：随手种树表
             ids.addAll(WOOD_CACHE.keySet());
-            ids.addAll(LAST_PROGRESS.keySet()); // 实测六十九
-            ids.addAll(WATCH_SAMPLE.keySet());
-            ids.addAll(RESET_REPORT_SINCE.keySet());
             java.util.Set<Integer> alive = new java.util.HashSet<>();
             for (int id : ids) {
                 for (ServerLevel lvl : server.m_129785_()) {
@@ -340,9 +334,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         com.maidsmart.task.MaidPlanting.purgeStale(pid -> !alive.contains(pid));
             WOOD_CACHE.keySet().removeIf(id -> !alive.contains(id));
             WOOD_SCANS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十一
-            LAST_PROGRESS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十九
-            WATCH_SAMPLE.keySet().removeIf(id -> !alive.contains(id));
-            RESET_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
     }
@@ -396,7 +387,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         return best;
     }
 
-
     public MaidWoodBehavior() {
         // v1.5.124：无限运行时长——旧版 super(emptyMap) 默认 60 tick 上限，
         // 行为每 3 秒自动停止再启动（m_6735_ 反复执行、实例状态反复重置，
@@ -404,20 +394,27 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         super();
     }
 
+    /** 本行为只认伐木任务：uid 取自任务类本身（实测九百一十一——不再与挖矿共用一份字面量） */
+    @Override
+    protected ResourceLocation workTaskUid() {
+        return MaidWoodTask.UID;
+    }
+
     @Override
     protected boolean m_6114_(ServerLevel level, EntityMaid maid) {
-        // v1.5.113：挖矿行为【常驻】——只要任务还是挖矿就持续运行：扫描找矿、
-        // 换镐、滑动迁移全部收敛到 doTick 统一处理。旧版 canStart 无矿即返回
+        // v1.5.113：伐木行为【常驻】——只要任务还是伐木就持续运行：扫描找树、
+        // 换斧、滑动迁移全部收敛到 doTick 统一处理。旧版 canStart 无树即返回
         // false → 行为停止 → doTick 不再运行 → 空框时女仆原地发呆、永不迁移
-        // （"矿挖完就站住不动"根因）。
-        return maid.getTask() != null
-                && ResourceLocation.parse("maid_smart:woodcut").equals(maid.getTask().getUid());
+        // （"树砍完就站住不动"根因）。
+        return maid.getTask() != null && workTaskUid().equals(maid.getTask().getUid());
     }
 
     @Override
     protected void m_6735_(ServerLevel level, EntityMaid maid, long gameTime) {
         // v1.5.164：诊断日志（确认女仆跑的是 maid_smart:mine 任务）
         LOGGER.info("wood behavior start: maid={}", maid.m_20148_());
+        // 实测九百三十八【没斧提示：每次进入伐木模式顶多说一次】：进模式时清掉"说过了"的标记。
+        NO_AXE_REPORT_SINCE.remove(maid.m_19879_());
         // v1.5.107：不再无条件装备最高级镐——目标矿已由 doTick 按需换镐；
         // 这里仅兜底"start 时 targetPos 为空重新找矿"的按需换镐
         if (this.targetPos == null) {
@@ -447,6 +444,8 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
     @Override
     protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
         WOODING.remove(maid.m_20148_());
+        // 实测九百一十三：停手即让出"链路走位独占"——下 tick TLM 的走路逻辑（跟随/闲逛）恢复
+        com.maidsmart.task.MaidWorkTags.setChainDrive(maid, false);
         // v1.5.161：停止时清连锁队列（任务切换/被抢占后不残留过期矿位）
         this.chainQueue.clear();
         this.chainBlock = null;
@@ -455,16 +454,29 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
 
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
+        // 实测九百一十三【链路走位独占】：手上锁着树 = 本模组的链路在驱动她 → 原版 TLM 的
+        // 走路逻辑（跟随把她写回主人、排班把她拉回工位）整体让位；没目标时立刻还权
+        //（"没有树木 → 回归空闲走路逻辑"）。
+        com.maidsmart.task.MaidWorkTags.setChainDrive(maid, this.targetPos != null);
         // v1.5.25f：每 tick 防窒息兜底（移植自保 antiSuffocate）——半身卡进方块
         // 立即强制上移到方块顶面之上。搭高挖矿时实体位移滞后/放偏，头顶检查
         // 拦不住横向卡入，这是最后一道保险：宁可瞬移半步也不被自己搭的方块闷住
         this.antiSuffocate(maid);
-        // v1.1.0 实测六十九：发呆看门狗——长时间零进展且原地不动时整体重置状态。
-        // 反馈：站坑发呆要收回魂符重放才恢复（重放换实体 ID 清空全部静态表）；
-        // 现在行为自己周期性做同款复位，不再需要玩家手动救
-        if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_WATCHDOG.get()
-                && this.stuckReset(level, maid, gameTime)) {
-            return; // 本 tick 已重置，下 tick 从头评估
+        this.antiWaterStuck(level, maid, gameTime);
+        // 实测九百七十七：无目标静默窗口内整条工作链路让位。
+        // 实测九百八十【照办：让 TLM 的空闲逻辑自己接管】——旧版在这里另写一个闲逛点，既抢
+        // TLM 的跟随目标（实机"只跟主人两秒"），点又常常离她不到 1 格（"走一步停一步"）。
+        // 现在什么都不写：清目标、停导航、交回走位权，这 10 秒她走的完全是空闲那一套。
+        if (this.inIdlePause(maid, gameTime)) {
+            this.targetPos = null;
+            this.destroyProgress = 0.0f;
+            maid.m_21573_().m_26573_();
+            com.maidsmart.task.MaidWorkTags.setChainDrive(maid, false);
+            return;
+        }
+        // 实测九百七十九：链路卡死自愈——同一目标 + 没挪窝 + 进度不动满 8 秒 → 弃目标重扫
+        if (this.stallWatchdog(level, maid, gameTime)) {
+            return;
         }
         // v1.5.109：移除 pullTowardTarget（setDeltaMovement 直接注入速度）——
         // 它与导航互相覆盖、搭高时把女仆从柱子上推走（"移速过快疯狂漂移"根因）。
@@ -569,6 +581,11 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
                 // v1.5.113：只有【全量重建】确认本框没矿才迁移——缓存轮空不迁移
                 // （等 5 秒重建再判，防锚点高速滑动）
                 if (this.lastScanWasFull) {
+                    // 实测九百七十三：确认这一片没树——气泡提醒主人一次（30 秒/条）
+                    // + 恢复空闲走位（工作圈内闲逛），不再原地站桩
+                    this.notifyNoTarget(maid, gameTime,
+                            "这片区域没有可砍的树木了，我先在这边活动～");
+                    this.startIdlePause(maid, gameTime);
                     // v1.5.102d：此前有被硬物挡住的矿 → 上报一次挡路原因
                     if (!this.blockedWoods.isEmpty()) {
                         this.reportBlockedArea(maid, level);
@@ -576,7 +593,13 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
                     // v1.5.113（B1/B2）：框内挖空 → 锚点朝主人方向滑动一个环宽
                     // （不走路、不原地重埋——旧版"朝主人走走出旧框"被墙堵住时
                     // 原地重埋与旧框重合 → 死循环；纯走路又零产出）
-                    this.slideAnchor(level, maid, anchor);
+                    if (this.slideAnchor(level, maid, anchor)) {
+                        BlockPos next = ANCHORS.get(maid.m_19879_());
+                        if (next != null) {
+                            LOGGER.info("wood relocate (box empty → fresh box): maid={} next={}",
+                                    maid.m_20148_(), next);
+                        }
+                    }
                 }
                 return;
             }
@@ -589,37 +612,27 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             WOODING.add(maid.m_20148_());
             }
         }
-        // v1.3.2 实测八百五十八【锁定期间的重评估】：到这里 targetPos 必非空。每 5 秒从缓存里
-        // 重挑一次（与挖矿 MaidMineBehavior 同款）——旧版只在 targetPos==null 时才重新评估，
-        // 锁上一棵树就不换。只走廉价的缓存轮（findWood 有缓存就只校验、不重建、不停顿）；
-        // 砍伐进行中（destroyProgress>0）不打扰；返回 null 时保留当前目标。
-        if (this.targetPos != null && this.destroyProgress <= 0.0f
-                && --this.repickCooldown <= 0) {
-            this.repickCooldown = WOOD_REPICK_INTERVAL;
-            BlockPos repicked = this.findWood(level, maid, anchor);
-            if (repicked != null && !repicked.equals(this.targetPos)) {
-                this.targetPos = repicked;
-                TARGET_SINCE.put(maid.m_19879_(), gameTime);
-                MaidToolAutoEquip.ensureAxeForTarget(maid, level.m_8055_(this.targetPos));
-            }
-        }
-        // v1.5.47：弃置检查——目标 5 秒够不着且无任何破坏进度 → 弃置重选（防原地磨蹭）
-        // v1.5.113（B4）：弃置矿进入 30 秒短时排除（RECENT_DISCARD），不再反复选中；
-        // 框内只剩这块够不着的矿时也不会来回折腾
-        Long since = TARGET_SINCE.get(maid.m_19879_());
-        if (since != null && gameTime - since >= com.maidsmart.config.MaidSmartConfig.WOOD_TARGET_TIMEOUT.get()
-                && this.destroyProgress <= 0.0f
-                && distSqToBlock(maid, this.targetPos) > reachSq()) {
-            this.abandonedPos = this.targetPos;
-            RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
-                    .put(this.targetPos.m_7949_(), gameTime);
-            markProgress(maid, gameTime); // 实测七十四：弃置也是前进（防看门狗误伤长舞蹈）
+        // 实测九百五十九【删"目标超时"弃置】（开发者指令：伐木不要按时长放弃目标）——
+        // 旧版这里"目标 N 秒够不着且零破坏进度 → 弃置重选"。但地表挡路的方块她基本都能
+        // 砍开 / 垫上去，"按时长放弃"只会打断正在推进的目标（双刃剑）；伐木保留的"真走不到"
+        // 判据只剩：硬挡路播报（挖不开的挡路块）+ 停滞检测（同一目标 + 双脚连续 N 拍
+        // 一字未动，与挖矿九百四十一 同款）+ 目标没了 / 跑出检索半径 / 关透视时视线被挡。
+        // v1.5.47：目标失效检查——矿 或 开路废石（穿透挖掘的临时目标）
+        // 实测九百三十八【目标跑出检索半径 → 单独清空一次，不进任何排除表】（同挖矿）
+        if (this.targetPos != null && targetOutOfRadius(maid, this.targetPos,
+                com.maidsmart.config.MaidSmartConfig.WOOD_SEARCH_RADIUS.get())) {
+            this.traceExit(maid, "wood 目标跑出检索半径→清空并弃框", "target=" + this.targetPos);
             this.targetPos = null;
             this.destroyProgress = 0.0f;
-            this.saveProgressNow(maid);
+            // 实测九百八十【断掉循环】（与挖矿同款）：光清目标不够——缓存/游标里还留着同一个格，
+            // 下一轮又选回来，原地无限循环。一并弃框 + 把扫描框挪到她脚下重判。
+            this.dropStaleScan(maid);
             return;
         }
-        // v1.5.47：目标失效检查——矿 或 开路废石（穿透挖掘的临时目标）
+        // 实测九百三十八【目标路径上有岩浆 → 汇报一次】
+        if (this.targetPos != null && lavaOnPath(level, maid, this.targetPos)) {
+            this.reportLavaPath(maid, this.targetPos, gameTime);
+        }
         if (!isWood(level, this.targetPos) && !this.isOpenStone(level, this.targetPos)) {
             this.targetPos = null;
             this.destroyProgress = 0.0f;
@@ -646,7 +659,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
                 // 扫描层几 tick 后又选中同一块，"选中→看不见→丢弃"无限循环站桩发呆
                 RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
                         .put(this.targetPos.m_7949_(), level.m_46467_());
-                markProgress(maid, gameTime); // 实测七十四：弃置也是前进（防看门狗误伤长舞蹈）
                 this.targetPos = null;
                 this.destroyProgress = 0.0f;
                 this.saveProgress(maid);
@@ -679,8 +691,41 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         }
         double distSq = distSqToBlock(maid, this.targetPos);
         if (distSq > reachSq()) {
-            // v1.5.25：够不着（超过玩家手长 4.5 格）→ 三选一搭路决策
-            //（向上搭高 / 向前搭斜坡 / 搭桥+走过去），每 tick 重算直到够得着
+            // 实测九百二十七【与挖矿同款：咬住不放】：够不着就一直推进（approachWood 每 tick 下走位 /
+            // 垫路指令）；只有整整 WOOD_WEDGE_TICKS（2 秒）一动没动才认这棵真走不到——当场弃掉
+            //（记 30 秒短排）换下一棵，不再"反复清导航重试几次"，也不再靠发呆看门狗（已删）收尾。
+            BlockPos feet = maid.m_20183_();
+            if (!feet.equals(this.lastStuckPos)
+                    || this.stuckTarget == null || !this.stuckTarget.equals(this.targetPos)) {
+                this.lastStuckPos = feet;
+                this.stuckTicks = 0;
+                this.stuckTarget = this.targetPos;
+            } else {
+                this.stuckTicks++;
+            }
+            if (this.stuckTicks >= WOOD_WEDGE_TICKS) {
+                this.wedgeStreak = gameTime - this.lastWedgeAt <= 200L ? this.wedgeStreak + 1 : 1;
+                this.lastWedgeAt = gameTime;
+                this.giveUpLog(maid, "2秒没挪窝", this.targetPos, gameTime);
+                RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
+                        .put(this.targetPos.m_7949_(), gameTime);
+                this.targetPos = null;
+                this.destroyProgress = 0.0f;
+                this.lastWalkTarget = null;
+                this.scanCooldown = 0;   // 下一 tick 立刻重跑检索，不再"原地愣一拍"
+                this.saveProgressNow(maid);
+                // 实测九百二十九【连着卡就换框】：与挖矿同款——连着三棵都走不到 ⇒ 这一框没戏，
+                // 清缓存 + 走"框空"那条迁移（home 档不迁、只留痕）。
+                if (this.wedgeStreak >= 3) {
+                    this.wedgeStreak = 0;
+                    WOOD_CACHE.remove(maid.m_19879_());
+                    WOOD_SCANS.remove(maid.m_19879_());
+                    LOGGER.info("wood box unreachable (3 连弃置、零破坏) → fresh box: maid={} anchor={}",
+                            maid.m_20148_(), anchor);
+                    this.slideAnchor(level, maid, anchor);
+                }
+                return;
+            }
             this.approachWood(level, maid);
             return;
         }
@@ -788,6 +833,7 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         boolean softNoDur = com.maidsmart.config.MaidSmartConfig.WOOD_SOFT_NO_DURABILITY.get();
         if (!mainHand.m_41619_() && (!softNoDur || !isSoft(mainHand, state))) {
             final ItemStack damaged = mainHand;
+            com.maidsmart.task.MaidToolAutoEquip.recordDurabilityBreak(maid, damaged);
             damaged.m_41622_(1, maid, broken -> {
                 maid.m_6674_(InteractionHand.MAIN_HAND);
                 try {
@@ -797,8 +843,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
                 }
             });
         }
-        // v1.5.47：挖掉任一矿/开路块 → 清除弃置记录（弃置理由随地形变化失效）
-        this.abandonedPos = null;
         // v1.5.113（B4）：挖掉任一方块 → 清短时排除（刚才够不着的矿可能已能到达）
         RECENT_DISCARD.remove(maid.m_19879_());
         // v1.5.87：硬挡弃置同样清除（开路改变了地形，阻挡可能已解除）
@@ -808,20 +852,24 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         // 女仆直接找下一个矿继续挖；站在柱子上的话等方块自然消失（掉落物回收）
         // v1.5.161：连锁采集——记录刚挖掉的方块类型并 BFS 填充连锁队列（队列里的
         // 同族矿挖完一块自动接下一块，直到挖完矿脉）；开关关闭时清空队列走正常找矿
+            this.wedgeStreak = 0;   // 实测九百二十九：破掉一棵 = 链路还在产出，连卡清零
         this.chainBlock = state.m_60734_();
         this.refillChainQueue(level, maid);
         // v1.5.172：连锁采集【同时破坏】（FTB Ultimine 式）——目标矿挖完瞬间把
         // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
         // 不再逐个挖（旧版"自动连挖"看不出连锁效果，反馈）
         this.chainBreakAll(level, maid, mainHand);
-        markProgress(maid, gameTime); // 实测六十九：喂看门狗（真实进展）
-        // 我要的只是以女仆为中心 3×3×3 范围内的树叶被破坏，带音效和特效"）：
-        // 删除 clearTreeTop 整冠 BFS 清除（一次性清掉整棵树的树叶不自然）。
-        // 树叶清理完全交给 burstNearbyLeaves——它本来就在行为激活期间每 20 tick
-        // 以女仆为中心清 3×3×3，女仆走过去自然会"经过"整片树冠逐层清完。
-        // （实测九已有的机制，本次让它成为唯一的树叶清理路径）
+        // 实测九百九十【树冠清理真的清树冠】：这个开关此前名不副实——整冠 BFS 在实测三十被
+        // 删掉之后，实际只剩 burstNearbyLeaves（**她自己身上** 3×3×3），而树叶长在树干周围/
+        // 头顶，站在地上砍树的她根本碰不到 → 砍完树后树冠照旧浮着，开关看起来"没有作用"。
+        // 现在按开关做**渐进版**树冠清理：每砍掉一段木头，就在这一段四周（水平 ±3、向上
+        // 6 格）清掉连着的树叶——跟着砍树逐层推进，而不是"整棵树冠瞬间消失"（那正是实测
+        // 三十当时的反馈）。原木不碰（那是正常挖掘目标），她搭的方块不碰。
         // 伐木内部的补种已移除——「随手种树」是独立行为（MaidPlantSaplingBehavior，
         // 手里有苗+附近有可种土块就种，什么都不干时也种）；本行为回归纯砍树/清叶。 树叶掉落的树苗仍直接进背包（自动收集开关之外的单品规则），供随手种树取用。
+        if (com.maidsmart.config.MaidSmartConfig.WOOD_LEAVES_CLEAR.get() && isWoodState(state)) {
+            this.clearCanopy(level, maid, this.targetPos);
+        }
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
@@ -865,15 +913,62 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         }
     }
 
+    /** 树冠清理：单段木头周围扫多少格（水平 ±） */
+    private static final int CANOPY_SIDE = 3;
+    /** 树冠清理：向上扫多少格（树叶长在头顶） */
+    private static final int CANOPY_UP = 6;
+    /** 树冠清理：单次最多清多少片（跟着砍树逐层推进，防一次清掉整棵树冠） */
+    private static final int CANOPY_LIMIT = 24;
+
     /**
-     * v1.1.0 实测四：树冠清理——从刚砍的树干位置向上 BFS 清树叶。
-     * v1.1.0 实测三十：【已删除】——反馈"整个树冠一下子清掉不自然"，要的只是
-     * 以女仆为中心 3×3×3 的树叶破坏（burstNearbyLeaves 已有）。方法保留为空壳
-     * 防外部调用残留（实际无外部调用者，纯保险）。
+     * 实测九百九十【渐进版树冠清理】：以刚砍掉的那一段木头为中心，清掉水平 ±{@link #CANOPY_SIDE}、
+     * 向上 {@link #CANOPY_UP} 格内的树叶（单次上限 {@link #CANOPY_LIMIT} 片）——跟着砍树逐层推进，
+     * 不是「整棵树冠瞬间消失」。掉落物口径与 {@link #burstNearbyLeaves} 一致（自动收集进背包，
+     * 否则落地，树苗永远进背包）；她搭的方块不碰。
      */
-    @SuppressWarnings("unused")
-    private void clearTreeTop(ServerLevel level, EntityMaid maid, ItemStack mainHand) {
-        // v1.1.0 实测三十：整体树冠 BFS 清除已删除——见调用点注释
+    private void clearCanopy(ServerLevel level, EntityMaid maid, BlockPos center) {
+        try {
+            if (center == null) {
+                return;
+            }
+            boolean auto = com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get();
+            int broken = 0;
+            for (int dy = 0; dy <= CANOPY_UP && broken < CANOPY_LIMIT; dy++) {
+                for (int dx = -CANOPY_SIDE; dx <= CANOPY_SIDE && broken < CANOPY_LIMIT; dx++) {
+                    for (int dz = -CANOPY_SIDE; dz <= CANOPY_SIDE && broken < CANOPY_LIMIT; dz++) {
+                        BlockPos p = center.m_7918_(dx, dy, dz);
+                        BlockState st = level.m_8055_(p);
+                        if (!(st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock)) {
+                            continue; // 只清树叶：原木是正常挖掘目标，别的方块更不碰
+                        }
+                        if (isWoodingPlaced(level, p)) {
+                            continue; // 她搭的树叶（脚手架）不动
+                        }
+                        level.m_46796_(2001, p, Block.m_49956_(st));
+                        BlockEntity be = level.m_7702_(p);
+                        java.util.List<ItemStack> drops = Block.m_49874_(st, level, p, be, maid, ItemStack.f_41583_);
+                        if (auto) {
+                            insertIntoMaidInventory(maid, level, drops, p);
+                        } else {
+                            for (ItemStack s : drops) {
+                                if (isSaplingItem(s)) {
+                                    insertIntoMaidInventory(maid, level, java.util.List.of(s), p);
+                                } else {
+                                    Block.m_49840_(level, p, s);
+                                }
+                            }
+                        }
+                        level.m_7731_(p, Blocks.f_50016_.m_49966_(), 3);
+                        broken++;
+                    }
+                }
+            }
+            if (broken > 0) {
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 摆臂动画
+                LOGGER.info("wood canopy clear: maid={} center={} broken={}", maid.m_20148_(), center, broken);
+            }
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
+        }
     }
 
     /**
@@ -897,12 +992,11 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
     }
 
     /**
-     * 直接摧毁。掉落物走 getDrops（树苗/苹果/木棍按概率），autoCollect 开着
-     * 直接进背包，否则落地（走原版掉落，拾取任务后续处理）。只清树叶——
-     * 立方体内的原木不碰（那是正常挖掘目标，走挖掘流程有工具加成）。
-     * 破坏时各自播 levelEvent 2001（同玩家挖方块——音效+粒子一起），不再
-     * 只在中心播一次（旧版静默清除观感突兀）。树冠清理（clearTreeTop）删除后
-     * 本方法是唯一的树叶清理路径：女仆走动经过树冠就逐层清 3×3×3。
+     * 直接摧毁。掉落物走 getDrops（树苗/苹果/木棍按概率），autoCollect 开着直接进背包，否则
+     * 落地（走原版掉落，拾取任务后续处理）。只清树叶——立方体内的原木不碰（那是正常挖掘目标，
+     * 走挖掘流程有工具加成）；破坏时各自播 levelEvent 2001（同玩家挖方块），不再只在中心播一次。
+     * 与 {@link #clearCanopy} 的分工：本方法管「她自己身上」（走路被树冠卡住时清开 3×3×3），
+     * clearCanopy 管「砍掉的那一段周围」（跟着砍树逐层清树冠）。
      */
     private void burstNearbyLeaves(ServerLevel level, EntityMaid maid) {
         try {
@@ -943,107 +1037,16 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             if (broken > 0) {
                 maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 摆臂动画
                 LOGGER.info("wood leaves burst: maid={} broken={}", maid.m_20148_(), broken);
-                markProgress(maid, level.m_46467_()); // 实测六十九：清树叶也算活动
             }
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ignored);
         }
     }
 
     /**
-     * v1.1.0 实测六十九：发呆看门狗判定。每 tick 廉价检查；窗口到期（默认 30 秒）结算：
-     * 期间【挪动过 ≥1.5 格】或【有过真实进展（挖掉/垫方块）】= 正常工作，续窗；否则判发呆，
-     * 整体重置该女仆在本行为里的全部状态并返回 true。走路赶路位置一直在变，不会误触发。
-     */
-    private boolean stuckReset(ServerLevel level, EntityMaid maid, long gameTime) {
-        int id = maid.m_19879_();
-        long window = com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() * 20L;
-        if (window <= 0) {
-            return false;
-        }
-        long[] sample = WATCH_SAMPLE.get(id);
-        if (sample == null) {
-            WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
-            LAST_PROGRESS.putIfAbsent(id, gameTime);
-            return false;
-        }
-        if (gameTime - sample[0] < window) {
-            return false; // 窗口未到期
-        }
-        double moved = Math.sqrt(
-                Math.pow(maid.m_20185_() - Double.longBitsToDouble(sample[1]), 2)
-                        + Math.pow(maid.m_20186_() - Double.longBitsToDouble(sample[2]), 2)
-                        + Math.pow(maid.m_20189_() - Double.longBitsToDouble(sample[3]), 2));
-        Long lastProg = LAST_PROGRESS.get(id);
-        if (moved >= 1.5 || (lastProg != null && lastProg >= sample[0])) {
-            WATCH_SAMPLE.put(id, watchSample(gameTime, maid)); // 有在干活：续窗
-            return false;
-        }
-        this.hardResetStuck(level, maid, gameTime);
-        return true;
-    }
-
-    /**
-     * v1.1.0 实测六十九：发呆整体重置——forget 清空本女仆的全部静态表（锚点/缓存/
-     * 扫描游标/弃置排除/各类限频），实例字段（目标/进度/连锁队列/挡路名单/走路记忆等）
-     * 一并归零，等效收回魂符再放下去；气泡播报一次（60 秒限频）。
-     */
-    private void hardResetStuck(ServerLevel level, EntityMaid maid, long gameTime) {
-        int id = maid.m_19879_();
-        long idleTicks = gameTime - LAST_PROGRESS.getOrDefault(id, gameTime);
-        // 实测七十四：保留 30 秒短排表——那是"学到的不可达知识"（600 tick 自过期）。
-        // 旧版连它一起清：够不着目标的长舞蹈（每个候选 15 秒超时）会被看门狗反复
-        // 打断归零，形成"每 30 秒重置一次"的新死循环
-        java.util.Map<BlockPos, Long> keptDiscard = RECENT_DISCARD.get(id);
-        BlockPos keptTarget = this.targetPos;
-        Long keptSince = TARGET_SINCE.get(id);
-        forget(id);
-        if (keptDiscard != null && !keptDiscard.isEmpty()) {
-            RECENT_DISCARD.put(id, keptDiscard);
-        }
-        // 实测七十五：当前目标与它的超时等待时钟一并保留——看门狗窗口（默认已降到
-        // 8 秒）小于目标超时（15 秒），若重置把计时清零，够不着的目标永远等不到弃置、
-        // 舞蹈永远走不完；恢复后失效检查照常逐 tick 复核该目标，坏了自然会被丢掉
-        if (keptTarget != null && keptSince != null) {
-            this.targetPos = keptTarget;
-            TARGET_SINCE.put(id, keptSince);
-        } else {
-            this.targetPos = null;
-        }
-        this.destroyProgress = 0.0f;
-        this.saveProgressNow(maid);
-        this.abandonedPos = null;
-        this.blockedWoods.clear();
-        this.skippedWoodPos = null;
-        this.skippedWoodName = null;
-        this.skippedWoodTool = null;
-        this.skippedWoodValue = -1;
-        this.chainQueue.clear();
-        this.chainBlock = null;
-        this.lastWalkTarget = null;
-        this.scanCooldown = 0;
-        this.pillarCooldown = 0;
-        this.walkRetargetCooldown = 0;
-        if (this.lastCrackPos != null) {
-            this.broadcastCrack(level, maid, this.lastCrackPos, 10); // 清残留挖掘裂纹
-        }
-        this.lastCrackPos = null;
-        this.lastCrackStage = -1;
-        LAST_PROGRESS.put(id, gameTime);
-        WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
-        LOGGER.info("wood stuck-reset: maid={} idle={}t pos={}", id, idleTicks, maid.m_20183_());
-        Long lastReport = RESET_REPORT_SINCE.get(id);
-        if (lastReport == null || gameTime - lastReport >= 1200L) {
-            RESET_REPORT_SINCE.put(id, gameTime);
-            maid.getChatBubbleManager().addTextChatBubble("好像走神了……我重新理一下思路，继续干活！");
-        }
-    }
-
-    /**
-     * v1.5.25 搭路决策：向上搭 vs 向前搭 的判定链。
-     * 目标够不着时的三种接近策略（每 tick 重算，垫一块就重新评估，直到够得着）：
-     * 1. 上方矿 + 水平近（dy≥2 且 hDist≤2.5）→ 脚下搭高（垫高自己）
-     * 2. 斜上方矿（dy≥1 且 2.5<hDist≤4.5）→ 向前垫台阶（斜坡逼近，水平+垂直同时接近）
-     * 3. 其他（太远 / 在下方）→ 走过去；目标方向前方脚下悬空（断崖/水）→ 先搭桥
+     * 目标够不着时的接近策略（每 tick 重算，垫一块就重新评估，直到够得着）：
+     * ① 高度优先——dy≥1 原地搭高、dy≤−1 逐级下降，**先把高度对齐**；
+     * ② 高度一致（dy==0）后再水平靠近——目标方向前方脚下悬空（断崖/水）先搭桥，否则走过去；
+     * ③ 高度一致且水平进了可交互圈 → 原地不动，交给挖掘入口。
      * 搭高失败（没料/头顶堵）不立刻放弃——退到"走过去"兜底，走不通由导航处理。
      */
     private void approachWood(ServerLevel level, EntityMaid maid) {
@@ -1058,11 +1061,26 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         double hz = t.m_123343_() + 0.5 - maid.m_20189_();
         double hDist = Math.sqrt(hx * hx + hz * hz);
         int dy = t.m_123342_() - maid.m_20183_().m_123342_();
+        double close = Math.min(2.5, Math.max(1.0, Math.sqrt(reachSq()) - 0.5));
+        // 实测九百一十五【到位就停】高度已一致 + 水平进了可交互圈 → 不再走/垫，交给挖掘入口。
+        // 旧版没有这道闸：她在目标轴附近一抖，方向单位量就翻号 → 朝【身后】垫块再走回去，
+        // 两个位置反复横跳（反馈的"迈克尔杰克逊步"）。
+        if (dy == 0 && hDist <= close && this.hasClearSight(level, maid, t)) {
+            return;
+        }
         // v1.5.111：搭高【站桩】——停掉直接导航（v1.5.127：旧版清 WALK_TARGET 记忆，
         // 现在改为停导航，语义一致：原地站定让 pillarGuard 钳位，垂直列干净成型）
-        if (dy >= 2 && hDist <= 2.5) {
+        if (dy >= 1) {
             if (this.pillarUpStep(level, maid)) {
                 maid.m_21573_().m_26573_();
+                return;
+            }
+            // 实测九百五十八【垫不上去就先砍开头顶】(同挖矿九百三十二)：pillarUpStep 失败的头号
+            // 原因是"头顶那两格是实心会窒息的方块"（地形，或她自己先前垫上去的方块）——旧版此时
+            // 只剩"走过去"，而头顶目标的落脚点全在实心块里、导航必失败 → 站在那儿永久卡死
+            //（反馈："伐木对比挖矿太傻了：头顶有方块挡住就卡死，挖矿不会"）。她有斧 → 把头顶
+            // 第一块能砍开的方块砍掉，下一拍头顶空了、垫高自然成立（一格一格开天窗往上走）。
+            if (this.digUpCap(level, maid)) {
                 return;
             }
             // v1.1.0 实测四十七：垫不上去（典型场景：女仆挖掉树干下 3 节后站进
@@ -1104,24 +1122,13 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
                 return;
             }
         }
-        // 2) 斜上方矿：向前垫台阶（斜坡），水平+垂直同时逼近
-        // v1.5.113：垫完【走一步到刚垫的台阶上】——旧版垫完只 walkToWoodBase
-        // （目的地可能隔着未垫完的沟，导航找不到路 → 站着不动）；改走一步再评估
-        // v1.1.0 实测三（反馈："伐木不像挖矿会四处走，喜欢站原地"）：斜坡/搭桥的
-        // 距离门槛从 4.5 格放宽到 8 格——树是竖直目标，树干下半部常在 4.5~8 格处，
-        // 旧版这个距离段"不垫也不走"（walkToWoodBase 的站立点在树底下、贴着就停）
-        // → 女仆在树旁站桩干等；放宽后中距离持续垫台阶/铺桥逼近（挖矿同款行为）
-        if (dy >= 1 && hDist > 2.5 && hDist <= 8.0) {
-            if (this.slopeStep(level, maid, hx, hz, hDist)) {
-                this.startStepOn(maid, hx, hz, hDist);
-                return;
-            }
-        }
         // 3) v1.1.0【下方木逐级下降】——目标比自身低时，向下垫一格并踩下去，
         // 逐级降低高度接近目标（旧版只能垫平/垫高，y 永不下降）
         if (dy <= -1) {
             if (this.descendStep(level, maid, hx, hz, hDist)) {
-                this.startStepOn(maid, hx, hz, hDist, -1);
+                if (!BlockWalkOn.isActive(maid)) {
+                    this.startStepOn(maid, hx, hz, hDist, -1);
+                }
                 return;
             }
             // 下不去（下面有地可走 / 危险 / 没料）→ 走位兜底；绝不再走到 bridgeToWood
@@ -1138,7 +1145,9 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         // v1.5.113：搭桥后【走一步上桥】——旧版搭完直接 return（无移动目标）
         // → 女仆站在桥头"搭一格就站着不动"根因
         if (this.bridgeToWood(level, maid, hx, hz, hDist)) {
-            this.startStepOn(maid, hx, hz, hDist);
+            if (!BlockWalkOn.isActive(maid)) {
+                this.startStepOn(maid, hx, hz, hDist);
+            }
             return;
         }
         // v1.5.87：走路目标 = 矿基座（矿下方 1 格）——旧版目标是矿本身（常在空中/岩壁内），
@@ -1188,7 +1197,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         }
         return null;
     }
-
 
     /**
      * v1.5.87：朝矿基座推进——搭高/垫台阶成功后立刻走，让女仆在水平方向持续贴近矿物。
@@ -1396,26 +1404,25 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             return true; // 冷却中：下 tick 再垫（v1.5.113 B6：成功放置才设冷却）
         }
         BlockPos pos = maid.m_20183_();
-        // v1.5.25b：选择放置格——脚下悬空 → 垫所在格 pos（站上去升高）；
-        // 脚下实心（平地）→ 垫身体格 pos+1（挤压顶起一格，不碰地面）。
-        // 旧版要求"所在格必须空气"：女仆站在矿洞底平地上脚部格是地面方块
-        // → 搭高永远失败 → 一直"走过去"死循环（"搭方块取钻石成功率低"根因）。
-        BlockPos place;
-        boolean posAir = level.m_8055_(pos).m_60795_();
-        if (posAir) {
-            place = pos; // 悬空：垫所在格，站上去升高
-        } else {
-            place = pos.m_7918_(0, 1, 0); // 平地：垫身体格顶起
+        // 实测九百五十八【垫块只盖下半身】：放置格一律取她【脚下那一格】——方块最多盖住
+        // 下半身（腿/脚），下一拍被游戏顶起一格升高。旧版在"脚下那格不是空气"（站在水里/
+        // 树叶里/雪层上）时改垫 pos+1 = 她的上半身/脑袋，顶起稍有滞后就是自己把自己闷住
+        //（反馈："垫方块可以覆盖到自己的脑袋→自己把自己弄窒息了"）。
+        // 脚下那格本身是会窒息的实心块（异常态）或岩浆时不垫——交给 antiSuffocate / 自保链。
+        BlockPos place = pos;
+        if (this.suffocates(level, pos)
+                || level.m_8055_(pos).m_60819_()
+                .m_205070_(net.minecraft.tags.FluidTags.f_13132_)) {
+            return false;
         }
-        // 防窒息：放置格必须空气（不能覆盖目标木材/任何方块）；头顶空间
+        // 防窒息：头顶空间
         // （place+1/place+2）放宽——目标木材所在格（搭高就是为了够它，垫块后
         // 头短暂插进目标木材，下一 tick 挖掘入口立即挖掉，属预期）与树叶等
         // 不窒息方块（isSuffocating=false）不拦；只拦真正会闷住她的实心满块。
         // v1.1.0 实测二百四十（反馈："伐木不会像挖矿一样搭方块够上面的树木"）：
         // 旧版 isAir 检查在伐木场景几乎必然失败——头顶正上方就是目标木材（树干）
         // 或树冠树叶，都不是空气 → 搭高永远失败 → 女仆原地等待到超时弃置。
-        if (!level.m_8055_(place).m_60795_()
-                || (this.suffocates(level, place.m_7918_(0, 1, 0)) && !place.m_7918_(0, 1, 0).equals(this.targetPos))
+        if ((this.suffocates(level, place.m_7918_(0, 1, 0)) && !place.m_7918_(0, 1, 0).equals(this.targetPos))
                 || (this.suffocates(level, place.m_7918_(0, 2, 0)) && !place.m_7918_(0, 2, 0).equals(this.targetPos))) {
             return false;
         }
@@ -1471,69 +1478,50 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         return !st.m_60795_() && st.m_60796_(level, pos);
     }
 
-
-    /** v1.1.0 终审三：没有斧头播报（限频 30 秒）——空手也能砍，只是慢；给把斧更快 */
-    private void notifyNoAxe(EntityMaid maid) {
-        long now = maid.m_9236_().m_46467_();
-        Long last = NO_AXE_REPORT_SINCE.get(maid.m_19879_());
-        if (last != null && now - last < 600L) {
-            return;
-        }
-        NO_AXE_REPORT_SINCE.put(maid.m_19879_(), now);
-        maid.getChatBubbleManager().addTextChatBubble(
-                "我没有斧头，只能用手慢慢掰了……要是给我一把斧就快多了～");
-    }
-
     /**
-     * v1.5.25 斜坡逼近：目标在斜上方（水平 2.5~4.5、垂直差 ≥1）时，
-     * 在朝目标方向的前方 1 格脚下垫方块形成台阶——女仆走上去后水平+垂直同时接近，
-     * 反复垫直到够得着。前方脚下是平地（不悬空）→ 不需要垫，直接走过去即可。
+     * 实测九百五十八【垫不上去就先砍开头顶】(套用挖矿九百三十二)：目标在上方、头顶那块又不是
+     * 木材（地形房顶 / 她自己先前垫的方块）时，pillarUpStep 被防窒息拒绝、firstWoodAbove 也找
+     * 不到木材 → 旧版只剩"走过去"（落脚点全在实心块里、导航必失败）= 站在那儿永久卡死。现在把
+     * 脚下正上方第一块【能砍开】的方块当临时目标砍掉：下一拍头顶空了、垫高自然成立（一格一格
+     * 开天窗往上走）；正上方就是木材（正常目标）或那块砍不开（基岩/箱子/机器）时返回 false。
+     * @return true = 已把头顶那块设为临时目标（本拍不要再走位）
      */
-    private boolean slopeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
-        if (this.pillarCooldown > 0) {
-            this.pillarCooldown--;
-            return true; // v1.5.113（B6）：冷却中——等一步走完再垫（不重复消耗）
-        }
-        int y = maid.m_20183_().m_123342_();
-        int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
-        int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
-        BlockPos ahead = new BlockPos(tx, y, tz);
-        BlockPos fill = ahead.m_7918_(0, -1, 0);
-        BlockState below = level.m_8055_(fill);
-        // 前方脚下悬空（空气/水）且前方格本身可走 → 垫台阶/桥
-        boolean gap = below.m_60795_() || below.m_60734_()
-                == ForgeRegistries.BLOCKS.getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
-        if (gap && level.m_8055_(ahead).m_60795_()) {
-            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
-            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
-            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
-                return false;
+    private boolean digUpCap(ServerLevel level, EntityMaid maid) {
+        BlockPos feet = maid.m_20183_();
+        for (int dy = 1; dy <= 3; dy++) {
+            BlockPos cap = feet.m_7918_(0, dy, 0);
+            if (level.m_8055_(cap).m_60795_()) {
+                continue;   // 这格已经通了，继续往上看
             }
-            Item item = this.takeBuildBlock(maid);
-            if (item == null) {
-                this.notifyNoBuildBlock(maid); // v1.5.113（C2）
-                return false;
+            if (this.isWood(level, cap)) {
+                return false;   // 正上方就是木材 → 交给主链路（正常目标），这里不抢
             }
-            Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
-            if (block == null) {
-                return false;
+            if (!this.isOpenStone(level, cap)) {
+                return false;   // 砍不开（基岩/箱子/机器）→ 这条才是真走不到
             }
-            level.m_7731_(fill, block.m_49966_(), 3);
-            trackPlaced(level, fill, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
-            // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
-            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
-            this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
-            this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.WOOD_PILLAR_COOLDOWN.get(); // v1.5.113（B6）
+            this.targetPos = cap.m_7949_();
+            TARGET_SINCE.put(maid.m_19879_(), level.m_46467_());
+            this.traceExit(maid, "wood 头顶压住砍开", "cap=" + cap + " feet=" + feet);
             return true;
         }
         return false;
     }
 
+    /** v1.1.0 终审三：没有斧头播报（限频 30 秒）——空手也能砍，只是慢；给把斧更快 */
+    private void notifyNoAxe(EntityMaid maid) {
+        // 实测九百三十八【每次进入伐木模式顶多说一次】：同上（Neo 侧同源注释）——start() 已清标记。
+        if (NO_AXE_REPORT_SINCE.containsKey(maid.m_19879_())) {
+            return;
+        }
+        NO_AXE_REPORT_SINCE.put(maid.m_19879_(), maid.m_9236_().m_46467_());
+        maid.getChatBubbleManager().addTextChatBubble(
+                "我没有斧头，只能用手慢慢掰了……要是给我一把斧就快多了～");
+    }
+
     /**
      * v1.1.0【下方木逐级下降】——目标比自己低时，在朝目标方向的前方一格【向下垫一格】
-     * 形成下行台阶（比 slopeStep 的垫块低一层），女仆踩下去后高度降低 1 格；反复执行
-     * 即可逐级下降接近目标。其余逻辑（取料/摆臂/音效/冷却/回收）与 slopeStep 完全一致。
+     * 形成下行台阶（比普通垫块低一层），女仆踩下去后高度降低 1 格；反复执行
+     * 即可逐级下降接近目标。其余逻辑（取料/摆臂/音效/冷却/回收）与普通垫块一致。
      *
      * 触发条件（缺一不可）：前方落脚层 y-1 与身体层 y 都是空气（能站能过）；
      * 落脚层脚下 y-2 无支撑（空气/水）→ 需要垫一块；已有支撑（纯落差）→ 交给行走兜底。
@@ -1568,6 +1556,8 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, support)) {
             return false;
         }
+        // 实测九百七十八：下行台阶同理——先转身再垫那一格
+        com.maidsmart.task.BlockWalkOn.faceToward(maid, tx + 0.5, tz + 0.5);
         Item item = this.takeBuildBlock(maid);
         if (item == null) {
             this.notifyNoBuildBlock(maid);
@@ -1612,6 +1602,9 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
                 return false;
             }
+            // 实测九百七十八：垫桥块之前先把身子转到要垫的那一格——旧版只垫不转身，
+            // 垫完靠直推走过去，头朝向和前进方向无关（"倒着搭、倒着走"）
+            com.maidsmart.task.BlockWalkOn.faceToward(maid, tx + 0.5, tz + 0.5);
             Item item = this.takeBuildBlock(maid);
             if (item == null) {
                 this.notifyNoBuildBlock(maid); // v1.5.113（C2）
@@ -1632,7 +1625,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         }
         return false;
     }
-
 
     /**
      * v1.5.87：搭方块防掉落（仅在挖矿搭方块时生效，效果照搬玩家潜行、移速不变）——
@@ -1764,25 +1756,41 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         OUT_SINCE.remove(id);
     }
 
+    /** 实测九百二十九【弃置必须留痕】：每一次"这块/这棵不要了"都留一行（5 秒/条）。
+     *  旧版六条弃置路径**一条日志都没有**——实机里"她站着不动二十五秒、日志零行"就是这么来的，
+     *  连着两轮都在猜根因。留痕口径与走路那条（{@code work walk stuck}）一致。 */
+    private void giveUpLog(EntityMaid maid, String reason, BlockPos p, long gameTime) {
+        if (gameTime - this.giveUpLogAt < 100L) {
+            return;
+        }
+        this.giveUpLogAt = gameTime;
+        try {
+            double d = p == null ? -1.0 : Math.sqrt(this.distSqToBlock(maid, p));
+            LOGGER.info("mine give-up: maid={} reason={} target={} dist={} feet={} progress={}",
+                    maid.m_20148_(), reason, p, (long) d, maid.m_20183_(), this.destroyProgress);
+        } catch (Exception ex) { com.maidsmart.diag.Diag.swallow("MaidWoodBehavior", ex);
+        }
+    }
     /**
-     * 一个搜索环宽（新框与旧框错开一半以上），女仆无需走路、马上能挖新框的矿。
-     * ① 被墙/悬崖堵住走不动 → 30 秒停滞就地重埋 → 新框与旧框重合 → 又空 → 又迁移
-     *    （死循环）；② 迁移期纯走路零产出。
-     * 每 5 秒最多滑一次（SLIDE_SINCE 节流），空旷地形也不会高速漂移。
-     * 同时清 WOOD_CACHE（新框未扫描）并朝新框中心设一个移动目标（赶路不干等）。
+     * 一个搜索环宽（新框与旧框错开一半以上），女仆无需走路、马上能挖新框的矿。① 被墙/悬崖堵住走不动 → 30 秒停滞就地重埋 → 新框与旧框重合 → 又空 → 又迁移（死循环）；② 迁移期纯走路零产出。
+     * 每 5 秒最多滑一次（SLIDE_SINCE 节流），空旷地形也不会高速漂移。清 WOOD_CACHE（新框未扫描）；**不设移动目标**（实测九百一十三：框空不该赶路）。
+     * <p>实测九百二十六【必须真的滑走】：主人在锚点上（她守在主人脚边干活）时，旧版把方向算成 (0,0) → 锚点原地不动 → 同一片空框反复全量扫、她永远没目标（实机 03:24:09 起 27 秒零动作）。
+     * 现在改成 8 向轮转取方向：框绕着主人一格一格转着找，既不原地不动、也不会越挖越远。
      */
-    private void slideAnchor(ServerLevel level, EntityMaid maid, BlockPos old) {
+    private boolean slideAnchor(ServerLevel level, EntityMaid maid, BlockPos old) {
         int id = maid.m_19879_();
         long now = level.m_46467_();
         Long last = SLIDE_SINCE.get(id);
         if (last != null && now - last < 100L) {
-            return; // 5 秒一次
+            return false; // 5 秒一次
         }
         SLIDE_SINCE.put(id, now);
         // 实测五百六十二：home 模式锚点固定在工作区域内——迁移正是"伐木女仆越走越远"
         // 的源头（框框相连追出去半个地图），圈砍空就待在圈里等（树苗长成/换任务）
         if (maid.m_21536_()) {
-            return; // hasRestriction——home 模式不迁移
+            LOGGER.info("wood box empty but home-restricted (pinned work area, no migration): maid={} anchor={}",
+                    id, old);
+            return false; // home 模式不迁移：工作圈钉死（圈内挖空就等区块刷新/换任务）
         }
         int step = Math.max(4, com.maidsmart.config.MaidSmartConfig.WOOD_SEARCH_RADIUS.get());
         int dirX = 1;
@@ -1794,8 +1802,17 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             double dx = owner.m_20185_() - old.m_123341_();
             double dz = owner.m_20189_() - old.m_123343_();
             if (Math.abs(dx) < 1.0 && Math.abs(dz) < 1.0) {
-                dirX = 0;
-                dirZ = 0; // 主人在身边 → 不迁移（以主人脚下为新框）
+                // 实测九百二十六【框空站桩的死路】：主人在锚点上（她就守在主人脚边干活）时，
+                // 旧版把方向算成 (0,0) = 锚点原地不动，于是同一片空框反复全量扫、她永远没目标
+                //（实机 03:24:09 起 27 秒零动作、看门狗每 8 秒重置一次）。改成按 8 向轮转取一个
+                // 方向：框绕着主人一格一格转着找，既不原地不动、也不会越挖越远。
+                this.slideTurn++;
+                double ang = (this.slideTurn % 8) * Math.PI / 4.0;
+                dirX = (int) Math.round(Math.cos(ang));
+                dirZ = (int) Math.round(Math.sin(ang));
+                if (dirX == 0 && dirZ == 0) {
+                    dirX = 1;
+                }
             } else {
                 dirX = dx >= 0 ? 1 : -1;
                 dirZ = dz >= 0 ? 1 : -1;
@@ -1806,12 +1823,11 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         ANCHORS.put(id, na);
         OUT_SINCE.remove(id);
         WOOD_CACHE.remove(id); // 新框未扫描，强制重建
-        // 朝新框中心走（空框时也在赶路，不原地干等；速度随 wood.moveSpeed 配置，
-        // 实测四十八起默认 0.3——旧版硬编码 0.6 正是"移速过快"的一处来源）
-        this.setWalkTarget(maid, na,
-                (float) (double) com.maidsmart.config.MaidSmartConfig.WOOD_MOVE_SPEED.get());
+        // 实测九百一十三：框空 = 没找到树 → 【不再朝新框赶路】——原版 TLM 的走路逻辑
+        // （空闲闲逛 / 跟随主人）接管；她走到哪，下一轮 relocate 就把搜索框埋回她脚下。
+        // 旧版这里强设移动目标（"空框时也在赶路，不原地干等"），正是"没树还满场乱跑"的来源之一。
+        return true;
     }
-
 
     /** v1.5.85：记录本次扫描中镐子挖不动的矿（只保留价值最高的一个，用于播报） */
     private void recordSkippedWood(EntityMaid maid, BlockPos pos, BlockState state) {
@@ -1825,7 +1841,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         this.skippedWoodName = blockCnName(state.m_60734_());
         this.skippedWoodTool = requiredTool(state);
     }
-
 
     /**
      * 播报"附近有木材但斧子挖不动"——气泡 + 主人聊天栏，
@@ -1897,8 +1912,17 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         }
     }
 
+    /** 实测九百八十：丢弃过期扫描状态、把扫描框挪到她自己脚下（目标跑出检索半径时用）。
+     *  只动"框"和缓存，不碰世界。 */
+    private void dropStaleScan(EntityMaid maid) {
+        int id = maid.m_19879_();
+        WOOD_CACHE.remove(id);
+        WOOD_SCANS.remove(id);
+        ANCHORS.put(id, maid.m_20183_().m_7949_());
+    }
+
     /**
-     * score = 距离平方 + 深度惩罚 - 价值加成，取最低分。
+     * score = 她到木材的距离平方（实测九百一十三起：最近优先，不再叠加深度/价值项），取最低分。
      * 穿透预算：女仆到矿之间实心挡路方块 ≤MAX_BREAK_BUDGET 可选（借鉴 maidmining）；
      * 刚弃置的目标跳过一次。
      * - 全量扫描（8.9 万格）每 5 秒一次（WOOD_CACHE_TTL），期间缓存轮只校验
@@ -1961,7 +1985,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
      */
     private BlockPos fullScanWoods(ServerLevel level, EntityMaid maid, BlockPos anchor, long now) {
         int id = maid.m_19879_();
-        int feetY = anchor.m_123342_();
         int radius = com.maidsmart.config.MaidSmartConfig.WOOD_SEARCH_RADIUS.get();
         int down = com.maidsmart.config.MaidSmartConfig.WOOD_DOWN_RANGE.get();
         int up = com.maidsmart.config.MaidSmartConfig.WOOD_UP_RANGE.get();
@@ -1974,15 +1997,10 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         }
         int budget = com.maidsmart.config.MaidSmartConfig.WOOD_SCAN_BUDGET.get();
         int breakBudget = com.maidsmart.config.MaidSmartConfig.WOOD_BREAK_BUDGET.get();
-        double valueWeight = com.maidsmart.config.MaidSmartConfig.WOOD_VALUE_WEIGHT.get();
-        double depthPenalty = com.maidsmart.config.MaidSmartConfig.WOOD_DEPTH_PENALTY.get();
         java.util.Map<BlockPos, Long> disc = RECENT_DISCARD.get(id);
         int processed = 0;
         while (st.dy <= up && processed < budget) {
             BlockPos p = anchor.m_7918_(st.dx, st.dy, st.dz);
-            int dx = st.dx;
-            int dz = st.dz;
-            int dy = st.dy;
             // 游标前进：dz → dx → dy（dz/dx 越界回绕进位）
             st.dz++;
             if (st.dz > radius) {
@@ -1994,9 +2012,9 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
                 st.dy++;
             }
             processed++;
-            if (p.equals(this.abandonedPos) || this.blockedWoods.contains(p)
+            if (this.blockedWoods.contains(p)
                     || (disc != null && disc.containsKey(p.m_7949_()))) {
-                continue; // v1.5.47：刚弃置跳过；v1.5.87：硬挡路持续排除；v1.5.113：短时排除
+                continue; // v1.5.87：硬挡路持续排除；v1.5.113：短时排除
             }
             BlockState woodState = level.m_8055_(p);
             Integer value = woodValueOf(woodState);
@@ -2041,9 +2059,16 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             }
             st.blockingCache.put(p.m_7949_(), blocking); // v1.5.113（A3）：缓存轮复用
             st.found.add(p.m_7949_());
-            double score = dx * dx + dz * dz + dy * dy
-                    + depthPenalty * Math.max(0, feetY - p.m_123342_())
-                    - value * valueWeight;
+            // 实测九百八十【同上·口径统一】：框内但在她自己检索半径外的格不进候选——
+            // 否则外层"跑出检索半径"清空它、下一轮又从缓存选回同一格（原地循环的根因）。
+            // 仍记进 found（缓存保持完整）：等她走近了下一轮缓存校验自然会放行。
+            if (this.targetOutOfRadius(maid, p, radius)) {
+                continue;
+            }
+            // 实测九百一十三【最近优先】：排序只看"她当前位置到目标"的距离²，与挖矿同口径。
+            // 旧版按"锚点偏移 + 深度惩罚 − 价值权重"打分——圈内最远的树可能压过脚边的树
+            //（"不优先锁定最近的"根因）；价值/深度两项连同它们的配置项一并废除。
+            double score = distSqToBlock(maid, p);
             if (score < st.bestScore) {
                 st.bestScore = score;
                 st.best = p.m_7949_();
@@ -2062,18 +2087,15 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
     private BlockPos pickFromCache(ServerLevel level, EntityMaid maid, BlockPos anchor, WoodCache cache) {
         int id = maid.m_19879_();
         long now = level.m_46467_();
-        int feetY = anchor.m_123342_();
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
         int radius = com.maidsmart.config.MaidSmartConfig.WOOD_SEARCH_RADIUS.get();
         int down = com.maidsmart.config.MaidSmartConfig.WOOD_DOWN_RANGE.get();
         int up = com.maidsmart.config.MaidSmartConfig.WOOD_UP_RANGE.get();
         int budget = com.maidsmart.config.MaidSmartConfig.WOOD_BREAK_BUDGET.get();
-        double valueWeight = com.maidsmart.config.MaidSmartConfig.WOOD_VALUE_WEIGHT.get();
-        double depthPenalty = com.maidsmart.config.MaidSmartConfig.WOOD_DEPTH_PENALTY.get();
         java.util.Map<BlockPos, Long> disc = RECENT_DISCARD.get(id);
         for (BlockPos p : cache.ores) {
-            if (p.equals(this.abandonedPos) || this.blockedWoods.contains(p)
+            if (this.blockedWoods.contains(p)
                     || (disc != null && disc.containsKey(p))) {
                 continue;
             }
@@ -2116,9 +2138,14 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
             if (value == null || blocking > budget) {
                 continue;
             }
-            double score = dx * dx + dz * dz + dy * dy
-                    + depthPenalty * Math.max(0, feetY - p.m_123342_())
-                    - value * valueWeight;
+            // 实测九百八十【口径统一】：缓存的"框"是相对【锚点】算的，她挖远之后同一个格可能已经
+            // 在她自己的检索半径外——外层判据（她到格）会把它清掉，可缓存下一轮又把同一格选回来，
+            // 于是"选中 → 跑出半径 → 清空 → 再选中"无限循环（实机 00:34:54 起原地站了 37 秒、
+            // 无气泡无日志，只能收放魂符一次）。缓存轮必须按【她到格】的同一口径筛一遍。
+            if (this.targetOutOfRadius(maid, p, radius)) {
+                continue;
+            }
+            double score = distSqToBlock(maid, p); // 实测九百一十三【最近优先】（同全量扫描口径）
             if (score < bestScore) {
                 bestScore = score;
                 best = p;
@@ -2126,7 +2153,6 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         }
         return best;
     }
-
 
     /**
      * 从眼睛到矿物中心采样（每 0.5 格，与 countBlocking 同一口径），到达矿物前碰到任何
@@ -2270,6 +2296,30 @@ public class MaidWoodBehavior extends MaidWorkBehavior {
         return null;
     }
 
+    /** 实测九百七十九：分帧扫描进行中她的"站着等"是正常的，不打卡死表 */
+    @Override
+    protected boolean stallWatchdogSuppressed(ServerLevel level, EntityMaid maid) {
+        return WOOD_SCANS.containsKey(maid.m_19879_());
+    }
+
+    /** 实测九百七十九：卡死弃目标的收尾——把这轮进度落盘（目标本身已进 30 秒短排） */
+    @Override
+    protected void onStallGiveUp(ServerLevel level, EntityMaid maid, long gameTime, BlockPos dead) {
+        this.saveProgressNow(maid);
+    }
+
+    /** 实测九百七十九：连卡 3 次 = 这一片没戏 → 清缓存 + 挪锚点换一片 */
+    @Override
+    protected void onStallStreak(ServerLevel level, EntityMaid maid, long gameTime) {
+        WOOD_CACHE.remove(maid.m_19879_());
+        WOOD_SCANS.remove(maid.m_19879_());
+        this.scanCooldown = 0;
+        BlockPos anchor = this.resolveAnchor(level, maid);
+        if (anchor != null) {
+            this.slideAnchor(level, maid, anchor);
+        }
+        LOGGER.info("wood stall x3 -> fresh box: maid={} anchor={}", maid.m_20148_(), anchor);
+    }
 
     /** v1.5.47：废石丢弃——每种保留 JUNK_KEEP 份，超出直接销毁（不生成掉落物，防被捡回）
      *  v1.5.88：保留量从配置面板读取（mine.junkKeep） */

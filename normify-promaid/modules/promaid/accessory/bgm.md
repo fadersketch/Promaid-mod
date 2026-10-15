@@ -19,7 +19,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/accessory/DaYunMusic.java, line: 1, end_line: 189}
   - {path: promaid_src_neo/com/maidsmart/accessory/DaYunMusicNetworking.java, line: 1, end_line: 89}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 3a973f0c941824935522672758393dc4cc1117059badae2f782c63e2256a8995
 state: active

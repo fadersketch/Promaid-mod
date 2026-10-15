@@ -906,6 +906,143 @@ public final class AiMemoryStore {
         return null;
     }
 
+
+    // ---------- 实测九百七十四：按稳定键调试（链路调试面板的选中身份） ----------
+
+    /** 调试键：hash@创建时刻。内容相同的两条段落 hash 相同，必须再带创建时刻才唯一——
+     *  旧版只按 hash 定位，同内容的两条会被当成同一条改。 */
+    public static String debugKey(AiMemoryModels.Paragraph p) {
+        return p.hash() + "@" + p.createdAt();
+    }
+
+    private static String keyHash(String key) {
+        int at = key.lastIndexOf('@');
+        return at < 0 ? key : key.substring(0, at);
+    }
+
+    private static long keyTime(String key) {
+        int at = key.lastIndexOf('@');
+        if (at < 0) {
+            return Long.MIN_VALUE;
+        }
+        try {
+            return Long.parseLong(key.substring(at + 1));
+        } catch (NumberFormatException ignored) {
+            return Long.MIN_VALUE; // 坏键 = 永不命中（不是异常，静默）
+        }
+    }
+
+    /** 按键定位段落（含已作废——恢复要选得到它） */
+    public synchronized AiMemoryModels.Paragraph paragraphByKey(String key) {
+        String h = keyHash(key);
+        long t = keyTime(key);
+        for (AiMemoryModels.Paragraph p : this.paragraphs) {
+            if (p.hash().equals(h) && p.createdAt() == t) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    /** 全部段落（含已作废）。调试面板列表专用：已作废的要留在列表里才点得到恢复 */
+    public synchronized List<AiMemoryModels.Paragraph> allParagraphs() {
+        return new ArrayList<>(this.paragraphs);
+    }
+
+    /** 按键标记作废 */
+    public synchronized boolean markDeletedByKey(String key) {
+        AiMemoryModels.Paragraph p = paragraphByKey(key);
+        if (p == null || p.deleted()) {
+            return false;
+        }
+        int i = this.paragraphs.indexOf(p);
+        if (i < 0) {
+            return false;
+        }
+        this.paragraphs.set(i, markDeleted(p));
+        this.profiles.removeIf(pr -> pr.evidenceIds().contains(p.hash()));
+        this.markDirty();
+        return true;
+    }
+
+    /** 按键恢复作废段落 */
+    public synchronized boolean restoreByKey(String key) {
+        AiMemoryModels.Paragraph p = paragraphByKey(key);
+        if (p == null || !p.deleted()) {
+            return false;
+        }
+        int i = this.paragraphs.indexOf(p);
+        if (i < 0) {
+            return false;
+        }
+        this.paragraphs.set(i, new AiMemoryModels.Paragraph(p.hash(), p.sourceType(), p.role(), p.content(), p.tags(),
+                p.metadata(), p.createdAt(), System.currentTimeMillis(), p.eventTimeStart(), p.eventTimeEnd(),
+                p.salience(), p.accessCount(), System.currentTimeMillis(), p.permanent(), false, p.protectedUntil()));
+        this.markDirty();
+        return true;
+    }
+
+    /** 按键调重要度（1..10 夹取）；返回新值，未命中返回 -1 */
+    public synchronized int adjustSalienceByKey(String key, int delta) {
+        AiMemoryModels.Paragraph p = paragraphByKey(key);
+        if (p == null || p.deleted()) {
+            return -1;
+        }
+        int i = this.paragraphs.indexOf(p);
+        if (i < 0) {
+            return -1;
+        }
+        int ns = Math.max(1, Math.min(10, p.salience() + delta));
+        this.paragraphs.set(i, new AiMemoryModels.Paragraph(p.hash(), p.sourceType(), p.role(), p.content(), p.tags(),
+                p.metadata(), p.createdAt(), System.currentTimeMillis(), p.eventTimeStart(), p.eventTimeEnd(),
+                ns, p.accessCount(), p.lastAccessed(), p.permanent(), p.deleted(), p.protectedUntil()));
+        this.markDirty();
+        return ns;
+    }
+
+    /** 按键强化：重要度 +1（封顶 10）、想起次数 +1；返回新重要度，未命中 -1 */
+    public synchronized int reinforceByKey(String key) {
+        int ns = adjustSalienceByKey(key, 1);
+        if (ns < 0) {
+            return -1;
+        }
+        AiMemoryModels.Paragraph p = paragraphByKey(key);
+        if (p != null) {
+            int i = this.paragraphs.indexOf(p);
+            if (i >= 0) {
+                this.paragraphs.set(i, new AiMemoryModels.Paragraph(p.hash(), p.sourceType(), p.role(), p.content(),
+                        p.tags(), p.metadata(), p.createdAt(), System.currentTimeMillis(), p.eventTimeStart(),
+                        p.eventTimeEnd(), p.salience(), p.accessCount() + 1, System.currentTimeMillis(),
+                        p.permanent(), p.deleted(), p.protectedUntil()));
+            }
+        }
+        this.markDirty();
+        return ns;
+    }
+
+    /** 按键削弱：重要度 -1（保底 1），不动想起次数；返回新重要度，未命中 -1 */
+    public synchronized int weakenByKey(String key) {
+        return adjustSalienceByKey(key, -1);
+    }
+
+    /** 按关系三元组 hash（主体|谓词|客体）停用或恢复单条关系——
+     *  旧版按谓词批量停用：点一条"妻子"，所有同谓词的关系一起下线。 */
+    public synchronized boolean setRelationInactive(String hash, boolean inactive) {
+        for (int i = 0; i < this.relations.size(); i++) {
+            AiMemoryModels.Relation r = this.relations.get(i);
+            if (r.inactive() == inactive || !r.hash().equals(hash)) {
+                continue;
+            }
+            this.relations.set(i, new AiMemoryModels.Relation(r.hash(), r.subject(), r.predicate(), r.object(),
+                    r.confidence(), r.sourceParagraph(), r.permanent(), inactive,
+                    r.protectedUntil(), r.accessCount(), r.createdAt()));
+            this.dirty = true;
+            this.save();
+            return true;
+        }
+        return false;
+    }
+
     /** 结构合并桶键：sourceType + 首 tag（对齐 v2 sameStructuralBucket：同源同结构 tag） */
     private static String structuralKey(AiMemoryModels.Paragraph p) {
         String tag = "";

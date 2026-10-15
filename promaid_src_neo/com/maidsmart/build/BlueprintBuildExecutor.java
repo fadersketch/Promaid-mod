@@ -170,7 +170,7 @@ public final class BlueprintBuildExecutor {
             }
         } else {
             planId = BuildPlan.setPlan(level, origin, buildable, name, blueprintId,
-                    Math.floorMod(quarters, 4));
+                    Math.floorMod(quarters, 4), player.getUUID());
         }
         String needText = needBubbleText(buildable);
         // v1.2.2 实测五百八十五（issue #15）：这份图纸的流体被剥离过 → 开工前明说

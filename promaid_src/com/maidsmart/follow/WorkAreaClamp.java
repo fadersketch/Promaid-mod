@@ -35,40 +35,22 @@ public final class WorkAreaClamp {
     }
 
     /**
-     * **玩家用罗盘/中键画过圈时，即使她此刻不在 home 模式（跟随中），干活的选点也被钳在这个圈里**。
-     * <p>【为什么】
-     * 而 TLM 的圈只在 {@code isHomeModeEnable} 为真时才生效（{@code hasRestriction} 就是它）——
-     * 玩家用罗盘画好圈、但排班没开 / 她把 home 关了时，这个圈在 TLM 侧是**完全无效**的。
-     * 挖矿/伐木/宰杀/农活的选点因此会跟着主人满地图跑。
-     * <p>【口径】home 模式 → 与 {@link #allows} 完全一致（TLM 自己的圈）；非 home 但存在 **玩家画的圈**（{@link com.maidsmart.schedule.PlayerCircle#isPlayerCircle}）→ 钳到该圈 （圈心 = {@link #playerCircleCenter}，半径 = {@link #playerCircleRadius}）；两者都不是 → 放行。 <p>【只管干活】本方法只用在"任务选点"（挖矿/伐木/宰杀的目标扫描）——空闲散步/跟随/战斗 仍走 {@link #allows}（放行），不会把跟着主人的女仆拴住。
+     * 干活选点闸（挖矿/伐木/宰杀/农活在扫描里选点用）——口径就是"目标能不能到"（{@link #allows}）。
+     *
+     * <p>【实测九百二十二改定】home 模式走 TLM 自己的限制圈；非 home（跟随/战斗）一律放行。此前在
+     * 非 home 时也拿"玩家用罗盘画的圈"钳选点——罗盘只写锚点、不开 home，圈留在老家后人被带到几十格
+     * 外，圈内圈外每一格都被否掉 → 扫描永远空 → 她站着报"附近没有值得挖的矿石"、旁边就是矿也不挖。
+     * 圈是"守家"的口径（home 与跟随必须分开）；闲逛那种"走两步"另走 {@link #allowsWander}。
      */
     public static boolean allowsWork(EntityMaid maid, BlockPos pos) {
-        try {
-            if (maid == null || pos == null) {
-                return true;
-            }
-            if (maid.m_21536_()) { // hasRestriction
-                return maid.m_21444_(pos); // home：TLM 的圈说了算
-            }
-            if (!com.maidsmart.schedule.PlayerCircle.isPlayerCircle(maid)) {
-                return true; // 没有玩家画的圈 → 不干预（旧口径）
-            }
-            BlockPos c = playerCircleCenter(maid);
-            if (c == null) {
-                return true;
-            }
-            int r = playerCircleRadius(maid);
-            return c.m_123331_(pos) <= (double) r * r;
-        } catch (Throwable t) {
-             com.maidsmart.diag.Diag.swallow("WorkAreaClamp", t); return true;
-        }
+        return allows(maid, pos);
     }
 
     /**
      * 玩家画的圈心（**非 home 也读**）——{@code SchedulePos} 的最近锚点。
      *
      * <p>与 {@link #circleCenter} 的区别：那条要求 home 模式（因为它读的是 TLM 的限制圈心）；
-     * 这条专供"玩家画过圈但没开 home"时使用——圈心就是玩家用罗盘/中键写进
+     * 这条专供"玩家画过圈但没开 home"时使用——圈心就是玩家用罗盘写进
      * {@code SchedulePos} 的那三个锚点里离她最近的一个。没配置锚点 → null。
      */
     public static BlockPos playerCircleCenter(EntityMaid maid) {

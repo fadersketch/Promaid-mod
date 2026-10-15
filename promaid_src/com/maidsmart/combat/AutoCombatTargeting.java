@@ -208,8 +208,9 @@ public final class AutoCombatTargeting {
         if (com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatTask(maid)) {
             return 2;
         }
-        // v1.2.2 实测五百九十：傀儡模式（第三方玩法）下【自主作战不介入】——不切走、
-        // 不换战术、不还原（返回 2 = 「已是战斗任务，跳过」；她由玩家安排着玩那个玩法）
+        // v1.2.2 实测五百九十 / 实测九百九十二：已在让位名单的模式里（傀儡师 / 拔刀剑 /
+        // 战斗）【自主作战不介入】——不再切走、不再换战术（返回 2 = 「已是战斗任务，跳过」；
+        // 拔刀剑/战斗模式可被自主切换切进来，但进来之后这一战归那个模组打）
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
             return 2;
         }

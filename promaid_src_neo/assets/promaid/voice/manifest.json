@@ -56,7 +56,7 @@
       "mode": "exact"
     },
     {
-      "text": "我的活动范围里没有能坐下的水边～主人可以潜行+中键水边方块，把我的工作区域标到那里",
+      "text": "我的活动范围里没有能坐下的水边～主人可以用河童的罗盘把我的工作区域标到那里",
       "file": "fish_no_water_area.ogg",
       "mode": "exact"
     },
@@ -481,11 +481,6 @@
       "mode": "contains"
     },
     {
-      "text": "好像走神了……我重新理一下思路，继续干活",
-      "file": "work_distracted.ogg",
-      "mode": "contains"
-    },
-    {
       "text": "够不着高处的矿",
       "file": "mine_no_block_high.ogg",
       "mode": "contains"
@@ -878,6 +873,26 @@
     {
       "text": "天气变成",
       "file": "weather_change.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这片区域没有目标矿物了",
+      "file": "mine_area_cleared.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这片区域没有可砍的树木了",
+      "file": "wood_area_cleared.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这块我够不到",
+      "file": "work_stall_giveup.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "的路上有岩浆",
+      "file": "lava_path_ahead.ogg",
       "mode": "contains"
     }
   ]

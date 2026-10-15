@@ -526,6 +526,60 @@ public final class BlueprintStepMath {
         return dedupeSteps(out);
     }
 
+    /** 【实测九百六十八】流体判定以**方块自身的流体状态**为准，不看名字里有没有 water/lava——
+     *  水、岩浆与任何模组流体（方块默认状态带流体即算）一律算流体；按 id 缓存，不必反复查注册表。 */
+    private static final Map<String, Boolean> FLUID_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static boolean isFluid(Block block) {
+        return block != null && !block.defaultBlockState().getFluidState().isEmpty();
+    }
+
+    public static boolean isFluidBlock(String blockId) {
+        if (blockId == null) {
+            return false;
+        }
+        Boolean hit = FLUID_CACHE.get(blockId);
+        if (hit != null) {
+            return hit;
+        }
+        boolean fluid = isFluid(net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId)));
+        FLUID_CACHE.put(blockId, fluid);
+        return fluid;
+    }
+
+    static boolean isFluidStep(String[] parts) {
+        return parts != null && parts.length > 3 && isFluidBlock(parts[3]);
+    }
+
+    /** v1.5.399：把流体步骤整段挪到计划末尾——先立结构、最后放液体。
+     *  放前面会出事：围壁还没建起来水就先流出去（刷铁机的推人水道冲散、刷石机的水漫过没砌好的槽），
+     *  流进干燥区还会冲掉随后放下的红石粉 / 火把 / 铁轨 / 作物——机器看着建好了却不工作。
+     *  挪到最后围壁已成型，流体在自己的槽里流，完工 activateWater 再整体激活一次即成形。
+     *  稳定分割：非液体步骤保序在前，液体步骤保序在后（两者内部次序都不动）。 */
+    static List<String> moveFluidsLast(List<String> steps) {
+        if (steps == null || steps.size() < 2) {
+            return steps;
+        }
+        // 【实测九百六十八】旧版这里有一次 "名字里含 water/lava" 的字符串预筛，用来跳过整趟解析——
+        // 但它按名字认流体，只带模组流体的蓝图会被漏掉（不后移 → 又回流出去冲散槽位）。
+        // 现在整趟走 isFluidStep（按方块流体状态判、按 id 缓存），代价与紧随其后的 dedupeSteps 同量级。
+        List<String> solids = new ArrayList<>(steps.size());
+        List<String> fluids = new ArrayList<>();
+        for (String step : steps) {
+            String[] parts = parseStep(step);
+            if (isFluidStep(parts)) {
+                fluids.add(step);
+            } else {
+                solids.add(step);
+            }
+        }
+        if (fluids.isEmpty()) {
+            return steps;
+        }
+        solids.addAll(fluids);
+        return solids;
+    }
+
     static List<String> dedupeSteps(List<String> steps) {
         if (steps == null || steps.size() < 2) {
             return steps;

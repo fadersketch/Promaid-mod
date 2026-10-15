@@ -251,7 +251,7 @@ public final class BlueprintWorldExtract {
     private static boolean skipWorldBlock(String blockId, int wx, int wz,
                                           double[] anchor, int range) {
         if (BlueprintBlockData.TERRAIN_BLOCKS.contains(blockId)
-                || "minecraft:water".equals(blockId) || "minecraft:lava".equals(blockId)
+                || BlueprintStepMath.isFluidBlock(blockId)
                 || "minecraft:snow_layer".equals(blockId) || "minecraft:ice".equals(blockId)
                 || "minecraft:air".equals(blockId)) {
             return true;

@@ -79,6 +79,11 @@ public class ReplyFeedbackTracker {
             "谢谢", "感谢", "懂了", "明白了", "可以", "有用", "不错", "好耶", "太好了",
             "说得对", "有道理", "真贴心", "哈哈", "很棒"
     };
+    /** 夸奖模式串（实测九百六十九：主人夸她 → 愉悦 / 支配升；手册承诺了"夸她会变开心"，此前没接） */
+    private static final String[] PRAISE_PATTERNS = {
+            "真棒", "好棒", "太棒", "很棒", "厉害", "好孩子", "做得好", "干得好", "辛苦了", "聪明",
+            "可爱", "体贴", "喜欢你", "爱你", "你最", "进步", "乖"
+    };
     /** 道歉模式串（主人道歉——安抚情绪，不视为对女仆发言的负面反馈） */
     private static final String[] APOLOGY_PATTERNS = {
             "对不起", "抱歉", "我错了", "对不住", "是我的错", "说重了", "道歉"
@@ -245,6 +250,12 @@ public class ReplyFeedbackTracker {
             QUESTION_PENDING.put(id, true);
             if (affectOn) {
                 AffectManager.onOwnerQuestion(maid);
+            }
+        }
+        if (containsAny(text, PRAISE_PATTERNS)) {
+            // 实测九百六十九：主人夸她 → 愉悦 / 支配升（手册口径"夸她会变开心"，旧实现没接）
+            if (affectOn) {
+                AffectManager.onOwnerPraise(maid);
             }
         }
         if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_REPLY_FEEDBACK.get()) {

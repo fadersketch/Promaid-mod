@@ -326,32 +326,41 @@ public final class MaidBuildBlockFilter {
      * 蓝图建造的 {@code BlueprintMaterials.extractExact} 用这一支（实测七百六十二）。
      */
     public static boolean extractHonest(IItemHandler handler, int slot, int count) {
-        int before;
+        // 实测九百六十一：核对期间让压缩盒"如实报数"——盒子格平时把大堆压到 64
+        // （视图口径，见 CompressionBoxMaidInv），真扣 1 件后视图仍是 64，下面的
+        // 差值核对就把"真扣到了"误判成"没扣到"：战斗放置（TNT/重生锚/末地水晶）
+        // 从压缩盒里取不出来，取出的那一件还被白白销毁。窗口全局静态、随用随还原。
+        boolean honestOld = com.maidsmart.box.CompressionBoxMaidInv.setHonestView(true);
         try {
-            before = handler.getStackInSlot(slot).getCount();
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
-            return false;
-        }
-        if (before <= 0) {
-            return false;
-        }
-        int moved;
-        try {
-            ItemStack taken = handler.extractItem(slot, count, false);
-            if (taken.isEmpty()) {
+            int before;
+            try {
+                before = handler.getStackInSlot(slot).getCount();
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
                 return false;
             }
-            moved = taken.getCount();
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
-            return false;
+            if (before <= 0) {
+                return false;
+            }
+            int moved;
+            try {
+                ItemStack taken = handler.extractItem(slot, count, false);
+                if (taken.isEmpty()) {
+                    return false;
+                }
+                moved = taken.getCount();
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
+                return false;
+            }
+            int after;
+            try {
+                after = handler.getStackInSlot(slot).getCount();
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
+                return true; // 查不到复核值时按原口径放行（不做更坏的假设）
+            }
+            return after == before - moved;
+        } finally {
+            com.maidsmart.box.CompressionBoxMaidInv.setHonestView(honestOld);
         }
-        int after;
-        try {
-            after = handler.getStackInSlot(slot).getCount();
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBuildBlockFilter", ignored);
-            return true; // 查不到复核值时按原口径放行（不做更坏的假设）
-        }
-        return after == before - moved;
     }
 
     /* ==================== v1.2.3-dbg 探针取值助手（查完删掉整段） ==================== */

@@ -64,6 +64,9 @@ public final class BombItems {
 
     private static final String ID_TNT = "minecraft:tnt";
 
+    /** TNT 矿车那一件（原版 id）：认到它时扔出去的是「它自己那一辆点着的矿车」——见 {@code BombThrow}。 */
+    private static final String ID_TNT_MINECART = "minecraft:tnt_minecart";
+
     private static final String ID_FLINT_AND_STEEL = "minecraft:flint_and_steel";
 
     private static final String ID_FIRE_CHARGE = "minecraft:fire_charge";
@@ -138,7 +141,30 @@ public final class BombItems {
         if (tntBlockOf(stack) != null) {
             return true; // v1.2.2 实测六百〇五：方块继承 TntBlock 的（模组 TNT 多半名字里没有 tnt）
         }
+        // 名字带 tnt：原版 TNT 矿车（minecraft:tnt_minecart）与各模组 TNT 都从这一条进来——
+        // 矿车那一类在投掷链里放的是「它自己那一辆矿车」，判据见 {@link #isTntMinecart}
         return idOf(stack).toLowerCase(java.util.Locale.ROOT).contains("tnt");
+    }
+
+    /**
+     * 这一件是不是「TNT 矿车」那一类：它按 {@link #isTnt} 的老口径本来就算 TNT（名字里就带 tnt），
+     * 单拎出来是因为**扔出去的东西不一样**——矿车要放的是它自己那一辆点着的矿车（见 {@code BombThrow}），
+     * 而不是回落成一枚普通引信 TNT。模组矿车：是矿车物品（Item 继承 MinecartItem）且注册名带 tnt。
+     */
+    static boolean isTntMinecart(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        if (isStack(stack, ID_TNT_MINECART)) {
+            return true; // 原版那一件：注册表查询万一失手也照认（与 isTnt 同一口径）
+        }
+        try {
+            if (stack.getItem() instanceof net.minecraft.world.item.MinecartItem) {
+                return idOf(stack).toLowerCase(java.util.Locale.ROOT).contains("tnt");
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
+        }
+        return false;
     }
 
     static TntBlock tntBlockOf(ItemStack stack) {
@@ -346,6 +372,62 @@ public final class BombItems {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
             return ItemStack.EMPTY;
         }
+    }
+
+    // ===== 实测九百四十五【压缩盒差异化】：盒子里存了弹药 → 一次投/放多个 =====
+
+    /** 压缩盒「弹药加成」的一次投 / 放上限（开发者口径：一次性扔 / 放 5 个，凑出"压缩爆炸"）。 */
+    static final int BOX_BURST = 5;
+
+    /**
+     * 女仆背包里所有压缩盒内、匹配 {@code match} 的物品总数量（真实数量；没盒子 / 没开延伸 = 0）。
+     * 走 {@code getMaidInv()} 的盒子段（{@code CompressionBoxMaidInv#boxRange()}，视图封顶 64——
+     * 对"够不够 5 个"足够）。
+     */
+    static int boxAmmoCount(EntityMaid maid, java.util.function.Predicate<ItemStack> match) {
+        if (maid == null) {
+            return 0;
+        }
+        try {
+            if (!(maid.getMaidInv() instanceof com.maidsmart.box.CompressionBoxMaidInv mv)) {
+                return 0;
+            }
+            IItemHandler box = mv.boxRange();
+            if (box == null) {
+                return 0;
+            }
+            int n = 0;
+            for (int i = 0; i < box.getSlots(); i++) {
+                ItemStack s = box.getStackInSlot(i);
+                if (!s.isEmpty() && match.test(s)) {
+                    n += s.getCount();
+                }
+            }
+            return n;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
+            return 0;
+        }
+    }
+
+    /** 一次投 / 放件数：盒子里存了 ≥2 件这类弹药 → 最多 {@link #BOX_BURST} 件（按存量取小），否则 1。 */
+    static int boxBurst(EntityMaid maid, java.util.function.Predicate<ItemStack> match) {
+        int inBox = boxAmmoCount(maid, match);
+        return inBox >= 2 ? Math.min(BOX_BURST, inBox) : 1;
+    }
+
+    /** TNT 的盒子加成件数（轰炸投掷链路用）。 */
+    static int boxBurstTnt(EntityMaid maid) {
+        return boxBurst(maid, BombItems::isTnt);
+    }
+
+    /** 末地水晶的盒子加成件数（放置链路用）。 */
+    static int boxBurstCrystal(EntityMaid maid) {
+        return boxBurst(maid, s -> isStack(s, ID_END_CRYSTAL));
+    }
+
+    /** 重生锚的盒子加成件数（放置链路用）。 */
+    static int boxBurstAnchor(EntityMaid maid) {
+        return boxBurst(maid, s -> isStack(s, ID_RESPAWN_ANCHOR));
     }
 
     static SoundEvent sound(String id) {

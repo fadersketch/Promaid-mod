@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/tool/SwitchTaskTool.java, line: 1, end_line: 355}
   - {path: promaid_src_neo/com/maidsmart/tool/SmartCraftTool.java, line: 1, end_line: 224}
   - {path: promaid_src_neo/com/maidsmart/tool/AirRaidTool.java, line: 1, end_line: 214}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 2a0dc1c6a2da5f09333716aeda6ea9f10fff2a9f4d4ef194f7e240d253c68cd6
 state: active

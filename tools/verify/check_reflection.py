@@ -21,8 +21,10 @@ TREES = ['promaid_src', 'promaid_src_neo']
 MARKS = ['Class.forName(', 'getMethod(', 'getDeclaredMethod(', 'getDeclaredField(']
 
 BASELINE = {
-    'promaid_src': {'Class.forName(': 86, 'getMethod(': 204, 'getDeclaredMethod(': 6, 'getDeclaredField(': 7},
-    'promaid_src_neo': {'Class.forName(': 82, 'getMethod(': 203, 'getDeclaredMethod(': 5, 'getDeclaredField(': 7},
+    # 实测九百九十八：TNT 矿车引信直写（MinecartTNT 的私有 fuse 字段，两版都没有写口）
+    # 各新增 1 处 getDeclaredField → 7/7 上调为 8/8（显式上调并留痕，见 TD-15）。
+    'promaid_src': {'Class.forName(': 86, 'getMethod(': 204, 'getDeclaredMethod(': 6, 'getDeclaredField(': 8},
+    'promaid_src_neo': {'Class.forName(': 82, 'getMethod(': 203, 'getDeclaredMethod(': 5, 'getDeclaredField(': 8},
 }
 
 FAILS, WARNS = [], []

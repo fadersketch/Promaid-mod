@@ -135,6 +135,12 @@ public class BlueprintBookScreen extends Screen {
     private String memoryMaidUuid = null;
     private String memoryMaidName = null;
     private List<String> memoryLines = null;
+    /** 实测九百七十一：记忆 / 状态区折行后的行高（原 12 偏挤，折行后按 11 走） */
+    private static final int TEXT_LINE_H = 11;
+    /** 实测九百七十一：链路调试"可调试对象"行按钮高度——对齐原版按钮贴图 20px
+     *  （旧版 14px 会把 20px 贴图压出横缝，看上去像每行白占一行） */
+    private static final int DEBUG_ROW_H = 16;
+
     private int memoryPage = 0;
     /** v1.5.190：女仆详情页区块列表页码 / 区块名单页女仆列表页码（无上限行修复） */
     private int detailRegionPage = 0;
@@ -260,6 +266,8 @@ public class BlueprintBookScreen extends Screen {
      * v1.5.180：玩家所在区块 planId（多区块共存——用 regions 列表带尺寸判定，
      * 公式与服务端一致：[ox-W/2, ox-W/2+W) × [oy, oy+H) × [oz-D/2, oz-D/2+D)）。
      * 不在任何区块内返回 null。
+     *
+     * <p>实测九百八十五：判定放宽到「**接触到**区块」——紧贴边界外一格也算（见下）。
      */
     private String playerPlanId() {
         net.minecraft.client.player.LocalPlayer player = Minecraft.getInstance().player;
@@ -281,9 +289,12 @@ public class BlueprintBookScreen extends Screen {
                 // v1.5.188：x/y/z 为区块 box 的 min 角（服务端 planRegion 下发），
                 // 不再减半——旧版"中心"语义导致玩家站在实际建造区内却不被判定在
                 // 区块内 → 区块内右击跳转不到对应区块详情页（反馈）
-                if (p.getX() >= x && p.getX() < x + w
-                        && p.getY() >= y && p.getY() < y + h
-                        && p.getZ() >= z && p.getZ() < z + d) {
+                // 实测九百八十五：三轴各向外放一格（接触面也算）。只有一格高的建筑
+                // （地毯/水渠/平台）玩家永远进不去体积内，旧判据下连"站在上面"都不算
+                // 在区块里 → 控制按钮永远不出现。
+                if (p.getX() >= x - 1 && p.getX() <= x + w
+                        && p.getY() >= y - 1 && p.getY() <= y + h
+                        && p.getZ() >= z - 1 && p.getZ() <= z + d) {
                     return r[0]; // planId
                 }
             } catch (NumberFormatException ignored) {
@@ -296,6 +307,9 @@ public class BlueprintBookScreen extends Screen {
      * v1.5.162：玩家是否处于建造区块内（v1.5.180：多区块——任一区块命中即 true）。
      * 控制按钮（续建/暂停/取消等）只在区块内显示——玩家在手册里看到区块范围，
      * 进到里面才有控制权。
+     *
+     * <p>实测九百八十五：口径改为「站在区块内 **或贴着它**（边界外一格）」——见
+     * {@link #playerPlanId()}。
      */
     private boolean inPlanRegion() {
         return playerPlanId() != null;
@@ -612,6 +626,135 @@ public class BlueprintBookScreen extends Screen {
         return line;
     }
 
+    /** 实测九百七十一：把逻辑行按像素宽折成"视觉行"——长记忆 / 记忆日记 / 工作笔记不再被一行截断。
+     *  渲染与分页共用同一份结果（页码因此与实际可见行严格一致）；折行时保留行首颜色码，续行不丢色。 */
+    private java.util.List<String> wrapLines(java.util.List<String> logical, int maxWidth) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (logical == null || maxWidth < 8) {
+            return out;
+        }
+        net.minecraft.client.gui.Font font = this.font;
+        for (String raw : logical) {
+            if (raw == null || raw.isEmpty()) {
+                out.add("");
+                continue;
+            }
+            StringBuilder codes = new StringBuilder();
+            for (int i = 0; i + 1 < raw.length() && raw.charAt(i) == '\u00a7'; i += 2) {
+                codes.append(raw, i, i + 2);
+            }
+            String remaining = raw.trim();
+            while (!remaining.isEmpty()) {
+                if (font.width(remaining) <= maxWidth) {
+                    out.add(remaining);
+                    break;
+                }
+                int cut = remaining.length();
+                while (cut > 0 && font.width(remaining.substring(0, cut)) > maxWidth) {
+                    cut--;
+                }
+                if (cut <= 0) {
+                    out.add(remaining);
+                    break;
+                }
+                String chunk = remaining.substring(0, cut);
+                if (chunk.endsWith("\u00a7")) { // 别把颜色码劈成两半
+                    chunk = chunk.substring(0, chunk.length() - 1);
+                    cut--;
+                }
+                if (chunk.isEmpty()) {
+                    out.add(remaining);
+                    break;
+                }
+                out.add(chunk);
+                remaining = codes + remaining.substring(cut).trim();
+            }
+        }
+        return out;
+    }
+
+    /** 实测九百七十一：链路调试状态区的**唯一**内容源（状态行 + 选中某行时追加的全文段）。
+     *  渲染与按钮分页都走它，页码才不会和实际可见行打架。 */
+    private java.util.List<String> debugStatusSource() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (this.debugStatusLines != null) {
+            out.addAll(this.debugStatusLines);
+        }
+        if (this.debugStatusOpen) {
+            String[] r = this.debugSelRow();
+            if (r != null) {
+                String st = this.debugSelState();
+                String mark = "deleted".equals(st) ? "\uff08\u5df2\u4f5c\u5e9f\uff09" : ("inactive".equals(st) ? "\uff08\u5df2\u505c\u7528\uff09" : "");
+                out.add("\u00a7e\u25b7 \u9009\u4e2d\u7684\u8fd9\u6761\u00a77\uff08" + r[2] + "\uff09" + mark + "\u00a77\uff1a");
+                out.add("§f" + r[3]);
+            }
+        }
+        return out;
+    }
+
+    /** 实测九百七十六：第二行——按选中项写明"这一条能做什么"（旧版只罗列按钮名，
+     *  「停用关系 / 恢复关系」到底干嘛没人看得懂） */
+    private String debugContextHint() {
+        String[] r = this.debugSelRow();
+        int relCount = this.debugRelCount();
+        if (r == null) {
+            int n = this.debugRows == null ? 0 : this.debugRows.size();
+            return "\u00a77\u70b9\u4e00\u884c\u9009\u4e2d \u2192 \u7528\u4e0b\u9762\u7684\u6309\u94ae\u6539\u8fd9\u4e00\u6761\uff08\u5171 " + n + " \u6761 \u00b7 \u5173\u7cfb " + relCount + " \u6761 \u00b7 \u72b6\u6001\u5f00\u5173\u5728\u5de6\u4e0b \u00b7 \u23ee\u23ed \u8df3\u9996\u9875\u672b\u9875\uff09";
+        }
+        if ("rel".equals(r[0])) {
+            return "inactive".equals(this.debugSelState())
+                    ? "\u00a77\u8fd9\u6bb5\u5173\u7cfb\u5df2\u505c\u7528\uff1a\u70b9\u300c\u542f\u7528\u5173\u7cfb\u300d\u5979\u5c31\u91cd\u65b0\u60f3\u8d77\u5b83"
+                    : "\u00a77\u8fd9\u6bb5\u5173\u7cfb\u6709\u6548\uff1a\u505c\u7528\u53ea\u662f\u8ba9\u5979\u4e0d\u518d\u60f3\u8d77\u5b83\uff0c\u8bb0\u5f55\u4fdd\u7559\u3001\u968f\u65f6\u53ef\u542f\u7528";
+        }
+        if ("deleted".equals(this.debugSelState())) {
+            return "\u00a77\u8fd9\u6761\u8bb0\u5fc6\u5df2\u4f5c\u5e9f\uff1a\u70b9\u300c\u6062\u590d\u300d\u5979\u5c31\u53c8\u80fd\u60f3\u8d77\u5b83";
+        }
+        // 实测九百七十七：记忆行被选中时讲清「关系操作」为什么是灰的、什么时候才亮
+        String why = relCount > 0
+                ? "\u00a77 \u00b7 \u4e0b\u9762\u90a3\u9897\u300c\u8df3\u5230\u5173\u7cfb\u300d\u53ef\u76f4\u8fbe"
+                : "\u00a77 \u00b7 \u6682\u65f6\u8fd8\u6ca1\u6709\u5173\u7cfb\u6761\u76ee\uff0c\u591a\u548c\u5979\u76f8\u5904\uff08\u63d0\u5347\u597d\u611f\u7b49\u7ea7\u3001\u89e6\u53d1\u5173\u7cfb\u4e8b\u4ef6\uff09\u540e\u4f1a\u51fa\u73b0";
+        return "\u00a77\u8fd9\u6761\u8bb0\u5fc6\uff1a\u2191\u2193\u6539\u91cd\u8981\u5ea6\u3001\u5f3a\u5316\u524a\u5f31\u8c03\u6743\u91cd\uff1b\u4f5c\u5e9f\u540e\u4e0d\u518d\u88ab\u60f3\u8d77\uff08\u53ef\u6062\u590d\uff09"
+                + "\u00a77\u3002\u300c\u5173\u7cfb\u64cd\u4f5c\u300d\u53ea\u5bf9\u5e26\u7d2b\u6807\u8bb0\u7684\u5173\u7cfb\u884c\u751f\u6548\uff08\u672c\u9875 " + relCount + " \u6761\uff09" + why;
+    }
+
+    /** 实测九百七十六：第三行——上一步回执优先；否则显示选中那条的全文（单行截断）；
+     *  都没有时显示刷新时刻。旧版这行画在 y=54，与状态首行（y=56）叠在一起。 */
+    private String debugTopLine() {
+        if (this.debugNote != null) {
+            return "\u00a7a\u4e0a\u4e00\u6b65\uff1a\u00a7f" + this.debugNote;
+        }
+        String[] r = this.debugSelRow();
+        if (r != null) {
+            return "\u00a7e\u25b7 \u9009\u4e2d\u7684\u8fd9\u6761\uff1a\u00a77" + this.fitText(r[3], this.width - 40);
+        }
+        return this.debugStamp != null ? "\u00a77\u6570\u636e " + this.debugStamp + " \u5237\u65b0" : "";
+    }
+
+    /** 实测九百七十四：选中项在列表里的下标（按稳定键查；没选中或那条已消失 → -1） */
+    private int debugSelIndex() {
+        if (this.debugSelKey == null || this.debugRows == null) {
+            return -1;
+        }
+        for (int i = 0; i < this.debugRows.size(); i++) {
+            if (this.debugSelKey.equals(this.debugRows.get(i)[1])) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** 选中行（没选中返回 null） */
+    private String[] debugSelRow() {
+        int i = this.debugSelIndex();
+        return i < 0 ? null : this.debugRows.get(i);
+    }
+
+    /** 选中行状态码（空 / deleted / inactive） */
+    private String debugSelState() {
+        String[] r = this.debugSelRow();
+        return r == null || r.length < 5 || r[4] == null ? "" : r[4];
+    }
+
     private void rebuildButtons() {
         this.clearWidgets(); // clearWidgets
         // v1.5.252ad：每次重建按钮清空空状态提示——旧版 graphicsHint 只设置不清空，
@@ -785,14 +928,16 @@ public class BlueprintBookScreen extends Screen {
                         Component.literal("\u00a7c\u2691 DIY 模式（关闭全部介入，像 TLM 原版）"),
                         b -> this.confirmAction(
                                 "切到 DIY 模式？",
-                                "\u00a7e会关闭全部「介入 TLM 女仆行为」的开关：战斗自保与单兵战术、主动参战与援护、"
-                                        + "自动换装、飞行与扫帚、骑乘、武装拴绳、搭路、拆刷怪笼、巡逻、"
-                                        + "排班接管、跟随收紧、移速上限与压档、拾取、传送与拉回、女仆复活，"
-                                        + "以及挖矿伐木建造里那些加强档（连锁采掘、不掉耐久、补种、清叶…）。\n\n"
-                                        + "\u00a77保留：AI 记忆与对话、感知与情绪、语音、手册、压缩盒、指标石与投影、"
-                                        + "冷却 HUD 与工作位置标记；几处安全护栏（不拆箱子、不搭在主人身上、"
-                                        + "卡住自愈、传送后重建）也保留。\n\n"
-                                        + "\u00a77立即生效、随时可切回「默认模式」。想用哪项加强，之后到"
+                                "\u00a7e只关闭本模组对「TLM 女仆原有行为」的改动：战斗自保与单兵战术、主动参战与援护、"
+                                        + "自动换装、飞行跟随、搭路、拆刷怪笼、巡逻、排班接管、跟随收紧、"
+                                        + "移速上限与压档、拾取、传送与拉回、女仆复活、危险方块绕行等。\n\n"
+                                        + "\u00a7a新任务与新物品**不受 DIY 影响**（与默认模式逐项相同）："
+                                        + "挖矿 / 伐木 / 建造 / 扫帚 / 宰杀 / 空袭（含空中接敌机动），"
+                                        + "以及压缩盒、武装拴绳、骑乘指挥棒、饰品「大运」。\n\n"
+                                        + "\u00a77保留：AI 记忆与对话、感知与情绪、语音、手册、指标石与投影、冷却 HUD，"
+                                        + "以及几处安全护栏（不拆箱子、不搭在主人身上、卡住自愈、传送后重建）。\n\n"
+                                        + "\u00a77效果：不碰新任务与新物品时，体验与 TLM 原版一致；想用就照常用。"
+                                        + "立即生效、随时可切回「默认模式」。之后到"
                                         + "「模组详细配置」里单独打开。\n\n"
                                         + "\u00a77大模式都有自己的「总开关」，就在它自己板块的第一条——"
                                         + "扫帚＝「移动与行为 → 扫帚模式」，空袭＝「战斗与自保 → 空袭数值」"
@@ -845,12 +990,12 @@ public class BlueprintBookScreen extends Screen {
         boolean diy = com.maidsmart.config.MaidConfigPreset.isDiy();
         int pending = Math.max(0, this.presetPending);
         this.drawCentered(graphics, "\u00a7e\u2691 DIY / 默认模式", 20, 0xFFFFFF);
-        this.drawCentered(graphics, "\u00a77给本模组换一套设定：DIY = 不介入女仆行为（像 TLM 原版）；"
-                + "默认 = 出厂推荐配置", 36, 0x888888);
+        this.drawCentered(graphics, "\u00a77给本模组换一套设定：DIY = 只关掉「介入女仆原有行为」的改动"
+                + "（新任务 / 新物品照常）；默认 = 出厂推荐配置", 36, 0x888888);
         this.drawCentered(graphics, diy ? "\u00a7b当前模式：DIY 模式" : "\u00a7b当前模式：默认模式",
                 52, 0x55FFFF);
         this.drawCentered(graphics, diy
-                        ? "\u00a77已应用 DIY：全模组不再介入女仆行为，各板块开关都为关"
+                        ? "\u00a77已应用 DIY：不再改动女仆原有行为；新任务与新物品照常可用"
                         : "\u00a77当前为默认模式：本模组按出厂推荐配置运行（全部功能可用）",
                 64, 0x999999);
         this.drawCentered(graphics, "\u00a7cDIY 模式会改动 " + pending + " 项配置", 78, 0xFF8888);
@@ -992,11 +1137,12 @@ public class BlueprintBookScreen extends Screen {
                 this.width / 2 - 150, 50, Math.min(300, this.width - 20), 16,
                 Component.literal("搜索建筑名称…"));
         this.searchBox.setMaxLength(64);
-        // v1.5.376：套用原版物品搜索栏样式——无边框 + 白字（默认深色字在深色面板上
-        // 几乎看不清，输入看起来"没反应/延迟"；字节码实证 CreativeModeInventoryScreen
-        // 搜索框 = setBordered(setBordered false) + setTextColor(setTextColor 白)）
-        this.searchBox.setBordered(false);
+        // 实测九百八十五：改回**有边框**（v1.5.376 的无边框只解决了"深色字看不清"，
+        // 代价是整框看起来不存在——空值时只有一个提示串飘在标题下面，玩家找不到搜索框）。
+        // 边框 + 白字：原版边框自带浅灰描边与深底，任何面板底色上都看得出是一个输入框。
+        this.searchBox.setBordered(true);
         this.searchBox.setTextColor(0xFFFFFF);
+        this.searchBox.setHint(Component.literal("搜索建筑名称…"));
         this.searchBox.setValue(this.searchQuery);
         this.searchBox.setResponder(s -> {
             this.searchQuery = s;
@@ -1062,8 +1208,8 @@ public class BlueprintBookScreen extends Screen {
     }
 
     /** v1.5.224：选择世界地图 zip → 发送导入请求（结果回聊天框）。
-     *  v1.0.4：改用游戏内文件浏览器（FilePickScreen）——旧版 java.awt.FileDialog 在
-     *  以 -Djava.awt.headless=true 运行的 JVM 里抛 HeadlessException，选择器打不开。 */
+     *  实测九百六十六：实测九百六十五 的「系统文件选择框优先」在开发者环境弹不出来
+     *  （AWT 不可用）→ 回到游戏内浏览器（同轮把它的布局修好：翻页行与条目重叠、条目出屏）。 */
     private void pickAndImportWorld() {
         com.maidsmart.gui.FilePickScreen.open(this,
                 "选择世界存档压缩包（.zip）",
@@ -1077,8 +1223,7 @@ public class BlueprintBookScreen extends Screen {
 
     /** v1.5.220：打开文件选择器选蓝图文件 → 发送导入请求（单机场景客户端与服务端
      *  同机，绝对路径服务端可直接读取；结果回聊天框）。
-     *  v1.0.4：改用游戏内文件浏览器（FilePickScreen）——java.awt.FileDialog 在
-     *  headless JVM 下抛 HeadlessException 打不开。 */
+     *  实测九百六十六：同导入地图——系统框弹不出来，回到游戏内浏览器（布局已修）。 */
     private void pickAndImportBuild() {
         com.maidsmart.gui.FilePickScreen.open(this,
                 "选择建筑蓝图文件（.schem/.litematic/.nbt/.snbt/.schematic/.json/.zip）",
@@ -1399,14 +1544,54 @@ public class BlueprintBookScreen extends Screen {
     private int memTab = 0;
     /** v1.5.192：链路调试——状态行（工作链路/状态/情绪/记忆统计/主动对话阶段/笔记） */
     private List<String> debugStatusLines = null;
-    /** v1.5.192：可调试对象行 {type, key, info, text}（段落 para / 关系 rel） */
+    /** v1.5.192 / 实测九百七十四：可调试对象行 {type, key, info, text, state}
+     *  （段落 para / 关系 rel；state 空或 deleted 或 inactive） */
     private List<String[]> debugRows = null;
-    /** v1.5.192：选中的调试对象（下标，-1 = 未选中） */
-    private int debugSelected = -1;
+    /** 实测九百七十四：选中项记【稳定键】而不是下标——动作后服务端按重要度重排，
+     *  旧版下标会指到隔壁那条（改上面一条、下面那条也跟着变就是这个）。null = 未选中 */
+    private String debugSelKey = null;
     /** v1.5.192：调试对象行分页 */
     private int debugPage = 0;
+
+    /** 实测九百七十七：当前列表每页行数（用于「跳到关系」把目标翻到可见页） */
+    private int debugMaxRows = 10;
     /** v1.2.1：链路调试状态区分页（小窗口状态行超 maxStatus 时 ◀/▶ 翻页） */
     private int debugStatusPage = 0;
+    /** 实测九百七十四：上一步动作的回执（服务端下发，画在面板里，不刷聊天栏）+ 刷新时刻 */
+    private String debugNote = null;
+    private String debugStamp = null;
+    /** 实测九百七十六：状态区默认收起——旧版一直占着上半屏，列表一页只剩两行 */
+    private boolean debugStatusOpen = false;
+
+    // ===== 实测九百七十二：记忆图谱页（把记忆画出来：重要度分布 / 时间轴 / 关系网络）=====
+    /** 图谱模式：0=重要度分布 / 1=记忆时间轴 / 2=关系网络 */
+    private int graphMode = 0;
+    /** 关系网翻页（一页 GRAPH_NODES_PER_PAGE 个实体；另两张图整张一屏，不翻页） */
+    private int graphPage = 0;
+    /** 图谱原始数据行（服务端结构化下发；行格式见 BlueprintBookNetworking#collectMemoryGraph） */
+    private List<String> graphLines = null;
+    /** 重要度直方图：下标 = 重要度 0~10，值 = 该档段落条数 */
+    private int[] graphHist = null;
+    /** 统计口径 {段落, 有效关系, 日记篇数, 永久段落, 长期段落, 日记最小日, 日记最大日} */
+    private long[] graphStat = null;
+    /** 时间轴条目 {起日, 止日, 级别码(0日/1三日/2周/3月), 字数} */
+    private List<int[]> graphTime = null;
+    /** 关系边 {主体, 谓词, 客体, 置信度文本} */
+    private List<String[]> graphEdge = null;
+    /** 实体节点 {名字, 度数}（按度数降序） */
+    private List<String[]> graphNode = null;
+    /** 关系网一页显示的实体数（圆环布局，再多会挤成一团） */
+    private static final int GRAPH_NODES_PER_PAGE = 12;
+
+    // ===== 实测九百七十五：日记本页（多级记忆索引 = 目录 + 逐日正文）=====
+    /** 日记原始行（服务端结构化下发；行格式见 BlueprintBookNetworking#collectDiary） */
+    private List<String> diaryLines = null;
+    /** 日记目录 {级别, 起日, 止日, 字数, 正文}（按时间倒序，最新在前） */
+    private List<String[]> diaryRec = null;
+    /** 目录翻页 / 选中的日记下标（-1 = 未选中）/ 正文翻页 */
+    private int diaryTocPage = 0;
+    private int diarySel = -1;
+    private int diaryTextPage = 0;
 
     /** 服务端下发记忆行后更新显示 */
     public void showMemoryLines(String maidUuid, List<String> lines) {
@@ -1417,25 +1602,273 @@ public class BlueprintBookScreen extends Screen {
         }
     }
 
-    /** v1.5.192：服务端下发调试快照后更新显示 */
-    public void showDebugSnapshot(String maidUuid, List<String> statusLines, List<String[]> rows) {
+    /** v1.5.192 / 实测九百七十四：服务端下发调试快照后更新显示（note = 上一步动作回执） */
+    public void showDebugSnapshot(String maidUuid, List<String> statusLines, List<String[]> rows, String note) {
         if (this.memoryMaidUuid != null && this.memoryMaidUuid.equals(maidUuid)) {
             this.debugStatusLines = statusLines == null ? new ArrayList<>() : statusLines;
             this.debugRows = rows == null ? new ArrayList<>() : rows;
-            if (this.debugSelected >= (this.debugRows == null ? 0 : this.debugRows.size())) {
-                this.debugSelected = -1;
+            // 选中项按稳定键重新定位；那条已不在列表里才清空选择
+            if (this.debugSelIndex() < 0) {
+                this.debugSelKey = null;
             }
             this.debugPage = 0;
             this.debugStatusPage = 0;
+            this.debugNote = note;
+            this.debugStamp = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ROOT)
+                    .format(new java.util.Date());
             this.rebuildButtons();
         }
     }
 
-    /** v1.5.192：发送调试快照请求（进入链路调试页/刷新时调用） */
+    /** 实测九百七十二：服务端下发图谱数据后解析并刷新（行格式：KIND|字段|…，坏行直接跳过） */
+    public void showMemoryGraph(String maidUuid, List<String> lines) {
+        if (this.memoryMaidUuid == null || !this.memoryMaidUuid.equals(maidUuid)) {
+            return;
+        }
+        List<String> src = lines == null ? new ArrayList<>() : lines;
+        this.graphLines = src;
+        this.graphHist = new int[11];
+        this.graphStat = new long[7];
+        this.graphTime = new ArrayList<>();
+        this.graphEdge = new ArrayList<>();
+        this.graphNode = new ArrayList<>();
+        for (String raw : src) {
+            if (raw == null) {
+                continue;
+            }
+            String[] f = raw.split("\\|", -1);
+            try {
+                switch (f[0]) {
+                    case "STAT" -> {
+                        for (int i = 0; i < 7 && i + 1 < f.length; i++) {
+                            this.graphStat[i] = Long.parseLong(f[i + 1]);
+                        }
+                    }
+                    case "HIST" -> {
+                        int b = Integer.parseInt(f[1]);
+                        if (b >= 0 && b <= 10) {
+                            this.graphHist[b] = Integer.parseInt(f[2]);
+                        }
+                    }
+                    case "TIME" -> this.graphTime.add(new int[]{Integer.parseInt(f[1]),
+                            Integer.parseInt(f[2]), Integer.parseInt(f[3]), Integer.parseInt(f[4])});
+                    case "EDGE" -> this.graphEdge.add(new String[]{f[1], f[2], f[3], f[4]});
+                    case "NODE" -> this.graphNode.add(new String[]{f[1], f[2]});
+                    default -> {
+                    }
+                }
+            } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookScreen", ignored);
+            }
+        }
+        this.graphPage = 0;
+        this.rebuildButtons();
+    }
+
+    /** 实测九百七十五：服务端下发日记行后解析并刷新（行格式：KIND|字段…，坏行直接跳过） */
+    public void showDiaryLines(String maidUuid, List<String> lines) {
+        if (this.memoryMaidUuid == null || !this.memoryMaidUuid.equals(maidUuid)) {
+            return;
+        }
+        this.diaryLines = lines == null ? new ArrayList<>() : lines;
+        this.diaryRec = new ArrayList<>();
+        for (String raw : this.diaryLines) {
+            if (raw == null) {
+                continue;
+            }
+            String[] f = raw.split("\\|", -1);
+            if (f.length < 6 || !"DIARY".equals(f[0])) {
+                continue;
+            }
+            this.diaryRec.add(new String[]{f[1], f[2], f[3], f[4], f[5]});
+        }
+        this.diaryTocPage = 0;
+        this.diaryTextPage = 0;
+        // 服务端已按时间倒序，默认就停在新的一篇上
+        this.diarySel = this.diaryRec.isEmpty() ? -1 : 0;
+        this.rebuildButtons();
+    }
+
+    /** 实测九百七十五：清掉日记缓存（换女仆或退出该女仆时调用——旧日记不能串到新人身上） */
+    private void clearDiary() {
+        this.diaryLines = null;
+        this.diaryRec = null;
+        this.diaryTocPage = 0;
+        this.diarySel = -1;
+        this.diaryTextPage = 0;
+    }
+
+    /** 实测九百七十五：请求日记数据（进日记页时调用） */
+    private void requestDiary() {
+        if (this.memoryMaidUuid == null) {
+            return;
+        }
+        PacketDistributor.sendToServer(
+                new BlueprintBookEntityPackets.MaidDiaryRequestPacket(this.memoryMaidUuid));
+    }
+
+    /** 实测九百七十五：日记本页左右两列的几何（渲染与按钮共用同一口径，页码才和按钮对得上） */
+    private int[] diaryLayout(int w, int h) {
+        int tocW = Math.max(96, w * 38 / 100);
+        int conX = 12 + tocW + 10;
+        int conW = Math.max(60, w - conX - 12);
+        return new int[]{12, tocW, conX, conW, h - 26};
+    }
+
+    /** 实测九百七十五：选中那篇的正文（当折行输入用；没选中返回空表） */
+    private java.util.List<String> diaryBody() {
+        java.util.List<String> one = new java.util.ArrayList<>();
+        if (this.diaryRec != null && this.diarySel >= 0 && this.diarySel < this.diaryRec.size()) {
+            one.add(this.diaryRec.get(this.diarySel)[4]);
+        }
+        return one;
+    }
+
+    /** 实测九百七十五：正文页数（按窗口宽度折行后算） */
+    private int diaryTextPages(int w, int h) {
+        int[] g = this.diaryLayout(w, h);
+        int top = CONTENT_TOP + 14;
+        int maxLines = Math.max(1, (g[4] - 4 - top) / TEXT_LINE_H);
+        int total = this.wrapLines(this.diaryBody(), g[3] - 4).size();
+        return Math.max(1, (total + maxLines - 1) / maxLines);
+    }
+
+    /** 实测九百七十五：左对齐小字（日记页标题/页码共用） */
+    private void diaryText(net.minecraft.client.gui.GuiGraphics graphics, String text, int x, int y, int color) {
+        graphics.drawString(this.font, Component.literal(text), x, y, color, false);
+    }
+
+    /** 实测九百七十五：日记本页按钮——左列目录（分页，点一条跳转）+ 两列页脚翻页 */
+    private void diaryViewButtons(int w, int h, int cx) {
+        int[] g = this.diaryLayout(w, h);
+        int top = CONTENT_TOP + 14;
+        if (this.diaryRec == null) {
+            this.graphicsHint("\u6b63\u5728\u7ffb\u5979\u7684\u65e5\u8bb0\u2026");
+            return;
+        }
+        if (this.diaryRec.isEmpty()) {
+            this.graphicsHint("\u5979\u8fd8\u6ca1\u6709\u65e5\u8bb0\u2014\u2014\u7761\u4e00\u89c9\u6216\u8de8\u5929\u540e\uff0c\u5979\u4f1a\u628a\u8fd9\u6bb5\u65f6\u95f4\u7684\u4e8b\u6574\u7406\u6210\u65e5\u8bb0");
+            return;
+        }
+        int maxToc = Math.max(1, (g[4] - 4 - top) / 19);
+        int tocPages = Math.max(1, (this.diaryRec.size() + maxToc - 1) / maxToc);
+        this.diaryTocPage = Math.min(this.diaryTocPage, tocPages - 1);
+        int start = this.diaryTocPage * maxToc;
+        int end = Math.min(this.diaryRec.size(), start + maxToc);
+        for (int i = start; i < end; i++) {
+            final int idx = i;
+            String[] r = this.diaryRec.get(i);
+            String label = (idx == this.diarySel ? "\u00a7e\u25b6 " : "\u00a77  ")
+                    + this.fitText("\u7b2c" + r[1] + "~" + r[2] + "\u5929 " + r[0] + "\u8bb0", g[1] - 14);
+            this.addRenderableWidget(Button.builder(Component.literal(label), b -> {
+                        this.diarySel = idx;
+                        this.diaryTextPage = 0;
+                        this.rebuildButtons();
+                    }).bounds(g[0], top + (i - start) * 19, g[1], 18).build());
+        }
+        if (tocPages > 1) {
+            if (this.diaryTocPage > 0) {
+                this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25c0"), b -> {
+                            this.diaryTocPage--;
+                            this.rebuildButtons();
+                        }).bounds(g[0], g[4], 20, 18).build());
+            }
+            if (this.diaryTocPage < tocPages - 1) {
+                this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25b6"), b -> {
+                            this.diaryTocPage++;
+                            this.rebuildButtons();
+                        }).bounds(g[0] + g[1] - 20, g[4], 20, 18).build());
+            }
+        }
+        int tp = this.diaryTextPages(w, h);
+        this.diaryTextPage = Math.min(this.diaryTextPage, tp - 1);
+        if (tp > 1) {
+            if (this.diaryTextPage > 0) {
+                this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25c0"), b -> {
+                            this.diaryTextPage--;
+                            this.rebuildButtons();
+                        }).bounds(g[2], g[4], 20, 18).build());
+            }
+            if (this.diaryTextPage < tp - 1) {
+                this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25b6"), b -> {
+                            this.diaryTextPage++;
+                            this.rebuildButtons();
+                        }).bounds(g[2] + g[3] - 20, g[4], 20, 18).build());
+            }
+        }
+    }
+
+    /** 实测九百七十五：日记本页渲染——左目录 + 右正文（都按窗口宽度折行分页） */
+    private void renderDiaryView(net.minecraft.client.gui.GuiGraphics graphics) {
+        this.drawCentered(graphics, "\u00a7e\u5973\u4ec6\u65e5\u8bb0 \u00b7 "
+                + (this.memoryMaidName == null ? "" : this.memoryMaidName)
+                + (this.diaryRec == null ? "\uff08\u8bf7\u6c42\u4e2d\u2026\uff09" : "\uff08\u5171 " + this.diaryRec.size() + " \u7bc7\uff09"),
+                PANEL_TITLE_Y, 0xFFFFFF);
+        this.drawCentered(graphics, "\u00a77\u5de6\u8fb9\u662f\u76ee\u5f55\uff0c\u70b9\u4e00\u5929\u770b\u90a3\u5929\u5979\u5199\u4e0b\u7684\u4e8b\uff1b\u53f3\u8fb9\u662f\u6b63\u6587",
+                PANEL_TITLE_Y + 8, 0x888888);
+        if (this.diaryRec == null || this.diaryRec.isEmpty()) {
+            if (this.maidEmptyText != null) {
+                this.diaryText(graphics, this.maidEmptyText, 12, CONTENT_TOP + 16, 0x888888);
+            }
+            return;
+        }
+        int[] g = this.diaryLayout(this.width, this.height);
+        int top = CONTENT_TOP + 14;
+        this.diaryText(graphics, "\u00a78\u76ee\u5f55\uff08\u6700\u65b0\u5728\u524d\uff09", g[0], CONTENT_TOP, 0x888888);
+        int maxToc = Math.max(1, (g[4] - 4 - top) / 19);
+        int tocPages = Math.max(1, (this.diaryRec.size() + maxToc - 1) / maxToc);
+        if (tocPages > 1) {
+            this.diaryText(graphics, "\u00a77\u7b2c" + (this.diaryTocPage + 1) + "/" + tocPages + " \u9875",
+                    g[0] + 24, g[4] + 5, 0xAAAAAA);
+        }
+        if (this.diarySel < 0 || this.diarySel >= this.diaryRec.size()) {
+            return;
+        }
+        String[] r = this.diaryRec.get(this.diarySel);
+        this.diaryText(graphics, "\u00a7e\u7b2c" + r[1] + "~" + r[2] + "\u5929 \u00b7 " + r[0] + "\u8bb0 \u00b7 " + r[3] + " \u5b57",
+                g[2], CONTENT_TOP, 0xFFFFFF);
+        java.util.List<String> body = this.wrapLines(this.diaryBody(), g[3] - 4);
+        int maxLines = Math.max(1, (g[4] - 4 - top) / TEXT_LINE_H);
+        int tp = Math.max(1, (body.size() + maxLines - 1) / maxLines);
+        int from = Math.min(this.diaryTextPage, tp - 1) * maxLines;
+        int y = top;
+        for (int i = from; i < Math.min(body.size(), from + maxLines); i++) {
+            this.diaryText(graphics, body.get(i), g[2], y, 0xDDDDDD);
+            y += TEXT_LINE_H;
+        }
+        if (tp > 1) {
+            this.diaryText(graphics, "\u00a77\u7b2c" + (this.diaryTextPage + 1) + "/" + tp + " \u9875",
+                    g[2] + 24, g[4] + 5, 0xAAAAAA);
+        }
+    }
+
+    /** 实测九百七十二：清掉图谱缓存（换女仆或退出该女仆时调用——旧数据不能串到新人身上） */
+    private void clearGraph() {
+        this.graphLines = null;
+        this.graphHist = null;
+        this.graphStat = null;
+        this.graphTime = null;
+        this.graphEdge = null;
+        this.graphNode = null;
+        this.graphPage = 0;
+    }
+
+    /** 实测九百七十二：请求图谱数据（进图谱页/刷新时调用） */
+    private void requestMemoryGraph() {
+        if (this.memoryMaidUuid == null) {
+            return;
+        }
+        PacketDistributor.sendToServer(
+                new BlueprintBookEntityPackets.MemoryGraphRequestPacket(this.memoryMaidUuid));
+    }
+
+    /** v1.5.192 / 实测九百七十四：发送调试快照请求（进入链路调试页或点刷新时调用）——
+     *  先给一句可见回执，否则点了刷新像没反应 */
     private void requestDebugSnapshot() {
         if (this.memoryMaidUuid == null) {
             return;
         }
+        this.debugNote = "\u6b63\u5728\u5237\u65b0\u2026";
+        this.rebuildButtons();
         PacketDistributor.sendToServer(
                 new BlueprintBookEntityPackets.MaidDebugRequestPacket(this.memoryMaidUuid));
     }
@@ -1471,30 +1904,63 @@ public class BlueprintBookScreen extends Screen {
                                 this.memoryLines = null;
                                 this.debugStatusLines = null;
                                 this.debugRows = null;
-                                this.debugSelected = -1;
+                                this.debugSelKey = null;
                                 this.memTab = 0;
+                                this.clearGraph();
+                                this.clearDiary();
                                 this.rebuildButtons();
                             })
                     .bounds(8, TOP_BTN_Y, 90, TOP_BTN_H).build());
             // v1.5.192：页内 tab（记忆 / 链路调试）
+            // 实测九百七十五：四个 tab 一组居中，总宽 46+50+46+50 + 三道 4px 缝 = 204
+            //（与三个 tab 时同外框，不与左侧「← 女仆列表」、右侧「清空记忆」抢位）
+            int tabW1 = 46;
+            int tabW2 = 50;
+            int tabW3 = 46;
+            int tabW4 = 50;
+            int tabGap = 4;
+            int tabX = cx - (tabW1 + tabW2 + tabW3 + tabW4 + tabGap * 3) / 2;
             this.addRenderableWidget(Button.builder(Component.literal(
-                            this.memTab == 0 ? "\u00a7e\u25cf 记忆" : "\u00a77记忆"),
+                            this.memTab == 0 ? "\u00a7e\u25cf \u8bb0\u5fc6" : "\u00a77\u8bb0\u5fc6"),
                             b -> {
                                 this.memTab = 0;
                                 this.rebuildButtons();
                             })
-                    .bounds(cx - 130, TOP_BTN_Y, 100, TOP_BTN_H).build());
+                    .bounds(tabX, TOP_BTN_Y, tabW1, TOP_BTN_H).build());
+            tabX += tabW1 + tabGap;
             this.addRenderableWidget(Button.builder(Component.literal(
-                            this.memTab == 1 ? "\u00a7e\u25cf 链路调试" : "\u00a77链路调试"),
+                            this.memTab == 1 ? "\u00a7e\u25cf \u8c03\u8bd5" : "\u00a77\u8c03\u8bd5"),
                             b -> {
                                 this.memTab = 1;
-                                this.debugSelected = -1;
+                                this.debugSelKey = null;
                                 this.debugStatusLines = null;
                                 this.debugRows = null;
                                 this.rebuildButtons();
                                 this.requestDebugSnapshot();
                             })
-                    .bounds(cx - 24, TOP_BTN_Y, 110, TOP_BTN_H).build());
+                    .bounds(tabX, TOP_BTN_Y, tabW2, TOP_BTN_H).build());
+            tabX += tabW2 + tabGap;
+            this.addRenderableWidget(Button.builder(Component.literal(
+                            this.memTab == 2 ? "\u00a7e\u25cf \u56fe\u8c31" : "\u00a77\u56fe\u8c31"),
+                            b -> {
+                                this.memTab = 2;
+                                this.graphMode = 0;
+                                this.clearGraph();
+                                this.clearDiary();
+                                this.rebuildButtons();
+                                this.requestMemoryGraph();
+                            })
+                    .bounds(tabX, TOP_BTN_Y, tabW3, TOP_BTN_H).build());
+            tabX += tabW3 + tabGap;
+            this.addRenderableWidget(Button.builder(Component.literal(
+                            this.memTab == 3 ? "\u00a7e\u25cf \u65e5\u8bb0" : "\u00a77\u65e5\u8bb0"),
+                            b -> {
+                                this.memTab = 3;
+                                this.clearDiary();
+                                this.rebuildButtons();
+                                this.requestDiary();
+                            })
+                    .bounds(tabX, TOP_BTN_Y, tabW4, TOP_BTN_H).build());
             // v1.5.103：清空该女仆全部记忆（段落/关系/画像）——确认框 + 服务端清空 + 刷新
             this.addRenderableWidget(Button.builder(Component.literal("\u00a7c清空记忆"),
                             b -> this.confirmClearMemory())
@@ -1504,11 +1970,24 @@ public class BlueprintBookScreen extends Screen {
                 this.debugViewButtons(w, h, cx);
                 return;
             }
+            if (this.memTab == 2) {
+                // ---- 记忆图谱页 ----
+                this.graphViewButtons(w, h, cx);
+                return;
+            }
+            if (this.memTab == 3) {
+                // ---- 实测九百七十五：日记本页 ----
+                this.diaryViewButtons(w, h, cx);
+                return;
+            }
         // v1.5.190：记忆行分页 + 高度自适应——旧版从 y=52 起无限画下去，
         // 行数一多就盖住底部按钮/翻页键；改为每页最多 8 行、底部翻页。
-        int maxLines = Math.max(4, (h - 30 - CONTENT_TOP - 20) / 10);
-        if (this.memoryLines != null && this.memoryLines.size() > maxLines) {
-            int pages = (this.memoryLines.size() + maxLines - 1) / maxLines;
+        // 实测九百七十一：翻页按**折行后的视觉行数**算，行高与渲染侧同口径（旧版这里 /10、
+        // 渲染侧 /12 —— 页数与实际可见行本就对不上，末页会被切掉）
+        int memVis = this.memoryLines == null ? 0 : this.wrapLines(this.memoryLines, w - 40).size();
+        int maxLines = Math.max(4, (h - 30 - CONTENT_TOP - 20) / TEXT_LINE_H);
+        if (this.memoryLines != null && memVis > maxLines) {
+            int pages = (memVis + maxLines - 1) / maxLines;
             this.memoryPage = Math.min(this.memoryPage, pages - 1);
             if (this.memoryPage > 0) {
                 this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"),
@@ -1558,7 +2037,9 @@ public class BlueprintBookScreen extends Screen {
                                 this.memTab = 0;
                                 this.debugStatusLines = null;
                                 this.debugRows = null;
-                                this.debugSelected = -1;
+                                this.debugSelKey = null;
+                                this.clearGraph();
+                                this.clearDiary();
                                 this.rebuildButtons();
                                 // 请求记忆
                                 PacketDistributor.sendToServer(
@@ -1636,6 +2117,16 @@ public class BlueprintBookScreen extends Screen {
                 this.renderDebugView(graphics);
                 return;
             }
+            if (this.memTab == 2) {
+                // 实测九百七十二：记忆图谱页（重要度分布 / 时间轴 / 关系网络）
+                this.renderGraphView(graphics);
+                return;
+            }
+            if (this.memTab == 3) {
+                // 实测九百七十五：日记本页（左目录 + 右逐日正文）
+                this.renderDiaryView(graphics);
+                return;
+            }
             this.drawCentered(graphics, "\u00a7e女仆记忆 · "
                     + (this.memoryMaidName == null ? "" : this.memoryMaidName)
                     + (this.memoryLines == null ? "（请求中…）" : ""), PANEL_TITLE_Y, 0xFFFFFF);
@@ -1645,20 +2136,21 @@ public class BlueprintBookScreen extends Screen {
                 return;
             }
             // 每页行数按可用高度自适应（v1.5.190：旧版固定 8 行，小窗口盖底）
-            int maxLines = Math.max(4, (this.height - 30 - CONTENT_TOP - 20) / 12);
+            // 实测九百七十一：长记忆 / 记忆日记先按宽度折行再分页——不再"一行截断看不全"
+            java.util.List<String> vis = this.wrapLines(this.memoryLines, this.width - 40);
+            int maxLines = Math.max(4, (this.height - 30 - CONTENT_TOP - 20) / TEXT_LINE_H);
             int y = CONTENT_TOP + 12;
             int start = this.memoryPage * maxLines;
-            int end = Math.min(this.memoryLines.size(), start + maxLines);
+            int end = Math.min(vis.size(), start + maxLines);
             for (int i = start; i < end; i++) {
-                String line = this.fitText(this.memoryLines.get(i), this.width - 40);
-                graphics.drawString(this.font, Component.literal(line),
+                graphics.drawString(this.font, Component.literal(vis.get(i)),
                         20, y, 0xFFFFFF, false);
-                y += 12;
+                y += TEXT_LINE_H;
             }
-            if (this.memoryLines.size() > maxLines) {
+            if (vis.size() > maxLines) {
                 // v1.1.0 实测二十五：页码画在两箭头中间行（h-22）
                 this.drawCentered(graphics, "\u00a77第" + (this.memoryPage + 1) + "/"
-                        + ((this.memoryLines.size() + maxLines - 1) / maxLines) + " 页",
+                        + ((vis.size() + maxLines - 1) / maxLines) + " 页",
                         this.height - 22, 0xAAAAAA);
             }
             return;
@@ -1692,184 +2184,509 @@ public class BlueprintBookScreen extends Screen {
 
     // ================= v1.5.192 链路调试页（工作链路 + 手动调试记忆） =================
 
-    /** 链路调试页按钮：状态行区（顶部）+ 可调试对象行（分页，点击选中）+ 动作按钮组 */
+    /** 链路调试页按钮：状态区（默认收起）+ 记忆列表（紧凑整页）+ 两行动作按钮 + 翻页/跳转 */
     private void debugViewButtons(int w, int h, int cx) {
-        int maxStatus = Math.max(4, (h - 30 - CONTENT_TOP - 120) / 12);
-        // v1.2.1：状态区分页 ◀/▶（右上角，仅在状态行超 maxStatus 时出现——小窗口不丢行）
-        if (this.debugStatusLines != null && this.debugStatusLines.size() > maxStatus) {
-            int sPages = (this.debugStatusLines.size() + maxStatus - 1) / maxStatus;
-            this.debugStatusPage = Math.min(this.debugStatusPage, sPages - 1);
-            if (this.debugStatusPage > 0) {
-                this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"),
-                                b -> {
-                                    this.debugStatusPage--;
-                                    this.rebuildButtons();
-                                })
-                        .bounds(w - 58, CONTENT_TOP + 2, 26, 14).build());
-            }
-            if (this.debugStatusPage < sPages - 1) {
-                this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"),
-                                b -> {
-                                    this.debugStatusPage++;
-                                    this.rebuildButtons();
-                                })
-                        .bounds(w - 28, CONTENT_TOP + 2, 26, 14).build());
+        int statusTop = CONTENT_TOP + 8;
+        int maxStatus = Math.max(3, (h - 100 - statusTop) / TEXT_LINE_H);
+        java.util.List<String> statusSrc = this.debugStatusSource();
+        int statusPages = 1;
+        int statusShown = 0;
+        if (this.debugStatusOpen) {
+            java.util.List<String> vis = this.wrapLines(statusSrc, w - 130);
+            statusPages = Math.max(1, (vis.size() + maxStatus - 1) / maxStatus);
+            this.debugStatusPage = Math.min(this.debugStatusPage, statusPages - 1);
+            statusShown = Math.min(maxStatus, Math.max(0, vis.size() - this.debugStatusPage * maxStatus));
+            if (statusPages > 1) {
+                if (this.debugStatusPage > 0) {
+                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25c0"), b -> {
+                                this.debugStatusPage--;
+                                this.rebuildButtons();
+                            }).bounds(w - 58, statusTop - 2, 26, 14).build());
+                }
+                if (this.debugStatusPage < statusPages - 1) {
+                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25b6"), b -> {
+                                this.debugStatusPage++;
+                                this.rebuildButtons();
+                            }).bounds(w - 28, statusTop - 2, 26, 14).build());
+                }
             }
         }
-        // 状态行分页（statusLines 可能比一行高——单独页码）
-        // 状态区 + 对象区共用 debugPage（对象区为主，状态区贴顶固定显示前几行）
+        // 状态开关（左下角；展开时按钮上直接写第几页）
+        String toggle = this.debugStatusOpen
+                ? (statusPages > 1 ? "\u00a7e\u72b6\u6001 " + (this.debugStatusPage + 1) + "/" + statusPages + " \u25b4"
+                                   : "\u00a7e\u72b6\u6001 \u25b4")
+                : "\u00a77\u72b6\u6001 \u25be";
+        this.addRenderableWidget(Button.builder(Component.literal(toggle), b -> {
+                    this.debugStatusOpen = !this.debugStatusOpen;
+                    this.rebuildButtons();
+                }).bounds(8, h - 24, 64, 16).build());
         if (this.debugStatusLines == null) {
-            this.graphicsHint("调试数据请求中…");
+            this.graphicsHint("\u6b63\u5728\u5411\u5979\u8981\u4e00\u4efd\u6700\u65b0\u72b6\u6001\u2026");
+            return;
         }
+        int pages = 1;
         if (this.debugRows == null || this.debugRows.isEmpty()) {
             if (this.debugRows != null) {
-                this.graphicsHint("没有可调试的记忆对象（多对话积累后出现）");
+                this.graphicsHint("\u5979\u8fd8\u6ca1\u6709\u80fd\u8c03\u8bd5\u7684\u8bb0\u5fc6\u2014\u2014\u591a\u548c\u5979\u804a\u804a\u5929\u3001\u4e00\u8d77\u5e72\u6d3b\uff0c\u8bb0\u5fc6\u4f1a\u6162\u6162\u957f\u51fa\u6765");
             }
         } else {
-            // 【实测七百九十·点2】行区起点/容量按**实际显示的状态行数**算，且必须给底部
-            // 动作按钮行（y=h-48、高 18）留出空间。旧公式有两处错：
-            // ① 起点用 maxStatus（**容量**，如 13）而不是实际显示行数（如 7）→ 行区整体
-            //    被压到 y≈230 起步；
-            // ② maxRows 里预留的 150px 没覆盖 maxStatus*12 的状态区高度 → 在小窗口
-            //    （GUI 缩放后 height≈360）算出 8 行，行区一路铺到 y≈335，而动作按钮在
-            //    y=312 → **按钮直接压在记忆行上**（玩家截图：按钮行卡在列表中间，按钮
-            //    下面还露出两行）。把 GUI 缩放调小没用——两项都随 height 一起缩。
-            int statusShown = this.debugStatusLines == null
-                    ? 0 : Math.min(maxStatus, this.debugStatusLines.size());
-            int rowsTop = CONTENT_TOP + 12 + statusShown * 12 + 10;
-            int rowsBottom = h - 50; // 动作按钮行(h-48) 上方留 2px
-            int maxRows = Math.max(1, (rowsBottom - rowsTop) / 15);
-            int pages = (this.debugRows.size() + maxRows - 1) / maxRows;
+            int rowsTop = statusTop + (this.debugStatusOpen ? statusShown * TEXT_LINE_H + 8 : 0);
+            int rowsBottom = h - 68;
+            int pitch = DEBUG_ROW_H + 1;
+            int maxRows = Math.max(1, (rowsBottom - rowsTop) / pitch);
+            this.debugMaxRows = maxRows;
+            pages = (this.debugRows.size() + maxRows - 1) / maxRows;
+            final int lastPage = pages - 1;
             this.debugPage = Math.min(this.debugPage, pages - 1);
             int start = this.debugPage * maxRows;
             int end = Math.min(this.debugRows.size(), start + maxRows);
             int y = rowsTop;
             int btnW = Math.max(120, w - 40);
             for (int i = start; i < end; i++) {
-                final int idx = i;
                 final String[] r = this.debugRows.get(i);
-                String line = (r[0].equals("rel") ? "\u00a7d[关系 " : "\u00a7e[")
-                        + r[2] + "] " + r[3];
-                boolean sel = idx == this.debugSelected;
+                final String key = r[1];
+                boolean sel = key.equals(this.debugSelKey);
                 this.addRenderableWidget(Button.builder(Component.literal(
-                                (sel ? "\u00a7e\u25b6 " : "\u00a77  ") + this.fitText(line, 200)),
+                                (sel ? "\u00a7e\u25b6 " : "\u00a77  ") + this.fitText(this.debugRowDigest(r), btnW - 30)),
                                 b -> {
-                                    this.debugSelected = (this.debugSelected == idx) ? -1 : idx;
+                                    this.debugSelKey = key.equals(this.debugSelKey) ? null : key;
                                     this.rebuildButtons();
-                                })
-                        .bounds(cx - btnW / 2, y, btnW, 14).build());
-                y += 15;
+                                }).bounds(cx - btnW / 2, y, btnW, DEBUG_ROW_H).build());
+                y += pitch;
             }
-            // 翻页（v1.1.0 实测二十五：改 20 宽箭头，页码画在箭头中间行）
             if (pages > 1) {
                 if (this.debugPage > 0) {
-                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"),
-                                    b -> {
-                                        this.debugPage--;
-                                        this.rebuildButtons();
-                                    }).bounds(cx - 40, h - 26, 20, 18).build());
+                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u23ee"), b -> {
+                                this.debugPage = 0;
+                                this.rebuildButtons();
+                            }).bounds(cx - 84, h - 24, 22, 16).build());
+                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25c0"), b -> {
+                                this.debugPage--;
+                                this.rebuildButtons();
+                            }).bounds(cx - 58, h - 24, 22, 16).build());
                 }
                 if (this.debugPage < pages - 1) {
-                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"),
-                                    b -> {
-                                        this.debugPage++;
-                                        this.rebuildButtons();
-                                    }).bounds(cx + 20, h - 26, 20, 18).build());
+                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25b6"), b -> {
+                                this.debugPage++;
+                                this.rebuildButtons();
+                            }).bounds(cx + 36, h - 24, 22, 16).build());
+                    this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u23ed"), b -> {
+                                this.debugPage = lastPage;
+                                this.rebuildButtons();
+                            }).bounds(cx + 62, h - 24, 22, 16).build());
                 }
             }
         }
-        // 动作按钮组（作用于选中行；未选中提示）
-        // v1.5.219：刷新并入动作组统一布局——旧版刷新固定 x=8 且与动作组同
-        // y=h-48，窗口窄时动作组占满整行（ax 钳到 8）→ 刷新按钮直接压住"↑重要度"
-        int ay = h - 48;
-        String[][] actions = {
-                {"\u00a7e↑重要度", "salience_up"},
-                {"\u00a7e↓重要度", "salience_down"},
-                {"\u00a7c标记删除", "delete"},
-                {"\u00a7a恢复", "restore"},
-                {"\u00a7b强化", "reinforce"},
-                {"\u00a7d停用关系", "deactivate_rel"},
-                {"\u00a7f↻ 刷新", "refresh"},
-        };
-        int bw = 76;
-        int gap = 4;
-        int totalW = actions.length * bw + (actions.length - 1) * gap;
-        int ax = cx - totalW / 2;
-        if (ax < 8) {
-            bw = Math.max(56, (w - 16 - (actions.length - 1) * gap) / actions.length);
-            ax = cx - (actions.length * bw + (actions.length - 1) * gap) / 2;
+        // 动作按钮：两行四列；只对选中的这条真用得上的那些点亮
+        String[] r = this.debugSelRow();
+        String st = this.debugSelState();
+        boolean isPara = r != null && "para".equals(r[0]);
+        boolean isRel = r != null && "rel".equals(r[0]);
+        boolean live = isPara && !"deleted".equals(st);
+        boolean relOn = isRel && !"inactive".equals(st);
+        // 实测九百七十七【启用关系按钮点不动】：旧版没选中关系行时按钮照样写着「启用关系」却是灰的，
+        // 玩家不知道该先选中什么。现在分三态——选中关系行 = 停用/启用；本页有关系但没选中 = 跳过去；
+        // 一条关系都没有 = 保持灰，并把原因写进上方提示行。
+        int relCount = this.debugRelCount();
+        String relLabel;
+        boolean relUsable;
+        String relAction;
+        if (isRel) {
+            relLabel = relOn ? "\u505c\u7528\u5173\u7cfb" : "\u542f\u7528\u5173\u7cfb";
+            relUsable = true;
+            relAction = relOn ? "deactivate_rel" : "activate_rel";
+        } else if (relCount > 0) {
+            relLabel = "\u8df3\u5230\u5173\u7cfb \u25b8";
+            relUsable = true;
+            relAction = "goto_rel";
+        } else {
+            relLabel = "\u5173\u7cfb\u64cd\u4f5c";
+            relUsable = false;
+            relAction = "activate_rel";
         }
-        for (int i = 0; i < actions.length; i++) {
-            final String act = actions[i][1];
-            this.addRenderableWidget(Button.builder(Component.literal(actions[i][0]),
-                            b -> {
-                                if ("refresh".equals(act)) {
-                                    this.requestDebugSnapshot();
-                                } else {
-                                    this.sendDebugAction(act);
-                                }
-                            })
-                    .bounds(ax + i * (bw + gap), ay, bw, 18).build());
+        int gap = 4;
+        int bw = Math.max(56, Math.min(96, (w - 24 - 3 * gap) / 4));
+        int ax = Math.max(8, cx - (4 * bw + 3 * gap) / 2);
+        int ay1 = h - 64;
+        int ay2 = h - 44;
+        this.debugActionButton("\u2191 \u91cd\u8981\u5ea6", "salience_up", live, ax, ay1, bw, gap, 0);
+        this.debugActionButton("\u2193 \u91cd\u8981\u5ea6", "salience_down", live, ax, ay1, bw, gap, 1);
+        this.debugActionButton("\u5f3a\u5316", "reinforce", live, ax, ay1, bw, gap, 2);
+        this.debugActionButton("\u524a\u5f31", "weaken", live, ax, ay1, bw, gap, 3);
+        this.debugActionButton("\u6807\u4e3a\u4f5c\u5e9f", "delete", live, ax, ay2, bw, gap, 0);
+        this.debugActionButton("\u6062\u590d", "restore", isPara && "deleted".equals(st), ax, ay2, bw, gap, 1);
+        this.debugActionButton(relLabel, relAction, relUsable, ax, ay2, bw, gap, 2);
+        this.debugActionButton("\u21bb \u5237\u65b0", "refresh", true, ax, ay2, bw, gap, 3);
+    }
+
+    /** 实测九百七十四：动作按钮统一样式——用不上的置灰禁用而不是藏起来，
+     *  一眼看出选中的这一条不支持该操作 */
+    private void debugActionButton(String label, String action, boolean usable,
+                                   int ax, int y, int bw, int gap, int col) {
+        Button b = Button.builder(Component.literal(label), btn -> {
+                    if ("refresh".equals(action)) {
+                        this.requestDebugSnapshot();
+                    } else if ("goto_rel".equals(action)) {
+                        this.selectFirstRelation();
+                    } else {
+                        this.sendDebugAction(action);
+                    }
+                }).bounds(ax + col * (bw + gap), y, bw, 18).build();
+        b.active = usable;
+        this.addRenderableWidget(b);
+    }
+
+    /** 实测九百七十七：本页关系条目数（调试列表里 kind=="rel" 的行） */
+    private int debugRelCount() {
+        if (this.debugRows == null) {
+            return 0;
+        }
+        int n = 0;
+        for (String[] r : this.debugRows) {
+            if ("rel".equals(r[0])) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /** 实测九百七十七：把第一条关系选中并翻到它所在的页——「启用关系」点不动时的直达入口 */
+    private void selectFirstRelation() {
+        if (this.debugRows == null) {
+            return;
+        }
+        for (int i = 0; i < this.debugRows.size(); i++) {
+            if ("rel".equals(this.debugRows.get(i)[0])) {
+                this.debugSelKey = this.debugRows.get(i)[1];
+                this.debugNote = "已跳到第一条关系——点下面那颗按钮即可停用 / 启用它";
+                this.debugPage = i / Math.max(1, this.debugMaxRows);
+                this.rebuildButtons();
+                return;
+            }
         }
     }
 
-    /** 发送调试动作（选中行未选中时聊天提示） */
+    /** 实测九百七十四：列表里一行的中文摘要（内部字段与英文长文不再突脸；全文看上方选中的这条） */
+    private String debugRowDigest(String[] r) {
+        String st = r.length > 4 && r[4] != null ? r[4] : "";
+        StringBuilder sb = new StringBuilder();
+        if ("deleted".equals(st)) {
+            sb.append("\u00a7c\u3010\u5df2\u4f5c\u5e9f\u3011");
+        } else if ("inactive".equals(st)) {
+            sb.append("\u00a75\u3010\u5df2\u505c\u7528\u3011");
+        }
+        sb.append("rel".equals(r[0]) ? "\u00a7d\u5173\u7cfb \u00a77" : "\u00a7f\u8bb0\u5fc6 \u00a77").append(r[2]).append(" \u00a78| \u00a77");
+        String t = r[3] == null ? "" : r[3];
+        if (t.length() > 40) {
+            int cut = 40;
+            if (Character.isHighSurrogate(t.charAt(cut - 1))) {
+                cut--;
+            }
+            t = t.substring(0, cut) + "\u2026";
+        }
+        return sb.append(t).toString();
+    }
+
+    /** 发送调试动作（没选中时在面板内提示，不刷聊天栏） */
     private void sendDebugAction(String action) {
-        if (this.debugSelected < 0 || this.debugRows == null
-                || this.debugSelected >= this.debugRows.size()) {
-            this.chatHint("\u00a77先点击选中一行记忆再执行动作");
+        String[] r = this.debugSelRow();
+        if (r == null) {
+            this.debugNote = "\u5148\u70b9\u4e0a\u9762\u4e00\u884c\u9009\u4e2d\uff0c\u518d\u7528\u4e0b\u9762\u7684\u6309\u94ae";
+            this.rebuildButtons();
             return;
         }
-        String[] r = this.debugRows.get(this.debugSelected);
         PacketDistributor.sendToServer(
                 new BlueprintBookEntityPackets.MaidDebugActionPacket(
                         this.memoryMaidUuid, action, r[1]));
+        this.debugNote = "\u5df2\u53d1\u9001\u2026";
     }
 
     /** 链路调试页渲染 */
     private void renderDebugView(net.minecraft.client.gui.GuiGraphics graphics) {
-        this.drawCentered(graphics, "\u00a7e链路调试 · "
+        this.drawCentered(graphics, "\u00a7e\u94fe\u8def\u8c03\u8bd5 \u00b7 "
                 + (this.memoryMaidName == null ? "" : this.memoryMaidName)
-                + (this.debugStatusLines == null ? "（请求中…）" : ""), PANEL_TITLE_Y, 0xFFFFFF);
-        this.drawCentered(graphics, "\u00a77点击下方记忆行选中，再用底部按钮调试（↑↓重要度/删除/恢复/强化/停用关系）",
-                PANEL_TITLE_Y + 8, 0x888888);
+                + (this.debugStatusLines == null ? "\uff08\u8bf7\u6c42\u4e2d\u2026\uff09" : ""), PANEL_TITLE_Y, 0xFFFFFF);
+        this.drawCentered(graphics, this.debugContextHint(), PANEL_TITLE_Y + 8, 0x888888);
+        String top = this.debugTopLine();
+        if (!top.isEmpty()) {
+            this.drawCentered(graphics, top, PANEL_TITLE_Y + 18, 0x888888);
+        }
         if (this.debugStatusLines == null) {
             return;
         }
-        // 状态区（分页——小窗口状态行超 maxStatus 时 ◀/▶ 翻页；v1.2.1）
-        int maxStatus = Math.max(4, (this.height - 30 - CONTENT_TOP - 120) / 12);
-        int sPages = (this.debugStatusLines.size() + maxStatus - 1) / maxStatus;
-        if (sPages > 1) {
+        int statusTop = CONTENT_TOP + 8;
+        int statusShown = 0;
+        if (this.debugStatusOpen) {
+            int maxStatus = Math.max(3, (this.height - 100 - statusTop) / TEXT_LINE_H);
+            java.util.List<String> vis = this.wrapLines(this.debugStatusSource(), this.width - 130);
+            int sPages = Math.max(1, (vis.size() + maxStatus - 1) / maxStatus);
             this.debugStatusPage = Math.min(this.debugStatusPage, sPages - 1);
-        }
-        int y = CONTENT_TOP + 4;
-        int sStart = this.debugStatusPage * maxStatus;
-        int n = Math.min(this.debugStatusLines.size() - sStart, maxStatus);
-        // 状态翻页按钮在右侧时给文本留出右缘
-        int lineW = sPages > 1 ? this.width - 130 : this.width - 40;
-        for (int i = 0; i < n; i++) {
-            String line = this.fitText(this.debugStatusLines.get(sStart + i), lineW);
-            graphics.drawString(this.font, Component.literal(line),
-                    12, y, 0xDDDDDD, false);
-            y += 12;
-        }
-        // 对象行（分页，选中高亮由按钮文本承载；这里画行下标提示）
-        if (this.debugRows != null && !this.debugRows.isEmpty()) {
-            // 【实测七百九十·点2】与 debugViewButtons 同一口径（实际状态行数 + 给动作按钮
-            // 行留位），否则页码会按"虚高的行数"算，翻页数与实际可见行对不上。
-            int statusShown = this.debugStatusLines == null
-                    ? 0 : Math.min(maxStatus, this.debugStatusLines.size());
-            int rowsTop = CONTENT_TOP + 12 + statusShown * 12 + 10;
-            int maxRows = Math.max(1, (this.height - 50 - rowsTop) / 15);
-            int pages = (this.debugRows.size() + maxRows - 1) / maxRows;
-            int start = this.debugPage * maxRows;
-            int end = Math.min(this.debugRows.size(), start + maxRows);
-            if (pages > 1) {
-                // v1.5.219 + v1.1.0 实测二十五：页码画在翻页箭头中间行（h-22）——
-                // 箭头 20px 在两侧，任何页码宽度不重叠
-                this.drawCentered(graphics, "\u00a77第" + (this.debugPage + 1) + "/" + pages + " 页",
-                        this.height - 22, 0xAAAAAA);
+            int sStart = this.debugStatusPage * maxStatus;
+            int n = Math.min(vis.size() - sStart, maxStatus);
+            int y = statusTop;
+            for (int i = 0; i < n; i++) {
+                graphics.drawString(this.font, Component.literal(vis.get(sStart + i)),
+                        12, y, 0xDDDDDD, false);
+                y += TEXT_LINE_H;
             }
+            statusShown = n;
+        }
+        if (this.debugRows != null && !this.debugRows.isEmpty()) {
+            int rowsTop = statusTop + (this.debugStatusOpen ? statusShown * TEXT_LINE_H + 8 : 0);
+            int maxRows = Math.max(1, (this.height - 68 - rowsTop) / (DEBUG_ROW_H + 1));
+            int pages = (this.debugRows.size() + maxRows - 1) / maxRows;
+            if (pages > 1) {
+                this.drawCentered(graphics, "\u00a77\u7b2c" + (this.debugPage + 1) + "/" + pages + " \u9875",
+                        this.height - 20, 0xAAAAAA);
+            }
+        }
+        if (this.maidEmptyText != null) {
+            graphics.drawString(this.font, Component.literal(this.maidEmptyText),
+                    12, CONTENT_TOP + 30, 0x888888, false);
+        }
+    }
+
+    // ============ 实测九百七十二：记忆图谱页（三张图共用一块内容区） ============
+
+    /** 图谱页按钮：三张图切换 + 关系网翻页（另两张整张一屏） */
+    private void graphViewButtons(int w, int h, int cx) {
+        String[] labels = {"重要度分布", "记忆时间轴", "关系网络"};
+        int bw = 84;
+        int gap = 4;
+        int total = labels.length * bw + (labels.length - 1) * gap;
+        int x = cx - total / 2;
+        for (int i = 0; i < labels.length; i++) {
+            final int mode = i;
+            boolean on = this.graphMode == i;
+            this.addRenderableWidget(Button.builder(Component.literal(on ? "\u00a7e\u25cf " + labels[i] : "\u00a77" + labels[i]),
+                            b -> {
+                                this.graphMode = mode;
+                                this.graphPage = 0;
+                                this.rebuildButtons();
+                            })
+                    .bounds(x, h - 46, bw, 16).build());
+            x += bw + gap;
+        }
+        int nodeCount = this.graphNode == null ? 0 : this.graphNode.size();
+        int pages = Math.max(1, (nodeCount + GRAPH_NODES_PER_PAGE - 1) / GRAPH_NODES_PER_PAGE);
+        if (this.graphMode == 2 && pages > 1) {
+            this.graphPage = Math.min(this.graphPage, pages - 1);
+            if (this.graphPage > 0) {
+                this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"),
+                                b -> {
+                                    this.graphPage--;
+                                    this.rebuildButtons();
+                                }).bounds(cx - 40, h - 26, 20, 20).build());
+            }
+            if (this.graphPage < pages - 1) {
+                this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"),
+                                b -> {
+                                    this.graphPage++;
+                                    this.rebuildButtons();
+                                }).bounds(cx + 20, h - 26, 20, 20).build());
+            }
+        }
+    }
+
+    /** 图谱页渲染：标题 → 统计 → 当前那张图 */
+    private void renderGraphView(net.minecraft.client.gui.GuiGraphics graphics) {
+        this.drawCentered(graphics, "\u00a7e记忆图谱 · "
+                + (this.memoryMaidName == null ? "" : this.memoryMaidName)
+                + (this.graphLines == null ? "（请求中…）" : ""), PANEL_TITLE_Y, 0xFFFFFF);
+        if (this.graphLines == null) {
+            return;
+        }
+        long[] st = this.graphStat == null ? new long[7] : this.graphStat;
+        this.drawCentered(graphics, "\u00a77段落 " + st[0] + " · 关系 " + st[1] + " · 日记 " + st[2]
+                        + " · 永久 " + st[3] + " · 长期 " + st[4]
+                        + (st[2] > 0 ? " · 覆盖第" + st[5] + "~" + st[6] + "天" : ""),
+                PANEL_TITLE_Y + 8, 0x888888);
+        int x0 = 16;
+        int x1 = this.width - 16;
+        int yTop = CONTENT_TOP + 4;
+        int yBot = this.height - 52;
+        if (x1 - x0 < 80 || yBot - yTop < 44) {
+            return; // 窗口太矮：宁可不画，也不画出屏幕
+        }
+        switch (this.graphMode) {
+            case 1 -> this.drawTimeline(graphics, x0, x1, yTop, yBot);
+            case 2 -> this.drawRelationNet(graphics, x0, x1, yTop, yBot);
+            default -> this.drawSalienceHist(graphics, x0, x1, yTop, yBot);
+        }
+    }
+
+    /** 图 1·重要度分布：横轴 0~10 档，柱高 = 该档段落条数（柱顶标条数、柱底标档位） */
+    private void drawSalienceHist(net.minecraft.client.gui.GuiGraphics graphics,
+                                  int x0, int x1, int yTop, int yBot) {
+        int[] hist = this.graphHist == null ? new int[11] : this.graphHist;
+        int max = 1;
+        int total = 0;
+        for (int c : hist) {
+            max = Math.max(max, c);
+            total += c;
+        }
+        if (total == 0) {
+            this.drawCentered(graphics, "\u00a77还没有记忆段落——多和她对话、一起做事后再回来看看",
+                    (yTop + yBot) / 2, 0x888888);
+            return;
+        }
+        graphics.drawString(this.font, Component.literal("\u00a77横轴＝重要度档位（越高越容易被想起），柱高＝该档段落条数"),
+                x0, yTop - 2, 0x888888, false);
+        int baseY = yBot - 12;
+        int topY = yTop + 10;
+        int areaH = Math.max(10, baseY - topY);
+        int slot = (x1 - x0) / 11;
+        int barW = Math.max(4, slot - 6);
+        for (int i = 0; i <= 10; i++) {
+            int bx = x0 + slot * i + slot / 2;
+            int hgt = hist[i] == 0 ? 0 : Math.max(2, (int) ((long) areaH * hist[i] / max));
+            int left = bx - barW / 2;
+            int right = left + barW;
+            int color = i >= 8 ? 0xE0FFC83D : (i >= 5 ? 0xC055DD55 : 0xC0AAAAAA);
+            if (hgt > 0) {
+                graphics.fill(left, baseY - hgt, right, baseY, color);
+            } else {
+                graphics.fill(left, baseY - 1, right, baseY, 0x33AAAAAA);
+            }
+            String n = String.valueOf(hist[i]);
+            graphics.drawString(this.font, Component.literal(n), bx - this.font.width(n) / 2, baseY - hgt - 10,
+                    hist[i] > 0 ? 0xCCCCCC : 0x666666, false);
+            String b = String.valueOf(i);
+            graphics.drawString(this.font, Component.literal(b), bx - this.font.width(b) / 2, baseY + 2,
+                    i >= 8 ? 0xFFC83D : 0x999999, false);
+        }
+    }
+
+    /** 图 2·记忆时间轴：横轴 = 游戏日，四条泳道 = 日/3日/周/月四级日记，色条 = 一篇日记的覆盖区间 */
+    private void drawTimeline(net.minecraft.client.gui.GuiGraphics graphics,
+                              int x0, int x1, int yTop, int yBot) {
+        if (this.graphTime == null || this.graphTime.isEmpty()) {
+            this.drawCentered(graphics, "\u00a77还没有日记——睡一觉或跨天后她才会整理出记忆日记",
+                    (yTop + yBot) / 2, 0x888888);
+            return;
+        }
+        int minDay = Integer.MAX_VALUE;
+        int maxDay = Integer.MIN_VALUE;
+        for (int[] t : this.graphTime) {
+            minDay = Math.min(minDay, t[0]);
+            maxDay = Math.max(maxDay, t[1]);
+        }
+        maxDay = Math.max(maxDay, minDay);
+        int span = Math.max(1, maxDay - minDay + 1);
+        String[] laneName = {"日", "3日", "周", "月"};
+        int[] laneColor = {0xC05AA9E8, 0xC055DD55, 0xC0FFAA33, 0xC0BB66DD};
+        int gutter = 30;
+        int gx0 = x0 + gutter;
+        int axisY = yBot - 10;
+        int laneH = Math.max(11, (axisY - yTop) / 4);
+        int barH = Math.max(2, Math.min(6, laneH / 3));
+        graphics.drawString(this.font, Component.literal("\u00a77横轴＝游戏日（D 数字）；四条泳道＝日/3日/周/月日记，色条越长＝覆盖天数越多"),
+                x0, yTop - 2, 0x888888, false);
+        for (int l = 0; l < 4; l++) {
+            int ly = yTop + l * laneH;
+            graphics.fill(x0, ly + laneH - 1, x1, ly + laneH, 0x22FFFFFF);
+            graphics.drawString(this.font, Component.literal("\u00a77" + laneName[l]), x0 + 2, ly + 2, 0x999999, false);
+        }
+        int tickStep = Math.max(1, span / 8);
+        for (int d = minDay; d <= maxDay; d += tickStep) {
+            int tx = gx0 + (int) ((long) (x1 - gx0) * (d - minDay) / span);
+            graphics.fill(tx, yTop, tx + 1, axisY, 0x15FFFFFF);
+            graphics.drawString(this.font, Component.literal("D" + d), tx, axisY + 1, 0x888888, false);
+        }
+        int[] laneSub = new int[4];
+        int perLane = Math.max(1, (laneH - 4) / (barH + 1));
+        for (int[] t : this.graphTime) {
+            int l = Math.max(0, Math.min(3, t[2]));
+            int bx = gx0 + (int) ((long) (x1 - gx0) * (t[0] - minDay) / span);
+            int bx2 = gx0 + (int) ((long) (x1 - gx0) * (t[1] - minDay + 1) / span);
+            if (bx2 <= bx) {
+                bx2 = bx + 2;
+            }
+            int sub = laneSub[l]++;
+            int by = yTop + l * laneH + 2 + (sub % perLane) * (barH + 1);
+            graphics.fill(bx, by, Math.min(bx2, x1), by + barH, laneColor[l]);
+        }
+    }
+
+    /** 图 3·关系网络：实体排在圆上、连线 = 关系（越亮越可信），一页 GRAPH_NODES_PER_PAGE 个实体 */
+    private void drawRelationNet(net.minecraft.client.gui.GuiGraphics graphics,
+                                 int x0, int x1, int yTop, int yBot) {
+        List<String[]> nodes = this.graphNode == null ? new ArrayList<>() : this.graphNode;
+        if (nodes.isEmpty()) {
+            this.drawCentered(graphics, "\u00a77还没有关系三元组——和她多聊些人和事，关系网会自己长出来",
+                    (yTop + yBot) / 2, 0x888888);
+            return;
+        }
+        int pages = Math.max(1, (nodes.size() + GRAPH_NODES_PER_PAGE - 1) / GRAPH_NODES_PER_PAGE);
+        int page = Math.min(this.graphPage, pages - 1);
+        int from = page * GRAPH_NODES_PER_PAGE;
+        int to = Math.min(nodes.size(), from + GRAPH_NODES_PER_PAGE);
+        List<String[]> vis = new ArrayList<>(nodes.subList(from, to));
+        int n = vis.size();
+        int cx = (x0 + x1) / 2;
+        int cy = (yTop + yBot) / 2;
+        int radius = Math.max(22, Math.min((x1 - x0) / 2 - 58, (yBot - yTop) / 2 - 22));
+        int[] px = new int[n];
+        int[] py = new int[n];
+        for (int i = 0; i < n; i++) {
+            double ang = -Math.PI / 2 + i * 2 * Math.PI / n;
+            px[i] = cx + (int) Math.round(Math.cos(ang) * radius);
+            py[i] = cy + (int) Math.round(Math.sin(ang) * radius);
+        }
+        java.util.Map<String, Integer> posOf = new java.util.HashMap<>();
+        for (int i = 0; i < n; i++) {
+            posOf.put(vis.get(i)[0], i);
+        }
+        int drawn = 0;
+        if (this.graphEdge != null) {
+            for (String[] e : this.graphEdge) {
+                if (drawn >= 40) {
+                    break;
+                }
+                Integer a = posOf.get(e[0]);
+                Integer b = posOf.get(e[2]);
+                if (a == null || b == null) {
+                    continue;
+                }
+                drawn++;
+                double conf = 0.5;
+                try {
+                    conf = Double.parseDouble(e[3]);
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookScreen", ignored);
+                }
+                int alpha = 0x30 + (int) (0x9F * Math.max(0.0, Math.min(1.0, conf)));
+                this.drawThinLine(graphics, px[a], py[a], px[b], py[b], (alpha << 24) | 0x7FB0FF);
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            graphics.fill(px[i] - 3, py[i] - 3, px[i] + 3, py[i] + 3, 0xC0FFD700);
+            graphics.fill(px[i] - 1, py[i] - 1, px[i] + 1, py[i] + 1, 0xFFFF6A00);
+            String name = this.fitText(vis.get(i)[0], 76);
+            int lw = this.font.width(name);
+            int lx = px[i] >= cx ? px[i] + 5 : px[i] - lw - 5;
+            lx = Math.max(2, Math.min(this.width - lw - 2, lx));
+            int ly = Math.max(2, Math.min(this.height - 22, py[i] - 4));
+            graphics.drawString(this.font, Component.literal("\u00a7f" + name), lx, ly, 0xFFFFFF, false);
+            graphics.drawString(this.font, Component.literal("\u00a78×" + vis.get(i)[1]), lx, ly + 9, 0x888888, false);
+        }
+        graphics.drawString(this.font, Component.literal("\u00a77圆点＝实体，连线＝关系（越亮越可信）　第" + (page + 1) + "/" + pages + " 页"),
+                x0, yTop - 2, 0x888888, false);
+    }
+
+    /** 实测九百七十二：两点间画一条细线——GuiGraphics 没有画线接口，按 2px 步长用 1px 方块拼出来 */
+    private void drawThinLine(net.minecraft.client.gui.GuiGraphics graphics,
+                              int ax, int ay, int bx, int by, int color) {
+        int dx = bx - ax;
+        int dy = by - ay;
+        int steps = Math.max(Math.abs(dx), Math.abs(dy)) / 2;
+        if (steps <= 0) {
+            graphics.fill(ax, ay, ax + 1, ay + 1, color);
+            return;
+        }
+        for (int i = 0; i <= steps; i++) {
+            int x = ax + dx * i / steps;
+            int y = ay + dy * i / steps;
+            graphics.fill(x, y, x + 1, y + 1, color);
         }
     }
 

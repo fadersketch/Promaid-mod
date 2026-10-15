@@ -67,6 +67,12 @@ public final class BlueprintBookNetworking {
         r.playToClient(BlueprintBookBuildPackets.PlayJarVoicePacket.TYPE, StreamCodec.ofMember(BlueprintBookBuildPackets.PlayJarVoicePacket::encode, BlueprintBookBuildPackets.PlayJarVoicePacket::decode), BlueprintBookBuildPackets.PlayJarVoicePacket::handle);
         // v1.1.0 实测四百二十一：冷却可视化（S2C）——复活倒计时 / 回魂符冷却每秒快照
         r.playToClient(BlueprintBookBuildPackets.CooldownHudPacket.TYPE, StreamCodec.ofMember(BlueprintBookBuildPackets.CooldownHudPacket::encode, BlueprintBookBuildPackets.CooldownHudPacket::decode), BlueprintBookBuildPackets.CooldownHudPacket::handle);
+        // 实测九百七十二：记忆图谱数据（C2S 请求 → S2C 结构化行，供手册「记忆图谱」页画图）
+        r.playToServer(BlueprintBookEntityPackets.MemoryGraphRequestPacket.TYPE, StreamCodec.ofMember(BlueprintBookEntityPackets.MemoryGraphRequestPacket::encode, BlueprintBookEntityPackets.MemoryGraphRequestPacket::decode), BlueprintBookEntityPackets.MemoryGraphRequestPacket::handle);
+        // 实测九百七十五：女仆日记（C2S 请求 → S2C 结构化行，供手册「日记本」页画目录与正文）
+        r.playToServer(BlueprintBookEntityPackets.MaidDiaryRequestPacket.TYPE, StreamCodec.ofMember(BlueprintBookEntityPackets.MaidDiaryRequestPacket::encode, BlueprintBookEntityPackets.MaidDiaryRequestPacket::decode), BlueprintBookEntityPackets.MaidDiaryRequestPacket::handle);
+        r.playToClient(BlueprintBookEntityPackets.MaidDiaryResponsePacket.TYPE, StreamCodec.ofMember(BlueprintBookEntityPackets.MaidDiaryResponsePacket::encode, BlueprintBookEntityPackets.MaidDiaryResponsePacket::decode), BlueprintBookEntityPackets.MaidDiaryResponsePacket::handle);
+        r.playToClient(BlueprintBookEntityPackets.MemoryGraphResponsePacket.TYPE, StreamCodec.ofMember(BlueprintBookEntityPackets.MemoryGraphResponsePacket::encode, BlueprintBookEntityPackets.MemoryGraphResponsePacket::decode), BlueprintBookEntityPackets.MemoryGraphResponsePacket::handle);
     }
 
     /** v1.1.0 实测四百二十一：把冷却快照发给单个玩家（CooldownHudTracker 用） */
@@ -318,8 +324,9 @@ public final class BlueprintBookNetworking {
 
     /**
      * v1.5.180：玩家所在区块（多区块共存——遍历该维度所有区块，范围公式与
-     * 客户端一致：[ox-W/2, ox-W/2+W) × [oy, oy+H) × [oz-D/2, oz-D/2+D)）。
-     * 不在任何区块内返回 null。
+     * 客户端一致：[ox-W/2, ox-W/2+W) × [oy, oy+H) × [oz-D/2, oz-D/2+D)）。不在任何区块内返回 null。
+     * <p>实测九百八十五：判定放宽到「**接触到**区块」——紧贴边界外一格也算（与客户端
+     * {@code BlueprintBookScreen.playerPlanId} 同口径；只有一格高的建筑玩家永远进不去体积内）。
      */
     public static BuildPlan.PlanState findPlayerPlan(net.minecraft.server.level.ServerLevel level,
                                                      net.minecraft.world.entity.player.Player player) {
@@ -334,9 +341,9 @@ public final class BlueprintBookNetworking {
             }
             int x0 = r[0];
             int z0 = r[2];
-            if (p.getX() >= x0 && p.getX() < r[3]
-                    && p.getY() >= r[1] && p.getY() < r[4]
-                    && p.getZ() >= z0 && p.getZ() < r[5]) {
+            if (p.getX() >= x0 - 1 && p.getX() <= r[3]
+                    && p.getY() >= r[1] - 1 && p.getY() <= r[4]
+                    && p.getZ() >= z0 - 1 && p.getZ() <= r[5]) {
                 return ps;
             }
         }
@@ -541,21 +548,11 @@ public final class BlueprintBookNetworking {
             }
             lines.add(sb.toString());
         }
-        // v1.5.382：记忆日记（多级记忆索引——日/3日/周/月日记式摘要，最新 6 篇）
+        // 实测九百七十六：日记已独立成「日记」页（目录 + 逐日正文），这里只留一行入口——
+        // 旧版在记忆页里再列 6 篇摘要，与日记页重复
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
-            List<com.maidsmart.memory.AiMemoryIndexStore.IndexRecord> idx =
-                    new ArrayList<>(store.index().all());
-            if (idx.isEmpty()) {
-                lines.add("\u00a7d记忆日记\u00a77（暂无——睡一觉后自动整理生成）");
-            } else {
-                idx.sort((a, b) -> Long.compare(b.endTick(), a.endTick()));
-                lines.add("\u00a7d记忆日记\u00a77（共" + idx.size() + " 篇，最新：）");
-                for (int i = 0; i < idx.size() && i < 6; i++) {
-                    com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r = idx.get(i);
-                    lines.add("\u00a7d  [" + r.level() + "记 第" + r.startDay() + "~" + r.endDay()
-                            + "天]\u00a7f " + com.maidsmart.memory.AiMemoryModels.clip(r.content(), 70));
-                }
-            }
+            lines.add("\u00a7d女仆日记\u00a77：共 " + store.index().all().size()
+                    + " 篇——点上方「\u00a7e日记\u00a77」页签翻看（目录 + 逐日正文）");
         }
         // 关系（按置信度降序）
         rels.sort(java.util.Comparator.comparingDouble(
@@ -693,7 +690,8 @@ public final class BlueprintBookNetworking {
             // 工作笔记
             String note = com.maidsmart.memory.WorkingNoteTool.readNote(maid);
             if (!note.isBlank()) {
-                lines.add("工作笔记: " + com.maidsmart.memory.AiMemoryModels.clip(note, 80));
+                // 实测九百七十一：工作笔记同样放宽（客户端折行分页显示全文）
+            lines.add("工作笔记: " + com.maidsmart.memory.AiMemoryModels.clip(note, 320));
             }
             // 绑定区块/建筑状态（从 allMaids 冗余字段读不到——直接查 BuildPlan）
             String pid = com.maidsmart.build.BuildPlan.getBoundPlanId(maid);
@@ -706,46 +704,210 @@ public final class BlueprintBookNetworking {
         return lines;
     }
 
-    /** v1.5.192：收集可调试记忆对象行 {type, key, info, text}：
-     *  段落（type=para，key=hash，info=重要度/访问/tags）按重要度降序
-     *  + 关系（type=rel，key=predicate，info=置信度）按置信度降序 */
+    /** v1.5.192 / 实测九百七十四：可调试记忆对象行 {type, key, info, text, state}
+     *  段落（type=para，key=hash@创建时刻，state 空或 deleted）按重要度降序
+     *  + 关系（type=rel，key=三元组 hash，state 空或 inactive）按置信度降序。
+     *  已作废的段落照样列出——旧版走 paragraphs()（过滤已删），删掉就再也选不中，恢复必然失败。 */
     private static List<String[]> collectDebugRows(EntityMaid maid, net.minecraft.server.level.ServerLevel level) {
         List<String[]> rows = new ArrayList<>();
         try {
             com.maidsmart.memory.AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
             List<com.maidsmart.memory.AiMemoryModels.Paragraph> paras =
-                    new ArrayList<>(store.paragraphs());
+                    new ArrayList<>(store.allParagraphs());
             paras.sort(java.util.Comparator
                     .comparingInt(com.maidsmart.memory.AiMemoryModels.Paragraph::salience).reversed()
                     .thenComparingLong(com.maidsmart.memory.AiMemoryModels.Paragraph::lastAccessed));
             for (com.maidsmart.memory.AiMemoryModels.Paragraph p : paras) {
-                rows.add(new String[]{"para", p.hash(),
-                        "重要度" + p.salience() + "·访问" + p.accessCount() + "·" + (p.tags() == null ? "" : p.tags()),
-                        (p.isPermanent() ? "[永久] " : "") + p.content()});
+                StringBuilder info = new StringBuilder("\u91cd\u8981\u5ea6 ").append(p.salience())
+                        .append(" \u00b7 \u60f3\u8d77 ").append(p.accessCount()).append(" \u6b21");
+                if (p.isPermanent()) {
+                    info.append(" \u00b7 \u6c38\u4e45");
+                }
+                rows.add(new String[]{"para", com.maidsmart.memory.AiMemoryStore.debugKey(p),
+                        info.toString(), p.content(), p.deleted() ? "deleted" : ""});
             }
             List<com.maidsmart.memory.AiMemoryModels.Relation> rels =
                     new ArrayList<>(store.relations());
             rels.sort(java.util.Comparator.comparingDouble(
                     com.maidsmart.memory.AiMemoryModels.Relation::confidence).reversed());
             for (com.maidsmart.memory.AiMemoryModels.Relation r : rels) {
-                if (r.inactive()) {
-                    continue;
-                }
-                rows.add(new String[]{"rel", r.predicate(),
-                        "置信度" + String.format(java.util.Locale.ROOT, "%.1f", r.confidence()),
-                        r.subject() + r.predicate() + r.object()});
+                rows.add(new String[]{"rel", r.hash(),
+                        "\u628a\u63e1 " + Math.round(r.confidence() * 100) + "%",
+                        r.subject() + " \u2192 " + r.predicate() + " \u2192 " + r.object(),
+                        r.inactive() ? "inactive" : ""});
             }
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
         }
         return rows;
     }
 
-    /** v1.5.192：回发调试快照（请求/动作成功后共用） */
+    /** v1.5.192 / 实测九百七十四：回发调试快照（请求与动作成功后共用）——
+     *  note = 上一步动作的回执（画在面板里，不再往聊天栏刷屏），null = 无回执 */
     static void sendDebugResponse(ServerPlayer player, EntityMaid maid,
-                                          net.minecraft.server.level.ServerLevel level, String uuid) {
+                                          net.minecraft.server.level.ServerLevel level, String uuid, String note) {
         PacketDistributor.sendToPlayer(player, new BlueprintBookEntityPackets.MaidDebugResponsePacket(uuid,
                         collectDebugStatus(maid, level),
-                        collectDebugRows(maid, level)));
+                        collectDebugRows(maid, level), note));
+    }
+
+    /** 实测九百七十五：女仆日记（多级记忆索引）——结构化行，供手册「日记本」页画目录与正文。
+     *  行格式：`STAT|篇数|最小日|最大日` · `DIARY|级别|起日|止日|字数|正文`（新的在前）；
+     *  正文里 `|` 换 `/`、去掉颜色码，单篇封顶 2000 字、最多 400 篇（包不能无限涨）。 */
+    static List<String> collectDiary(EntityMaid maid, net.minecraft.server.level.ServerLevel level) {
+        List<String> out = new ArrayList<>();
+        try {
+            com.maidsmart.memory.AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
+            List<com.maidsmart.memory.AiMemoryIndexStore.IndexRecord> idx =
+                    new ArrayList<>(store.index().all());
+            idx.sort((a, b) -> Long.compare(b.endTick(), a.endTick()));
+            int minDay = 0;
+            int maxDay = 0;
+            for (com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r : idx) {
+                if (minDay == 0 || r.startDay() < minDay) {
+                    minDay = r.startDay();
+                }
+                if (r.endDay() > maxDay) {
+                    maxDay = r.endDay();
+                }
+            }
+            out.add("STAT|" + idx.size() + "|" + minDay + "|" + maxDay);
+            int n = Math.min(idx.size(), 400);
+            for (int i = 0; i < n; i++) {
+                com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r = idx.get(i);
+                String body = r.content() == null ? "" : r.content();
+                body = body.replace("|", "/").replace("\u00a7", "");
+                if (body.length() > 2000) {
+                    body = body.substring(0, 2000);
+                }
+                out.add("DIARY|" + diaryField(r.level()) + "|" + r.startDay() + "|" + r.endDay()
+                        + "|" + body.length() + "|" + body);
+            }
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
+        }
+        return out;
+    }
+
+    /** 实测九百七十五：日记字段清洗（分隔符与颜色码都不许进包） */
+    private static String diaryField(String s) {
+        return s == null ? "" : s.replace("|", "/").replace("\u00a7", "");
+    }
+
+    /** 实测九百七十五：回发日记数据（请求成功后调用） */
+    static void sendDiaryResponse(ServerPlayer player, EntityMaid maid,
+                                          net.minecraft.server.level.ServerLevel level, String uuid) {
+        PacketDistributor.sendToPlayer(player, new BlueprintBookEntityPackets.MaidDiaryResponsePacket(
+                uuid, collectDiary(maid, level)));
+    }
+
+    /** 实测九百七十二：记忆图谱数据（结构化行，供手册「记忆图谱」页画图，不传原文——只传统计与结构）。
+     *  行格式：`STAT|段落|有效关系|日记|永久|长期|最小日|最大日` · `HIST|重要度0~10|条数` ·
+     *  `TIME|起日|止日|级别码|字数`（级别码 0 日 / 1 三日 / 2 周 / 3 月）·
+     *  `EDGE|主体|谓词|客体|置信度` · `NODE|实体|度数`；坏行由客户端跳过。 */
+    static List<String> collectMemoryGraph(EntityMaid maid, net.minecraft.server.level.ServerLevel level) {
+        List<String> out = new ArrayList<>();
+        try {
+            com.maidsmart.memory.AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
+            List<com.maidsmart.memory.AiMemoryModels.Paragraph> paras =
+                    new ArrayList<>(store.paragraphs());
+            List<com.maidsmart.memory.AiMemoryModels.Relation> rels =
+                    new ArrayList<>(store.relations());
+            List<com.maidsmart.memory.AiMemoryIndexStore.IndexRecord> idx =
+                    new ArrayList<>(store.index().all());
+            int[] hist = new int[11];
+            int perm = 0;
+            int longTerm = 0;
+            for (com.maidsmart.memory.AiMemoryModels.Paragraph p : paras) {
+                if (p.deleted()) {
+                    continue;
+                }
+                if (p.isPermanent()) {
+                    perm++;
+                }
+                if (p.tags() != null && p.tags().contains("long_term")) {
+                    longTerm++;
+                }
+                hist[Math.max(0, Math.min(10, p.salience()))]++;
+            }
+            java.util.Map<String, Integer> degree = new java.util.HashMap<>();
+            List<com.maidsmart.memory.AiMemoryModels.Relation> live = new ArrayList<>();
+            for (com.maidsmart.memory.AiMemoryModels.Relation r : rels) {
+                if (r.inactive()) {
+                    continue;
+                }
+                live.add(r);
+                bumpDegree(degree, r.subject());
+                bumpDegree(degree, r.object());
+            }
+            idx.sort(java.util.Comparator.comparingInt(
+                    com.maidsmart.memory.AiMemoryIndexStore.IndexRecord::startDay));
+            int minDay = idx.isEmpty() ? 0 : idx.get(0).startDay();
+            int maxDay = idx.isEmpty() ? 0 : idx.get(idx.size() - 1).endDay();
+            out.add("STAT|" + paras.size() + "|" + live.size() + "|" + idx.size() + "|" + perm
+                    + "|" + longTerm + "|" + minDay + "|" + maxDay);
+            for (int i = 0; i <= 10; i++) {
+                if (hist[i] > 0) {
+                    out.add("HIST|" + i + "|" + hist[i]);
+                }
+            }
+            for (int i = 0; i < idx.size() && i < 400; i++) {
+                com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r = idx.get(i);
+                out.add("TIME|" + r.startDay() + "|" + r.endDay() + "|" + graphLevelCode(r.level())
+                        + "|" + (r.content() == null ? 0 : r.content().length()));
+            }
+            live.sort(java.util.Comparator.comparingDouble(
+                    com.maidsmart.memory.AiMemoryModels.Relation::confidence).reversed());
+            for (int i = 0; i < live.size() && i < 240; i++) {
+                com.maidsmart.memory.AiMemoryModels.Relation r = live.get(i);
+                out.add("EDGE|" + graphField(r.subject()) + "|" + graphField(r.predicate()) + "|"
+                        + graphField(r.object()) + "|"
+                        + String.format(java.util.Locale.ROOT, "%.2f", r.confidence()));
+            }
+            List<java.util.Map.Entry<String, Integer>> nodes = new ArrayList<>(degree.entrySet());
+            nodes.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+            for (int i = 0; i < nodes.size() && i < 240; i++) {
+                out.add("NODE|" + graphField(nodes.get(i).getKey()) + "|" + nodes.get(i).getValue());
+            }
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintBookNetworking", ignored);
+        }
+        return out;
+    }
+
+    /** 实测九百七十二：实体度数累加（关系网圆环布局按度数取前 N 个实体） */
+    private static void bumpDegree(java.util.Map<String, Integer> degree, String name) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        degree.merge(name, 1, Integer::sum);
+    }
+
+    /** 实测九百七十二：图谱字段清洗——`|` 是行内分隔符、`§` 是颜色码，两者都不能带进数据行 */
+    private static String graphField(String s) {
+        if (s == null) {
+            return "";
+        }
+        return s.replace('|', '/').replace('\u00a7', ' ').trim();
+    }
+
+    /** 实测九百七十二：日记级别 → 图谱级别码（0 日 / 1 三日 / 2 周 / 3 月） */
+    private static int graphLevelCode(String level) {
+        if ("3日".equals(level)) {
+            return 1;
+        }
+        if ("周".equals(level)) {
+            return 2;
+        }
+        if ("月".equals(level)) {
+            return 3;
+        }
+        return 0;
+    }
+
+    /** 实测九百七十二：回发记忆图谱（请求成功后调用） */
+    static void sendGraphResponse(ServerPlayer player, EntityMaid maid,
+                                  net.minecraft.server.level.ServerLevel level, String uuid) {
+        PacketDistributor.sendToPlayer(player,
+                new BlueprintBookEntityPackets.MemoryGraphResponsePacket(uuid,
+                        collectMemoryGraph(maid, level)));
     }
 
     // ==================== v1.1.0 实测八十二：蓝图投影 ====================
@@ -794,6 +956,13 @@ public final class BlueprintBookNetworking {
             BuildPlan.PlanState ps = BuildPlan.getPlanById(planId);
             if (ps == null) {
                 return false;
+            }
+            // 【实测九百六十八】创建者本人：创建后到绑女仆前这段窗口里，他不在区块内也要收到自己的
+            // 区块（旧版只认「站在区块内 / 区块里有他绑的女仆」，于是刚确认完走出区块那行就断了 →
+            // 客户端把框清掉；女仆一绑上并加载就恢复——现场正是这个顺序）。
+            if (ps.creatorUuid != null && !ps.creatorUuid.isEmpty()
+                    && ps.creatorUuid.equals(player.getUUID().toString())) {
+                return true;
             }
             net.minecraft.server.level.ServerLevel lvl = server.getLevel(ps.dim);
             if (lvl == null) {

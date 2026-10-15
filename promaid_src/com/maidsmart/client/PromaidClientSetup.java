@@ -102,11 +102,6 @@ public final class PromaidClientSetup {
         }
     }
 
-    /** 实测五百六十二：潜行+中键 工位标记的客户端手势识别（仅客户端注册） */
-    public static void registerWorkPosMarker() {
-        com.maidsmart.marker.WorkPosMarkerClient.register();
-    }
-
     /** 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（仅客户端注册）。 */
     public static void registerRideViewClamp() {
         com.maidsmart.client.RideBatonViewClamp.ensureRegistered();
@@ -148,6 +143,16 @@ public final class PromaidClientSetup {
             com.maidsmart.client.DaYunMusicPlayer.handle(wearerId, track, playing);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidClientSetup", ignored);
         }
+    }
+
+    /**
+     * 多人下「配置以服务端为准」的客户端钩子：退出世界时把客户端自己那份配置还原回来
+     * （锁定期间套用的是服务端值，不清会跨世界残留）。客户端专属——事件类型是客户端类型。
+     */
+    public static void registerConfigSyncClient() {
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                (net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) ->
+                        com.maidsmart.config.ConfigSyncNetworking.restoreOwn());
     }
 
 }

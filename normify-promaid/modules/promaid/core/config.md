@@ -13,7 +13,7 @@ description:
       *_MIGRATED migration flags live in user-visible config.
 source:
   - {path: promaid_src_neo/com/maidsmart/config/MaidSmartConfig.java, line: 1, end_line: 3546}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f50a6468b16c6f70ecb42f22c13459427077910754c1e746b11f636dcffc3876
 state: active

@@ -13,7 +13,7 @@ description:
       default-value migrations (including 10 one-shot *_MIGRATED flags).
 source:
   - {path: promaid_src_neo/com/maidsmart/ProMaidMod.java, line: 1, end_line: 452}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 15fdf0a6f075685e1558cb87a803c22c95d0a05c2137603eb647811956c5c986
 state: active

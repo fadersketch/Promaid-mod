@@ -16,7 +16,7 @@ import net.minecraft.network.chat.Component;
  *   if (ClientHooks.onClickInput(2, options.keyPickItem, MAIN_HAND).isCanceled()) return;
  * </pre>
  * 也就是说：**准星指着空气/天空时按中键，事件压根不触发**——玩家"开着创造模式飞在空中按中键"
- * 正是这种情况（实测日志：站在地上看着方块按那一次成功记下了标记，天上怎么按都没有任何反应）。 所以手势改成**自己取按键**：在 {@code ClientTickEvent.Pre}（早于本拍的 {@code handleKeybinds()}， 见 javap：tick() 里 fireClientTickPre 在偏移 10、handleKeybinds 在 366）里 {@code consumeClick()} 掉中键——拿航图时这一下就完全是我们的，原版取方块不会发生； 没拿航图时一个字节都不碰，原版照旧。 <p>⇒ 两条规矩：<b>① 拿着航图中键＝标记手势</b>（不用潜行，空中地面都行）； <b>② 必须先"开始标记"</b>，否则只回一句提示。落点永远是服务端按玩家自己的位置取的 （客户端发的包里没有坐标，见 {@code PatrolNetworking.MarkPatrolPointPacket}）。 <p>【与 {@code WorkPosMarkerClient} 的关系】那边是"潜行+中键标工位"，写的是 TLM 排班锚点。 手持巡逻航图时这一整套让位给本类（见那边的 {@code holdingPatrolChart}）——一次手势只有一个意思。
+ * 正是这种情况（实测日志：站在地上看着方块按那一次成功记下了标记，天上怎么按都没有任何反应）。 所以手势改成**自己取按键**：在 {@code ClientTickEvent.Pre}（早于本拍的 {@code handleKeybinds()}， 见 javap：tick() 里 fireClientTickPre 在偏移 10、handleKeybinds 在 366）里 {@code consumeClick()} 掉中键——拿航图时这一下就完全是我们的，原版取方块不会发生； 没拿航图时一个字节都不碰，原版照旧。 <p>⇒ 两条规矩：<b>① 拿着航图中键＝标记手势</b>（不用潜行，空中地面都行）； <b>② 必须先"开始标记"</b>，否则只回一句提示。落点永远是服务端按玩家自己的位置取的 （客户端发的包里没有坐标，见 {@code PatrolNetworking.MarkPatrolPointPacket}）。 
  */
 public final class PatrolMarkerClient {
 

@@ -14,7 +14,7 @@ import java.util.Set;
 /**
  * v1.1.0 实测八十九/九十：危险方块表共享工具。
  *
- * 配置面板杂项「dangerBlocks」（注册名列表）→ Block 集合缓存（按列表实例同一性
+ * 配置面板「战斗与自保 → 危险方块 → 危险方块名单」（toml 键 dangerBlocks，注册名列表）→ Block 集合缓存（按列表实例同一性
  * 失效重建）。两处消费方：
  * - MaidDangerPathMixin（寻路层：节点改判 BLOCKED，绕开危险）；
  * - DangerEscapeHandler（险境脱离：已身处危险方块上时挪到最近安全格）。
@@ -82,9 +82,43 @@ public final class DangerBlocks {
             return true;
         }
         // 头顶灼烧型子集（固定四种，不受配置增删影响——浆果丛顶上走过去没事）
-        String above = idOf(level, x, y + 1, z);
-        return above.equals("minecraft:fire") || above.equals("minecraft:soul_fire")
-                || above.equals("minecraft:lava");
+        return isBurnAbove(level, x, y + 1, z);
+    }
+
+    /** 危险表里的「热危险」子集——火 / 灵魂火 / 岩浆 / 营火 / 灵魂营火 / 岩浆块，都是"烫"。
+     *  抗火效果与火焰保护饰品对它们豁免（见 {@link #heatOnlyDanger}）；表里的仙人掌 /
+     *  甜浆果丛 / 凋零玫瑰 / 细雪 / 石笋不是热危险，不吃这份豁免。 */
+    private static final Set<String> HEAT = Set.of(
+            "minecraft:lava", "minecraft:fire", "minecraft:soul_fire",
+            "minecraft:magma_block", "minecraft:campfire", "minecraft:soul_campfire");
+
+    /** 该站立格的危险是否**全部**由热危险构成——是则抗火 / 火焰保护饰品可豁免脱离。
+     *  口径与 {@link #cellDangerous} 逐格对齐：本体 / 脚下在表内且都是热危险、头顶灼烧型
+     *  也只算热；只要有一个非热贡献（仙人掌等）就不算，照常脱离。 */
+    public static boolean heatOnlyDanger(BlockGetter level, int x, int y, int z) {
+        if (!cellDangerous(level, x, y, z)) {
+            return false;
+        }
+        boolean heat = false;
+        for (int dy = 0; dy >= -1; dy--) {
+            String id = idOf(level, x, y + dy, z);
+            if (!set().contains(id)) {
+                continue;
+            }
+            if (HEAT.contains(id)) {
+                heat = true;
+            } else {
+                return false; // 有非热危险贡献 → 不纯，照常脱离
+            }
+        }
+        return heat || isBurnAbove(level, x, y + 1, z);
+    }
+
+    /** 头顶那格是否为固定灼烧型（火 / 灵魂火 / 岩浆）——与 {@link #cellDangerous} 同口径 */
+    private static boolean isBurnAbove(BlockGetter level, int x, int y, int z) {
+        String id = idOf(level, x, y, z);
+        return id.equals("minecraft:fire") || id.equals("minecraft:soul_fire")
+                || id.equals("minecraft:lava");
     }
 
     /**

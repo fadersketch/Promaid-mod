@@ -41,6 +41,13 @@ public final class MaidAutoResurrect {
      */
     private static final long CLEANUP_TIMEOUT_TICKS = 20L * 120L;
 
+    /**
+     * 【实测九百二十四】复活连续失败上限（默认 12 次 × 5 秒 ≈ 60 秒）。到点就放弃这条登记、
+     * 如实播报——旧版失败后每 5 秒把 {@code dueTick} 推回 {@code now+100}，排班表/HUD 于是永远
+     * 显示"复活中·剩 5 秒"、她永远回不来（玩家报的"倒计时结束又刷回 5 秒、反复刷新、永远无法复活"）。
+     */
+    private static final int MAX_RESURRECT_RETRIES = 12;
+
     /** 【实测七百九十九】墓碑删除结果：删掉了，或确证已不存在 —— 可以继续复活 */
     private static final int TOMBSTONE_GONE = 1;
     /** 【实测七百九十九】那格区块的实体还在异步载入（loadingInbox 未抽干）—— 这一拍删不掉，下一拍再试 */
@@ -62,6 +69,8 @@ public final class MaidAutoResurrect {
          * 顶多多载一块碑的区块两分钟，无副作用。
          */
         long cleanupSince;
+        /** 【实测九百二十四】连续失败计数（不落盘，重启清零）——给"复活一直失败"封顶，见 {@link #MAX_RESURRECT_RETRIES} */
+        int retries;
 
         Pending(CompoundTag maidNbt, UUID ownerId, long dueTick, UUID tombstoneId, String maidName) {
             this.maidNbt = maidNbt;
@@ -248,12 +257,37 @@ public final class MaidAutoResurrect {
                 }
                 // 复用原 UUID——记忆/灵魂目录按 UUID 索引，换 UUID 会丢记忆
                 if (resurrect(server, owner, p, maidId)) {
+                    p.retries = 0;
+                    data.remove(maidId);
+                } else if (++p.retries >= MAX_RESURRECT_RETRIES) {
+                    // 实测九百二十四：连续失败到上限 → 别再无限重排（旧版每 5 秒把 dueTick 推回
+                    // now+100 → 永远"剩 5 秒"、永远回不来）。实测九百二十五 补齐了真根因（同 UUID 被
+                    // 占着）与清尸路径，走到这里的只剩极端情形（占位者所在区块还没加载出来），
+                    // 于是放弃这条登记、如实播报，并把玩家真正能做的事说清楚。
+                    com.maidsmart.tool.PromaidLog.log("自动复活", p.maidName
+                            + " 自动复活连续失败 " + p.retries + " 次（她的 UUID 一直被占着、又定位不到占位者）→ 放弃本次自动复活");
+                    try {
+                        owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                                "\u00a7c\u2726 \u00a7f你的女仆 \u00a7b" + p.maidName
+                                        + "\u00a7f 自动复活多次失败，已放弃本次复活（她的 UUID 一直被占用）。"
+                                        + "\u00a77重进存档后再让她死一次通常就正常了。"), false);
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
+                    }
+                    data.remove(maidId);
+                } else {
+                    // 复活失败：推迟 5 秒重试，不丢快照（到 MAX_RESURRECT_RETRIES 次即放弃，见上）
+                    com.maidsmart.tool.PromaidLog.log("自动复活", p.maidName
+                            + " 复活尝试失败（第 " + p.retries + " 次）→ 5 秒后重试");
+                    p.dueTick = now + 100L;
+                }
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
+                if (++p.retries >= MAX_RESURRECT_RETRIES) {
+                    com.maidsmart.tool.PromaidLog.log("自动复活", p.maidName
+                            + " 复活抛异常 " + p.retries + " 次 → 放弃本次自动复活（她的 UUID 一直被占用）");
                     data.remove(maidId);
                 } else {
                     p.dueTick = now + 100L;
                 }
-            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
-                p.dueTick = now + 100L;
             }
         }
     }
@@ -426,6 +460,11 @@ public final class MaidAutoResurrect {
         com.maidsmart.protect.MasterDeathTeleportHandler.sanitizeDeathState(p.maidNbt);
         maid.load(p.maidNbt);
         maid.setUUID(maidId); // 复用原 UUID——记忆/灵魂目录按 UUID 索引
+        // 实测九百二十五：先把【她死亡时的坐标】记下来（load 出来的 NBT 就带着它，下一句 setPos 会盖掉）
+        // ——一具"死了却没被原版清掉"的死体就停在那个位置，查重/清尸要用它（见 findMaidAnywhere）。
+        double deathX = maid.getX();
+        double deathY = maid.getY();
+        double deathZ = maid.getZ();
         maid.setPos(safe[0], safe[1], safe[2]);
         float max = Math.max(1.0f, maid.getMaxHealth());
         float ratio = (float) (double) com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get();
@@ -433,7 +472,46 @@ public final class MaidAutoResurrect {
         maid.setAirSupply(20);
         maid.setTicksFrozen(0);
         com.maidsmart.protect.MasterDeathTeleportHandler.cleanseAfterRevive(maid);
+        // 实测九百二十五【真根因：一具「卡住的死体」占着她的 UUID】。复活走的是 addFreshEntity，只要那个
+        // UUID 还挂在这一维度的实体登记表里就必然失败，并打一行「UUID of added entity already exists」
+        // （PersistentEntitySectionManager.addEntityUuid 反编译实证）。占位者两种都要处理：①她其实已被别
+        // 的路径放回世界 → 别再重复造人、摘登记；②**她死的那一刻所在区块掉出了 entity-ticking（玩家同
+        // 一瞬也死了、或走远了都会发生）→ 原版死体清理（LivingEntity.tickDeath → remove）永远跑不到 →
+        // 那具尸体就一直占着 UUID**。②正是玩家报的「倒计时结束又刷回 5 秒、反复刷新、永远无法复活」：
+        // 旧版每 5 秒重排 dueTick 却从没看过挡住 add 的是谁（九百二十四 只认 isAlive()，尸体不算「活的」）。
+        // 现在两种都收：活的摘登记；死的当场清掉（discard 同步走 Callback.onRemove → UUID 立刻释放），本拍继续放人。
+        EntityMaid blocker = findMaidAnywhere(server, maidId, maid, deathX, deathY, deathZ);
+        if (blocker != null) {
+            if (!blocker.isAlive()) {
+                try {
+                    blocker.discard(); // 卡住的死体：清掉，把 UUID 解放出来
+                    com.maidsmart.tool.PromaidLog.log("自动复活", p.maidName
+                            + " 有一具死体卡住了她的 UUID（所在区块不 tick，原版清理跑不到）→ 已清掉，本拍继续放人");
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
+                }
+            } else {
+                try {
+                    float max0 = Math.max(1.0f, blocker.getMaxHealth());
+                    float ratio0 = (float) (double) com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get();
+                    if (blocker.getHealth() < max0 * ratio0) {
+                        blocker.setHealth(Math.max(1.0f, max0 * ratio0));
+                    }
+                    com.maidsmart.protect.MasterDeathTeleportHandler.cleanseAfterRevive(blocker);
+                    // 她已经活着：顺手补一枪"客户端重建"与"脚下补票"——旧口径只治疗不清洗/不补包，
+                    // 幽灵状态（服务端有她、客户端没有）就留下来了，玩家一样看不见她。
+                    com.maidsmart.command.MaidResyncCommand.scheduleForcedResync(blocker);
+                    com.maidsmart.follow.MaidChunkLoadManager.ensureTicketNow(blocker);
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
+                }
+                com.maidsmart.tool.PromaidLog.log("自动复活", p.maidName
+                        + " 其实已经在世界里（同 UUID）→ 这条登记是重复的，直接摘掉、不重复造人");
+                return true;
+            }
+        }
         if (!dest.addFreshEntity(maid)) {
+            com.maidsmart.tool.PromaidLog.log("自动复活", p.maidName
+                    + " 造人被拒：同 UUID 还挂在这一维度的登记表上，但既不在追踪表、也不在她死亡点附近"
+                    + "（多半在没加载的区块里）→ 5 秒后重试");
             return false;
         }
         // v1.3.0(beta) 实测六百九十七【复活后补包】：复活用的是"同 UUID、新实体 id"，
@@ -472,6 +550,33 @@ public final class MaidAutoResurrect {
             return null;
         }
         return AutoResurrectStore.get(level);
+    }
+
+    /** 实测九百二十五：按 UUID 找那只「占着她 UUID」的女仆——活的、死的、以及不在追踪表里的都要找到。
+     *
+     * <p>为什么不能只用 {@code getEntity(UUID)}（九百二十四 的口径）：它读的是【可见实体索引】（{@code LevelEntityGetterAdapter.get(UUID) → EntityLookup}），只覆盖「正在被追踪」的实体。实测那局她死在半空、玩家同一刻也死了 → 她那格区块掉出 entity-ticking（只剩 FULL）→ 死体既不再被 tick（原版 tickDeath 清理跑不到）、也不再出现在可见实体索引里，可它**仍然在区块实体表（sectionStorage）里占着那个 UUID** —— 于是复活永远被拒、倒计时永远刷回 5 秒。
+     *
+     * <p>{@code getEntitiesOfClass(类, AABB)} 走的是 AABB → sectionStorage 这条链（反编译实证），连「区块已加载但没被追踪」的实体也捞得到；尸体不会移动，用她死亡坐标附近一个 128 格的盒子就够，并且把全部维度都扫一遍（防她死在别的维度）。
+     */
+    private static EntityMaid findMaidAnywhere(MinecraftServer server, UUID id, EntityMaid exclude,
+                                               double x, double y, double z) {
+        try {
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    x - 128.0, y - 128.0, z - 128.0, x + 128.0, y + 128.0, z + 128.0);
+            for (ServerLevel lvl : server.getAllLevels()) {
+                net.minecraft.world.entity.Entity direct = lvl.getEntity(id);
+                if (direct instanceof EntityMaid m && m != exclude) {
+                    return m; // 追踪表里就有（最常见：她已经被别的路径放回世界了）
+                }
+                for (EntityMaid m : lvl.getEntitiesOfClass(EntityMaid.class, box)) {
+                    if (m != exclude && id.equals(m.getUUID())) {
+                        return m; // 区块实体表里捞到的（含"已加载但不被追踪"的那具死体）
+                    }
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAutoResurrect", ignored);
+        }
+        return null;
     }
 
     // ================== 实测六百九十九：待复活查询接口（排班表/一键召回用） ==================

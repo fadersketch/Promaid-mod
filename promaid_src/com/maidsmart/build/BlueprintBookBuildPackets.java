@@ -622,7 +622,7 @@ public final class BlueprintBookBuildPackets {
                     // 旧版一律"区块不存在"（实测：区块明明存在却提示不存在）
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             (pkt.planId == null || pkt.planId.isEmpty())
-                                    ? "\u00a7c请先站在建造区块内再操作（区块外无法定位区块）。"
+                                    ? "\u00a7c请先走到建造区块旁边再操作（站在里面或贴着它都算）。"
                                     : "\u00a7c区块不存在（可能已被取消/完成）。"));
                     return;
                 }
@@ -637,7 +637,7 @@ public final class BlueprintBookBuildPackets {
                     BuildPlan.PlanState here = BlueprintBookNetworking.findPlayerPlan(level, player);
                     if (here == null || !here.planId.equals(target.planId)) {
                         player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                                "\u00a7c必须站在该建造区块内才能操作（暂停/继续/取消/速度/全员加入）。"));
+                                "\u00a7c必须接触到该建造区块才能操作（站在里面或贴着它都算；暂停/继续/取消/速度/全员加入）。"));
                         return;
                     }
                 }

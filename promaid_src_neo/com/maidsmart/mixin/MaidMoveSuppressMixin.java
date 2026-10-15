@@ -58,6 +58,24 @@ public abstract class MaidMoveSuppressMixin {
             // 执行）；直连寻路那一侧由 SpawnerTorchNavGuardMixin 掐。
             maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             ci.cancel();
+        } else if (com.maidsmart.task.MaidWorkTags.isChainDrive(maid)) {
+            // 实测九百一十三【链路走位独占】：挖矿/伐木锁着目标、或正在接战期间，本模组的链路
+            // 是唯一驱动（她自己的走位走直连 moveTo，见 MaidWorkBehavior.setWalkTarget）——
+            // TLM 其它行为写的 WALK_TARGET（跟随/闲逛/远程走位…）一律不执行。跟随行为本身
+            // 另有一道闸（MaidFollowOwnerTickMixin 取消它的 start），两条合起来 = 干活期间
+            // 原版走路逻辑整体让位。
+            // 实测九百一十六【干活也捡掉落物】：拾取任务（TLM 原生 CORE 行为）写的"去捡某件
+            // 掉落物"这一发 WALK_TARGET 例外放行——否则她干活时不会走过去捡东西（反馈："砍树
+            // 伐木时不捡掉落物"）。只认拾取任务刚打过的戳（isPickupDrive），其它 WALK_TARGET 照旧不执行。
+            if (com.maidsmart.task.MaidWorkTags.isPickupDrive(maid, gameTime)) {
+                if (maid.getBrain().getMemory(MemoryModuleType.WALK_TARGET).isPresent()) {
+                    return; // 拾取驱动中：让 MoveToTargetSink 照常把 WALK_TARGET 变成寻路
+                }
+                com.maidsmart.task.MaidWorkTags.clearPickupDrive(maid); // 目标已消化 → 结束放行
+            }
+            com.maidsmart.combat.CombatStallProbe.note(maid, "walk-cut"); // 滞留探针（诊断）
+            maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            ci.cancel();
         } else if (com.maidsmart.flight.MaidFreeFlightController.isControlling(maid)) {
             // 【仿创造飞行接管移动】：清 WALK_TARGET + 停导航 + 取消本 tick。飞行速度写在
             // MaidTickEvent（brain 之前），而 brain 随后写下的 WALK_TARGET 会被 MoveToTargetSink 变成

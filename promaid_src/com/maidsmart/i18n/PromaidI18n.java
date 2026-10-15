@@ -286,6 +286,20 @@ public final class PromaidI18n {
             return c;
         }
         try {
+            // v1.3.2 R948：多段消息逐段翻译。典型是主人聊天栏那行
+            // 「§d[名字] §d台词」——整串翻时名字里的汉字会把整句交给硬守卫放弃
+            // （名字是玩家自己起的，不在词条表里），台词那半边的英文也就没了。
+            // 判据：根本身没有正文（getString 全等于各兄弟串起来），只有兄弟段
+            // → 逐段翻。其余组件（含正文的单段串）走原来的整串路径。
+            java.util.List<Component> sibs = c.m_7360_();
+            if (!sibs.isEmpty() && ownTextEmpty(c, sibs)) {
+                net.minecraft.network.chat.MutableComponent out =
+                        Component.m_237119_().m_130948_(c.m_7383_());
+                for (Component s : sibs) {
+                    out.m_7220_(tr(s));
+                }
+                return out;
+            }
             String raw = c.getString();
             if (raw == null || raw.isEmpty()) {
                 return c;
@@ -298,6 +312,15 @@ public final class PromaidI18n {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidI18n", ignored);
             return c;
         }
+    }
+
+    /** 这个组件自己没有正文吗？（只有兄弟段 = 拼接容器） */
+    private static boolean ownTextEmpty(Component c, java.util.List<Component> sibs) {
+        StringBuilder kids = new StringBuilder();
+        for (Component s : sibs) {
+            kids.append(s.getString());
+        }
+        return c.getString().equals(kids.toString());
     }
 
     /** 替换一个 FormattedText（兼容组件与纯文本）。 */

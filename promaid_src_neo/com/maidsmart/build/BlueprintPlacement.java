@@ -222,7 +222,7 @@ public final class BlueprintPlacement {
                 if (origin.getX() + Integer.parseInt(parts[0]) == wx
                         && origin.getY() + Integer.parseInt(parts[1]) == wy
                         && origin.getZ() + Integer.parseInt(parts[2]) == wz) {
-                    return "minecraft:water".equals(parts[3]) || "minecraft:lava".equals(parts[3]);
+                    return BlueprintStepMath.isFluidStep(parts);
                 }
             } catch (NumberFormatException ignored) {
             }

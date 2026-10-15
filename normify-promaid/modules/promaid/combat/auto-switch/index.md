@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/AutoCombatSwitch.java, line: 1, end_line: 799}
   - {path: promaid_src_neo/com/maidsmart/combat/AutoCombatPools.java, line: 1, end_line: 676}
   - {path: promaid_src_neo/com/maidsmart/combat/AutoCombatTargeting.java, line: 1, end_line: 488}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 57db4901ed0cef6c0c26d0376895c3aeaa83620c1f58a84fe8a19c802626d651
 state: active

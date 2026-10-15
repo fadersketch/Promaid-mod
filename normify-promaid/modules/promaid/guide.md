@@ -18,7 +18,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/guide/GuideContent.java, line: 1, end_line: 197}
   - {path: promaid_src_neo/com/maidsmart/guide/GuideScreen.java, line: 1, end_line: 784}
   - {path: promaid_src_neo/com/maidsmart/guide/GuideChaptersFlight.java, line: 1, end_line: 1282}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 3594e84072cc777d39d922a192cfc556148d85166b68057c3690e59e3f1332ac
 state: active

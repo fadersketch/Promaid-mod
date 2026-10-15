@@ -139,6 +139,9 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     /** 是否战术激活（MaidMoveSuppressMixin 用）：开关 + 有存活目标 + 接战范围内 */
     public static boolean isActive(EntityMaid maid) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TAKE_OVER_MOVEMENT.get()) {
+            return false; // 实测九百九十三【接管走位·关】：战术不接管走位/跳劈（举盾走 isTacticsEnabled，不受影响）
+        }
         if (!isTacticsEnabled(maid)) {
             return false;
         }

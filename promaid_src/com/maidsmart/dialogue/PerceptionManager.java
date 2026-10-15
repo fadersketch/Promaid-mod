@@ -71,6 +71,23 @@ public class PerceptionManager {
      * 事件的 30 秒同类全局限频。map：女仆 UUID → 上次播报的游戏 tick。
      */
     private final Map<UUID, Long> lookCooldowns = new HashMap<>();
+    /**
+     * 实测九百九十一【敌袭语音改口径】：每只女仆"接敌中"的上一帧状态（边沿检测用）——
+     * 口径与链路走位独占**同一条腿**：她自己有活着的攻击目标（attacking desire）才算接敌。
+     */
+    private final Map<UUID, Boolean> engageState = new HashMap<>();
+    /** 接敌开始的 tick（"清掉了"这条要求这一仗至少跨过一次扫描——见 scan 里的说明） */
+    private final Map<UUID, Long> engageSince = new HashMap<>();
+    /** "清掉了"要求接敌至少持续这么多 tick（默认 20 = 一次感知扫描周期）——防目标一闪一没刷屏 */
+    private static final int CLEAR_MIN_ENGAGE_TICKS = 20;
+    /** 她最近一个真在打的目标（"清掉了"要核对它死没死——活着跟丢不算清掉，实测九百九十六） */
+    private final Map<UUID, net.minecraft.world.entity.LivingEntity> engageLast = new HashMap<>();
+    /** "清掉了"确认窗（tick）：目标死了也再等 2 秒、没重新接敌才播 */
+    private static final int CLEAR_CONFIRM_TICKS = 40;
+    /** "清掉了"挂起超时（tick）：10 秒内没等到"附近真没威胁"就静默放弃 */
+    private static final int CLEAR_PENDING_TIMEOUT = 200;
+    /** "清掉了"的挂起表（女仆 UUID → 目标刚死的那一刻）——两重确认见 scan */
+    private final Map<UUID, Long> clearPending = new HashMap<>();
     /** 主人持续注视阈值（秒）与滞回角度均从配置面板读取 */
 
     /** 快照：当前可感知的世界事实 */
@@ -126,11 +143,13 @@ public class PerceptionManager {
                 });
             }
         }
-        // 清理离开范围的女仆快照（防内存泄漏；v1.5.98c 含注视状态）
+        // 清理离开范围的女仆快照（防内存泄漏；v1.5.98c 含注视状态；实测九百九十一含接敌状态）
         this.lastSnapshots.keySet().removeIf(id -> !this.isAnyMaidNearby(server, id));
         this.lookingState.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
         this.lookingTicks.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
         this.lookCooldowns.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
+        this.engageState.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
+        this.engageSince.keySet().removeIf(id -> !this.lastSnapshots.containsKey(id));
     }
 
     private boolean isAnyMaidNearby(MinecraftServer server, UUID id) {
@@ -246,18 +265,58 @@ public class PerceptionManager {
         boolean hostileOn = com.maidsmart.config.MaidSmartConfig.PERCEPTION_HOSTILE.get();
         boolean ownerOn = com.maidsmart.config.MaidSmartConfig.PERCEPTION_OWNER.get();
         boolean weatherOn = com.maidsmart.config.MaidSmartConfig.PERCEPTION_WEATHER.get();
-        // 敌人出现（v1.5.195：文案"敌对生物/怪物"→"敌人"——威胁含中立反咬/主人被攻击的生物）
-        // v1.5.228：三个敌袭子事件共用同一个 key "enemy"（300 秒限频）——
-        // 旧版 appear/approach/gone 分开 key，敌人反复出现/消失会各刷一条
-        if (hostileOn && prev.hostiles == 0 && now.hostiles > 0) {
-            events.add(new String[]{"enemy",
-                    "有敌人靠近了！离我 " + String.format(java.util.Locale.ROOT, "%.1f", now.nearestHostileDist) + " 格"});
-        } else if (hostileOn && now.hostiles > 0 && prev.nearestHostileDist >= 0 && now.nearestHostileDist >= 0
-                && now.nearestHostileDist + 3.0 < prev.nearestHostileDist) {
-            events.add(new String[]{"enemy",
-                    "有敌人靠近…离我 " + String.format(java.util.Locale.ROOT, "%.1f", now.nearestHostileDist) + " 格了"});
-        } else if (hostileOn && prev.hostiles > 0 && now.hostiles == 0) {
-            events.add(new String[]{"enemy", "附近的敌人都清掉了，安全了！"});
+        // 敌袭语音（实测九百九十一【改口径】）：旧版拿"她周围 12 格威胁数"的快照差分判，
+        // 三个子事件还共用同一个 300 秒限频 key——"有敌人靠近"播过之后"清掉了"基本被吞
+        //（反馈："这个语音原本出现的判定也有问题"），而且"附近没威胁"也不代表她没在打
+        //（怪被引走 / 她在圈外打）。现在与链路走位独占统一成**她自己的接敌口径**
+        //（脑里/身上有活着的攻击目标，见 CombatWorkRange.attackDesireTarget）：
+        //   没目标 → 有目标 = "有敌人靠近了"（报她自己那个目标的距离）；
+        //   有目标 → 没目标 = "附近的敌人都清掉了，安全了"（这一仗至少跨过一次扫描才算数，
+        //   防目标一闪一没刷屏）。两条各用各的限频 key（enemy_near / enemy_clear），互不吞。
+        if (hostileOn) {
+            UUID id = maid.m_20148_();
+            net.minecraft.world.entity.LivingEntity foe =
+                    com.maidsmart.combat.CombatWorkRange.attackDesireTarget(maid);
+            boolean engaged = foe != null;
+            Boolean was = this.engageState.put(id, engaged);
+            if (engaged) {
+                this.engageLast.put(id, foe);
+            }
+            if (engaged && (was == null || !was)) {
+                this.engageSince.put(id, tick);
+            }
+            if (was != null) {
+                if (!was && engaged) {
+                    this.clearPending.remove(id); // 重新接敌：这一仗没完，撤销待播的"清掉了"
+                    events.add(new String[]{"enemy_near", "有敌人靠近了！离我 "
+                            + String.format(java.util.Locale.ROOT, "%.1f",
+                                    Math.sqrt(maid.m_20280_(foe))) + " 格"});
+                } else if (was && !engaged) {
+                    Long since = this.engageSince.get(id);
+                    // 实测九百九十六【清敌语音两重确认】：目标丢失 ≠ 都清掉了——先核对刚打
+                    // 的那个还活着没有：只是跟丢（钻地 / 被掀飞 / 记忆闪断）不算清掉，真的
+                    // 打死了才挂起等确认窗。日志实证：那条"安全了"竟带着 [警示] 前缀一块播、
+                    // 几秒后她又挨监守者一炮——都是"活着跟丢"造成的误报。
+                    net.minecraft.world.entity.LivingEntity last = this.engageLast.get(id);
+                    if ((since == null || tick - since >= CLEAR_MIN_ENGAGE_TICKS)
+                            && (last == null || !last.m_6084_())) {
+                        this.clearPending.put(id, tick);
+                    }
+                }
+            }
+            // 确认：目标死了不算完——挂起后要持续 CLEAR_CONFIRM_TICKS 没重新接敌、且附近
+            // 真没有威胁（hostiles == 0）才播；目标回来即撤销，一直等不到就超时静默放弃。
+            Long pending = this.clearPending.get(id);
+            if (pending != null) {
+                if (engaged) {
+                    this.clearPending.remove(id);
+                } else if (now.hostiles == 0 && tick - pending >= CLEAR_CONFIRM_TICKS) {
+                    this.clearPending.remove(id);
+                    events.add(new String[]{"enemy_clear", "附近的敌人都清掉了，安全了！"});
+                } else if (tick - pending > CLEAR_PENDING_TIMEOUT) {
+                    this.clearPending.remove(id);
+                }
+            }
         }
         // 主人受伤（v1.5.227：限频按事件类型，不再按"含血量数字的完整文案"——
         // 旧版 70%/60%/30% 每个百分比都是新 key，30 秒限频形同虚设）
@@ -368,17 +427,21 @@ public class PerceptionManager {
     }
 
     /** 气泡播报（v1.5.99b：同类事件【全局限频】30 秒——多女仆不再各喊一遍）
-     *  v1.5.119：敌人感知显示单独限频（默认 300 秒）——感知检测照常进行，仅
-     *  "发现敌人"这类显示频率大大降低；主人受伤/注视/天气仍用原 30 秒限频。
-     *  v1.5.227：限频 key 从【完整文案】改为【事件类型】——旧版文案含距离/血量
-     *  数字（"离我 71.5 格了"每次不同），key 永不重复、限频完全失效（实测敌人
-     *  警示每 10 秒刷一条）。enemy_appear/enemy_approach/enemy_gone 共用一个
-     *  300 秒敌袭限频，owner_hurt/owner_low/owner_look/weather 共用 30 秒。 */
+     *  v1.5.119：敌人感知显示单独限频（默认 300 秒）；主人受伤/注视/天气用 30 秒。
+     *  v1.5.227：限频 key 从【完整文案】改为【事件类型】（旧版文案含距离数字，key 永不
+     *  重复、限频完全失效）。实测九百九十一：敌袭两条语音各用各的 key——enemy_near 吃
+     *  300 秒敌袭限频，enemy_clear 吃 30 秒普通事件限频（原先三条敌袭语音共用一个 key，
+     *  靠近播过之后清敌语音被吞）。
+     */
     private void bubble(EntityMaid maid, String type, String text, long tick) {
         // 实测八百二十五：owner_look 已在 scan 里做【每只女仆 1800 秒】独立限频，
         // 此处不再叠加同类事件的全局限频——否则多只女仆同时被注视时互相压制。
         if (!"owner_look".equals(type)) {
-            boolean hostile = type.equals("enemy");
+            // 实测九百九十一：敌袭两条语音改用**各自**的 key——"有敌人靠近"（enemy_near）仍吃
+            // 「敌对感知显示限频」（默认 300 秒，防"发现怪"刷屏）；"附近的敌人都清掉了"
+            // （enemy_clear）改吃普通事件限频（PERCEPTION_EVENT_COOLDOWN，默认 30 秒）——
+            // 旧版两条共用一个 key，靠近播过一次之后清敌语音 5 分钟内全被吞（反馈的那条问题）。
+            boolean hostile = "enemy_near".equals(type);
             int cd = hostile
                     ? com.maidsmart.config.MaidSmartConfig.PERCEPTION_HOSTILE_SHOW_COOLDOWN.get()
                     : com.maidsmart.config.MaidSmartConfig.PERCEPTION_EVENT_COOLDOWN.get();

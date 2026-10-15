@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/dialogue/PerceptionManager.java, line: 1, end_line: 369}
   - {path: promaid_src_neo/com/maidsmart/dialogue/WorldProbe.java, line: 1, end_line: 597}
   - {path: promaid_src_neo/com/maidsmart/dialogue/PerceptionQueryTool.java, line: 1, end_line: 161}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: fd535062561c33ee67c475c1da9abd016b689702be70d1881021e10deaa36f1c
 state: active

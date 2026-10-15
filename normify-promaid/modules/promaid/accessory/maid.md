@@ -15,7 +15,7 @@ description:
       air raid for the wall-phase and self-preservation modules.
 source:
   - {path: promaid_src_neo/com/maidsmart/accessory/DaYunBauble.java, line: 1, end_line: 102}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 09aef49282b00fbd3ba2c34a18db1b83a89e1a60034bb1a25d0d2f0bcef6005f
 state: active

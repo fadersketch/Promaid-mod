@@ -53,6 +53,7 @@ public final class BombPlacement {
     }
 
     static boolean stepBlock(ServerLevel level, EntityMaid maid, BlockPos targetPos, MaidBombing.Phase ph) {
+        int anchorBurst = BombItems.boxBurstAnchor(maid); // 实测九百四十六：取第一枚前先算（否则首枚出库把计数减 1）
         ItemStack stack;
         if (ph.kind == MaidBombing.Kind.BED) {
             stack = BombItems.takeOneBed(maid);
@@ -86,6 +87,47 @@ public final class BombPlacement {
                 ph.placedBlock.add(placed);
             }
         }
+        // 实测九百四十六【压缩盒差异化·续】：盒子供弹 → 重生锚一次放多个。
+        // 与黑曜石底座 / 末地水晶**完全复用同一套落点逻辑**（placeOnSupport / tryPlaceAll 的
+        // 邻格 ring）——重生锚也是普通整块方块，能并排同时放下。
+        if (ph.kind == MaidBombing.Kind.ANCHOR && anchorBurst > 1) {
+            BlockPos maidFeetX = maid.blockPosition();
+            BlockPos maidHeadX = maidFeetX.above();
+            List<BlockPos> ring = new ArrayList<>(12);
+            for (Direction d : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+                ring.add(spot.relative(d));
+            }
+            for (Direction d1 : new Direction[]{Direction.NORTH, Direction.SOUTH}) {
+                for (Direction d2 : new Direction[]{Direction.EAST, Direction.WEST}) {
+                    ring.add(spot.relative(d1).relative(d2));
+                }
+            }
+            for (Direction d : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+                ring.add(spot.relative(d, 2));
+            }
+            sortByDistToMaid(ring, maid);
+            int placedExtra = 0;
+            for (int i = 1; i < anchorBurst; i++) {
+                ItemStack anchorExtra = BombItems.takeOne(maid, BombItems.ID_RESPAWN_ANCHOR);
+                if (anchorExtra.isEmpty()) {
+                    break;
+                }
+                BlockPos sp2 = tryPlaceAll(level, maid, anchorExtra, ring, maidFeetX, maidHeadX, true);
+                if (sp2 == null) {
+                    BombItems.giveBack(maid, anchorExtra);
+                    break;
+                }
+                Block b2 = placedBlockOf(level, sp2, anchorExtra);
+                if (b2 != null) {
+                    ph.placed.add(sp2);
+                    ph.placedBlock.add(b2);
+                    placedExtra++;
+                }
+            }
+            if (placedExtra > 0) {
+                MaidBombing.log("压缩盒供弹：重生锚一次放 " + (placedExtra + 1) + " 个（并排，同时起爆）");
+            }
+        }
         maid.swing(InteractionHand.MAIN_HAND);
         BombConfig.pose(maid, ph.display, MaidBombing.BOMB_POSE_TICKS);
         MaidBombing.log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放下 " + ph.kind.cn
@@ -98,7 +140,11 @@ public final class BombPlacement {
         if (base == null) {
             return false;
         }
+        // 实测九百四十五【压缩盒差异化】：先算盒子能供几枚水晶（必须在取第一枚之前算，
+        // 否则第一枚从盒子出库会把计数减 1，多出的那几枚就算漏了）
+        int crystalBurst = BombItems.boxBurstCrystal(maid);
         Entity spawned = null;
+        int anchorCharged = 0; // 实测九百四十六：本次充能成功的重生锚个数（多放时逐枚登记各自一炸）
         if (ph.kind == MaidBombing.Kind.CRYSTAL) {
             ItemStack crystal = BombItems.takeOne(maid, BombItems.ID_END_CRYSTAL);
             if (crystal.isEmpty()) {
@@ -125,28 +171,81 @@ public final class BombPlacement {
             //  →继续切换回飞行。0.5 秒后再挥一次手臂。正好对上重生锚自爆"
             // step 0 已经放好重生锚（副手举的是它，见 stepBlock）；这里换萤石、充能、摆臂，
             // 副手这一下亮的是萤石；ph.display 不覆盖，起爆那一刻亮的仍是重生锚。
+            // 实测九百四十六【压缩盒差异化·续】：盒子供弹时并排放下了多个重生锚，这里的「充能」
+            // 对**每个**各做一遍（各消耗 1 颗萤石）；萤石不够时把已充上的那几个照常起爆。
             ItemStack glow = ItemStack.EMPTY;
-            if (BombConfig.cfgAnchorNeedsGlowstone()) {
-                glow = BombItems.takeOne(maid, BombItems.ID_GLOWSTONE);
-                if (glow.isEmpty()) {
-                    MaidBombing.log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
-                    return false;
+            List<BlockPos> anchors = ph.placed.isEmpty()
+                    ? java.util.List.of(base) : new ArrayList<>(ph.placed);
+            int charged = 0;
+            for (BlockPos ap : anchors) {
+                if (BombConfig.cfgAnchorNeedsGlowstone()) {
+                    ItemStack g1 = BombItems.takeOne(maid, BombItems.ID_GLOWSTONE);
+                    if (g1.isEmpty()) {
+                        if (charged == 0) {
+                            MaidBombing.log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
+                            return false;
+                        }
+                        MaidBombing.log("压缩盒供弹：萤石不够，只充了 " + charged + " 个重生锚");
+                        break;
+                    }
+                    glow = g1;
+                    BombConfig.pose(maid, glow, MaidBombing.BOMB_POSE_TICKS); // 副手这时换成的就是萤石
                 }
-                BombConfig.pose(maid, glow, MaidBombing.BOMB_POSE_TICKS); // 副手这时换成的就是萤石
-            }
-            // 照原版 charge：音效 + 充能等级 +1（等级只决定"炸不炸"，1 级足够；< 4 只是防越界）
-            try {
-                BlockState cur = level.getBlockState(base);
-                if (cur.getBlock() instanceof net.minecraft.world.level.block.RespawnAnchorBlock
-                        && cur.getValue(net.minecraft.world.level.block.RespawnAnchorBlock.CHARGE) < 4) {
-                    net.minecraft.world.level.block.RespawnAnchorBlock.charge(maid, level, base, cur);
+                // 照原版 charge：音效 + 充能等级 +1（等级只决定"炸不炸"，1 级足够；< 4 只是防越界）
+                try {
+                    BlockState cur = level.getBlockState(ap);
+                    if (cur.getBlock() instanceof net.minecraft.world.level.block.RespawnAnchorBlock
+                            && cur.getValue(net.minecraft.world.level.block.RespawnAnchorBlock.CHARGE) < 4) {
+                        net.minecraft.world.level.block.RespawnAnchorBlock.charge(maid, level, ap, cur);
+                    }
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPlacement", ignored);
                 }
-            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombPlacement", ignored);
+                charged++;
             }
+            anchorCharged = charged;
             maid.swing(InteractionHand.MAIN_HAND);
             if (glow.isEmpty()) {
                 BombConfig.pose(maid, ph.display, MaidBombing.BOMB_POSE_TICKS); // 没消耗萤石（开关关掉）→ 亮重生锚
             }
+        }
+        // 实测九百四十六【压缩盒差异化·续】：重生锚盒子供弹 → 每个并排锚各起一炸（同时）。
+        // 共用同一份 placed 列表：removePlaced 只拆"还是那个方块"的格子，拆过就跳过，
+        // 所以不会重复撤 / 重复还（重生锚那一炸本就由原版消耗方块，撤除只是兜底）。
+        if (ph.kind == MaidBombing.Kind.ANCHOR && anchorCharged > 1) {
+            for (int i = 1; i < anchorCharged; i++) {
+                if (MaidBombing.PENDING.size() < MaidBombing.MAX_PENDING) {
+                    MaidBombing.PENDING.add(new MaidBombing.Bomb(level, maid, null, ph.placed.get(i),
+                            new ArrayList<>(ph.placed), new ArrayList<>(ph.placedBlock), ph.kind,
+                            gameTime + BombConfig.cfgFuse(), ph.display));
+                }
+            }
+        }
+        // 实测九百四十五【压缩盒差异化】：盒子里存了末地水晶 → 同一底座上一次放多枚，一起起爆。
+        // 多出来的这几枚**不带 placed 列表**——底座只由第一枚那一炸回收一次，绝不重复回收
+        // （否则同一块黑曜石会被还 N 次 = 白送底座）。
+        if (spawned != null && ph.kind == MaidBombing.Kind.CRYSTAL && crystalBurst > 1) {
+            // 实测九百四十七：开发者口径——多出的水晶**叠在同一格**上（不再并排散开）。
+            // 起爆时多炸落点完全重合，才是真正的「压缩爆炸」；原版末地水晶是实体，
+            // 同格重叠不互相伤害（只有被攻击才炸），我们的起爆又是自定义那一炸、不走原版，
+            // 所以叠放不会自爆、也不会漏炸。
+            for (int i = 0; i < crystalBurst - 1; i++) {
+                ItemStack extraCrystal = BombItems.takeOne(maid, BombItems.ID_END_CRYSTAL);
+                if (extraCrystal.isEmpty()) {
+                    break;
+                }
+                EndCrystal xc = new EndCrystal(level, base.getX() + 0.5,
+                        base.getY() + 1.0, base.getZ() + 0.5);
+                xc.setShowBottom(false);
+                if (!level.addFreshEntity(xc)) {
+                    BombItems.giveBack(maid, extraCrystal);
+                    break;
+                }
+                if (MaidBombing.PENDING.size() < MaidBombing.MAX_PENDING) {
+                    MaidBombing.PENDING.add(new MaidBombing.Bomb(level, maid, xc, base, null, null, ph.kind,
+                            gameTime + BombConfig.cfgFuse(), ph.display));
+                }
+            }
+            MaidBombing.log("压缩盒供弹：末地水晶一次放 " + crystalBurst + " 枚（同一底座，一起起爆）");
         }
         List<BlockPos> posList = ph.placed.isEmpty() ? null : new ArrayList<>(ph.placed);
         List<Block> blockList = ph.placedBlock.isEmpty() ? null : new ArrayList<>(ph.placedBlock);

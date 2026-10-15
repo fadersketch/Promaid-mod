@@ -19,7 +19,7 @@ import java.util.function.Supplier;
 /**
  * 排班表网络包——女仆个体操作（v1.2.4 从 ScheduleNetworking 拆出）。
  * 
- * 召唤/改名/坐标查询与回传/传送到指定点/工位标记。
+ * 召唤/改名/坐标查询与回传/传送到指定点。
  * 原为 ScheduleNetworking 的嵌套类，搬出后外部引用已全树改写。编解码逐字未动。
  */
 public final class SchedulePacketsMaid {
@@ -298,7 +298,8 @@ public final class SchedulePacketsMaid {
                 ScheduleNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                         new MaidCoordPacket(pkt.uuid, false, ScheduleNetworking.dimName(maid.m_9236_()),
                                 p.m_123341_(), p.m_123342_(), p.m_123343_(),
-                                maid.isMaidInSittingPose(), maid.m_20159_()));
+                                maid.isMaidInSittingPose(), maid.m_20159_()
+                                        || com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)));
             });
             ctx.get().setPacketHandled(true);
         }
@@ -426,77 +427,6 @@ public final class SchedulePacketsMaid {
         }
     }
 
-    public static class MarkWorkPosPacket {
-        public final int x;
-        public final int y;
-        public final int z;
-
-        public MarkWorkPosPacket(int x, int y, int z) {
-            this.x = x;
-            this.y = y;
-            this.z = z;
-        }
-
-        public static void encode(MarkWorkPosPacket pkt, FriendlyByteBuf buf) {
-            buf.writeInt(pkt.x);
-            buf.writeInt(pkt.y);
-            buf.writeInt(pkt.z);
-        }
-
-        public static MarkWorkPosPacket decode(FriendlyByteBuf buf) {
-            return new MarkWorkPosPacket(buf.readInt(), buf.readInt(), buf.readInt());
-        }
-
-        public static void handle(MarkWorkPosPacket pkt, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> {
-                ServerPlayer player = ctx.get().getSender();
-                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
-                    return;
-                }
-                // 标记点距玩家 ≤64 格（客户端射线 8 格，这里防御恶意远标）
-                double dSq = player.m_20275_(pkt.x + 0.5, pkt.y + 0.5, pkt.z + 0.5);
-                if (dSq > 64.0 * 64.0) {
-                    return;
-                }
-                BlockPos pos = new BlockPos(pkt.x, pkt.y, pkt.z);
-                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                        player.m_20185_() - 32, player.m_20186_() - 32, player.m_20189_() - 32,
-                        player.m_20185_() + 32, player.m_20186_() + 32, player.m_20189_() + 32);
-                int n = 0;
-                for (net.minecraft.world.entity.Entity e : level.m_45976_(
-                        net.minecraft.world.entity.Entity.class, box)) {
-                    if (!(e instanceof EntityMaid maid)
-                            || maid.m_269323_() != player
-                            || !maid.isHomeModeEnable()) {
-                        continue;
-                    }
-                    var sp = maid.getSchedulePos();
-                    if (sp == null) {
-                        continue;
-                    }
-                    sp.setWorkPos(pos);
-                    sp.setIdlePos(pos);
-                    sp.setConfigured(true);
-                    sp.restrictTo(maid);
-                    // 实测八百一十五：中键是玩家亲手画的圈 → 落「玩家圈」标记，此后本模组的
-                    // 自动锚定（排班/建造拿当前位置兜底）一律让位，不再顶掉这个圈
-                    com.maidsmart.schedule.PlayerCircle.markPlayerCircle(maid);
-                    n++;
-                }
-                String at = "(" + pkt.x + ", " + pkt.y + ", " + pkt.z + ")";
-                if (n > 0) {
-                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7a已把 " + n + " 名女仆的工作区域标到 " + at
-                                    + "——她们的任务选点/散步/巡逻都会收进这里（半径=「排班活动半径」）"));
-                } else {
-                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a77附近 32 格内没有在家模式（不跟随/排班中）的女仆，标记没生效"));
-                }
-            });
-            ctx.get().setPacketHandled(true);
-        }
-    }
-
     /**
      * v1.3.0 实测六百五十五：快捷设置页的「女仆配置」按钮——**直接打开她的原版女仆界面**
      * （与玩家右键女仆同款：背包 / 外观 / 行为设置，即 {@code openMaidGui} 的 index 0 那页）。
@@ -584,8 +514,9 @@ public final class SchedulePacketsMaid {
      *
      * <p>服务端把 maid 的坐姿设为 {@code sit}（TLM 的 setInSittingPose / SRG m_21837_，
      * 它同时写入 orderedToSit 命令位——与右键指挥她坐下是同一个入口）。
-     * <b>骑乘（乘客）时拒绝</b>：她正坐在船上/坐骑上，改她的坐姿没有意义也会打架
-     * （客户端按钮同样置灰，这里是服务端兜底，防客户端伪造包）。
+     * <b>骑乘时拒绝</b>：她正坐在船上/坐骑上（含龙 / 卓越前线载具那种"悬空鞍位"、并非
+     * 原版乘客的情形），改坐姿没有意义也会打架（客户端按钮同样置灰，这里是服务端兜底，
+     * 防客户端伪造包）。
      */
     public static class MaidSitTogglePacket {
         public final String uuid;
@@ -617,7 +548,8 @@ public final class SchedulePacketsMaid {
                             "§7没找到她——可能已被收进魂符或不在已加载区块"));
                     return;
                 }
-                if (maid.m_20159_()) {
+                if (maid.m_20159_()
+                        || com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             "§7她正骑在坐骑/船上——先让她下来才能调整站/坐"));
                     return;

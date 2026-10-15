@@ -39,6 +39,15 @@ public class CompressionBoxItem extends Item {
         return !stack.m_41619_() && stack.m_41720_() instanceof CompressionBoxItem;
     }
 
+    /** 收纳成功的一记声音：与玩家穿装备同款（原版 {@code ARMOR_EQUIP_GENERIC}，音量/音调 1.0、
+     *  声源 PLAYERS、落点取玩家自己脚下）——右键把东西收进盒子时的那一下听感就来自这里。 */
+    public static void playStoreSound(Player player) {
+        try {
+            player.m_5496_(net.minecraft.sounds.SoundEvents.f_11675_, 1.0F, 1.0F);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxItem", ignored);
+        }
+    }
+
     /**
      * 常驻附魔光效（v1.2.2 实测六百一十八，用户要求「给压缩盒打上附魔的特效，
      * 排班表里已经做过了，直接照搬」）。
@@ -66,6 +75,70 @@ public class CompressionBoxItem extends Item {
             CompressionBoxNetworking.openFor(sp, hand, CompressionBoxData.read(stack));
         }
         return new InteractionResultHolder<>(InteractionResult.CONSUME, stack);
+    }
+
+    /**
+     * 收纳袋式交互：光标上拿着压缩盒、右键点某个槽 → 把那一组装进盒子，槽里留装不下的余量。
+     * <p>两棵树不一样：Neo 1.21.1 的 {@code AbstractContainerMenu.doClick} 本来就调这个钩子，
+     * 这份 override 直接生效；Forge 1.20.1 原版没有任何调用方（方法名只在 ItemStack / Item /
+     * BundleItem 三处定义过，原版收纳袋点击逻辑 1.20.5 才进菜单），故 Forge 侧靠
+     * {@code CompressionBoxClickMixin} 在 doClick 里手动调它，否则这里是死代码。
+     */
+    @Override
+    public boolean m_142207_(ItemStack box, net.minecraft.world.inventory.Slot slot,
+                              net.minecraft.world.inventory.ClickAction action,
+                              net.minecraft.world.entity.player.Player player) {
+        try {
+            if (action != net.minecraft.world.inventory.ClickAction.SECONDARY || box.m_41613_() != 1) {
+                return false; // 只接右键；盒子一叠多个时不接管（原版收纳袋同口径）
+            }
+            ItemStack inSlot = slot.m_7993_();
+            if (inSlot.m_41619_() || !CompressionBoxFilter.canStore(inSlot)) {
+                return false; // 空槽没得装；禁入的（带附魔 / 盒子本身）不装
+            }
+            List<ItemStack> items = CompressionBoxData.read(box);
+            ItemStack left = CompressionBoxData.merge(items, inSlot.m_41777_());
+            if (left.m_41613_() == inSlot.m_41613_()) {
+                return false; // 一点都没装进去（5 格满了 / 这一件不合）→ 交还原版
+            }
+            CompressionBoxData.write(box, items);
+            slot.m_5852_(left); // 槽里留下装不下的余量
+            slot.m_6654_();
+            playStoreSound(player); // 收纳成功 → 一记穿装备声
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxItem", ignored);
+            return false;
+        }
+    }
+
+    /**
+     * 收纳袋式交互的反向：**盒在槽里、光标上拿着别的东西，右键点盒子** → 把光标那组装进去。
+     * 与上面那条成对（原版收纳袋两个方向都收），同样只有 Neo 的原版菜单会主动调它。
+     */
+    @Override
+    public boolean m_142305_(ItemStack box, ItemStack other, net.minecraft.world.inventory.Slot slot,
+                           net.minecraft.world.inventory.ClickAction action,
+                           net.minecraft.world.entity.player.Player player,
+                           net.minecraft.world.entity.SlotAccess access) {
+        try {
+            if (action != net.minecraft.world.inventory.ClickAction.SECONDARY || box.m_41613_() != 1
+                    || other.m_41619_() || !CompressionBoxFilter.canStore(other)) {
+                return false;
+            }
+            List<ItemStack> items = CompressionBoxData.read(box);
+            ItemStack left = CompressionBoxData.merge(items, other.m_41777_());
+            if (left.m_41613_() == other.m_41613_()) {
+                return false;
+            }
+            CompressionBoxData.write(box, items);
+            slot.m_5852_(box); // NBT 变过 → 写回槽（触发脏标记/同步）
+            slot.m_6654_();
+            access.m_142104_(left); // 光标上留装不下的余量（可能为空）
+            playStoreSound(player); // 收纳成功 → 一记穿装备声
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxItem", ignored);
+            return false;
+        }
     }
 
     /** 物品描述：装了什么 + 两个关键口径（5 格 / 每格上限），不写满屏 */

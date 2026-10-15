@@ -27,7 +27,23 @@ public final class BlockWalkOn {
     /** 登记"走上去"目标并给首次推力（后续 tick 由 tick() 持续推送）。
      *  v1.1.0：目标 Y 低于当前脚位时自动走"下行台阶"到达判定（见 tick）。 */
     public static void start(EntityMaid maid, double tx, double ty, double tz) {
+        faceToward(maid, tx, tz); // 实测九百七十八：推之前先转身，别倒着走
         ACTIVE.put(maid.getUUID(), new State(tx, ty, tz, 12));
+    }
+
+    /** 实测九百七十八：把身体朝向转到 (tx, tz)。垫块后的"走上去"是**直接施速位移**、
+     *  不走导航，旧版不转身 → 头朝向与前进方向各走各的（木头/矿石都出现过倒着搭、倒着走）。
+     *  三个角度一起写：setYRot（实体朝向）+ setYBodyRot（身体）+ setYHeadRot（头）。 */
+    public static void faceToward(EntityMaid maid, double tx, double tz) {
+        double dxf = tx - maid.getX();
+        double dzf = tz - maid.getZ();
+        if (dxf * dxf + dzf * dzf < 1.0E-4) {
+            return;
+        }
+        float yaw = (float) (Math.atan2(dzf, dxf) * (180.0 / Math.PI)) - 90.0F;
+        maid.setYRot(yaw);
+        maid.setYBodyRot(yaw);
+        maid.setYHeadRot(yaw);
     }
 
     public static boolean isActive(EntityMaid maid) {
@@ -70,6 +86,7 @@ public final class BlockWalkOn {
         double dz = s.z() - maid.getZ();
         double d = Math.sqrt(dx * dx + dz * dz);
         if (d > 1e-3) {
+            faceToward(maid, s.x(), s.z()); // 实测九百七十八：推送方向即朝向
             // v1.1.0 实测二百一十五【防摔落·潜行式边缘守卫】：目标格下方已经没有
             // 支撑（方块被回收/没放上/被替换）→ 不推不冲，水平收力原地站住——
             // 绝不在断崖边上主动把自己推下去（宁可她停住等下一步重铺）。

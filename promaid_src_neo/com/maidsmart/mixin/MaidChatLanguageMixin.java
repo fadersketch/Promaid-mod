@@ -48,12 +48,16 @@ public abstract class MaidChatLanguageMixin {
 
     /**
      * v1.5.231b：输出语言检测——LLM 回复落地处（LLMCallback.onSuccess）。
-     * 检测 chatText 是否为设定语言：目标中文时，汉字占比过低或假名占比过高
-     * = 不符 → 【内嵌翻译】（v1.5.250 软化，替代旧"审查打回重刷"）：
+     * 检测 chatText 是否符合**设定的输出语言**；不符则【内嵌翻译】成目标语言：
      * - 把原文交给 LLM 翻译成目标语言（一条 system 翻译指令 + 原文），
      *   翻译结果直接作为最终回复显示；
-     * - 翻译结果仍非中文 → 放行原文（不再循环翻译，也不提示"已放弃"）；
+     * - 翻译结果仍不符 → 放行原文（不再循环翻译，也不提示"已放弃"）；
      * - 日志搜 "lang translate" 看重试/原文。
+     *
+     * <p>v1.3.2 R948：旧版只查中文目标（{@code !target.startsWith("zh") → return}），
+     * 于是"目标不是中文"时模型飘回中文没有任何兜底。现在判据按目标语言走
+     * （{@link com.maidsmart.dialogue.OutputLanguage#matches}），翻译指令里的
+     * 目标语言也跟着设定走（旧版写死"翻译成简体中文"）。
      */
     @Mixin(LLMCallback.class)
     public abstract static class MaidLangCheckMixin {
@@ -69,17 +73,12 @@ public abstract class MaidChatLanguageMixin {
                 if (!MaidSmartConfig.DIALOGUE_LANG_CHECK.get()) {
                     return;
                 }
-                String target = MaidSmartConfig.DIALOGUE_OUTPUT_LANGUAGE.get();
-                if (target == null || target.isBlank()) {
-                    target = "zh_cn";
-                }
-                if (!target.startsWith("zh")) {
-                    return; // 非中文目标暂不检测（当前主要解决日文输出问题）
-                }
+                String target = com.maidsmart.dialogue.OutputLanguage.current();
                 LLMCallback cb = (LLMCallback) (Object) this;
                 String text = response.getChatText();
-                if (text == null || text.isBlank() || isLikelyChinese(text)) {
-                    return; // 中文 → 放行
+                if (text == null || text.isBlank()
+                        || com.maidsmart.dialogue.OutputLanguage.matches(text, target)) {
+                    return; // 符合设定语言 → 放行
                 }
                 int retry = RETRIES.merge(cb, 1, Integer::sum);
                 ci.cancel(); // 拦截本次回复（不显示原文）
@@ -88,18 +87,23 @@ public abstract class MaidChatLanguageMixin {
                 // 交给 LLM 翻译成目标语言，翻译结果直接作为最终回复（一次翻译，
                 // 不循环）
                 if (retry > 1) {
-                    // 已翻译过一次仍非中文 → 放弃翻译，放行原文（总比"已放弃"
+                    // 已翻译过一次仍不符 → 放弃翻译，放行原文（总比"已放弃"
                     // 提示强——女仆至少回答了）
-                    LOGGER.warn("lang translate giveup: maid={} text={}",
-                            cb.getMaid().getDisplayName(), clip(text));
+                    LOGGER.warn("lang translate giveup: maid={} target={} text={}",
+                            cb.getMaid().getDisplayName(), target, clip(text));
                     showBubble(cb, text);
                     return;
                 }
-                LOGGER.warn("lang translate: maid={} text={}", cb.getMaid().getDisplayName(), clip(text));
+                LOGGER.warn("lang translate: maid={} target={} text={}",
+                        cb.getMaid().getDisplayName(), target, clip(text));
                 java.util.List<LLMMessage> messages = new java.util.ArrayList<>();
                 messages.add(LLMMessage.systemChat(cb.getMaid(),
-                        "你是翻译助手。请把用户消息翻译成简体中文（zh_cn）。只输出译文本身，"
-                                + "不要任何解释、注释或前缀。"));
+                        "你是翻译助手。请把用户消息翻译成"
+                                + com.maidsmart.dialogue.OutputLanguage.displayName(target)
+                                + "（" + target + "）。只输出译文本身，不要任何解释、注释或前缀。"
+                                + " You are a translation assistant: translate the user message into "
+                                + com.maidsmart.dialogue.OutputLanguage.displayName(target)
+                                + ". Output only the translation, with no explanation, notes or prefix."));
                 messages.add(LLMMessage.userChat(cb.getMaid(), text));
                 // 移除旧"思考中"气泡，发起翻译请求
                 cb.getMaid().getChatBubbleManager().removeChatBubble(cb.getWaitingChatBubbleId());
@@ -132,27 +136,5 @@ public abstract class MaidChatLanguageMixin {
             }
         }
 
-        /** 中文判定：汉字占比 ≥40% 且假名占比 <10%（日文 = 假名多；英文 = 汉字 0） */
-        private static boolean isLikelyChinese(String text) {
-            int han = 0;
-            int kana = 0;
-            int letters = 0;
-            for (int i = 0; i < text.length(); i++) {
-                char c = text.charAt(i);
-                if (c >= '\u4e00' && c <= '\u9fff') {
-                    han++;
-                    letters++;
-                } else if (c >= '\u3040' && c <= '\u30ff') {
-                    kana++;
-                    letters++;
-                } else if (Character.isLetter(c)) {
-                    letters++;
-                }
-            }
-            if (letters == 0) {
-                return true; // 纯符号/数字不判定
-            }
-            return han >= letters * 0.4 && kana < letters * 0.1;
-        }
     }
 }

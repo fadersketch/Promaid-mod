@@ -11,9 +11,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 
 /**
  * PAD 情绪事件钩子（v1.5.95）——把游戏事件喂给 AffectManager：
- * - 主人与女仆对话（PlayerLoggedIn 简化：每次玩家对女仆右键喂食/交互触发，见 onOwnerInteract）
- * - 主人打女仆（LivingIncomingDamageEvent：攻击者=主人）
- * - 女仆被世界伤害（攻击者非主人）
+ * - 主人与女仆对话 / **喂食**（右键：手里是食物即算喂饭，见 onOwnerInteract；实测九百六十九）
+ * - 主人打女仆 / **别的玩家打女仆**（后者另算一档，实测九百六十九）
+ * - 女仆被世界伤害（攻击者非玩家：怪物 / 摔落 / 环境）
  * - tick 静默恢复（每 20 秒）
  *
  * 注意：本类不修改任何现有数值系统（TLM 好感等现有数值），只更新独立情绪层。
@@ -38,11 +38,16 @@ public class AffectEventHooks {
             return;
         }
         net.minecraft.world.entity.Entity src = event.getSource().getEntity();
-        if (src instanceof ServerPlayer) {
-            // 主人（或任意玩家）打女仆
-            AffectManager.onHurtByOwner(maid);
+        if (src instanceof ServerPlayer player) {
+            // 实测九百六十九：区分"主人打"和"别的玩家打"——旧版把任何玩家的伤害都按主人档算，
+            // 多人服里别人打你的女仆，账会记到你头上。
+            if (maid.getOwner() == player) {
+                AffectManager.onHurtByOwner(maid);
+            } else {
+                AffectManager.onHurtByStranger(maid);
+            }
         } else {
-            // 世界伤害（怪物/摔落/环境）
+            // 世界伤害（怪物/摔落/火/挤压/环境）
             AffectManager.onHurtByWorld(maid);
         }
     }
@@ -56,10 +61,18 @@ public class AffectEventHooks {
         if (!(event.getTarget() instanceof EntityMaid maid)) {
             return;
         }
-        if (event.getEntity() instanceof ServerPlayer
-                && maid.getOwner() == event.getEntity()
+        if (event.getEntity() instanceof ServerPlayer player
+                && maid.getOwner() == player
                 && maid.level() instanceof ServerLevel level && !level.isClientSide()) {
-            AffectManager.onOwnerMessage(maid);
+            // 实测九百六十九：手里拿着食物右键她 = 喂饭 → 愉悦升（手册承诺的"喂她会变开心"）；
+            // 空手 / 非食物右键仍按"主人互动"（亲密与愉悦都微升）
+            net.minecraft.world.item.ItemStack held = event.getItemStack();
+            if (!held.isEmpty() && held.getItem().components().has(
+                    net.minecraft.core.component.DataComponents.FOOD)) {
+                AffectManager.onOwnerFeed(maid);
+            } else {
+                AffectManager.onOwnerMessage(maid);
+            }
         }
     }
 

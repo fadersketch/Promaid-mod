@@ -773,9 +773,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测一百五十三：TLM 火焰保护饰品同豁免——饰品在受伤时给抗火+灭火剂，
      *  泡岩浆不该惊慌 */
     private boolean envDangerCritical(EntityMaid maid) {
-        return maid.isInLava() && !hasFireResist(maid)
-                && !(com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
-                        && hasFireProtectBauble(maid)); // isInLava 且无抗火且无火焰保护饰品
+        return maid.isInLava() && !fireProof(maid); // isInLava 且无抗火且无火焰保护饰品
     }
 
     /** v1.5.135：软环境危险（着火 / 溺水 / 卡墙窒息）——85% 血量以下才逃。
@@ -787,11 +785,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  自己免疫对应伤害（火焰=受伤给抗火+灭火剂；溺水=空气自动补满），
      *  佩戴时对应情境不再算软危险。 */
     private boolean envDangerSoft(EntityMaid maid) {
-        boolean fireProtected = com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
-                && hasFireProtectBauble(maid);
         boolean drownProtected = com.maidsmart.config.MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get()
                 && hasDrownProtectBauble(maid);
-        return (maid.isOnFire() && !hasFireResist(maid) && !fireProtected)   // isOnFire 且无抗火且无火焰保护饰品
+        return (maid.isOnFire() && !fireProof(maid))   // isOnFire 且无抗火且无火焰保护饰品
                 || (maid.isInWater() && maid.getAirSupply() < 60 && !drownProtected) // isInWater 且氧气不足 1/5 且无溺水保护饰品
                 || this.headInSolid(maid)                             // 头部卡进实心方块（真窒息）
                 || this.envDamageCell(maid);                          // v1.5.395：站在伤害方块上（营火/岩浆块等，见下）
@@ -806,6 +802,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  凡是表里、又不是仙人掌/甜浆果丛/石笋/凋零玫瑰这类「接触一下、走位即脱开」的小伤害，
      *  一律算软危险——所以以后往表里新增任何「踩上去掉血」的方块都自动被兜住（通用）。 <p>【为什么不误伤小伤害】v1.5.87 的设计约定：仙人掌/浆果丛这类接触伤害不该触发 整套逃跑流程（她本来就在正常走路时被蹭一下）。{@link #SOFT_CONTACT_DAMAGE} 把 这四类排除在外，行为与旧版一致。 */
     private boolean envDamageCell(EntityMaid maid) {
+        // 实测九百三十八【抗火 / 火焰保护饰品豁免】：站营火 / 岩浆块上挨的也是**火伤**，抗火效果或
+        //   火焰保护饰品在身时她根本不掉血——旧版这一项没跟岩浆 / 着火那两项一样做豁免，于是
+        //   "有抗火还惊慌逃跑"。这里补上同一道豁免。
+        if (fireImmune(maid)) {
+            return false;
+        }
         net.minecraft.world.level.Level level = maid.level();
         BlockPos feet = maid.blockPosition();
         return this.damageCellAt(level, feet)
@@ -2515,9 +2517,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  顶出）——"全失败恢复正常状态"后仍保留最低限度的保命移动。
      *  只改移动方向，不做任何物品判定（自救判断已交给其他链路）。 */
     private void giveUpMovement(EntityMaid maid) {
-        if (maid.isInLava() && !hasFireResist(maid)
-                && !(com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
-                        && hasFireProtectBauble(maid))) {
+        if (maid.isInLava() && !fireProof(maid)) {
             BlockPos edge = this.findLavaEdge(maid);
             if (edge != null) {
                 maid.getNavigation().moveTo(edge.getX() + 0.5,
@@ -2525,9 +2525,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             return;
         }
-        if (maid.isOnFire() && !hasFireResist(maid)
-                && !(com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
-                        && hasFireProtectBauble(maid))) {
+        if (maid.isOnFire() && !fireProof(maid)) {
             LivingEntity owner = maid.getOwner();
             if (owner != null && owner.isAlive()) {
                 double odx = owner.getX() - maid.getX();
@@ -2572,8 +2570,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //（v1.5.137：改用 isInLava = isInLava——旧 isInWaterOrRain 是 isInWaterOrLava，
         //  站水里也会误进岩浆逃生）
         if (maid.isInLava()) {
-            // v1.5.232：抗火随时断开——有抗火(≥30s)时岩浆无害，链路否定恢复正常
-            if (hasFireResist(maid)) {
+            // v1.5.232：抗火 / 火焰保护饰品随时断开——免疫时岩浆无害，链路否定恢复正常
+            if (fireProof(maid)) {
                 return;
             }
             BlockPos safe = this.findSafeSpot(maid);
@@ -2680,15 +2678,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //  直接抗火或逃跑；
         //  抗火→金苹果；全失败交回自保； （"着火后跳入水坑和用末影珍珠都没有了"：珍珠此前只在岩浆链路））
         if (maid.isOnFire()) {
-            // v1.5.232：抗火随时断开——火不伤人，等自然灭即可（isOnFire 仍 true）
-            if (hasFireResist(maid)) {
-                return;
-            }
+            // v1.5.232：抗火 / 火焰保护饰品随时断开——火不伤人，等自然灭即可（isOnFire 仍 true）
             // v1.1.0 实测一百五十三：火焰保护饰品——火焰伤害由饰品扛（受伤时给
-            // 15 秒抗火 + 喷灭火剂），不需要惊慌灭火/找水/往主人身边跑（反馈：
-            // "女仆装备火焰保护时仍然会表示自己着火"）
-            if (com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
-                    && hasFireProtectBauble(maid)) {
+            // 15 秒抗火 + 喷灭火剂），不需要惊慌灭火/找水/往主人身边跑。实测九百三十九：
+            // 这一档与上面那条收口成同一判据 fireProof（两条本就是一个语义）。
+            if (fireProof(maid)) {
                 return;
             }
             if (this.extinguishSelf(maid)) {
@@ -2874,9 +2868,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //    绕开（"面前一格岩浆也有逃跑的迹象"）。v1.5.234 移到最后——避让只是
         //    预防性绕行不直接掉血，所有"正在掉血"的逃生（岩浆/着火/溺水/卡墙）
         //    判定有结果后才轮到它。
-        //    v1.5.229：有抗火时跳过避让——岩浆无害，绕行是浪费（地狱常驻岩浆，
-        //    有抗火就该正常行走而不是永远绕路）
-        if (this.cachedNearLava != null && !hasFireResist(maid)) {
+        //    v1.5.229：有抗火 / 火焰保护饰品时跳过避让——岩浆无害，绕行是浪费
+        //    （地狱常驻岩浆，免疫时就该正常行走而不是永远绕路）
+        if (this.cachedNearLava != null && !fireProof(maid)) {
             // v1.5.204：避让提示（每场一次；自动走系统消息 TTS 朗读）
             if (!this.announcedEnv) {
                 this.announcedEnv = true;
@@ -3041,13 +3035,33 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  v1.5.229：剩余 <30 秒（600 tick）视为【没有】——泡岩浆时效果 30 秒内
      *  就会过期，等过期了才判定会多掉 30 秒的血；提前续杯无空档。 */
     private static boolean hasFireResist(EntityMaid maid) {
+        return hasFireResistAtLeast(maid, 600); // 续杯门槛：见上方注释
+    }
+
+    /** 实测九百三十九：身上还带着抗火效果（不看剩余多久）——"烫不疼她"用。
+     *  与 {@link #hasFireResist} 的 ≥30 秒门槛分开：要不要续杯看余量，免不免疼只看有没有。 */
+    private static boolean hasFireResistNow(EntityMaid maid) {
+        return hasFireResistAtLeast(maid, 1);
+    }
+
+    /** 实测九百三十九：火对她是"无害且短期内持续"的吗——抗火药水（剩余 ≥30 秒）或 TLM
+     *  火焰保护饰品。但凡"要不要为火逃跑 / 灭火 / 绕开岩浆"的判定都走这条（收口，替代各处
+     *  手写的 hasFireResist + hasFireProtectBauble 两份）；只看"这一 tick 烫不疼"的地方
+     *  （站在伤害方块上 / 飞行烫伤脱困）用 {@link #fireImmune}。 */
+    private static boolean fireProof(EntityMaid maid) {
+        return hasFireResist(maid)
+                || (com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
+                        && hasFireProtectBauble(maid));
+    }
+
+    /** 抗火效果判定：剩余 ≥ {@code minTicks} 才算命中（饮用 / 喷溅 / 滞留通用） */
+    private static boolean hasFireResistAtLeast(EntityMaid maid, int minTicks) {
         for (net.minecraft.world.effect.MobEffectInstance eff : maid.getActiveEffects()) {
             net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT
                     .getKey(eff.getEffect().value());
-            if (key != null && "minecraft:fire_resistance".equals(key.toString())) {
-                if (eff.getDuration() >= 600) { // getDuration：剩余 ≥30 秒才算有效
-                    return true;
-                }
+            if (key != null && "minecraft:fire_resistance".equals(key.toString())
+                    && eff.getDuration() >= minTicks) {
+                return true;
             }
         }
         return false;
@@ -3081,16 +3095,16 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 【实测七百一十一】她此刻**烫不疼**吗——抗火药水（剩余 ≥30 秒）或 TLM 火焰保护饰品。
+     * 【实测七百一十一】她此刻**烫不疼**吗——抗火药水（只要还在生效）或 TLM 火焰保护饰品。
      *
-     * <p>从 {@code hasFireResist} / {@code hasFireProtectBauble} 收口成一条**对外**判据，
-     * 给「烫伤脱困」（{@link MaidHeatEscape}）用：泡在岩浆里但两样占其一的她**本来就不掉血**，
-     * 不该被当成"正被烫到"而惊慌传送。口径与自保那边逐字一致（
-     * {@code envDangerCritical} / {@code envDangerSoft} 用的就是这两条），没有第二套。
+     * <p>从 {@code hasFireResistNow} / {@code hasFireProtectBauble} 收口成一条**对外**判据，
+     * 给「烫伤脱困」（{@link MaidHeatEscape}）与「险境脱离」（危险全来自热源那种格子）用：
+     * 泡在岩浆里但两样占其一的她**本来就不掉血**，不该被当成"正被烫到"而惊慌传送。
+     * 不看余量——{@code hasFireResist} 那道 ≥30 秒只管续杯（见 {@link #fireProof}）；实测九百三十九：有抗火仍被传送，就是卡在这道门槛上。
      */
     public static boolean fireImmune(EntityMaid maid) {
         try {
-            return hasFireResist(maid)
+            return hasFireResistNow(maid)
                     || (com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
                             && hasFireProtectBauble(maid));
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
@@ -3418,7 +3432,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  之上"的空气格。而岩浆是**流体方块**，贴着地面那一层；她站在地面上时脚下那格才是岩浆面，
      *  眼高那格是空气 → **恒判干净**，于是这个避让对"贴着地走/走进浅岩浆"几乎完全失效 （这就是"自己寻路时对危险环境的判定也有点问题，有的时候还是会踩上去"的根因）。 现在改成探**脚底那一层**（{@code floor(getY())}，与 {@link com.maidsmart.tool.DangerBlocks} 的站立格口径一致：本体格 + 脚下一格），并按她的碰撞箱宽度横扩（0.6 宽 → ±1 格）， 所以她"擦着岩浆边缘走"时也会被判到。 */
     private void avoidLavaMovement(EntityMaid maid) {
-        if (this.cachedNearLava == null || hasFireResist(maid) || maid.isInLava()) {
+        if (this.cachedNearLava == null || fireProof(maid) || maid.isInLava()) {
             return;
         }
         net.minecraft.world.phys.Vec3 vel = maid.getDeltaMovement();

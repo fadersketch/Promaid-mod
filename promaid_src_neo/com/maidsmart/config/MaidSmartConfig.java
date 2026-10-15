@@ -45,6 +45,13 @@ public static final ModConfigSpec.BooleanValue STROLL_SPEED_MIGRATED;
      * 旧默认 6 的档**才搬到 4，玩家自己调过的值一律不碰。
      */
     public static final ModConfigSpec.BooleanValue ORBIT_RADIUS_MIGRATED;
+    /**
+     * 【实测九百八十九】TNT 追踪时长默认 10 → 20（0.5 秒 → 1 秒）的一次性迁移标记。
+     *
+     * <p>老档 toml 里存着 10（实测五百九十一 留下的默认），不迁的话"追踪久一点、别再扔偏"
+     * 对老档不生效。判据与前几次同款：**只有还停在旧默认 10 的档**才搬到 20。
+     */
+    public static final ModConfigSpec.BooleanValue TNT_TRACK_20_MIGRATED;
 /** v1.3.0(beta) 实测六百八十一：默认值修复迁移标记（把 679 误当默认的 12 项搬回真默认；内部，一次性） */
 public static final ModConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
     public static final ModConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
@@ -71,6 +78,8 @@ public static final ModConfigSpec.ConfigValue<String> BUILD_KEEP_FLUIDS;
 public static final ModConfigSpec.ConfigValue<String> BUILD_LOOSE_MATERIALS;
 // v1.5.331：TNT 点火保护期（秒）——建造期/完工激活期/宽限期压制一切 TNT 点火
 public static final ModConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
+/** 实测九百六十一：完工「后门」——完工瞬间静默清空她建的这片 + 按蓝图整片重放（默认开） */
+public static final ModConfigSpec.BooleanValue BUILD_SNAP_FINISH;
 /** v1.1.0 实测八十二：蓝图投影预览——区块显示时叠加半透明幽灵方块轮廓（确认朝向/形状） */
 public static final ModConfigSpec.BooleanValue BUILD_PROJECTION;
 /** 实测五百五十三③：建造缺料时从区块内容器取料 */
@@ -140,8 +149,6 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.IntValue MINE_DOWN_RANGE;
     public static final ModConfigSpec.IntValue MINE_UP_RANGE;
     public static final ModConfigSpec.IntValue MINE_BREAK_BUDGET;
-    public static final ModConfigSpec.DoubleValue MINE_VALUE_WEIGHT;
-    public static final ModConfigSpec.DoubleValue MINE_DEPTH_PENALTY;
     public static final ModConfigSpec.DoubleValue MINE_SPEED_FACTOR;
     public static final ModConfigSpec.DoubleValue MINE_MOVE_SPEED;
     public static final ModConfigSpec.IntValue MINE_JUNK_KEEP;
@@ -150,16 +157,16 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue MINE_PILLAR_GUARD;
     public static final ModConfigSpec.BooleanValue MINE_HARD_BLOCK_REPORT;
     // v1.5.102：挖矿剩余数值（锚点/超时/距离/节奏/播报）
-    public static final ModConfigSpec.IntValue MINE_CREATIVE_DEFAULT_VALUE;
     // v1.0.4：透视感知开关（默认关——关闭后仅发现视线无阻的矿物，见 hasClearSight）
     public static final ModConfigSpec.BooleanValue MINE_SEEK_THROUGH_WALLS;
     public static final ModConfigSpec.IntValue MINE_ANCHOR_TIMEOUT;
     public static final ModConfigSpec.IntValue MINE_RELOCATE_THROTTLE;
-    public static final ModConfigSpec.IntValue MINE_TARGET_TIMEOUT;
     public static final ModConfigSpec.DoubleValue MINE_REACH;
     public static final ModConfigSpec.IntValue MINE_PILLAR_COOLDOWN;
     public static final ModConfigSpec.IntValue MINE_JUNK_CHECK_INTERVAL;
     public static final ModConfigSpec.IntValue MINE_SKIP_REPORT_INTERVAL;
+    /** 实测九百七十七：挖矿/伐木确认无目标后的静默闲逛时长（秒）——见 MaidWorkBehavior.startIdlePause */
+    public static final ModConfigSpec.IntValue MINE_NO_TARGET_PAUSE;
     // v1.5.161：进阶挖矿——连锁采集 / 自动收集（默认关闭）
     public static final ModConfigSpec.BooleanValue MINE_CHAIN_MINING;
     public static final ModConfigSpec.BooleanValue MINE_AUTO_COLLECT;
@@ -171,19 +178,13 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue MINE_RIDE_NO_PILLAR;
     /** 实测八百六十九【没镐不启动，对齐参考 mod 官方流程图】：手+背包一把镐都没有时挖矿任务不启动 */
     public static final ModConfigSpec.BooleanValue MINE_REQUIRE_PICK;
-    /** 实测八百六十九【锁定期间持续重挑】：每 5 秒廉价重评估一次（换更优的矿才切；切换不重置锁定超时） */
-    public static final ModConfigSpec.BooleanValue MINE_REPICK;
 
     // ================= 伐木（v1.1.0，克隆挖矿；障碍物两名单与挖矿共享） =================
     public static final ModConfigSpec.ConfigValue<List<? extends String>> WOOD_VALUES;
-    /** v1.1.0：自动识别带原版 logs 标签的模组原木（默认开） */
-    public static final ModConfigSpec.BooleanValue WOOD_TAG_AUTO;
     public static final ModConfigSpec.IntValue WOOD_SEARCH_RADIUS;
     public static final ModConfigSpec.IntValue WOOD_DOWN_RANGE;
     public static final ModConfigSpec.IntValue WOOD_UP_RANGE;
     public static final ModConfigSpec.IntValue WOOD_BREAK_BUDGET;
-    public static final ModConfigSpec.DoubleValue WOOD_VALUE_WEIGHT;
-    public static final ModConfigSpec.DoubleValue WOOD_DEPTH_PENALTY;
     public static final ModConfigSpec.DoubleValue WOOD_SPEED_FACTOR;
     public static final ModConfigSpec.DoubleValue WOOD_MOVE_SPEED;
     public static final ModConfigSpec.IntValue WOOD_JUNK_KEEP;
@@ -191,11 +192,9 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue WOOD_SOFT_NO_DURABILITY;
     public static final ModConfigSpec.BooleanValue WOOD_PILLAR_GUARD;
     public static final ModConfigSpec.BooleanValue WOOD_HARD_BLOCK_REPORT;
-    public static final ModConfigSpec.IntValue WOOD_CREATIVE_DEFAULT_VALUE;
     public static final ModConfigSpec.BooleanValue WOOD_SEEK_THROUGH_WALLS;
     public static final ModConfigSpec.IntValue WOOD_ANCHOR_TIMEOUT;
     public static final ModConfigSpec.IntValue WOOD_RELOCATE_THROTTLE;
-    public static final ModConfigSpec.IntValue WOOD_TARGET_TIMEOUT;
     public static final ModConfigSpec.DoubleValue WOOD_REACH;
     public static final ModConfigSpec.IntValue WOOD_PILLAR_COOLDOWN;
     public static final ModConfigSpec.IntValue WOOD_JUNK_CHECK_INTERVAL;
@@ -398,12 +397,7 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：伐木/挖矿全量扫描每 tick 预算
     public static final ModConfigSpec.IntValue WOOD_SCAN_BUDGET;
     public static final ModConfigSpec.IntValue MINE_SCAN_BUDGET;
-    /** v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态 */
-    public static final ModConfigSpec.BooleanValue WOOD_STUCK_WATCHDOG;
-    public static final ModConfigSpec.IntValue WOOD_STUCK_RESET_SECONDS;
-    public static final ModConfigSpec.BooleanValue MINE_STUCK_WATCHDOG;
-    public static final ModConfigSpec.IntValue MINE_STUCK_RESET_SECONDS;
-    /** v1.1.0 实测七十三：默认可挖矿表（原版全家桶，价值统一 300）——抽成常量供
+    /** v1.1.0 实测七十三：默认可挖矿表（原版全家桶 + 两条矿物标签行，价值统一 300）——抽成常量供
      *  配置迁移复用（旧档的空表/缺铜表在加载时按此补齐；见 ProMaidMod.onConfigLoad）。
      *  必须声明在 static{} 块之前（块内的 defineList 要引用它） */
     public static final java.util.List<String> DEFAULT_ORE_VALUES = java.util.List.of(
@@ -416,7 +410,12 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
             "minecraft:emerald_ore=300", "minecraft:deepslate_emerald_ore=300",
             "minecraft:redstone_ore=300", "minecraft:deepslate_redstone_ore=300",
             "minecraft:nether_gold_ore=300", "minecraft:nether_quartz_ore=300",
-            "minecraft:ancient_debris=300");
+            "minecraft:ancient_debris=300",
+            // 实测九百九十九：表尾两条是**标签行**（`#` 开头 = 整条方块标签一起进表）——装了
+            // 模组矿也默认算矿，不必逐块添加；不存在的标签恒不命中，什么都不影响。
+            "#forge:ores=300", "#c:ores=300");
+    /** 实测九百九十九：矿表/木材表"标签行"默认迁移（默认那两对）是否已执行；一次性，内部。 */
+    public static final ModConfigSpec.BooleanValue MINE_WOOD_TAGLINES_MIGRATED;
     public static final ModConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
@@ -426,6 +425,9 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_EXPAND;
     /** v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式的工作范围圈，见 CombatWorkRange） */
     public static final ModConfigSpec.IntValue COMBAT_WORK_RANGE;
+    /** 实测九百九十三【接管走位】：开 = 战斗链路走位独占只在"她自己接上敌 / 本模组驱动器在开她"时咬住；
+     *  关 = 战斗状态下不干涉她的走位与移动（战术/追怪全体停手，喂目标与补刀照常）。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_TAKE_OVER_MOVEMENT;
     /** 实测八百二十三：参战时把 TLM 作息临时切「全天」（默认开）——夜里白班女仆处于 REST、
      *  WORK 攻击行为不 tick，"切了任务却站着不动"；切成 ALL 让她真出手，威胁消失后随任务一起复原。 */
     public static final ModConfigSpec.BooleanValue COMBAT_FORCE_ALL_SCHEDULE;
@@ -656,6 +658,29 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 关掉时整条悬停/盘旋链路不激活，本闸也不生效——否则她既不会爬升、又永远不许投弹）。
      */
     public static final ModConfigSpec.DoubleValue COMBAT_RIDE_BOMB_STANDOFF;
+    /**
+     * 【实测九百八十五】固定翼（滑翔式）载具的**额外加高**（格，默认 60）——滑翔类载具
+     * （A-10 / AC-130H / Ju-87 / KV-16 / 汤姆6）的盘旋高度 = 参照物高度（跟随 = 主人 Y +
+     * 悬停高度；接敌 = 敌人 Y + 接敌高度）**再抬本项**，地形净空线也一起抬。见
+     * {@code MaidMountCompat.aircraftAltBonus}。
+     */
+    public static final ModConfigSpec.DoubleValue COMBAT_RIDE_FIXEDWING_ALT_BONUS;
+    /**
+     * 【实测九百九十八】拟真降落（固定翼，含汤姆6，默认关）——开 = 跑道条带选址 + 对准进近 +
+     * 下滑道 + 复飞的拟真链路；关 = 上一个版本的降落方式（"最平点"那条链路，见
+     * {@code MaidMountCompat.aircraftHomeLandingLegacy}）。两种方式共有的部分：电量见底
+     * 照常安全降落、接地后清 crash 标记并停住。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_REALISTIC_LANDING;
+    /** 实测九百九十八：滑翔类盘旋加高默认 30 → 60 的一次性迁移标记（只搬还停在 30 的档）。 */
+    public static final ModConfigSpec.BooleanValue FIXEDWING_ALT_60_MIGRATED;
+
+/**
+ * 【实测九百八十五】骑乘指挥棒·光标（金色描边，默认开）——绑定/选中时给女仆与坐骑打的那道
+ * **原版发光标记**（同光灵箭的渲染）。关掉后不再点亮；已经亮着的会在 5 秒内被清扫链熄掉（只熄灯，链路与留痕一个不动）。
+ * 见 {@code RideBindManager.batonMarkOn}。
+ */
+public static final ModConfigSpec.BooleanValue COMBAT_RIDE_BATON_MARK;
 
     /**
      * <p>反馈者
@@ -674,7 +699,6 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 关掉 = 一条都不拦，TLM 原版照拉（DIY 预设会关掉）。
      */
     public static final ModConfigSpec.BooleanValue TLM_TELEPORT_EXEMPT;
-
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
     /** 总开关（默认开）。关掉 = 整条链路不启动（她不会为了刷怪笼改变行程） */
@@ -1100,7 +1124,7 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_FIRE_RENDER;
     /** 火焰伤害保护（默认开；v1.2.2 实测五百九十七）：玩家与女仆免疫这种火的点燃与掉血 */
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_FIRE_PROTECT;
-    /** 第三方玩法模式黑名单（默认开，v1.2.2 实测五百九十：傀儡装配的「傀儡师」） */
+    /** 第三方玩法模式黑名单（默认开；v1.2.2 实测五百九十起：傀儡装配「傀儡师」禁止自主切入；实测九百九十二加 真正的力量「拔刀剑模式」/ 史诗战斗联动「战斗模式」——可切入、切入后让位） */
     public static final ModConfigSpec.BooleanValue COMPAT_PUPPET_BLACKLIST;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_AIR_PLACE;
     /** 空中悬空投弹（走后门，默认开；v1.2.2 实测六百〇三）：落点的最后一级——目标头顶 / 目标自己那一格，悬空也放 */
@@ -1201,14 +1225,6 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue MISC_BED_INTEROP;
     // v1.1.0 实测四百二十一：冷却可视化 HUD（女仆复活倒计时 / 回魂符冷却显示在玩家屏幕上）
     public static final ModConfigSpec.BooleanValue MISC_COOLDOWN_HUD;
-    /**
-     * 潜行 + 鼠标中键方块 = 把身边自家 home 模式女仆的工位/休闲锚点标过去（实测五百六十二）。
-     * 反馈：这条手势与 TLM 自带的【河童的罗盘】（`touhou_little_maid:kappa_compass`）撞车——
-     * 罗盘是"右键方块记坐标 → 右键女仆写入"的另一套入口，两者**写的是同一份 TLM 排班锚点**
-     * （谁后写谁生效）。关掉本项 = 中键完全交还原版取方块；另外**手持河童的罗盘时本功能自动
-     * 让位**（不管开关），避免"两个都在标"。
-     */
-    public static final ModConfigSpec.BooleanValue MISC_WORK_POS_MARKER;
     // 实测四百四十三：悬空禁搭方块（自保搭高/搭路/挖矿垫脚/伐木垫脚统一闸口）
     public static final ModConfigSpec.BooleanValue MISC_NO_PLACE_IN_AIR;
     // 实测五百三十六：不得搭在主人身上（目标格被主人碰撞箱占着就不搭——
@@ -1317,6 +1333,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_GRAVITY;
     /** 滑翔时改用模型自己的鞘翅动画（默认关 = 沿用作者的游泳动画） */
     public static final ModConfigSpec.BooleanValue MISC_GLIDE_ELYTRA_ANIM;
+    /** 多人服务器：配置以服务端为准（默认关；开启后全服以服务端那一份为准，非 OP 只读，仅 OP 可改） */
+    public static final ModConfigSpec.BooleanValue MISC_SERVER_FORCED_CONFIG;
     /** 智能待命（默认开）：主人停下就落地站到脚边，而不是一直悬着 */
     public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_IDLE;
     /** 主人静止多少秒后落地待命（默认 3） */
@@ -1380,6 +1398,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.BooleanValue MISC_HOME_MOVEMENT;
     public static final ModConfigSpec.BooleanValue MISC_STATIONARY_LOCK;
     public static final ModConfigSpec.BooleanValue MISC_FISHING_CHAIR;
+    /** 实测九百九十三【接管总闸】：钓鱼 / 农场两个玩法的魔改总闸（默认开 · 随 DIY 关）——关 = 该玩法完全按 TLM 原版 */
+    public static final ModConfigSpec.BooleanValue MISC_TAKE_OVER_FISHING;
+    public static final ModConfigSpec.BooleanValue MISC_TAKE_OVER_FARM;
     public static final ModConfigSpec.BooleanValue MISC_DRIVEN_NO_STROLL;
     public static final ModConfigSpec.BooleanValue BUILD_AREA_PROTECTION;
     public static final ModConfigSpec.BooleanValue BUILD_FORCE_WORK_ACTIVITY;
@@ -1476,6 +1497,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 启动），期满后机器按正常红石逻辑点火。0 = 关闭保护（回到 1.5.328 行为）
         BUILD_TNT_IGNITION_GRACE = BUILDER.comment("TNT 点火保护期（秒，默认 120）：建造期+完工激活期+宽限期内压制一切 TNT 点火（放置/活塞推动/邻居更新），防机器'刚建好炸膛'（天机屠龙炮等观察者→活塞推 TNT 的机器）；完工点火结算只点燃邻接带电的 TNT（轰炸机当场启动），期满后机器按正常红石逻辑点火。0 = 关闭保护")
                 .translation("config.promaid.build.tntIgnitionGrace").defineInRange("tntIgnitionGrace", 120, 0, 3600);
+        // 实测九百六十一：完工「后门」——完工瞬间静默清空 + 按蓝图整片重放，终态=蓝图
+        BUILD_SNAP_FINISH = BUILDER.comment("完工整体重放（默认开）：建造完成的瞬间，把她在这片建好的方块与流体静默清除（无粒子、无音效、不触发邻居更新），再按蓝图整片重放一遍——终态严格等于蓝图本身，建造顺序留下的中间态（活塞被推、信号误触、水流冲散、补支撑多出来的石头）全部抹平。超大蓝图（超过 5 万步）自动跳过。关 = 完工不重放")
+                .translation("config.promaid.build.snapFinish").define("snapFinish", true);
         // v1.1.0 实测八十二：蓝图投影——只有区块框不好确认建筑朝向/形状
         BUILD_PROJECTION = BUILDER.comment("蓝图投影预览：「区块显示」与建造中区块叠加半透明幽灵方块轮廓（外壳抽稀采样，确认建筑朝向/形状）；关闭则只显示区块框")
                 .translation("config.promaid.build.projection").define("projection", true);
@@ -1523,7 +1547,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.build.structureMaxVolume")
                 .defineInRange("structureMaxVolume", 16777216, 100000, 67108864);
         // v1.3.2 实测八百五十九：建造区保护 / 强制工作时段——随 DIY 关
-        BUILD_AREA_PROTECTION = BUILDER.comment("建造区保护（默认开）：建造计划进行中，图纸区域内的随机刻度暂停（草不传播、作物不长）、下落方块重力冻结（沙砾悬空保持）、蓝图树叶永不衰减、TNT 点火被压制（放完就炸、活塞推炸）。关闭 = 完全回原版物理与随机刻度（建造中的沙砾会崩落、蓝图树叶会掉）")
+        BUILD_AREA_PROTECTION = BUILDER.comment("建造区保护（默认开）：建造计划进行中，图纸区域内的随机刻度暂停（草不传播、作物不长）、下落方块重力冻结（沙砾悬空保持）、流体静止（水/岩浆不流动、不外溢）、蓝图树叶永不衰减、TNT 点火被压制（放完就炸、活塞推炸）。关闭 = 完全回原版物理与随机刻度（建造中的沙砾会崩落、水会漫流、蓝图树叶会掉）")
                 .translation("config.promaid.build.areaProtection").define("areaProtection", true);
         BUILD_FORCE_WORK_ACTIVITY = BUILDER.comment("建造任务强制工作时段（默认开）：她的任务是本模组建造时，把大脑活动钉在 WORK（休息/睡觉时段也照建——否则建造行为根本不被评估，她会站着不动）。关闭 = 完全按作息表切活动（休息时段不再建造）")
                 .translation("config.promaid.build.forceWorkActivity").define("forceWorkActivity", true);
@@ -1572,10 +1596,10 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- 挖矿 ----
         BUILDER.comment("挖矿设置").translation("config.promaid.mine").push("mine");
-        MINE_ORE_VALUES = BUILDER.comment("可挖掘方块表（自定义矿表）：每项 方块注册名=价值，如 minecraft:mod_ore=300；适配其他 mod 的矿石")
+        MINE_ORE_VALUES = BUILDER.comment("可挖掘方块表（自定义矿表）：每项 方块注册名=价值，如 minecraft:mod_ore=300；适配其他 mod 的矿石。**这张表就是唯一依据**：不在表里的方块一律不算矿；面板上点方块图标加入、点右上角小叉移出。行首写 # 命名空间:标签 = **整条方块标签一起进表**（默认表尾两条就是矿物标签，带矿物标签的模组矿石默认算矿；把标签覆盖的方块点小叉移出时，标签行会自动展开成逐块行，移出精确到那一块）；行首的 ! 仍被接受但已无意义（不进表 = 不挖）")
                 .translation("config.promaid.mine.oreValues")
                 .defineList("oreValues", DEFAULT_ORE_VALUES,
-                        o -> o instanceof String s && s.contains("="));
+                        o -> o instanceof String s && (s.startsWith("!") ? s.length() > 1 : s.contains("=")));
         MINE_BREAKABLES = BUILDER.comment("额外可挖穿方块（障碍物名单，path 名如 oak_log——女仆挖矿遇到会挖穿而非当硬挡路报点弃置）")
                 .translation("config.promaid.mine.breakables")
                 .defineList("extraBreakables", List.of(),
@@ -1598,7 +1622,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                         "dead_bubble_coral_block", "dead_fire_coral_block", "dead_horn_coral_block"),
                         o -> o instanceof String s && !s.isEmpty());
         MINE_SEARCH_RADIUS = BUILDER.comment("矿物检索半径（水平）")
-                .translation("config.promaid.mine.searchRadius").defineInRange("searchRadius", 24, 8, 64);
+                .translation("config.promaid.mine.searchRadius").defineInRange("searchRadius", 48, 8, 64);
         MINE_DOWN_RANGE = BUILDER.comment("垂直向下搜索范围")
                 .translation("config.promaid.mine.downRange").defineInRange("downRange", 12, 4, 48);
         MINE_UP_RANGE = BUILDER.comment("垂直向上搜索范围")
@@ -1608,12 +1632,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 同步回 22（玩家实值）
         MINE_BREAK_BUDGET = BUILDER.comment("穿透预算（默认 22）：选矿时统计女仆到矿之间要穿过多少层实心方块（含石头/泥土等可开路的），超过预算的矿不选——走近了会重新评估；调大=更爱穿墙打隧道，调小=只挑眼前暴露的矿")
                 .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 22, 0, 64);
-        MINE_VALUE_WEIGHT = BUILDER.comment("价值权重（高价值矿优先程度）")
-                .translation("config.promaid.mine.valueWeight")
-                .defineInRange("valueWeight", 2.0, 0.5, 5.0);
-        MINE_DEPTH_PENALTY = BUILDER.comment("深度惩罚（越深成本越高）")
-                .translation("config.promaid.mine.depthPenalty")
-                .defineInRange("depthPenalty", 3.0, 0.0, 10.0);
         MINE_SPEED_FACTOR = BUILDER.comment("挖矿速度系数（1.0=玩家速度，1.2=快20%）")
                 .translation("config.promaid.mine.speedFactor")
                 .defineInRange("speedFactor", 1.2, 0.5, 3.0);
@@ -1632,20 +1650,14 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.mine.pillarGuard").define("pillarGuard", true);
         MINE_HARD_BLOCK_REPORT = BUILDER.comment("硬挡路（箱子/机器等）报点弃置该矿")
                 .translation("config.promaid.mine.hardBlockReport").define("hardBlockReport", true);
-        MINE_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板添加矿物的默认价值")
-                .translation("config.promaid.mine.creativeDefaultValue")
-                .defineInRange("creativeDefaultValue", 300, 10, 1000);
-        MINE_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找矿，默认关）：开启后女仆能发现视线被方块挡住的矿物并挖通开路；关闭（默认）后像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块都挡视线，被挡的矿不可见、不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
-                .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", false);
+        MINE_SEEK_THROUGH_WALLS = BUILDER.comment("智能挖矿（默认开）：女仆会自己感知并尝试挖矿，不再只挖表层的——她能发现视线被方块挡住的矿物并挖通开路；关闭 = 像玩家一样只发现视线无阻的矿物（除水/岩浆外任何方块都挡视线，被挡的矿不可见、不报点，也不隔墙挖穿）；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
+                .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", true);
         MINE_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick，出框超过此时长重埋锚点）")
                 .translation("config.promaid.mine.anchorTimeout")
                 .defineInRange("anchorTimeout", 200, 40, 1200);
         MINE_RELOCATE_THROTTLE = BUILDER.comment("重定位节流（tick，防边界抖动）")
                 .translation("config.promaid.mine.relocateThrottle")
                 .defineInRange("relocateThrottle", 20, 4, 200);
-        MINE_TARGET_TIMEOUT = BUILDER.comment("目标超时（tick，够不到矿超时放弃）")
-                .translation("config.promaid.mine.targetTimeout")
-                .defineInRange("targetTimeout", 300, 60, 1200);
         MINE_REACH = BUILDER.comment("挖掘/捡拾距离（格）")
                 .translation("config.promaid.mine.reach")
                 .defineInRange("reach", 4.5, 2.0, 8.0);
@@ -1664,6 +1676,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过矿/捡不到掉落播报间隔（tick，防刷屏）")
                 .translation("config.promaid.mine.skipReportInterval")
                 .defineInRange("skipReportInterval", 600, 100, 2400);
+        // 实测九百七十七【无目标静默闲逛】：挖矿/伐木确认这片没有目标的那一刻起，整条工作链路
+        // 暂停这么久——不扫描、不播报，走路交回空闲那一套；到时自动恢复并重新检索一次。
+        MINE_NO_TARGET_PAUSE = BUILDER.comment("无目标静默闲逛时长（秒，挖矿与伐木共用）：确认这片区域没有目标时，她先按空闲走路逛这么久（期间不扫描、不播报），到时自动恢复并重新检索一次；0 = 关闭该静默")
+                .translation("config.promaid.mine.noTargetPause")
+                .defineInRange("noTargetPause", 10, 0, 120);
         // v1.5.161：进阶挖矿——连锁采集 / 自动收集（自动收集默认关闭；连锁采集
         // 二百零六 按玩家当前配置同步为默认开）
         MINE_CHAIN_MINING = BUILDER.comment("连锁采集（默认开）：挖矿时自动连锁挖掘相连的同族矿石——矿脉一次挖完")
@@ -1682,24 +1699,16 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_CHAIN_FULL_DURABILITY = BUILDER.comment("连锁采集每块都消耗耐久（默认关）：关闭时整串连锁只扣 1 点耐久（历史行为）；开启后连锁破坏的每一块都扣 1 点，更贴近手工挖矿，但镐子会明显更快磨损")
                 .translation("config.promaid.mine.chainFullDurability")
                 .define("chainFullDurability", false);
-        // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
-        MINE_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：挖矿期间连续 N 秒既没挖掉任何方块、位置也没挪动（原地发呆/内部状态卡死）时，自动整体重置该女仆的挖矿状态——锚点/扫描缓存/排除表/目标全部清空重新开始，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭路都算进展，不会误触发")
-                .translation("config.promaid.mine.stuckWatchdog").define("stuckWatchdog", true);
-        MINE_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 8，发呆出现很快）：连续这么久既没挖掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
-                .translation("config.promaid.mine.stuckResetSeconds").defineInRange("stuckResetSeconds", 8, 4, 300);
-        // 实测八百六十九（对齐参考 mod 官方流程图「身上有镐子吗 / 持续检测」两口径）：
-        // ①没镐不启动——手与背包（含精妙/旅行者背包）一把镐都没有时挖矿任务不启动、只气泡提示；
-        // ②锁定期间持续重挑——每 5 秒廉价重挑一次，换更优的矿才切，且切换【不】重置锁定超时
-        //（抖动时钟继续走，够不着的矿终会超时弃置）。两项默认开、随 DIY 关。
+        // 实测八百六十九（对齐参考 mod 官方流程图「身上有镐子吗」这一条）：没镐不启动——
+        // 手与背包（含精妙/旅行者背包）一把镐都没有时挖矿任务不启动、只气泡提示。默认开、随 DIY 关。
+        //（同批的「锁定期间持续重挑」已在实测九百二十七删掉：锁上就一路推进，不再每 5 秒换目标。）
         MINE_REQUIRE_PICK = BUILDER.comment("没镐不启动（默认开）：主手与背包（含精妙/旅行者背包）里一把镐都没有时，挖矿任务不启动，她只气泡提示先备一把镐子；关闭 = 照常启动、走到矿前才报挖不动")
                 .translation("config.promaid.mine.requirePick").define("requirePick", true);
-        MINE_REPICK = BUILDER.comment("锁定期间持续重挑（默认开）：锁定一块矿期间每 5 秒从缓存里廉价重挑一次，发现更优的矿就切过去；切换不重置「够不着」超时，避免在分数接近的矿之间反复抖动。关闭 = 锁上就一路挖到底、中途不换目标")
-                .translation("config.promaid.mine.repick").define("repick", true);
         BUILDER.pop();
 
         // ---- 伐木（v1.1.0：克隆挖矿架构；障碍物名单与挖矿共享 extraBreakables/disabledBreakables） ----
         BUILDER.comment("伐木设置").translation("config.promaid.wood").push("wood");
-        WOOD_VALUES = BUILDER.comment("可砍伐木材表：每项 方块注册名=价值，如 minecraft:oak_log=300；带原版 logs 标签的模组原木默认自动识别（见 tagAuto，无需加入）；未打标签的模组木材在此加入（创造面板已按木质 tag 过滤显示）")
+        WOOD_VALUES = BUILDER.comment("可砍伐木材表：每项 方块注册名=价值，如 minecraft:oak_log=300。**这张表就是唯一依据**：不在表里的方块一律不算木材；面板上点方块图标加入、点右上角小叉移出。行首写 # 命名空间:标签 = **整条方块标签一起进表**（默认表尾两条就是木材标签，打了标签的模组原木自动算木材；把标签覆盖的方块点小叉移出时，标签行会自动展开成逐块行，移出精确到那一块）；行首的 ! 仍被接受但已无意义（不进表 = 不砍）")
                 .translation("config.promaid.wood.values")
                 .defineList("woodValues", List.of(
                                 "minecraft:oak_log=300", "minecraft:spruce_log=300", "minecraft:birch_log=300",
@@ -1711,22 +1720,21 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                                 "minecraft:stripped_birch_log=300", "minecraft:stripped_jungle_log=300",
                                 "minecraft:stripped_acacia_log=300", "minecraft:stripped_dark_oak_log=300",
                                 "minecraft:stripped_mangrove_log=300", "minecraft:stripped_cherry_log=300",
-                                "minecraft:stripped_crimson_stem=300", "minecraft:stripped_warped_stem=300"),
-                        o -> o instanceof String s && s.contains("="));
-        WOOD_TAG_AUTO = BUILDER.comment("自动识别模组原木（默认开）：凡带原版 #minecraft:logs / #minecraft:bamboo_blocks 标签的方块（模组原木）都自动视为可砍木材（价值 300，无需进名单）；关闭则只认名单")
-                .translation("config.promaid.wood.tagAuto").define("tagAuto", true);
+                                "minecraft:stripped_crimson_stem=300", "minecraft:stripped_warped_stem=300",
+                                // 实测九百九十九：表尾两条是标签行（同矿表）——打了原版木材
+                                // 标签的模组原木默认也砍；不存在的标签恒不命中。
+                                "#minecraft:logs=300", "#minecraft:bamboo_blocks=300"),
+                        // 实测九百八十：只写 `id=价值` 了；仍接受旧版的 `!id` 行（历史存档里还留着，
+                        // 解析时按"不进表 = 不挖/不砍"处理）——直接拒绝会让整份配置文件校验失败。
+                        o -> o instanceof String s && (s.startsWith("!") ? s.length() > 1 : s.contains("=")));
         WOOD_SEARCH_RADIUS = BUILDER.comment("木材检索半径（水平）")
-                .translation("config.promaid.wood.searchRadius").defineInRange("searchRadius", 24, 8, 64);
+                .translation("config.promaid.wood.searchRadius").defineInRange("searchRadius", 48, 8, 64);
         WOOD_DOWN_RANGE = BUILDER.comment("垂直向下搜索范围（格）——树在地表，默认只往下看 4 格")
                 .translation("config.promaid.wood.downRange").defineInRange("downRange", 4, 1, 32);
         WOOD_UP_RANGE = BUILDER.comment("垂直向上搜索范围（格）——树冠/巨型蘑菇很高，默认 24")
                 .translation("config.promaid.wood.upRange").defineInRange("upRange", 24, 4, 64);
         WOOD_BREAK_BUDGET = BUILDER.comment("穿透预算（允许挖开多少层不可开路挡路方块）——与挖矿共享障碍物名单")
                 .translation("config.promaid.wood.breakBudget").defineInRange("breakBudget", 22, 0, 64);
-        WOOD_VALUE_WEIGHT = BUILDER.comment("价值权重：木材价值对选材的加成")
-                .translation("config.promaid.wood.valueWeight").defineInRange("valueWeight", 2.0, 0.5, 5.0);
-        WOOD_DEPTH_PENALTY = BUILDER.comment("深度惩罚（每格扣分）——树在地表，默认 0（不偏好浅层）")
-                .translation("config.promaid.wood.depthPenalty").defineInRange("depthPenalty", 0.0, 0.0, 10.0);
         WOOD_SPEED_FACTOR = BUILDER.comment("砍伐速度系数（1.0=玩家速度，1.2=快20%）")
                 .translation("config.promaid.wood.speedFactor").defineInRange("speedFactor", 1.2, 0.5, 3.0);
         WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率（0.6→0.3——伐木移速至少快一倍，观感像狂奔；0.3 = 挖矿同款基础的一半，悠闲走向下一棵树）")
@@ -1741,8 +1749,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.pillarGuard").define("pillarGuard", true);
         WOOD_HARD_BLOCK_REPORT = BUILDER.comment("硬挡路（箱子/机器等）报点弃置该木材")
                 .translation("config.promaid.wood.hardBlockReport").define("hardBlockReport", true);
-        WOOD_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板默认价值：木材页锁定方块后，输入框留空直接点「添加」时用的分数")
-                .translation("config.promaid.wood.creativeDefaultValue").defineInRange("creativeDefaultValue", 300, 10, 1000);
         // v1.1.0 实测四十一（反馈："隔墙找木材视线感知默认打开——增加容错率"）：
         // 树木天然被树冠/地形遮挡，关着容错率太低（玩家反感"找不到树"）
         WOOD_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找木材，默认开）——开启后女仆能发现视线被方块挡住的木材并挖通开路；关闭则像玩家一样只发现视线无阻的木材（树叶不挡视线）")
@@ -1751,8 +1757,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.anchorTimeout").defineInRange("anchorTimeout", 200, 40, 1200);
         WOOD_RELOCATE_THROTTLE = BUILDER.comment("重定位节流（tick，防边界抖动）")
                 .translation("config.promaid.wood.relocateThrottle").defineInRange("relocateThrottle", 20, 4, 200);
-        WOOD_TARGET_TIMEOUT = BUILDER.comment("目标超时（tick，够不到木材超时放弃）")
-                .translation("config.promaid.wood.targetTimeout").defineInRange("targetTimeout", 300, 60, 1200);
         WOOD_REACH = BUILDER.comment("砍伐距离（格）")
                 .translation("config.promaid.wood.reach").defineInRange("reach", 4.5, 2.0, 8.0);
         WOOD_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
@@ -1780,13 +1784,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.autoCollect").define("autoCollect", false);
         WOOD_CHAIN_LIMIT = BUILDER.comment("连锁砍伐上限（块）：一次连锁砍伐的最大方块数")
                 .translation("config.promaid.wood.chainLimit").defineInRange("chainLimit", 16, 4, 64);
-        WOOD_LEAVES_CLEAR = BUILDER.comment("树冠清理（默认开）：树干连锁砍完后，顺手把上方树冠的树叶也清掉（树叶 BFS 清到半径 3 格，掉落物/树苗直接进背包——树叶不清会挂着挡视线还慢慢掉东西；关闭则只砍树干、树叶靠自然衰减）")
+        WOOD_LEAVES_CLEAR = BUILDER.comment("树冠清理（默认开）：砍掉一段树干时，顺手清掉那一段周围（水平 3 格、向上 6 格内）连着的树叶——跟着砍树逐层推进，不会一次性把整棵树冠清掉；她走路被树冠卡住时，也会清掉身边 3×3×3 的树叶。掉落物/树苗直接进背包（树叶不清会挂着挡视线还慢慢掉东西）。关闭则只砍树干、树叶靠自然衰减")
                 .translation("config.promaid.wood.leavesClear").define("leavesClear", true);
-        // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
-        WOOD_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：伐木期间连续 N 秒既没砍掉任何方块、位置也没挪动（典型如站进挖掉的树洞里对着头顶树干发呆）时，自动整体重置该女仆的伐木状态——锚点/扫描缓存/排除表/目标全部清空重新找树，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭高都算进展，不会误触发")
-                .translation("config.promaid.wood.stuckWatchdog").define("stuckWatchdog", true);
-        WOOD_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 8）：连续这么久既没砍掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
-                .translation("config.promaid.wood.stuckResetSeconds").defineInRange("stuckResetSeconds", 8, 3, 300);
         BUILDER.pop();
 
         // ---- AI 记忆 ----
@@ -1943,7 +1942,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         PERCEPTION_EVENT_COOLDOWN = BUILDER.comment("同类事件播报限频（秒，非敌对事件用）")
                 .translation("config.promaid.perception.eventCooldown")
                 .defineInRange("eventCooldown", 30, 5, 300);
-        PERCEPTION_HOSTILE_SHOW_COOLDOWN = BUILDER.comment("敌对感知显示限频（秒，感知检测照常、仅'发现怪物'类显示大大降频；默认 300 秒 = 5 分钟一条）")
+        PERCEPTION_HOSTILE_SHOW_COOLDOWN = BUILDER.comment("敌对感知显示限频（秒，默认 300 = 5 分钟一条）：只限「有敌人靠近了」这一条语音/气泡的显示间隔（感知检测照常，只是显示大大降频）。「附近的敌人都清掉了」单独走上面那条『感知事件限频』（默认 30 秒）——两条各算各的，靠近播过之后清敌语音不再被吞（此前三条敌袭语音共用一个 300 秒限频）")
                 .translation("config.promaid.perception.hostileShowCooldown")
                 .defineInRange("hostileShowCooldown", 300, 60, 3600);
         PERCEPTION_OWNER_LOW_HEALTH = BUILDER.comment("主人血量低阈值（%）")
@@ -2003,7 +2002,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.aitools.switchTask").define("switchTask", true);
         TOOL_AIR_RAID = BUILDER.comment("smart_air_raid 工具（起飞空袭/停止空袭——可指定近战或远程、锁定目标，并回报\"缺不缺件\"）")
                 .translation("config.promaid.aitools.airRaid").define("airRaid", true);
-        TOOL_WORK_AREA = BUILDER.comment("smart_work_area 工具（把工作区设到此处并驻守 / 解除驻守恢复跟随 / 查看锚点——写的是与中键工位标记同一份 SchedulePos 数据）")
+        TOOL_WORK_AREA = BUILDER.comment("smart_work_area 工具（把工作区设到此处并驻守 / 解除驻守恢复跟随 / 查看锚点——写的就是 TLM 那份 SchedulePos 排班锚点）")
                 .translation("config.promaid.aitools.workArea").define("workArea", true);
         TOOL_READINESS = BUILDER.comment("smart_readiness 工具（只读自检——空袭三件套/弹药/驻守/排班/工作锚点/血量，让模型\"先查后做\"）")
                 .translation("config.promaid.aitools.readiness").define("readiness", true);
@@ -2608,6 +2607,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 15, 0, 512);
         COMBAT_ASSIST_RADIUS = BUILDER.comment("援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3）：两条一起管——①【援护】她的战斗任务没有目标时，优先把「主人最近的仇人」（最近打主人的人，其次主人最近打的人，都只在 5 秒窗口内）当成目标去帮；②【撒手】她的目标离她**和**主人都超过这个半径时松开目标（追一个已经跑掉的怪正是「追出去→被圈拽回来」的循环源头）。援护对象必须过完整合法性链：她的任务认它是敌人 + 非友军 + 看得见（隔着墙不写目标）+ 在她工作圈内；工作圈随「战斗时临时扩圈」一起放大。0 = 两条一起关（0~64）")
                 .translation("config.promaid.combat.assistRadius").defineInRange("assistRadius", 16, 0, 64);
+        // 实测九百九十一【接敌才接管】：战斗任务在没有敌人时把一切行为还给 TLM 原版
+        //（跟随模式跟主人、home 模式在家闲逛）；只有接敌（她自己有攻击目标）或本模组的
+        // 战斗驱动器真在开她时，链路走位独占才咬住。
+        COMBAT_TAKE_OVER_MOVEMENT = BUILDER.comment("接管走位（默认开）：开 = 战斗任务的女仆只有「她自己接上敌」（脑里/身上有活着的攻击目标）或本模组的战斗驱动器正在开她（战术/自保/喂目标/扫帚/空袭/自由飞）时，才由本模组的战斗链路接管她的走位与移动——敌人一清立即交还；没有敌人时行为完全按 TLM 原版来（跟随模式就跟着主人、守家模式在家按自己的节奏活动）。关闭 = 战斗状态下她的走位与移动完全按 TLM 原版来：本模组不再安排战术接近/绕后/跳劈、也不再兜底追怪（喂目标和原地补刀照常；自保/空袭/扫帚等自有功能与「时机举盾」不受影响）")
+                .translation("config.promaid.combat.takeOverMovement").define("takeOverMovement", true);
         // 实测八百四十：这两条原先只在 mixin 里硬问 isDiy（没有配置项）——开发者要求落成开关
         COMBAT_SWEEP_ALWAYS = BUILDER.comment("平A必横扫（默认开）：她每次平A都触发横扫之刃（没带该附魔时按 50% 攻击力倍率结算），跳劈（真·空中攻击）保持单体暴击不横扫——TLM 原版只在带横扫之刃附魔时才横扫，所以开着的手感与玩家一致。关闭 = 回 TLM 原版（只有带附魔才横扫，空中照扫）")
                 .translation("config.promaid.combat.sweepAlways").define("sweepAlways", true);
@@ -2687,6 +2691,19 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.ride.airAltMigrated").define("airAltMigrated", false);
         ORBIT_RADIUS_MIGRATED = INTERNAL.comment("内部标记：骑飞行载具盘旋半径默认迁移（6→4）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.ride.orbitRadiusMigrated").define("orbitRadiusMigrated", false);
+        // 【实测九百八十九】TNT 追踪时长默认 10 → 20（0.5 秒 → 1 秒）：老档里留着 10 的档要搬
+        // （"追踪时间不够、TNT 扔偏"）。判据同款：只搬**还停在旧默认 10** 的档，自己调过的不碰。
+        TNT_TRACK_20_MIGRATED = INTERNAL.comment("内部标记：TNT 追踪时长默认迁移（10→20）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.bombing.tntTrack20Migrated").define("tntTrack20Migrated", false);
+        // 【实测九百九十九】矿表/木材表补"标签行"（`#forge:ores` / `#c:ores` / `#minecraft:logs` /
+        // `#minecraft:bamboo_blocks`）：老 toml 里只有逐块名单，带标签的模组矿 / 模组原木不认识。
+        // 只补默认那两对；表里已有任何 `#` 行的档一概不动。
+        MINE_WOOD_TAGLINES_MIGRATED = INTERNAL.comment("内部标记：矿表/木材表补标签行（默认那两对）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.mine.tableTaglinesMigrated").define("tableTaglinesMigrated", false);
+        // 【实测九百九十八】滑翔类盘旋加高默认 30 → 60：老档 toml 里落着 30（上一版默认）——
+        // 不迁的话"默认 60"对老档不生效。只搬**还停在 30** 的档，自己调过的不碰。
+        FIXEDWING_ALT_60_MIGRATED = INTERNAL.comment("内部标记：滑翔类盘旋加高默认迁移（30→60）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.ride.fixedWingAlt60Migrated").define("fixedWingAlt60Migrated", false);
         BUILDER.pop();
 
         // ---- v1.3.0(beta) 实测七百〇三「接敌机动」（配置面板：战斗与自保 → 接敌机动）----
@@ -2821,6 +2838,22 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_RIDE_BOMB_STANDOFF = BUILDER.comment("投弹安全高度（格，默认 20，0~64）：女仆驾驶**飞行载具**（尤其基洛夫空艇）准备对地投弹时，先把机身升到**比目标高这么多格**、再松弹\n\n【为什么需要】基洛夫的武器是往下丢的航空炸弹，爆炸半径极大（SWB 里那颗 Bor-57 是 42 格）；贴地投弹等于把她自己也圈进爆心。本项就是那道「先拉高再丢」的闸：\n\n【怎么生效】她骑飞行载具、有攻击目标时，机身高度会被抬到「目标 + 本项格数」（与「接敌升到敌上」同一条总距/liftSpeed 通道，不用新的一档控制）；**没到位就不投弹**，到位了才照常投。\n\n【0 = 关掉】填 0 = 不做这道闸，想投就投（贴地俯冲投弹也照投，后果自负）。\n\n【只作用于飞行载具】地面载具（坦克/装甲车）不受影响。且这一档属于「骑飞行载具·悬停与盘旋」，那一项关掉时本闸也不生效。")
                 .translation("config.promaid.ride.bombStandoff")
                 .defineInRange("bombStandoff", 20.0, 0.0, 64.0);
+
+        // 实测九百八十五【滑翔式载具的盘旋高度交出来】——固定翼那一档从 781/782 起就有一个
+        // 代码里写死的"额外加高 30 格"（玩家当时要求"盘旋高度再提 15 格"两次，最后落在 30），
+        // 但面板上一直没有这一项：滑翔式载具飞多高只能改代码。现在它就是这一页的旋钮。
+        COMBAT_RIDE_FIXEDWING_ALT_BONUS = BUILDER.comment("固定翼（滑翔式）额外加高（格，默认 60，0~80）：滑翔类载具（A-10 / AC-130H / Ju-87 / KV-16 / 汤姆6）的盘旋高度 = 参照物高度 + 本项。\n\n【参照物是谁】跟随（没敌人）= 主人脚下 + 「悬停高度」；接敌 = 敌人脚下 + 「接敌高度」。本项是**再往上抬**的那一档，所以实际高度 = 二者之和 + 本项。\n\n【地形净空也一起抬】固定翼巡航有一条“前方地形净空线”（前瞻约 160 拍的路，按最高地形 + 14 格算），本项**同时**加在这条线上——否则超平坦地形上真正管着她的是这条线，只抬目标点等于没抬。\n\n调小 = 飞得低、看得清地面（但山头/建筑一抬头就要拉起来）；调大 = 更安全、轰炸更省心；0 = 只按「悬停高度 / 接敌高度」飞。")
+                .translation("config.promaid.ride.fixedWingAltBonus")
+                .defineInRange("fixedWingAltBonus", 60.0, 0.0, 80.0);
+        // v1.3.2【拟真降落：默认关】——固定翼降落在这一版换成了"跑道条带 + 对准进近 + 下滑道 +
+        // 复飞"的拟真链路；上一个版本是"选一块平地 → 朝它压高度 → 近地接地"。两个都留、由这一项选。
+        COMBAT_RIDE_REALISTIC_LANDING = BUILDER.comment("拟真降落（默认关）：开 = 固定翼（含汤姆6）降落走**拟真**那条链路——先在跑道圈里规划一条能落下去的跑道（八向条带选落差最小的，挑不出就原地盘旋等下一轮），再「对准进近 → 沿下滑道下降 → 触地前压平轻接地」，一条航道两分钟都进不了场才拉黑换一条。关 = **上一个版本的降落方式**（选一块够平的地面当落点，朝它压高度，进到近地高度就压平机翼、轻接地）。两种方式共有的部分：电量见底照常安全降落、接地后清 crash 标记并停住。")
+                .translation("config.promaid.ride.realisticLanding").define("realisticLanding", false);
+        // 实测九百八十五【骑乘指挥棒：光标渲染开关】——「被绑定以后会出现光标」是原生需求，
+        // 但金色描边有人不想要（挂机时满屏发光、与别的模组描边叠加），所以把它交成一个总闸。
+        COMBAT_RIDE_BATON_MARK = BUILDER.comment("骑乘指挥棒·光标（默认开）：绑定成功、或“待选中”选中时，在**女仆与坐骑身上**打一道**原版发光标记**——同光灵箭那条渲染（金色描边），隔老远也能看出这一对是哪一对。\n\n【关掉会怎样】① 之后**不再点亮**任何新光标；② **已经亮着的**会在 5 秒内被清扫链自动熄掉；③ 链路本身、绑定留痕、选中与配对流程**一概不受影响**（那三样与“发光”是分开记的），解绑与收魂符照旧会熄灯。\n\n【为什么有人要关】挂机时满屏金色描边晃眼，或与别的模组的发光/描边叠加；关掉只影响“看不看得见”，不影响任何骑乘行为。")
+                .translation("config.promaid.ride.batonMark")
+                .define("batonMark", true);
         BUILDER.pop();
         // v1.3.0(beta) 实测七百一十八【issue #31】：坐/蹲着的女仆不被自保归位传送拉走。
         // 与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径——那条管 TLM 原版的
@@ -2858,7 +2891,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineList("breakBlacklist", java.util.List.of("empty", "benign"),
                         o -> o instanceof String s && !s.isEmpty());
         BUILDER.pop();
-
 
         // ---- 空袭数值（v1.2.2 实测五百八十一）----
         // 需求原文：「关于空袭等各项数值也要有一个详细的配置面板，在模组详细配置。」
@@ -3080,15 +3112,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.fireProtect").define("fireProtect", true);
         COMBAT_BOMBING_TNT_TRACK = BUILDER.comment("TNT 追踪飞行（默认开）：扔出去的 TNT 在**离手后的一小段时间里**朝目标方向拐一点弯——**只改方向、速度不变**（目标跑得快也更容易吃到）；关 = 纯弹道抛物线。追多久见下面那条『TNT 追踪时长』")
                 .translation("config.promaid.bombing.tntTrack").define("tntTrack", true);
-        COMBAT_BOMBING_TNT_TRACK_TICKS = BUILDER.comment("TNT 追踪时长（tick，默认 10 = 0.5 秒，0 = 不追踪）：扔出去之后只在这段时间内修正方向，之后按当时方向直飞——0.5 秒刚好是『稍微修一下准度』的量；另外每 tick 最多转 5 度（限转角），所以观感是一段平滑小弧线，不会一离手就折线乱拐")
-                .translation("config.promaid.bombing.tntTrackTicks").defineInRange("tntTrackTicks", 10, 0, 200);
+        COMBAT_BOMBING_TNT_TRACK_TICKS = BUILDER.comment("TNT 追踪时长（tick，默认 20 = 1 秒，0 = 不追踪）：扔出去之后只在这段时间内修正方向，之后按当时方向直飞——1 秒是『稍微修一下准度』又不至于像在飞导弹的量；另外每 tick 最多转 5 度（限转角），所以观感是一段平滑小弧线，不会一离手就折线乱拐。\n\n【撞到敌人一定会炸（物理体积）】扔出去的 TNT 撞上敌人、或落地后敌人撞上来，都会在接触点**立刻引爆**（不再从敌人身上穿过去）——这条判定不受上面「追踪飞行」与本条时长影响，开不开追踪都有")
+                .translation("config.promaid.bombing.tntTrackTicks").defineInRange("tntTrackTicks", 20, 0, 200);
         BUILDER.pop();
 
-        // ---- 第三方玩法模式黑名单（v1.2.2 实测五百九十：傀儡装配 Modular Golems 的「傀儡师」） ----
-        //   口径：自主系统永不切进去；玩家手动切进去之后本模组战术全体让位
-        //（见 com.maidsmart.compat.MaidModeCompat）
+        // ---- 第三方玩法模式黑名单（v1.2.2 实测五百九十 傀儡师禁切入；实测九百九十二 加 拔刀剑/战斗模式——可切入、切入后让位） ----
+        //   口径：只有傀儡师禁止自主切入；拔刀剑/战斗模式可被自主切换切进去，
+        //   切进去之后本模组战术全体让位、敌人清除后照常还原（见 com.maidsmart.compat.MaidModeCompat）
         BUILDER.comment("第三方模组兼容").translation("config.promaid.compat").push("compat");
-        COMPAT_PUPPET_BLACKLIST = BUILDER.comment("傀儡模式黑名单（默认开）：检测到《傀儡装配》Modular Golems 给女仆注册的「傀儡师」模式时自动列入——① 自主参战与 LLM 自主切换永不切到这个模式；② 玩家手动切进去之后，本模组的战术（单兵走位/跳劈/举盾、投弹与轰炸、自动换装、排班换段）全体让位，只保留那个模组原汁原味的玩法，切回来即自动恢复；保命动作（自保/落地水/防火）不在让位之列")
+        COMPAT_PUPPET_BLACKLIST = BUILDER.comment("第三方玩法模式黑名单（默认开）：三类自带一整套战斗玩法的模组任务自动列入——《傀儡装配》的「傀儡师」、《车万女仆：真正的力量》的「拔刀剑模式》、《史诗战斗联动》的「战斗模式」—— ① 自主参战与 LLM 自主切换能把「拔刀剑模式 / 战斗模式」当普通战斗任务切进去，「傀儡师」永不切入；② 切进去之后（不管谁切进去的），本模组的战术与行动（单兵走位/跳劈/举盾、投弹与轰炸、威胁驱动、走位独占、自动换装、排班换段）全体让位，只保留那个模组原汁原味的玩法，敌人清除后照常还原回战斗前任务；保命动作（自保/落地水/防火/宠物免疫）不在让位之列。没装对应模组时名单等于空，什么都不影响")
                 .translation("config.promaid.compat.puppetBlacklist").define("puppetBlacklist", true);
         BUILDER.pop();
 
@@ -3217,9 +3249,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 实测四百二十一：冷却可视化 HUD（反馈："我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化"）
         MISC_COOLDOWN_HUD = BUILDER.comment("冷却可视化 HUD（默认开）：在玩家屏幕左上角实时显示本人女仆的自动复活倒计时与回魂符冷却倒计时——女仆死亡等待复活、或放出后处于回魂符冷却窗口时显示；关掉不显示也不发同步包")
                 .translation("config.promaid.misc.cooldownHud").define("cooldownHud", true);
-        // 实测五百七十三：中键工位标记开关（与 TLM 自带的「河童的罗盘」撞车 → 给开关 + 让位）
-        MISC_WORK_POS_MARKER = BUILDER.comment("中键工位标记（默认开）：潜行 + 鼠标中键方块 = 把身边自家「在家/排班」女仆的工位与休闲锚点标到那个方块（范围=排班活动半径）。与 TLM 自带的「河童的罗盘」功能重叠——两者写的是同一份排班锚点（谁后写谁生效），所以手持河童的罗盘时本功能自动让位；这里关掉则中键完全交还原版取方块")
-                .translation("config.promaid.misc.workPosMarker").define("workPosMarker", true);
+        // 实测九百一十四：中键工位标记（旧 misc.workPosMarker）已删除——功能下线
         // 实测四百四十三：悬空禁搭方块（反馈："女仆在悬空状态下应该禁止搭建方块——
         // 挖矿/伐木也通用；下落悬空时搭方块又放不了落地水，结果自己摔死"）
         MISC_NO_PLACE_IN_AIR = BUILDER.comment("悬空禁搭方块（默认开）：女仆未落地时不再搭方块——涵盖自保搭高/搭路/挖矿垫脚/伐木垫脚四个模块。触发口径：重锤跃起中（1.21.1）整段空中都禁；其余情况是坠落距离达到「落地水触发高度」时禁（此时落地水会接管，搭方块既救不了她、又会挡住落地水）。水里/岩浆里、骑乘、鞘翅滑翔不算悬空；站在地面照常搭")
@@ -3267,8 +3297,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.scheduleBubbleEnabled").define("scheduleBubbleEnabled", true);
         MISC_SCHEDULE_BUBBLE_RADIUS = BUILDER.comment("排班贴身气泡触发距离（格，默认 3.5）：主人距排班女仆水平小于此值时可能触发（每只女仆触发冷却 30 秒，与气泡全局限频独立）")
                 .translation("config.promaid.misc.scheduleBubbleDist").defineInRange("scheduleBubbleDist", 3.5, 1.0, 16.0);
-        MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")
-                .translation("config.promaid.misc.pickupPriority").define("pickupPriority", true);
+        MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级；默认关 = 干活时也去捡掉落物）")
+                .translation("config.promaid.misc.pickupPriority").define("pickupPriority", false);
         MISC_PICKUP_VALUE_REORDER = BUILDER.comment("拾取按价值重排（默认开）：同一个地方散着一堆掉落物时，原版低价值物品（废石/泥土/沙子/粘土/地狱岩/凝灰岩等）的拾取优先级降到最低，矿石与模组物品排前面——她不会被一堆挖矿废石挤掉真正的战利品。关掉 = TLM 原版顺序（就近优先，不看价值）")
                 .translation("config.promaid.misc.pickupValueReorder").define("pickupValueReorder", true);
         MISC_VERTICAL_RANGE = BUILDER.comment("烹饪/酿造垂直搜索范围")
@@ -3343,7 +3373,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MISC_WORK_STAY_IN_CIRCLE = BUILDER.comment("干活时不许出圈（默认开）：女仆工作时会在多个地方高速移动找任务目标，很容易跑出玩家用罗盘画的圈，观感很差。\n\n【为什么会在圈外乱窜】烧制/酿造/宰杀这三种任务在「没炉子/没台子/没牲畜」时会进「闲逛等活」分支（每 2 秒在周围 8 格随机挑一点走过去，边走边找活）。选点本身会过一遍「工作圈」（home 模式不许出圈）；但**跟随模式（非 home）下圈形同不存在**——直接放行，于是她每 2 秒换一个随机方向、满地图乱窜找活。\n\n【这一项做什么】跟随模式下也给闲逛定一个圈：以**主人身边**为圆心（跟随的语义就是待在他附近）、半径取「排班活动半径」（设置里那一项，默认 12 格；调小=更老实待在原地附近），闲逛点必须落在这个圈里；并且取点锚点从「她此刻位置」改成这个固定圆心——否则「围绕自己每 2 秒随机挪 8 格」等于一场没有回复力的随机游走，几十步就漂出去几十格。home 模式照旧用玩家画的圈（罗盘/工位）。\n\n【不影响的】战斗/跟随/空闲/建造（建造是站桩按蓝图放，不闲逛）；关掉 = 跟随模式完全不限。")
                 .translation("config.promaid.misc.workStayInCircle").define("workStayInCircle", true);
         // 实测八百一十五：河童的罗盘优先
-        MISC_COMPASS_PRIORITY = BUILDER.comment("罗盘圈优先（默认开）：让排班表的 home 也读取之前用罗盘画出来的圈，并且罗盘具有更高的优先级——女仆干活不许出圈，休息睡觉之类也按圈内行为准则。\n\n【圈是谁在画】河童的罗盘（右键方块记工位/休闲/睡眠三点 → 右键女仆写入）与潜行+中键工位标记，写的都是同一份 TLM 排班锚点；排班表/建造行为则会在「没配过锚点」时拿她**当前站的地方**当锚点（自动锚定 home）。三种来源里，只有罗盘/中键是玩家**亲手画**的。\n\n【这一项做什么】给「玩家画过圈」这件事记一个标记（罗盘中键任一写锚点时落上）。此后：①排班表的自动锚定不再拿当前位置覆盖它；②建造行为不再用「当前坐标」把它顶掉；③关排班（或别的路径）也不会把圈清成零。一句话——**玩家画的圈，除了玩家自己再画一次（或在 TLM GUI 里改），谁都不许动**。\n\n【不影响的】中键标记与罗盘之间仍然是「谁后写谁生效」；关掉 = 自动锚定照旧可能覆盖玩家画的圈。")
+        MISC_COMPASS_PRIORITY = BUILDER.comment("罗盘圈优先（默认开）：让排班表的 home 也读取之前用罗盘画出来的圈，并且罗盘具有更高的优先级——女仆干活不许出圈，休息睡觉之类也按圈内行为准则。\n\n【圈是谁在画】河童的罗盘（右键方块记工位/休闲/睡眠三点 → 右键女仆写入）写的就是 TLM 那份排班锚点；排班表/建造行为则会在「没配过锚点」时拿她**当前站的地方**当锚点（自动锚定 home）。两种来源里，只有罗盘是玩家**亲手画**的。\n\n【这一项做什么】给「玩家画过圈」这件事记一个标记（罗盘写锚点时落上）。此后：①排班表的自动锚定不再拿当前位置覆盖它；②建造行为不再用「当前坐标」把它顶掉；③关排班（或别的路径）也不会把圈清成零。一句话——**玩家画的圈，除了玩家自己再画一次（或在 TLM GUI 里改），谁都不许动**。\n\n【不影响的】关掉 = 自动锚定照旧可能覆盖玩家画的圈。")
                 .translation("config.promaid.misc.compassPriority").define("compassPriority", true);
         // 实测八百一十六：非战斗模式下女仆移速硬上限（不许比玩家快）
         MISC_NONCOMBAT_SPEED_CAP = BUILDER.comment("非战斗模式下移速硬上限（默认开）：非战斗时，女仆的速度不能比玩家快（哪怕是寻找任务目标）——默认速度最多与玩家奔跑速度持平。\n\n【女仆「寻找任务目标」走的是哪条速度链路】①Brain 写 WALK_TARGET（或任务直接调 PathNavigation.moveTo）→ 原版 MoveToTargetSink 把它变成一条 Path；②PathNavigation 每 tick 把下一个路径点喂给 MoveControl.setWantedPosition(x,y,z,speedModifier)；③TLM 的 MaidMoveControl.tick 在 MOVE_TO / STRAFE 分支里算「速度 = speedModifier × getAttributeValue(MOVEMENT_SPEED)」，然后调 Mob.setSpeed；④Mob.setSpeed 只有两行——LivingEntity.setSpeed(value)（写 speed 字段）+ setZza(value)（写前向输入 zza），travel 用的正是这两个值去算这一 tick 的位移。\n\n【结论】女仆靠腿走的一切速度最后都必然经过 Mob.setSpeed 这一个口子——导航走路、直连 moveTo、闲逛 WALK_TARGET、农活、跟随、挖矿赶路，一条都绕不开。（唯二不经过它的是「直接 setDeltaMovement 施加速度矢量」的那几处：搭路推一步、自保逃跑、飞行/扫帚——那些不是「走路」，本项一律不碰。）\n\n【为什么默认就是玩家奔跑速度】女仆 MOVEMENT_SPEED = 0.7 就是她的裸值，把 speedModifier 记作倍率，对照格/秒：0.3 → 1.9｜0.4 → 3.3（默认散步）｜0.5 → 4.9｜0.6 → 6.0｜0.7 → 8.2｜1.0 → 14（玩家走路 4.32、奔跑 5.61 格/秒；同一档换地形/机器约 ±20% 波动）。玩家奔跑 5.61 落在 0.5 与 0.6 之间 → 约 0.56 倍率，这就是默认上限「5.61 格/秒 = 玩家奔跑」的由来（0.4 只到 3.3，比玩家走路 4.32 还慢，所以上限不能取 0.4——那是「散步」的档，不是上限的档）。\n\n【这一项做什么】非战斗时，把送进 Mob.setSpeed 的那个数硬钳到不超过「上限」那一项（默认 0.56，单位与「散步速度倍率」/「挖矿移速」同一套；只往下钳、绝不往上抬）。这是绝对上限——哪怕饰品把她的 MOVEMENT_SPEED 抬高一倍，钳的是「最终送进去的那个数」，所以她照样不会比玩家快。\n\n【什么时候不钳】战斗（攻击类任务含第三方 IAttackTask / 参战中 / 单兵战术接管——战斗要走位躲技能不能压）；自保逃跑（低血/逃跑/逃离险境，压速等于送死）；飞行 / 扫帚腾空（此刻不靠腿走）；坐着 / 乘客 / 睡觉；无主女仆（与跟随收紧/移动抑制 同一条规矩）。\n\n【关掉】完全不碰 Mob.setSpeed（本模组自己的挖矿赶路 1.5×、砍树、宰杀追击等原样恢复）。")
@@ -3482,7 +3512,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.orbJoin").define("orbJoin", true);
     MISC_EQUIP_RESCUE = BUILDER.comment("装备救回（默认开）：女仆装备槽被清空（第三方工具/意外掉落）时，把物品救回她身上/背包，防丢失。关闭 = 回原版（装备被清就是没了）")
             .translation("config.promaid.misc.equipRescue").define("equipRescue", true);
-    MISC_WORK_TELEPORT_HOLD = BUILDER.comment("干活时不被传送召回（默认开）：女仆在挖矿/伐木且已盯上目标期间，TLM 自带的\"离主人太远就瞬移回主人身边\"暂不生效——避免她走远找矿/伐木时被拽走、手上这一轮作废。关闭 = 回原版（照常被传送）")
+    MISC_WORK_TELEPORT_HOLD = BUILDER.comment("干活时不被召回（默认开）：女仆在挖矿/伐木期间，两条\"太远就回去\"的判据一起松——① TLM 自带的「离主人太远就瞬移回主人身边」暂不生效；② 「工作范围」圈的半径读数临时顶到罩得住「她到主人 / 到圈心 / 她自己的检索范围」（+8 格），于是排班/在家的「出圈（半径+4）就传送回工位、否则自己走回去」与跟随模式的「太远就传送 / 太远就自己走回来」都不会半路把她拽回来（跟随那两个分支还会每 tick 清掉她的寻路 → 原地走一步停一步，一并消掉）。切任务 / 行为停转当拍回落常态。关闭 = 回原版（照常被传送、照常被圈拽回）")
             .translation("config.promaid.misc.workTeleportHold").define("workTeleportHold", true);
     MISC_HOME_MOVEMENT = BUILDER.comment("home 模式走位（默认开）：在家模式女仆没有移动目标时，由本模组给 home 锚点附近的随机走位（非干活的持续巡逻、宰杀任务无牲畜时去附近闲逛）。关闭 = 回原版（home 女仆站原地不动）")
             .translation("config.promaid.misc.homeMovement").define("homeMovement", true);
@@ -3490,8 +3520,16 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.stationaryLock").define("stationaryLock", true);
     MISC_FISHING_CHAIR = BUILDER.comment("钓鱼自动坐垫（默认开）：钓鱼女仆自动生成坐垫并维持坐垫走位。关闭 = 回原版（不生成坐垫）")
             .translation("config.promaid.misc.fishingChair").define("fishingChair", true);
+    // 实测九百九十三【接管总闸】钓鱼 / 农场（默认开 · 随 DIY 关）：面板「钓鱼」「农场与宰杀」
+    // 两页各自的第一条；关 = 该玩法完全按 TLM 原版（各子开关保留勾选，重新打开即恢复）。
+    MISC_TAKE_OVER_FISHING = BUILDER.comment("接管钓鱼（默认开）：开 = 本模组对钓鱼玩法的增强全部生效（附近没椅子/船时主动找开阔水域、自带坐垫生成在岸边并维持坐垫走位）。关闭 = 钓鱼完全交还 TLM 原版：不做主动找水、不生成坐垫（下面「钓鱼自动坐垫」的勾选保留，重新打开立即恢复）")
+            .translation("config.promaid.misc.takeOverFishing").define("takeOverFishing", true);
+    MISC_TAKE_OVER_FARM = BUILDER.comment("接管农场（默认开）：开 = 本模组对农场玩法的增强全部生效（连锁收获、批量种植、掉落物顺手拾取、锄地、骨粉催熟、不踩坏农田）。关闭 = 农场完全交还 TLM 原版：上面这些增强全体停手，她只按原版一格一格慢慢干（各子开关的勾选保留，重新打开立即恢复；本页的宰杀不受本开关管）")
+            .translation("config.promaid.misc.takeOverFarm").define("takeOverFarm", true);
     MISC_DRIVEN_NO_STROLL = BUILDER.comment("坐骑不闲逛（默认开）：被本模组女仆驾驶的坐骑不许自己随机溜达（原版只对玩家乘客做这件事）。关闭 = 回原版（女仆驾驶时坐骑仍会自己溜达）")
             .translation("config.promaid.misc.drivenNoStroll").define("drivenNoStroll", true);
+    MISC_SERVER_FORCED_CONFIG = BUILDER.comment("多人服务器：配置以服务端为准（默认关）。\n\n【作用】关着 = 各人改各人自己那份配置，互不干扰。打开后全服以服务端这一份为准：服务端把配置推给每个客户端，非 OP 只能看、不能改，OP 在面板里的改动写回服务端并同步全服。\n\n【显示条件】只在专用服务器、或局域网里已有多人在线时，且只对本机是 OP 的玩家显示这一行；单机不显示。\n\n【撤销】关掉它，或直接改服务端的 config/promaid-common.toml，即可恢复各人自配。")
+            .translation("config.promaid.misc.serverForcedConfig").define("serverForcedConfig", false);
     BUILDER.pop();
 
         // ---- 语音（v1.5.198：TTS 音量倍率 / 系统消息朗读 / 系统语音包 / 语音缓存）----

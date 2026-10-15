@@ -6,7 +6,8 @@
      与 mods.toml 不一致（WARN）——#37 第 4 条。
      （仓库 changelog 已于实测八百五十六 撤掉，版本位不再有 `CHANGELOG.md` 首行这一处。）
   2. 发布登记：rounds/RELEASES.tsv 里 published 行与 patched/ 里同号 jar 哈希不符（FAIL，= 同号覆盖）；
-     当前版本的 jar 未登记（WARN）；更早的 jar 未登记（聚合 WARN）。
+     当前版本的 jar 未登记（WARN）；更早的 jar 未登记（聚合 WARN，能归就归——补登记只记本地哈希，
+     不主张是否上过平台）。已交付但归档里没有文件的历史发布件不告警（实测九百五十七，拉倒）。
   3. 轮次记录：rounds/ 里最新的 RNNN-*.md 必须含 ## 排班 / ## 验证 / ## 验收 / ## 边界。
   4. 台账：DEBT.md 存在；BD-*/TD-* 行有级别与状态。
   5. 配额（§8）：最新轮次记录标为 FEATURE 轮时，不得存在未清的 P0/P1 债。
@@ -158,6 +159,11 @@ def check_registry(cur_version):
         path = os.path.join(ROOT, 'patched', fname)
         if not os.path.isfile(path):
             same_ver = [os.path.basename(p) for p in archive.get((r['ver'], r['loader']), [])]
+            if r['ver'] != cur_version:
+                # 历史发布件：文件早就不在归档里了（玩家手上那份仍在平台上）——无从核对，不告警
+                print('    （历史件 %s 不在归档，跳过核对；归档里同版本另有 %s）'
+                      % (fname, '、'.join(same_ver) if same_ver else '无'))
+                continue
             warn('发布件「%s」（%s / %s）不在 patched/ 归档里，无法核对哈希；'
                  '归档里同版本的其它文件（%s）不能代表发布件'
                  % (fname, r['ver'], r['loader'], '、'.join(same_ver) if same_ver else '无'))

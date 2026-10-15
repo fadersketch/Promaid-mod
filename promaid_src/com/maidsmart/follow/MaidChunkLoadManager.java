@@ -396,7 +396,7 @@ public final class MaidChunkLoadManager {
      *  一键召回，必须先解除建造——给建造模式特殊豁免，可被一键召回和单独召回"）：
      *  建造任务中的女仆召回豁免——建造行为强制 home 模式（防 TLM 跟随拉走），
      *  而召回链路全部豁免 home → 建造女仆恒被挡。建造女仆在召回判定中视为
-     *  【可召回】：召回后她瞬移回工地继续建（teleportToWorkSite 每 4 tick 一次），
+     *  【可召回】：召回后她瞬移回工地继续建（teleportToWorkSite 每 tick 至多一次），
      *  落点不稳时先召回再让她自己回去，无需解除建造。 */
     private static boolean isBuildingMaid(EntityMaid maid) {
         return maid != null
@@ -965,6 +965,8 @@ BlockPos stand = findStand(newLevel,
                 // home 判据塞在 "!broomRider && ..." 的**后面**，于是"扫帚模式 + 在家模式"
                 // 一起开时 broomRider 抢先放行 → 正在家中巡逻/盘旋的她照样被一键集合召回
                 // （玩家实测）。建造女仆的老口径不变（建造强制 home，但可被召回）。
+                // 实测九百二十五【按玩家要求回退】：守家（门禁）恢复"钉死"口径——九百二十四 给骑乘者的
+                // 那点"让位"会牵连出一堆问题（她自己骑上载具就被拽、载具链路在传送里断掉等），撤销。
                 if (md.isHomeModeEnable() && !isBuildingMaid(md)) {
                     kept++;
                     continue;
@@ -1353,6 +1355,9 @@ BlockPos stand = findStand(newLevel,
             // 【实测七百六十六】在家模式（守家）→ 状态豁免，优于下面全部"骑乘例外"（扫帚 / 坐骑 /
             // 特殊载具 / 自坐模组载具）。旧口径把 home 判据放在那些例外**之后**，于是"扫帚模式 +
             // 在家模式"一起开时，正在家中巡逻/盘旋的她照样被"召她过来"拽走（玩家实测）。
+            // 【实测九百二十五】按玩家要求把守家（门禁）恢复"钉死"：九百二十四 为"召她过来要能把她从
+            // 驾驶座上拽下来"给骑乘者让位，实测下来牵连太多（家里那只被拖走、载具链路半途断掉），
+            // 撤销。要召回骑在载具上的她 = 先解除在家模式。
             if (maid.isHomeModeEnable() && !isBuildingMaid(maid)) {
                 return 3;
             }
@@ -1408,6 +1413,7 @@ BlockPos stand = findStand(newLevel,
         if (maid.m_213877_() || maid.m_21224_()) {
             return false;
         }
+        // 实测九百二十五：守家（门禁）恢复"钉死"口径（九百二十四 的骑乘让位已按玩家要求撤销）
         if (maid.isHomeModeEnable() && !isBuildingMaid(maid)) {
             return false; // 守家：唯一保留的豁免
         }
@@ -1449,6 +1455,7 @@ BlockPos stand = findStand(newLevel,
         }
         // 【实测七百六十六】守家钉死：home（在家）模式优于下面全部"骑乘例外"——旧口径把
         // home 判据放在那些例外**之后**，"扫帚模式 + 在家模式"一起开时她照样被传走。
+        // 实测九百二十五：守家（门禁）恢复"钉死"口径（九百二十四 的骑乘让位已按玩家要求撤销）
         if (maid.isHomeModeEnable() && !isBuildingMaid(maid)) {
             return false;
         }
@@ -1456,22 +1463,13 @@ BlockPos stand = findStand(newLevel,
         if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
             return owner.m_6084_() && recallBroomRider(maid, owner);
         }
-        // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）：只传人 + 先解除绑定/清标记
-        if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
-            if (!owner.m_6084_()) {
-                return false;
-            }
-            com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
-            return teleportCore(maid, owner, true);
-        }
-        // 【实测七百四十一·点4】她自己坐上模组载具（非指挥棒绑定）：先请她下来，再单独传人。
-        // 与上一档同款"只传人不传载具"，只是不需要解绑任何东西（她身上本就没有我们的标记）。
-        if (com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
-            if (!owner.m_6084_()) {
-                return false;
-            }
-            com.maidsmart.combat.RideBindManager.dismountSelfBoarded(maid);
-            return teleportCore(maid, owner, true);
+        // "她自己坐上去的模组载具"：本方法服务**「一键集合」**，玩家定的口径是**连人带载具一起**
+        // 收回来（「一键集合则是连人带载具一起」）。旧版这两档是"只传人、把载具留在原地"（726/741）
+        // ——那是「召她过来」（summonNamed）该有的口径。这里改走 recallRideRider 那条"解开乘客
+        // 关系 → 搬载具 → 搬她 → 重新落座"的连人带载具链路（与 716 档指挥棒坐骑同一段代码）。
+        if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)
+                || com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
+            return owner.m_6084_() && recallRideRider(maid, owner);
         }
         // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬
         if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {

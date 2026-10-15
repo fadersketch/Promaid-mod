@@ -32,6 +32,9 @@ public final class BuildHudRenderer {
      */
     private static long lastSnapshotNanos = 0L;
     private static final long SNAPSHOT_TIMEOUT_NANOS = 5_000_000_000L;
+    /** 诊断：首次进入渲染回调 / 首次绘制各打一条 latest.log（区分“事件没到”还是“没数据”） */
+    private static boolean loggedEvent = false;
+    private static boolean loggedDraw = false;
 
     private BuildHudRenderer() {
     }
@@ -67,9 +70,18 @@ public final class BuildHudRenderer {
         }
     }
 
+    /**
+     * 实测九百八十四：改用 {@code RenderGuiEvent.Post}（1.20.1 ForgeGui.render 末尾每帧必发一次）。
+     * 旧版监听 {@code RenderGuiOverlayEvent.Post}，与冷却 HUD 当初“回调从未进入”是同一个坑
+     * （见 {@code CooldownHudRenderer} 类注释）：1.20.1 上那个事件不能保证每帧到达。
+     */
     @net.minecraftforge.eventbus.api.SubscribeEvent
-    public static void onGui(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {
+    public static void onGui(net.minecraftforge.client.event.RenderGuiEvent.Post event) {
         lastBottomY = 4; // 本帧未画建造 HUD 时（下方提前 return）冷却 HUD 从顶部起画
+        if (!loggedEvent) {
+            loggedEvent = true;
+            com.mojang.logging.LogUtils.getLogger().info("build hud: first render event");
+        }
         // v1.2.0 实测五百五十七：快照超时（5 秒无推送）→ 本地清屏，防 HUD 永久挂在左上角
         if (!SNAPSHOT.isEmpty() && System.nanoTime() - lastSnapshotNanos > SNAPSHOT_TIMEOUT_NANOS) {
             SNAPSHOT.clear();
@@ -101,6 +113,10 @@ public final class BuildHudRenderer {
         if (y < 0) {
             lastBottomY = 4;
             return;
+        }
+        if (!loggedDraw) {
+            loggedDraw = true;
+            com.mojang.logging.LogUtils.getLogger().info("build hud: first draw at y={}", y);
         }
         for (String[] e : SNAPSHOT.values()) {
             y = entry(gg, font, e, x, y, w, h);

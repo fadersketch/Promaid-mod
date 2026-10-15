@@ -14,7 +14,7 @@ description:
       This is the repository's largest structural debt.
 source:
   - {path: promaid_src/com/maidsmart, line: 1}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 5fa8df85a5e39dbb2d2cdd1c231e9cad8798bed6663c18685e19239b554c3935
 state: active

@@ -133,6 +133,7 @@ public final class BlueprintMachineDetect {
         try {
             int water = 0;
             int lava = 0;
+            int other = 0;
             net.minecraft.nbt.ListTag palette = tag.m_128425_("palettes", 9)
                     ? tag.m_128437_("palettes", 9).m_128744_(0)
                     : tag.m_128437_("palette", 10);
@@ -150,9 +151,11 @@ public final class BlueprintMachineDetect {
                     water++;
                 } else if ("minecraft:lava".equals(nm)) {
                     lava++;
+                } else if (BlueprintStepMath.isFluidBlock(nm)) {
+                    other++; // 【实测九百六十八】模组流体同样算"含流体"，不再按名字漏判
                 }
             }
-            if (water == 0 && lava == 0) {
+            if (water == 0 && lava == 0 && other == 0) {
                 return;
             }
             StringBuilder sb = new StringBuilder();
@@ -161,6 +164,9 @@ public final class BlueprintMachineDetect {
             }
             if (lava > 0) {
                 sb.append(sb.length() > 0 ? "、" : "").append("岩浆×").append(lava);
+            }
+            if (other > 0) {
+                sb.append(sb.length() > 0 ? "、" : "").append("其他流体×").append(other);
             }
             FLUID_STRIPPED.put(blueprintId, sb.toString());
             BlueprintLib.LOGGER.info("loadExternalFile: {} 含流体（{} 格）已按「普通建筑」剥离（内容判据：{}）——"
@@ -176,7 +182,7 @@ public final class BlueprintMachineDetect {
         if (s == null) {
             return "";
         }
-        return "\u00a7e注意：这份图纸原本含 " + s + "，已按「普通建筑」处理并剥离（不会建水/岩浆）。"
+        return "\u00a7e注意：这份图纸原本含 " + s + "，已按「普通建筑」处理并剥离（不会建流体）。"
                 + "如果它是靠流体工作的机器：把文件名加上关键词（" + machineKeywordHint()
                 + "）后重新导入，或到「模组详细配置 → 建造 → 图纸流体保留」改成「always」再重建。";
     }

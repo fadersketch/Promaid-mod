@@ -51,6 +51,9 @@ public abstract class FarmSweepMixin {
         if (base == null) {
             return;
         }
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FARM.get()) {
+            return; // 实测九百九十三【接管农场·关】：连收连种 / 批量种植 / 顺手拾取全体停手（回 TLM 原版）
+        }
         boolean enhance = com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get();
         boolean chain = com.maidsmart.config.MaidSmartConfig.MISC_CHAIN_HARVEST.get();
         // v1.1.0 实测二百九十八：锄地改顺带逻辑——不再挂在 start TAIL（旧版

@@ -11,7 +11,7 @@ description:
       adding its own tab.
 source:
   - {path: promaid_src_neo/com/maidsmart/CreativeTabHandler.java, line: 1, end_line: 48}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 057b442f0bbab4ca1d1b086f74267c74f2a5c2a4fdec118a6b67573eb431ccdc
 state: active

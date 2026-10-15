@@ -187,11 +187,13 @@ release 说明从那里取素材（见 `WORKFLOW.md` §6.1）。
 | `tools/verify/check_dev_voice.py` | 开发口吻棘轮：可见文案（两树 `assets/promaid/i18n/en_us.json` 与 `assets/maid_smart/lang/en_us.json` 的 value）里禁 `test/实测` 轮次号与第一人称复数 `we/our/us/ours`，处数只减不增 | 改任意可见文案时；已接进 `build_promaid*.py`（`--warn`）；见 TD-03 |
 | `tools/verify/check_comment_dup.py` | 重复注释棘轮：把两树源码里所有 `.comment("…")` 正文（去空白后）分组，同一段文字出现在多处即算重复；仅 4 段共用机制的固定文案在白名单，其余重复组只减不增 | 改配置项注释时；已接进 `build_promaid*.py`（`--warn`）；见 TD-02 |
 | `tools/verify/check_reflection.py` | 探针式反射棘轮：数两树源码（去注释后）里的 `Class.forName(` / `getMethod(` / `getDeclaredMethod(` / `getDeclaredField(` 处数，高于基线 FAIL、低于基线 WARN（只减不增） | 每次改代码后；已接进 `build_promaid*.py`（`--warn`）；见 TD-15 |
+| `tools/verify/check_mixin_targets.py` | mixin 注入点审计：拿目标类 + 父类链的**真实方法表**（`javap -s` 的 JVM 描述符）核对每个 `method="…"`——写全的必须存在、裸名字不许有"同名不同签名"（会命中协变桥接）、`@Inject` 处理方法参数必须 = 目标参数 + 回调；支持多 `@Mixin` 文件与跨行字符串拼接；单棵树「已校验注入点」不足 100 判空转 FAIL | 每次改 mixin / 换依赖版本后；**已接进 `build_promaid*.py` 作硬闸门（不过不出包）；见 R951** |
 | `tools/verify/gen_switch_inventory.py` | 生成 `ARCHITECTURE-SWITCHES.md`（按节 + 按主题聚合配置项），改行为前先查、新开关必须进 | 改配置项后 |
-| `tools/verify/verify_jar_classes.py` | 打包后自检（mixin 登记 / 注入签名 / class 齐全） | 打 jar 后（已有） |
+| `tools/verify/verify_jar_classes.py` | 打包后自检（mixin 类登记 / class 齐全；注入签名判据已搬到 `check_mixin_targets.py`） | 打 jar 后（已有） |
 
-八个护栏**目前以 `--warn` 形式接进构建**（注释 / 吞异常 / 缺译文存量未清零，先告警不阻断）；
+这一批护栏**目前以 `--warn` 形式接进构建**（注释 / 吞异常 / 缺译文存量未清零，先告警不阻断）；
 存量清零后把 `build_promaid*.py` 里那行的 `--warn` 去掉即改为**阻断出包**。
+（`check_mixin_targets.py` 例外：它是**硬闸门**，在打包前先跑，不过直接拒包。）
 
 ### 6.1 「引语」到底禁什么
 
@@ -229,7 +231,7 @@ DEV_GUIDE.md / WORKFLOW.md / PUBLISH_GUIDE.md / GIT_SYNC.md   成文标准与流
 桌面快照 `C:\Users\Sketch\Desktop\Promaid_本体当前`（**固定名，不带日期**）由
 `tools/deploy/sync_desktop_snapshot.py` 在**每次出包后自动刷新**（两个 `build_promaid*.py` 末尾调用，
 以 `--quiet` 模式只打一行 `SNAPSHOT: …`）：`source/` = 工作树镜像（跳过一切 `_` 开头的临时物）、
-`01_jar/` = 刚打出的两个 jar、`说明.txt` = 按当前 `RELEASE_NOTES_v1.3.1.md` 标题与 jar 哈希**重新生成**。
+`01_jar/` = 刚打出的两个 jar、`说明.txt` = 按当前 `RELEASE_NOTES_v1.3.2.md` 标题与 jar 哈希**重新生成**。
 所以**不需要再手动刷**；要单独刷一遍就 `python tools/deploy/sync_desktop_snapshot.py`。
 镜像范围内快照多出来的旧文件会被自动删掉（多退少补），但不动 `source/` 之外用户自己放的东西。
 
@@ -260,7 +262,8 @@ git tag 上并不存在）。发布版本区间由这几处实证锁定：
 
 | 发布版本 | 实测区间 | 出处 |
 |---|---|---|
-| v1.3.1 | 七百九十五 ~ 八百五十六 | 本次发布，`RELEASE_NOTES_v1.3.1.md` |
+| v1.3.2 | 八百五十九 ~ 九百九十九 | 本次发布，`RELEASE_NOTES_v1.3.2.md` |
+| v1.3.1 | 七百九十五 ~ 八百五十六（+ 857/858 同号覆盖重传） | `RELEASE_NOTES_v1.3.1.md`、`store/release_notes_1.3.1.md` |
 | v1.3.0 | 七百四十九 ~ 七百九十四（beta 749~763 + 正式 764~794） | `store/release_notes_1.3.0.md`（「相对首次 beta 上传：实测七百四十九 ~ 七百六十三」） |
 | v1.2.5 及更早 | 旧版按版本号分组写（`## vX.Y.Z：…`），未用编号 | 本地留档 `_cleanup_backup/version_changelog_legacy_full.md`（实测八百五十六 起移出工作区） |
 
@@ -294,7 +297,7 @@ git tag 上并不存在）。发布版本区间由这几处实证锁定：
 6. **桌面快照自动化 + 可复现打包**：`tools/deploy/sync_desktop_snapshot.py`（常驻）＋两个 `build_promaid*.py` 末尾挂钩，
    每次出包自动把 `Desktop\Promaid_本体当前`（**固定名**，已从 `_20261009` 改名）刷成与仓库一致；
    同时把 jar 内归档时间戳固定成 `2020-01-01`（同一份源码必出同一 sha256）；`说明.txt` 改为按
-   本版标题（实测八百五十六 起读 `RELEASE_NOTES_v1.3.1.md`）+ jar 哈希**生成**（不再手写）。
+   本版标题（实测八百五十六 起读该版 `RELEASE_NOTES_vX.Y.Z.md`）+ jar 哈希**生成**（不再手写）。
    旧的 `tools/_refresh_snapshot.py` 已删。
 
 7. **实测八百三十五 手册「调试 / 预设模式」（两树）**：新增 `MaidConfigPreset`（反射枚举全部 `static ConfigValue`
@@ -326,7 +329,7 @@ git tag 上并不存在）。发布版本区间由这几处实证锁定：
     改由桌面 `Promaid文本\` 记录，release 说明从那里取素材（`WORKFLOW.md` §6.1 / `DEV_GUIDE.md` §2）。
     同步改动：删护栏 `check_changelog.py`；`check_workflow.py` 去掉 CHANGELOG 依赖（轮次取 `rounds/` 最新 RNNN、
     版本位去掉「CHANGELOG 首行」、撤掉「进了 changelog 必须已验收」门禁）；`sync_desktop_snapshot.py`
-    改按 `RELEASE_NOTES_v1.3.1.md` 标题生成 `说明.txt`；两个 `build_promaid*.py` 护栏列表去一项；
+    改按该版 `RELEASE_NOTES_vX.Y.Z.md` 标题生成 `说明.txt`；两个 `build_promaid*.py` 护栏列表去一项；
     `publish_modrinth.py` 的平台 changelog 比对改读 `release_body*.md`；文档同步（`DEV_GUIDE` §2/§6/§7/§8/§9、
     `WORKFLOW` §5/§6/§9/§11、`README`、`PUBLISH_GUIDE`、台账、`机制详解`、`arch_modules`）。
     ② 新功能「**大运**」佩戴者免疫撞墙（`daYunNoWallDamage`，默认开；只认「佩戴者（玩家 Curios / 女仆 TLM 饰品栏）

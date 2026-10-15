@@ -1,6 +1,6 @@
 # Promaid 架构大纲 / Architecture Outline
 
-修订 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f · 121 模块 / 61 API / 73 箭头 / 最大深度 3
+修订 f94c12de83c73b74b57c4d736c614ed6bca9d571 · 120 模块 / 61 API / 76 箭头 / 最大深度 3
 
 - **Promaid 模组总览** `promaid`
   - **入口与装配** `promaid.entry`
@@ -177,7 +177,6 @@
     - **建构安全与共享工具** `promaid.core.safety` *(leaf)*
     - **游戏内文件浏览器** `promaid.core.gui` *(leaf)*
     - **第三方模式兼容** `promaid.core.compat` *(leaf)*
-    - **工位标记** `promaid.core.marker` *(leaf)*
     - **提示词追加** `promaid.core.prompt` *(leaf)*
   - **客户端界面** `promaid.client` *(leaf)*
   - **详细介绍手册** `promaid.guide` *(leaf)*

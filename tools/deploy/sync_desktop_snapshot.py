@@ -43,7 +43,7 @@ QUIET = '--quiet' in sys.argv[1:]
 DIRS = ['promaid_src', 'promaid_src_neo', 'libs_forge', 'libs_neo', 'tools']
 DOCS = ['DEBT.md', 'ARCHITECTURE.md', 'DEDICATED_SERVER_NOTES.md',
         'GIT_SYNC.md', 'PUBLISH_GUIDE.md', 'README.md',
-        'release_body.md', 'release_body_neo.md', 'DEV_GUIDE.md', 'RELEASE_NOTES_v1.3.1.md']
+        'release_body.md', 'release_body_neo.md', 'DEV_GUIDE.md', 'RELEASE_NOTES_v1.3.2.md']
 JARS = ['promaid-1.3.2-neoforge-1.21.1.jar', 'promaid-1.3.2-forge-1.20.1.jar']
 TARGETS = [r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods',
            r'D:\.minecraft\versions\1.20.1-Forge_47.4.10\mods',
@@ -124,9 +124,9 @@ def mirror(sub):
 
 
 def round_title():
-    """本版标题：取 RELEASE_NOTES_v1.3.1.md 首行（`# Promaid v1.3.1 …`）；读不到时退回 mods.toml 版本号。
+    """本版标题：取 RELEASE_NOTES_v1.3.2.md 首行（`# Promaid v1.3.2 …`）；读不到时退回 mods.toml 版本号。
     （仓库 changelog 已于实测八百五十六 撤掉，不再有 `CHANGELOG.md` 首行可读。）"""
-    p = os.path.join(BASE, 'RELEASE_NOTES_v1.3.1.md')
+    p = os.path.join(BASE, 'RELEASE_NOTES_v1.3.2.md')
     if os.path.isfile(p):
         first = io.open(p, encoding='utf-8').readline().strip()
         if first:
@@ -158,7 +158,7 @@ def write_readme(jars):
     L.append('  source/promaid_src_neo/   NeoForge 1.21.1 树（Mojmap 名）')
     L.append('  source/tools/             构建 / 部署 / 校验 / 测试脚本')
     L.append('  source/libs_forge, libs_neo  编译所需的 TLM 前置 jar')
-    L.append('  01_jar/                   两个本体现 jar + RELEASE_NOTES_v1.3.1.md')
+    L.append('  01_jar/                   两个本体现 jar + RELEASE_NOTES_v1.3.2.md')
     L.append('')
     L.append('【jar 是哪一份】')
     if jars:
@@ -226,10 +226,20 @@ def main():
         h = sha(dp)[:16]
         jars.append((fn, os.path.getsize(dp), h))
         log('   %-38s %d bytes  sha256[:16]=%s' % (fn, os.path.getsize(dp), h))
-    rn = os.path.join(BASE, 'RELEASE_NOTES_v1.3.1.md')
+    rn_name = 'RELEASE_NOTES_v1.3.2.md'
+    rn = os.path.join(BASE, rn_name)
+    for d in (os.path.join(DST, '01_jar'), DST, os.path.join(DST, 'source')):
+        if os.path.isdir(d):
+            for fn in os.listdir(d):
+                if fn.startswith('RELEASE_NOTES_') and fn.endswith('.md') and fn != rn_name:
+                    try:
+                        os.remove(os.path.join(d, fn))
+                        log('   快照删掉旧版本说明 %s' % fn)
+                    except OSError:
+                        pass
     if os.path.isfile(rn):
-        shutil.copy2(rn, os.path.join(DST, '01_jar', 'RELEASE_NOTES_v1.3.1.md'))
-        shutil.copy2(rn, os.path.join(DST, 'RELEASE_NOTES_v1.3.1.md'))
+        shutil.copy2(rn, os.path.join(DST, '01_jar', rn_name))
+        shutil.copy2(rn, os.path.join(DST, rn_name))
     write_readme(jars)
     log('说明.txt 已按当前 RELEASE_NOTES 标题与 jar 哈希重新生成。')
     if QUIET:

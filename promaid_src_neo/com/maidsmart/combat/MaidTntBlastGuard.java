@@ -124,10 +124,18 @@ public final class MaidTntBlastGuard {
     /**
      * 这一炸是不是"她扔的模组 TNT"——是就返回那位女仆，否则 null。
      * 两条判据见类注释；两条都要求直系来源是**引信 TNT 那一类**（不碰别的爆炸来源）。
+     * 补一条（v1.3.2）：直系来源是 **TNT 矿车**时只认 {@link #rememberTnt} 登记过的那一辆
+     *（她扔出去的矿车在 {@code BombThrow} 里登记；别人摆的矿车一概不碰，照常炸地形）。
      */
     private static EntityMaid ownerMaidOf(Explosion ex) {
         try {
             Entity direct = ex.getDirectSourceEntity();
+            if (direct instanceof net.minecraft.world.entity.vehicle.MinecartTNT) {
+                // 【TNT 矿车那一支】只认我们自己亲手登记过的那一辆（见 rememberTnt）——矿车不改
+                // 点火者、也没有间系可看（javap 实证：它那一炸的 source 传的就是它自己），所以
+                // "别人摆的 TNT 矿车"一概不认，该炸地形照炸地形。
+                return maidOfTnt(direct);
+            }
             if (!(direct instanceof PrimedTnt)) {
                 return null; // 只认 TNT（她扔的模组 TNT 也继承 PrimedTnt）
             }
@@ -149,20 +157,23 @@ public final class MaidTntBlastGuard {
      * 由 {@link #ownerMaidOf} 与主人/友军免伤（{@code FriendlyFireGuard.maidOfDamage}）共用：
      * 爆炸事件里我们拿得到 {@code Explosion}，而伤害事件里只有一枚**直接实体**，
      * 两边都要能把账算回她头上，所以这条判据必须是公开的、与 {@link #tracked} 的表同一份。
-     * 判据与类注释那两条一致（只认 {@link PrimedTnt} 这一类）：
+     * 判据与类注释那两条一致（只认 {@link PrimedTnt} 这一类；她扔出去的 TNT 矿车走登记表那一条）：
      * <ol> <li><b>主人链</b>：引信 TNT 自己记的点火者（原版 {@code PrimedTnt.getOwner()}， {@code Explosion.getIndirectSourceEntity()} 读的就是它）；</li> <li><b>我们亲手登记过的那一枚</b>：{@code MaidBombing.primeTnt} 放出模组自己的 TNT 时登记， 防的是"模组不把点火者写进爆炸/伤害源"那一类（这时前一条整段落空）。</li> </ol>
      */
     public static EntityMaid maidOfTnt(Entity tnt) {
-        if (!(tnt instanceof PrimedTnt)) {
-            return null;
+        if (!(tnt instanceof PrimedTnt)
+                && !(tnt instanceof net.minecraft.world.entity.vehicle.MinecartTNT)) {
+            return null; // 其余爆炸来源一概不认（绝不对别人的爆炸动手）
         }
         try {
-            net.minecraft.world.entity.LivingEntity owner = ((PrimedTnt) tnt).getOwner();
+            net.minecraft.world.entity.LivingEntity owner =
+                    tnt instanceof PrimedTnt primed ? primed.getOwner() : null;
             if (owner instanceof EntityMaid m) {
                 return m;
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
         }
+        // 矿车只走这一条：不是我们扔出去的那一辆 → null（我们放的一定登记过，见 rememberTnt）
         Tracked t = tracked(tnt);
         return t == null ? null : t.maid;
     }
@@ -203,7 +214,7 @@ public final class MaidTntBlastGuard {
             }
             LOG_AT.put(who, now);
             com.maidsmart.tool.PromaidLog.log("空袭轰炸", who
-                    + " 模组 TNT 那一炸按「不破坏方块」处理（清掉 " + n + " 个方块；"
+                    + " 她扔的 TNT/矿车那一炸按「不破坏方块」处理（清掉 " + n + " 个方块；"
                     + "威力与伤害照它自己的）；" + attribution(ex));
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidTntBlastGuard", ignored);
         }

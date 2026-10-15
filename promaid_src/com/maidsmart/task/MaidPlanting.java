@@ -42,6 +42,11 @@ public final class MaidPlanting {
      */
     private static final int TRUNK_CLEARANCE = 7;
 
+    /** 实测九百五十八【树苗不挨太近】：候选格周围这么多格内已经有树苗就不种
+     *（反馈："随手种树的树苗与树苗之间挨得太近了"）——水平 ±2、垂直 ±2 的盒子里
+     *  有任意一棵树苗 = 这地方已经有了 → 静默跳过（不种、不播报），照常重新计时。 */
+    private static final int SAPLING_GAP = 2;
+
     /** 冷却表（女仆实体 ID → 上次种植/尝试 tick），默认 100 tick = 5 秒 */
     private static final java.util.Map<Integer, Long> PLANT_SINCE = new java.util.HashMap<>();
     /** 跳过原因日志限频表（女仆实体 ID → 上次记录 tick，60 秒一条防刷屏） */
@@ -369,6 +374,9 @@ public final class MaidPlanting {
                     if (!hasGrowthSpace(level, p)) {
                         continue; // 上方 7 格内有实心方块（天花板/桥面）——树干顶死长不成
                     }
+                    if (saplingNearby(level, p)) {
+                        continue; // 实测九百五十八：这地方已经有树苗了 → 换个地方（哪儿都不合适就本轮不种）
+                    }
                     if (level.m_46803_(p.m_7494_()) < 9) {
                         continue; // 原版 randomTick 同款条件：光照 <9 永不自然生长（地下/屋内）
                     }
@@ -393,6 +401,27 @@ public final class MaidPlanting {
         }
         return best == null ? new int[]{0, 0, 0, 0}
                 : new int[]{1, best.m_123341_(), best.m_123342_(), best.m_123343_()};
+    }
+
+    /**
+     * 实测九百五十八：候选格周围（水平 ±{@link #SAPLING_GAP}、垂直 ±2）是否已有树苗
+     *（她刚种下的 / 玩家种的 / 自然长出来的都算）——有就不在这附近再种一棵。
+     */
+    private static boolean saplingNearby(ServerLevel level, net.minecraft.core.BlockPos p) {
+        for (int dx = -SAPLING_GAP; dx <= SAPLING_GAP; dx++) {
+            for (int dz = -SAPLING_GAP; dz <= SAPLING_GAP; dz++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    if (dx == 0 && dz == 0 && dy == 0) {
+                        continue;
+                    }
+                    if (level.m_8055_(p.m_7918_(dx, dy, dz)).m_60734_()
+                            instanceof net.minecraft.world.level.block.SaplingBlock) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**

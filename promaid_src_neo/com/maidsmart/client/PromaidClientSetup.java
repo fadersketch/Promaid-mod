@@ -46,11 +46,6 @@ public final class PromaidClientSetup {
         com.maidsmart.client.GunnerTetherClient.ensureRegistered();
     }
 
-    /** 实测五百六十二：潜行+中键 工位标记的客户端手势识别（仅客户端注册） */
-    public static void registerWorkPosMarker() {
-        com.maidsmart.marker.WorkPosMarkerClient.register();
-    }
-
     /**
      * v1.3.9：巡逻航图的两件客户端东西——中键打点手势 + 航迹/标记预览渲染。
      * 与服务端铁律一致（{@code Screen} 一律在本客户端专类里开）。
@@ -133,6 +128,16 @@ public final class PromaidClientSetup {
             com.maidsmart.client.DaYunMusicPlayer.handle(wearerId, track, playing);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidClientSetup", ignored);
         }
+    }
+
+    /**
+     * 多人下「配置以服务端为准」的客户端钩子：退出世界时把客户端自己那份配置还原回来
+     * （锁定期间套用的是服务端值，不清会跨世界残留）。客户端专属——事件类型是客户端类型。
+     */
+    public static void registerConfigSyncClient() {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) ->
+                        com.maidsmart.config.ConfigSyncNetworking.restoreOwn());
     }
 
     private static void onPlaySound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {

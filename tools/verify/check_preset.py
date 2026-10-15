@@ -23,14 +23,32 @@ TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 实测八百八十二·TD-08：巡逻总开关的 TOML 路径原与扫帚总开关撞键（broom.enable），
 # 撞键时 parse 只会算到一个 → 拆开后两条都独立计数，基线 173/177 → 174/178。
 # 实测九百〇六：新增 accessory.daYunSmash（撞击，默认开、随 DIY 关）→ 174/178 → 175/179。
-BASELINE_FLIP = {'promaid_src': 175, 'promaid_src_neo': 179}
+# 实测九百一十六：misc.pickupPriority（挖矿中禁止拾取）默认由 true 翻成 false = 默认不再介入
+# （干活时照常捡掉落物）→ 不计入 DIY 关闭条数，基线 175/179 → 174/178，并列入 OFF_ACK。
+# 实测九百二十：新增 mine.tagAuto（矿表标签自动识别，默认开、与伐木 tagAuto 同口径）→
+# DIY 会关掉它（回到"只认矿表"）→ 基线 174/178 → 175/179。
+# 实测九百二十七：删掉 mine.repick / mine.stuckWatchdog / mine.stuckResetSeconds /
+# wood.stuckWatchdog / wood.stuckResetSeconds 五只开关（"发呆看门狗"整段不要了）→
+# DIY 会关掉的布尔少 3 条（两只 stuckWatchdog + mine.repick；两个 stuckResetSeconds 是数值项）
+# → 175/179 → 172/176。
+# 实测九百四十二：mine.seekThroughWalls（已改名「智能挖矿」）默认由 false 翻成 true =
+# 默认即"介入"（女仆自己隔墙找矿），DIY 要把它关掉 → 172/176 → 173/177。
+# 实测九百四十七【DIY 新规】：新任务（挖矿/伐木/建造/扫帚/空袭）与新物品（压缩盒/武装拴绳/
+# 骑乘指挥棒/饰品大运）整块不再吃 DIY（见 MaidConfigPreset.DIY_KEEP_PREFIX / DIY_KEEP_EXACT），
+# 于是 DIY 关闭条数大幅下降 → 173/177 → 105/108。
+# 实测九百九十一：新增 combat.engageChain（接敌才接管走位，默认开、随 DIY 关——DIY 下战斗
+# 链路本来就不接管）→ 105/108 → 106/109。
+# 实测九百九十三：combat.engageChain 改名为 combat.takeOverMovement（语义改为「是否接管走位」，
+# 默认开、随 DIY 关，条数不变）+ 新增 misc.takeOverFishing / misc.takeOverFarm（钓鱼 / 农场接管
+# 总闸，默认开、随 DIY 关）→ 106/109 → 108/111。
+BASELINE_FLIP = {'promaid_src': 108, 'promaid_src_neo': 111}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
 combat.crossbowPlainFirework dialogue.proactiveKill flightFollow.enabled memory.vectorEnable
 mine.autoCollect mine.chainFullDurability mine.seekThroughWalls misc.autoCollect misc.bdStorage
 misc.cookBurnWood voice.freeFlight voice.glideElytraAnimation misc.freeFlight misc.glideElytraAnimation
-wood.autoCollect
+wood.autoCollect misc.pickupPriority misc.serverForcedConfig
 """.split())
 # 三道闸：配置字段名 → 必须引用它的 mixin 文件
 GATES = {
@@ -53,6 +71,8 @@ GATES = {
     'MISC_BAUBLE_TOTEM': 'MaidBaubleTotemMixin.java',
     # 实测八百六十七：干活时（挖矿/伐木且已盯上目标）暂不执行 TLM 远距离传送召回
     'MISC_WORK_TELEPORT_HOLD': 'MaidTeleportPreserveMixin.java',
+    # 实测九百九十三：农场接管总闸（农场与宰杀页第一条）——连收连种 / 批量种植都经本 mixin
+    'MISC_TAKE_OVER_FARM': 'FarmSweepMixin.java',
 }
 GATES_EXTRA = {'TLM_TELEPORT_EXEMPT': 'FollowPreserveMixin.java'}
 # 同上，但接点在非 mixin 的常驻类里（值 = 相对树根的文件路径）
@@ -70,11 +90,17 @@ GATES_ELSEWHERE = {
     'COMBAT_RIDE_PURSUE_TARGET': 'com/maidsmart/combat/RideBindManager.java',
     # 实测八百六十三：绑定飞行载具后的启动时间
     'COMBAT_RIDE_STARTUP_SECONDS': 'com/maidsmart/combat/RideBindManager.java',
-    # 实测八百六十九：挖矿入口闸（没镐不启动）/ 锁定期间持续重挑——接点在任务类里
+    # 实测八百六十九：挖矿入口闸（没镐不启动）——接点在任务类里
+    #（同批的 MINE_REPICK「锁定期间持续重挑」已在实测九百二十七删掉：锁上就一路推进，
+    #  不再每 5 秒换目标，本表随之少一项。）
     'MINE_REQUIRE_PICK': 'com/maidsmart/task/MaidMineBehavior.java',
-    'MINE_REPICK': 'com/maidsmart/task/MaidMineBehavior.java',
     # 实测九百〇六：「大运」撞击（破坏范围内按速度的伤害+击飞）——接点在饰品侧
     'DAYUN_SMASH': 'com/maidsmart/accessory/DaYunSmash.java',
+    # 实测九百一十一：干活时（挖矿/伐木已盯上目标）工作圈临时扩圈——接点在任务侧读数类里
+    'MISC_WORK_TELEPORT_HOLD': 'com/maidsmart/task/MaidWorkRangeExpand.java',
+    # 实测九百九十三：接管走位（战斗走位总闸）/ 钓鱼接管总闸——接点在常驻类里
+    'COMBAT_TAKE_OVER_MOVEMENT': 'com/maidsmart/task/MaidWorkTags.java',
+    'MISC_TAKE_OVER_FISHING': 'com/maidsmart/fishing/FishingChairService.java',
 }
 # 「干预型 mixin 必须有闸」的兜底名单：这几处改的是女仆行为、但**没有自己的配置项**
 # （表驱动管不到），所以在代码里直接问 MaidConfigPreset.isDiy()。少一处 = DIY 下仍然生效。
@@ -166,13 +192,21 @@ def literals(text):
 def parse_preset(tree):
     src = read(os.path.join(ROOT, tree, 'com/maidsmart/config/MaidConfigPreset.java'))
     out = {}
-    for name in ('SKIP', 'KEEP', 'FORCE_ON', 'RESET_KEEP'):
+    for name in ('SKIP', 'KEEP', 'FORCE_ON', 'RESET_KEEP',
+                 'DIY_KEEP_PREFIX', 'DIY_KEEP_EXACT'):
         b = block(src, name)
         out[name] = set(literals(b)) if b is not None else None
     vb = block(src, 'VALUES')
     out['VALUES'] = set(literals(vb)) if vb is not None else set()
     out['src'] = src
     return out
+
+
+def is_new_feature(pre, path):
+    """实测九百四十七 DIY 新规：新任务 / 新物品整块不吃 DIY（前缀表 + 点名表）。"""
+    if path in (pre.get('DIY_KEEP_EXACT') or set()):
+        return True
+    return any(path.startswith(x) for x in (pre.get('DIY_KEEP_PREFIX') or set()))
 
 
 def path_like(s):
@@ -184,16 +218,21 @@ def check_tree(tree, label):
     pre = parse_preset(tree)
     print('--- %s (%s)：配置项 %d 个，布尔 %d 个' % (tree, label, len(cfg),
                                                   sum(1 for v in cfg.values() if v[0] == 'bool')))
-    for name in ('SKIP', 'KEEP', 'FORCE_ON', 'RESET_KEEP'):
-        if pre[name] is None:
+    for name in ('SKIP', 'KEEP', 'FORCE_ON', 'RESET_KEEP',
+                 'DIY_KEEP_PREFIX', 'DIY_KEEP_EXACT'):
+        if pre.get(name) is None:
             fail('%s: MaidConfigPreset 里找不到 %s 表（脚本与源码对不上了）' % (tree, name))
             pre[name] = set()
 
     # 1) 路径存在性
-    for name in ('SKIP', 'KEEP', 'FORCE_ON', 'RESET_KEEP'):
+    for name in ('SKIP', 'KEEP', 'FORCE_ON', 'RESET_KEEP', 'DIY_KEEP_EXACT'):
         for p in sorted(pre[name]):
             if p not in cfg:
                 fail('%s: %s 里的路径在配置里不存在：%s' % (tree, name, p))
+    for pfx in sorted(pre['DIY_KEEP_PREFIX']):
+        if not any(pp.startswith(pfx) for pp in cfg):
+            fail('%s: DIY_KEEP_PREFIX 的前缀在配置里没有任何匹配项（拼错了？）：%s'
+                 % (tree, pfx))
     for lit in sorted(pre['VALUES']):
         if path_like(lit) and lit not in cfg:
             fail('%s: VALUES 里的路径在配置里不存在：%s' % (tree, lit))
@@ -218,6 +257,8 @@ def check_tree(tree, label):
             force.append(path)
         elif path in pre['KEEP']:
             keep.append(path)
+        elif is_new_feature(pre, path):
+            keep.append(path)  # 实测九百四十七 DIY 新规：新任务 / 新物品与默认模式一致
         elif default == 'true':
             flip.append(path)
         else:

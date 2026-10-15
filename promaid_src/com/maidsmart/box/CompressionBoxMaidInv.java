@@ -28,6 +28,23 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
     /** 女仆侧一格盒子最多能「看见」多少（原版堆叠口径） */
     private static final int VIEW_CAP = CompressionBoxData.MAID_VIEW_CAP;
 
+    /**
+     * 【诚实取物窗口】置位期间盒子格回报**真实**数量（不再压到 64）。
+     *
+     * <p>只给"扣了要核对底账"的取物收口用（{@code MaidBuildBlockFilter.extractHonest}）：
+     * 大堆扣 1 件后视图仍是 64，差值核对会把"真扣到了"误判成"没扣到"——战斗放置
+     * （TNT/重生锚/末地水晶）从压缩盒里取不出来就是这么来的。窗口由调用方
+     * try/finally 开合；窗口外照旧只露出 64，整堆（114514）不许流进她的手/背包格。
+     */
+    private static boolean honestView;
+
+    /** 开关「诚实取物窗口」，返回旧值（调用方在 finally 里还原，不嵌套时直接传 false）。 */
+    public static boolean setHonestView(boolean on) {
+        boolean old = honestView;
+        honestView = on;
+        return old;
+    }
+
     private final EntityMaid maid;
     private final ItemStackHandler backing;
 
@@ -141,7 +158,10 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         // `copyWithCount(viewCap(s))`，于是"盒子里 5 个石头"会变成"她看见 64 个"
         // （凭空多出来，实测六百一十八自检的石头对照当场打红）。原版口径本来就是
         // 「不超过 min(64, 物品上限)」，真实数量更小时以真实数量为准。
-        return s.m_255036_(Math.min(s.m_41613_(), CompressionBoxData.viewCap(s)));
+
+        // 实测九百六十一：诚实取物窗口开着时按真实数量回报（取物核对用，见 honestView）
+        int cap = honestView ? Integer.MAX_VALUE : CompressionBoxData.viewCap(s);
+        return s.m_255036_(Math.min(s.m_41613_(), cap));
     }
 
     @Override

@@ -100,6 +100,15 @@ if (++this.throttle < 10) {
                     LAST_TRY.remove(maid.getUUID());
                     continue;
                 }
+                // 实测九百三十九【抗火 / 火焰保护饰品豁免】：危险**全部**来自热源（火 / 岩浆 /
+                // 营火 / 岩浆块）而她此刻烫不疼时，不搬走——否则每次路过熔岩 / 营火旁边都被
+                // 弹开（有抗火仍被传送的根因）。非热危险（仙人掌 / 细雪 / 石笋等）不走此豁免。
+                if (SelfPreservationBehavior.fireImmune(maid)
+                        && DangerBlocks.heatOnlyDanger(level, feet.getX(),
+                                feet.getY(), feet.getZ())) {
+                    LAST_TRY.remove(maid.getUUID()); // 不记账：豁免一旦消失，下一轮立即恢复抢救
+                    continue;
+                }
                 Long last = LAST_TRY.get(maid.getUUID());
                 if (last != null && now - last < RETRY_INTERVAL) {
                     continue;

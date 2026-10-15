@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/FarmTillDriver.java, line: 1, end_line: 399}
   - {path: promaid_src_neo/com/maidsmart/build/FarmSweepCache.java, line: 1, end_line: 198}
   - {path: promaid_src_neo/com/maidsmart/build/FarmlandMarkStore.java, line: 1, end_line: 88}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f99fea9e37996942bdc4b3a8751af69efe01cb84ca55aa1b2cfcc4104b8b0d53
 state: active

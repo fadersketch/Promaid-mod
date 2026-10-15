@@ -84,10 +84,25 @@ public abstract class ChatBubbleLimitMixin {
                 && this.maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer owner) {
             boolean danger = com.maidsmart.dialogue.PerceptionManager.dangerActive(this.maid)
                     && !isCalmBubble(text);
-            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    danger
-                            ? "\u00a7c[\u8b66\u793a]\u00a7c[" + this.maid.m_5446_().getString() + "] \u00a7c" + text
-                            : "\u00a7d[" + this.maid.m_5446_().getString() + "] \u00a7d" + text));
+            // v1.3.2 R948：名字单独成段。旧版把「§d[名字] §d台词」拼成一整个字面量，
+            // 客户端逐串翻译时会被"名字里有汉字"的硬守卫整句放弃（玩家给女仆起的名字
+            // 不在词条表里，且不翻译）→ 台词那半边的英文也一起没了。拆段后只有台词
+            // 那段去查词条表（PromaidI18n 已支持逐段翻译）。
+            // 实测九百九十四【整行粉色】：§ 颜色码只在单个字面量内部生效、不跨组件边界——
+            // 拆段后只有开头的「[」被染粉（反馈"只有第1个[是粉色的"）。现在每段各带
+            // 一段 ChatFormatting 样式（组件级），整行颜色不再依赖字面量里的 §。
+            net.minecraft.ChatFormatting col = danger
+                    ? net.minecraft.ChatFormatting.RED : net.minecraft.ChatFormatting.LIGHT_PURPLE;
+            net.minecraft.network.chat.MutableComponent line =
+                    net.minecraft.network.chat.Component.m_237119_()
+                            .m_7220_(net.minecraft.network.chat.Component.m_237113_(
+                                    danger ? "[\u8b66\u793a][" : "[").m_130940_(col))
+                            .m_7220_(net.minecraft.network.chat.Component.m_237113_(
+                                    this.maid.m_5446_().getString()).m_130940_(col))
+                            .m_7220_(net.minecraft.network.chat.Component.m_237113_(
+                                    "] ").m_130940_(col))
+                            .m_7220_(net.minecraft.network.chat.Component.m_237115_(text).m_130940_(col));
+            owner.m_213846_(line);
         }
     }
 

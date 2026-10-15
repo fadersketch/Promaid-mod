@@ -123,7 +123,9 @@ public final class BuildHudTracker {
                 }
                 Object[] info = planInfo(server, e[0]);
                 if (info != null) {
-                    infos.add(new Object[]{e, info[1], info[2], info[3]});
+                    // 实测九百八十四：info[0] 必须是 planId（playerInvolved 要按它取计划、
+                    // 取创建者），快照本体挪到 info[4]——旧版把条目塞进 info[0]，导致每次广播抛 CCE
+                    infos.add(new Object[]{info[0], info[1], info[2], info[3], e});
                 }
             }
         }
@@ -136,7 +138,10 @@ public final class BuildHudTracker {
                     out = new java.util.ArrayList<>();
                     for (Object[] info : infos) {
                         if (playerInvolved(p, info)) {
-                            out.add((String[]) info[0]);
+                            Object body = info.length > 4 ? info[4] : null;
+                            if (body instanceof String[] snapshot) {
+                                out.add(snapshot);
+                            }
                         }
                     }
                 }
@@ -178,6 +183,14 @@ public final class BuildHudTracker {
     /** 这名玩家与这份快照有关吗：① 站在区块范围内；② 区块里绑着一只归他的女仆。 */
     private static boolean playerInvolved(net.minecraft.server.level.ServerPlayer p, Object[] info) {
         try {
+            // 【实测九百六十八】创建者本人也算有关（刚创建、还没绑女仆时，走出区块也要看得到进度）
+            Object idObj = info.length > 0 ? info[0] : null;
+            BuildPlan.PlanState cps =
+                    idObj instanceof String planId ? BuildPlan.getPlanById(planId) : null;
+            if (cps != null && cps.creatorUuid != null && !cps.creatorUuid.isEmpty()
+                    && cps.creatorUuid.equals(p.m_20148_().toString())) {
+                return true;
+            }
             net.minecraft.server.level.ServerLevel lvl =
                     (net.minecraft.server.level.ServerLevel) info[1];
             int[] r = (int[]) info[2];

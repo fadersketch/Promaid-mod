@@ -28,7 +28,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MaidContainerRemoteOpenMixin {
 
     /** {@code stillValid}（forge: SRG {@code m_6875_}）：只把"距离"这一条翻过来 */
-    @Inject(method = "m_6875_", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "m_6875_(Lnet/minecraft/world/entity/player/Player;)Z",
+            at = @At("RETURN"), cancellable = true)
     private void maidsmart$allowRemoteOpen(Player player, CallbackInfoReturnable<Boolean> cir) {
         try {
             if (cir.getReturnValueZ()) {
@@ -51,7 +52,7 @@ public abstract class MaidContainerRemoteOpenMixin {
     }
 
     /** {@code removed}（forge: SRG {@code m_6877_}）：界面一关就把这次远程授权收回 */
-    @Inject(method = "m_6877_", at = @At("HEAD"))
+    @Inject(method = "m_6877_(Lnet/minecraft/world/entity/player/Player;)V", at = @At("HEAD"))
     private void maidsmart$endRemoteOpen(Player player, CallbackInfo ci) {
         try {
             EntityMaid maid = ((AbstractMaidContainer) (Object) this).getMaid();

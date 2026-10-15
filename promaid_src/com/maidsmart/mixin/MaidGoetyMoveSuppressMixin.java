@@ -23,12 +23,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * tick——从源头让"走路"没有方向盘可抢。
  * 【不加 {@code MaidScope.owned} 门禁】本档是**玩家显式下命令**才进的（不是自动行为），无主女仆在测试服里
  * 也要能飞。
- * 【1.20.1 差异】{@code MoveToTargetSink.tick} 只有 SRG 名 {@code m_6725_}，方法签名与 1.21.1 一致。
+ * 【1.20.1 差异】本树 {@code MoveToTargetSink.tick} 只有 SRG 名 {@code m_6725_}；注入点写全签名——该类上同名方法有两份（自带的参数是 {@code Mob}、编译器留的协变桥接是 {@code LivingEntity}），裸名字会命中桥接、签名对不上就崩。
  */
 @Mixin(net.minecraft.world.entity.ai.behavior.MoveToTargetSink.class)
 public abstract class MaidGoetyMoveSuppressMixin {
 
-    @Inject(method = "m_6725_", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "m_6725_(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/Mob;J)V",
+            at = @At("HEAD"), cancellable = true)
     private void maidsmart$suppressMoveUnderGoetyPush(ServerLevel level, Mob mob, long gameTime, CallbackInfo ci) {
         if (!(mob instanceof EntityMaid maid)) {
             return;

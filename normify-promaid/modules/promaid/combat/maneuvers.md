@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidTridentSpinBehavior.java, line: 1, end_line: 743}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidRiptideBoost.java, line: 1, end_line: 558}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidMaceSmashBehavior.java, line: 1, end_line: 482}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 80dad4ad834714fc002e93a735542b267d5e02d1e59bd50736cc659057ae8314
 state: active

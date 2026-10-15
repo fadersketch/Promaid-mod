@@ -125,7 +125,8 @@ if (++this.throttle < 10) {
      */
     private boolean bonemealNearby(ServerLevel world, EntityMaid maid) {
         try {
-            if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_BONEMEAL_FARM.get()) {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FARM.get()
+                    || !com.maidsmart.config.MaidSmartConfig.MISC_MAID_BONEMEAL_FARM.get()) {
                 return false;
             }
             BlockPos base = maid.blockPosition();
@@ -228,7 +229,8 @@ if (++this.throttle < 10) {
      */
     private boolean tillNearby(ServerLevel world, EntityMaid maid) {
         try {
-            if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FARM.get()
+                    || !com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
                 return false;
             }
             long now = world.getGameTime();

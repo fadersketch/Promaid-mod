@@ -24,6 +24,55 @@ public final class MaidWorkTags {
     private MaidWorkTags() {
     }
 
+    /** 链路走位独占标记键（实测九百一十三）：本模组的链路（挖矿/伐木锁定目标、接战）正在驱动
+     *  她走位期间，TLM 的一切走路逻辑让位——跟随行为不再把她写回主人/清她的寻路，排班不再拉她回工位。 */
+    public static final String CHAIN_DRIVE_TAG = "maid_smart_chain_drive";
+
+    /** 置/清"链路走位独占"标记（挖矿/伐木行为按"手上有没有锁定的目标"每 tick 维护） */
+    public static void setChainDrive(EntityMaid maid, boolean on) {
+        try {
+            maid.getPersistentData().m_128379_(CHAIN_DRIVE_TAG, on);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+        }
+    }
+
+    /**
+     * 现在是不是「本模组的链路在驱动她」：挖矿/伐木锁着目标，或正在接敌。坐着 / 被骑 / 脑冻结
+     * 恒 false（那几种状态她本来就不动）；**home 模式恒 false（实测九百一十四）**：那道工作圈
+     * 是最大活动范围，圈里的走位照归 TLM，独占只在跟随模式生效。
+     * 实测九百九十三【接管走位】：战斗腿 = 她**自己接上敌**（脑里有活着的非友军目标）或本模组驱动器真在
+     * 开她——两者都没有就把走位完整还给 TLM 原版（跟随跟主人、home 在家活动）；开关 `combat.takeOverMovement`
+     * 关掉 = 战斗腿直接不成立（战斗状态下不干涉她的走位与移动）。实测九百九十二【第三方玩法模式】：黑名单（傀儡师/拔刀剑/战斗）下恒 false，走位归那个模组。
+     */
+    public static boolean isChainDrive(EntityMaid maid) {
+        try {
+            if (maid.isMaidInSittingPose() || maid.m_20159_() || !maid.canBrainMoving()) {
+                return false;
+            }
+            if (maid.isHomeModeEnable()) {
+                return false; // home：圈是最大活动范围（见上）
+            }
+            if (maid.getTask() == null) {
+                return false; // 没任务 / 任务刚被清：防残留
+            }
+            // 第三方玩法模式（傀儡师/拔刀剑/战斗）下【走位独占全体让位】：接战腿会因她
+            // 自己的攻击目标咬住，而这类模式的走位归它自己的 AI（口径见 MaidModeCompat）。
+            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+                return false;
+            }
+            if (maid.getPersistentData().m_128471_(CHAIN_DRIVE_TAG)) {
+                return true; // 挖矿/伐木：标记本身就是"链路锁着目标在驱动"
+            }
+            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TAKE_OVER_MOVEMENT.get()) {
+                return false; // 实测九百九十三【接管走位·关】：战斗状态下不干涉她的走位与移动
+            }
+            return com.maidsmart.combat.CombatWorkRange.hasAttackDesire(maid)
+                    || com.maidsmart.combat.CombatWorkRange.chainDriverActive(maid);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+            return false;
+        }
+    }
+
     /** 是否处于完全站桩工作状态（标记 + 当前任务确为工作任务，双保险防残留冻结） */
     public static boolean isStill(EntityMaid maid) {
         if (!maid.getPersistentData().m_128471_(WORK_STILL_TAG)) {
@@ -193,6 +242,45 @@ public final class MaidWorkTags {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
             return false;
         }
+    }
+
+    /** 实测九百一十六【干活时也捡掉落物】：拾取任务挑中某件掉落物、开始驱动她走过去时打的戳
+     *  （{@code MaidPickupEntitiesTask.start} 里打，见 {@code MaidPickupPriorityMixin}）。链路
+     *  走位独占（{@link #isChainDrive}）期间只有这一发能让 MoveToTargetSink 照常把 WALK_TARGET
+     *  变成寻路——不然"干活时去捡东西"的走位目标会被独占闸每 tick 清掉（反馈："砍树伐木时不捡
+     *  掉落物"）。 */
+    private static final java.util.Map<Integer, Long> PICKUP_DRIVE_UNTIL = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 拾取任务开始驱动走位时打戳（30 秒安全窗口；目标消化后由独占闸清） */
+    public static void markPickupDrive(EntityMaid maid, long gameTime) {
+        try {
+            if (PICKUP_DRIVE_UNTIL.size() > 1024) {
+                PICKUP_DRIVE_UNTIL.clear(); // 兜底防增长（正常情况下过期即自清）
+            }
+            PICKUP_DRIVE_UNTIL.put(maid.m_19879_(), gameTime + 600L);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+        }
+    }
+
+    /** 结束拾取驱动放行（走位目标已被消化/失效时由独占闸清） */
+    public static void clearPickupDrive(EntityMaid maid) {
+        try {
+            PICKUP_DRIVE_UNTIL.remove(maid.m_19879_());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+        }
+    }
+
+    /** 现在是不是"拾取任务正在驱动她走去捡东西"（窗口内打过戳；过期即失效） */
+    public static boolean isPickupDrive(EntityMaid maid, long gameTime) {
+        Long until = PICKUP_DRIVE_UNTIL.get(maid.m_19879_());
+        if (until == null) {
+            return false;
+        }
+        if (gameTime > until) {
+            PICKUP_DRIVE_UNTIL.remove(maid.m_19879_());
+            return false;
+        }
+        return true;
     }
 
 }

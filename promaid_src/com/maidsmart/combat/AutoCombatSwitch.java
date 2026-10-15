@@ -384,6 +384,13 @@ public class AutoCombatSwitch {
                 victim.m_5446_() != null ? victim.m_5446_().getString() : victim.m_20148_());
     }
 
+    /** 【实测九百八十五】「滞留」判定的持续时间（tick）：人还在我们指派的战斗任务上、
+     *  身上没有一点在打的痕迹、视野里也没有威胁，持续这么久就认定是滞留。 */
+    private static final long STRANDED_COMBAT_TICKS = 200L;
+    /** 【实测九百八十五】滞留计时（实体 id → 首次判定到的时间；条件不成立即清） */
+    private static final java.util.Map<Integer, Long> STRANDED_COMBAT_SINCE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * 威胁消失持续够久 → 还原原任务。扫描持久化标记（非内存集合）——
      * 存档重读/魂符收放/换维度后仍能正确还原，不会卡死在战斗任务上。
@@ -403,6 +410,56 @@ public class AutoCombatSwitch {
         // v1.1.0 实测五十七：战中近远程换战术只依赖总开关——自动还原关掉时，
         // 换战术仍然工作（还原关 = 玩家要她打到底，但打得聪明依旧成立）
         boolean restoreOn = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get();
+        // 【实测九百八十五】「战斗模式但未接敌、也没发现威胁」的滞留兜底——现象：
+        // 「女仆在某一战斗模式但是未接敌和发现威胁的状态下…会直接卡在原地不动，不再
+        // 跟随主人」。她在**我们指派的战斗任务**里（原版攻击类任务本就不跟随主人），
+        // 而下面那条还原扫描先要看到 COMBAT_ACTIVE 标记才看她——标记被别的环节清掉
+        //（排班开启 / 傀儡模式退出 / 存档重读…）就再没人管她的任务了。本道**不看标记**：
+        // 人还在我方指派的战斗任务上 + 无目标/无 getTarget/非自保/5 秒没交手 +
+        // 威胁圈与索敌范围内都没有威胁，持续 10 秒 → 补回战斗标记，交给下面那条久经
+        // 修补的还原链处理（玩家自己切的战斗任务不在射程内：任务 UID 与指派记录不符即跳过）。
+        for (ServerLevel level : event.getServer().m_129785_()) {
+            for (EntityMaid maid : com.maidsmart.tool.MaidRoster.in(event.getServer(), level)) {
+                try {
+                    Integer key = maid.m_19879_();
+                    IMaidTask cur = maid.m_6084_() ? maid.getTask() : null;
+                    String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
+                    boolean stranded = cur != null && cur.getUid() != null
+                            && !assigned.isEmpty()
+                            && assigned.equals(cur.getUid().toString())
+                            && com.maidsmart.task.MaidWorkTags.isAttackTask(maid)
+                            && !com.maidsmart.schedule.ScheduleData.isOn(maid)
+                            && !maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)
+                            && !com.maidsmart.combat.CombatWorkRange.inCombat(maid)
+                            && !AutoCombatTargeting.hasThreatNearby(maid)
+                            && AutoCombatTargeting.nearestThreatDist(maid)
+                                    > AutoCombatPools.TARGETING_RANGE;
+                    if (!stranded) {
+                        STRANDED_COMBAT_SINCE.remove(key);
+                        continue;
+                    }
+                    long nowStranded = level.m_46467_();
+                    Long since = STRANDED_COMBAT_SINCE.get(key);
+                    if (since == null) {
+                        if (STRANDED_COMBAT_SINCE.size() > 4096) {
+                            STRANDED_COMBAT_SINCE.clear(); // 兜底防增长
+                        }
+                        STRANDED_COMBAT_SINCE.put(key, nowStranded);
+                        continue;
+                    }
+                    if (nowStranded - since < STRANDED_COMBAT_TICKS) {
+                        continue;
+                    }
+                    STRANDED_COMBAT_SINCE.remove(key);
+                    maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, true);
+                    com.mojang.logging.LogUtils.getLogger().info(
+                            "auto-combat stranded: maid={} task={} 无目标无威胁滞留 {} 秒 → 补战斗标记交还原链",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid), cur.getUid(),
+                            (nowStranded - since) / 20);
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatSwitch", ignored);
+                }
+            }
+        }
         int activeCount = 0;
         int schedCleared = 0;
         for (ServerLevel level : event.getServer().m_129785_()) {
@@ -420,9 +477,11 @@ public class AutoCombatSwitch {
                     continue;
                 }
                 activeCount++;
-                // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【不还原、不干预】——
-                // 只清掉残留的战斗标记就退出（她的任务由玩家管，本模组战术全体让位）
-                if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
+                // v1.2.2 实测五百九十：傀儡师【不还原、不干预】——它禁止自主切入，出现在
+                // 这里的只可能是手动切进去的：只清掉残留的战斗标记就退出（任务由玩家管）
+                // 实测九百九十二：拔刀剑模式 / 战斗模式可被自主切换切进去，不进这道闸——
+                // 它们照常走下面的还原链（战斗中的换战术由名单闸挡住，见 retuneCombatTactics）
+                if (com.maidsmart.compat.MaidModeCompat.isBlacklisted(maid.getTask())) {
                     AutoCombatPools.clearMarkers(maid);
                     continue;
                 }

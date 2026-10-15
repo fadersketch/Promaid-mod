@@ -128,8 +128,7 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerVoiceHooks();
             // v1.2.0：指标石预览渲染器（绿框跟随指针 / 红框锁定 / 橙色幽灵格 + 长射线锁定）
             com.maidsmart.client.PromaidClientSetup.registerIndexStoneHooks();
-            // 实测五百六十二：潜行+中键 工位标记（客户端手势识别 + C2S 包）
-            com.maidsmart.client.PromaidClientSetup.registerWorkPosMarker();
+            // 实测九百一十四：中键工位标记（旧 registerWorkPosMarker）已删除——功能下线
             // v1.3.9：鼠标中键（标记态下）巡逻打点 + 轨道/标记预览渲染（客户端专属）
             com.maidsmart.client.PromaidClientSetup.registerPatrolHooks();
             // 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（客户端 tick 复述）
@@ -138,6 +137,8 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerSeatSyncClear();
             // v1.5.394 实测八百零五：「大运」BGM 客户端（每刻推进 + 退出世界清表）
             com.maidsmart.client.PromaidClientSetup.registerDaYunMusicHooks();
+            // 多人下「配置以服务端为准」：退出世界时还原客户端自己那份配置（客户端专属）
+            com.maidsmart.client.PromaidClientSetup.registerConfigSyncClient();
         }
     }
 
@@ -153,14 +154,6 @@ public class ProMaidMod {
             // 【实测六百八十一】这里原来有一条「22 → 6」的**强制**迁移：声明的默认值那时是
             // 22、迁移一启动就把它改成 6，于是"声明 22"永远看不到。默认值已表态为 22，
             // 这条迁移也跟着撤掉——留着它等于玩家永远拿不到默认值。
-            if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() == 30) {
-                com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.set(8);
-                changed = true;
-            }
-            if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() == 45) {
-                com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.set(8);
-                changed = true;
-            }
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 2
                     || com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 8) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.set(5);
@@ -397,8 +390,49 @@ public class ProMaidMod {
                             "骑飞行载具盘旋半径不需要迁移（现值 " + orbitBefore + "）");
                 }
             }
+            // 【实测九百八十九】TNT 追踪时长默认 10 → 20（0.5 秒 → 1 秒）。反馈："0.5 秒追踪敌人
+            // 时间是不够的，大概要 1 秒。"老档 toml 里落着 10（实测五百九十一 的默认）——不迁的话
+            // 这份修复对老档不生效。判据同款：只搬**还停在 10** 的档，玩家自己调过的一律不碰。
+            if (!com.maidsmart.config.MaidSmartConfig.TNT_TRACK_20_MIGRATED.get()) {
+                int trackBefore = -1;
+                try {
+                    trackBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK_TICKS.get();
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
+                }
+                com.maidsmart.config.MaidSmartConfig.TNT_TRACK_20_MIGRATED.set(true);
+                changed = true;
+                if (trackBefore == 10) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK_TICKS.set(20);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "TNT 追踪时长迁移：10 → 20（0.5 秒 → 1 秒，旧档里留下的上一版默认值）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "TNT 追踪时长不需要迁移（现值 " + trackBefore + "）");
+                }
+            }
+            // 【实测九百九十八】滑翔类载具盘旋加高默认 30 → 60（本版把默认值调高，与面板项一起
+            // 明确"默认 60 格"）。老档 toml 里落着 30（上一版默认）——不迁的话对老档不生效。
+            // 判据同款：只搬**还停在 30** 的档，自己调过的一律不碰。
+            if (!com.maidsmart.config.MaidSmartConfig.FIXEDWING_ALT_60_MIGRATED.get()) {
+                double altBefore = -1.0;
+                try {
+                    altBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_FIXEDWING_ALT_BONUS.get();
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
+                }
+                com.maidsmart.config.MaidSmartConfig.FIXEDWING_ALT_60_MIGRATED.set(true);
+                changed = true;
+                if (altBefore == 30.0) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_FIXEDWING_ALT_BONUS.set(60.0);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "滑翔类盘旋加高迁移：30 → 60（旧档里留下的上一版默认值）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "滑翔类盘旋加高不需要迁移（现值 " + altBefore + "）");
+                }
+            }
             changed |= migrateDangerCampfire();
             changed |= migrateOreTable();
+            changed |= migrateTagLines();
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
         }
         return changed;
@@ -504,5 +538,43 @@ public class ProMaidMod {
                     new java.util.ArrayList<>(ores));
         }
         return changed;
+    }
+
+    /**
+     * 【实测九百九十九】矿表 / 木材表补**标签行**：老 toml 里只有逐块名单，带矿物 / logs
+     * 标签的模组方块一律不认识。这里把默认那两对标签行补进去（矿物 {@code #forge:ores} /
+     * {@code #c:ores}，木材 {@code #minecraft:logs} / {@code #minecraft:bamboo_blocks}），
+     * 一次性（标记见字段声明）；表里已有任何 {@code #} 行的档一概不动。
+     */
+    private static boolean migrateTagLines() {
+        if (com.maidsmart.config.MaidSmartConfig.MINE_WOOD_TAGLINES_MIGRATED.get()) {
+            return false;
+        }
+        com.maidsmart.config.MaidSmartConfig.MINE_WOOD_TAGLINES_MIGRATED.set(true);
+        boolean changed = true; // 标记本身要落盘
+        changed |= appendTagLines(com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES,
+                java.util.List.of("#forge:ores=300", "#c:ores=300"));
+        changed |= appendTagLines(com.maidsmart.config.MaidSmartConfig.WOOD_VALUES,
+                java.util.List.of("#minecraft:logs=300", "#minecraft:bamboo_blocks=300"));
+        if (changed) {
+            com.maidsmart.tool.PromaidLog.log("配置迁移",
+                    "矿表/木材表补标签行：带矿物 / logs 标签的模组方块默认也算矿 / 算木材");
+        }
+        return changed;
+    }
+
+    /** 表里没有任何 `#` 标签行 → 把给定标签行追加到表尾；已有 → 不动（玩家自己写的不重排）。 */
+    private static boolean appendTagLines(
+            net.neoforged.neoforge.common.ModConfigSpec.ConfigValue<java.util.List<? extends String>> cv,
+            java.util.List<String> lines) {
+        java.util.List<String> cur = new java.util.ArrayList<>(cv.get());
+        for (String e : cur) {
+            if (e != null && e.trim().startsWith("#")) {
+                return false;
+            }
+        }
+        cur.addAll(lines);
+        cv.set(cur);
+        return true;
     }
 }

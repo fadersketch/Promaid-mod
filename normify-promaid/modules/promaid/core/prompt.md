@@ -10,7 +10,7 @@ description:
       Appends a 'work posture' section to the system prompt, injected by a mixin.
 source:
   - {path: promaid_src_neo/com/maidsmart/prompt/PromaidPromptAppender.java, line: 1, end_line: 26}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 68e0db572fb603d2a50808faf8b7d992aa2db9ab98da4260ca7995511c60e875
 state: active

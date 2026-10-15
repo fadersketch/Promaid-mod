@@ -37,8 +37,14 @@ public class FilePickScreen extends Screen {
     private final List<File> entries = new ArrayList<>();
     private int page = 0;
 
-    private static final int ROWS = 12;
     private static final int ROW_H = 18;
+
+    /** 实测九百六十六：每页行数【按屏幕高度现算】——旧版写死 12 行，矮窗口（GUI 缩放调大）
+     *  下条目会一路画到屏幕外，并与底部翻页行重叠。列表区 = 顶部(80) 到翻页行(h-28) 之上，
+     *  行距 = ROW_H + 2。 */
+    private int rowsPerPage() {
+        return Math.max(1, ((this.height - 34) - 80) / (ROW_H + 2));
+    }
 
     public FilePickScreen(Screen parent, String title, String[] exts, Consumer<String> onPick) {
         super(Component.literal("选择文件"));
@@ -119,6 +125,9 @@ public class FilePickScreen extends Screen {
         int w = this.width;
         int h = this.height;
         int cx = w / 2;
+        // 实测九百六十六：按钮宽度也随屏幕收窄——旧版固定 300 宽，窄窗口上会顶出屏幕两侧
+        int bw = Math.min(300, w - 16);
+        int bx = cx - bw / 2;
         // 左上角：返回手册
         this.addRenderableWidget(Button.builder(Component.literal("← 返回手册"),
                         b -> this.onClose())
@@ -134,7 +143,7 @@ public class FilePickScreen extends Screen {
                                     this.reload();
                                     this.init();
                                 })
-                        .bounds(cx - 150, y, 300, 20).build());
+                        .bounds(bx, y, bw, 20).build());
                 y += 24;
             }
             return;
@@ -146,19 +155,20 @@ public class FilePickScreen extends Screen {
                             this.reload();
                             this.init();
                         })
-                .bounds(cx - 150, 58, 300, 16).build());
-        // 条目（分页）
-        int totalPages = Math.max(1, (this.entries.size() + ROWS - 1) / ROWS);
+                .bounds(bx, 58, bw, 16).build());
+        // 条目（分页；行数随屏幕现算，见 rowsPerPage）
+        int perPage = this.rowsPerPage();
+        int totalPages = Math.max(1, (this.entries.size() + perPage - 1) / perPage);
         this.page = Math.min(this.page, totalPages - 1);
-        int start = this.page * ROWS;
-        int end = Math.min(this.entries.size(), start + ROWS);
+        int start = this.page * perPage;
+        int end = Math.min(this.entries.size(), start + perPage);
         int y = 80;
         for (int i = start; i < end; i++) {
             final File f = this.entries.get(i);
             String label = f.isDirectory()
                     ? "\u00a7e\u25b6 " + f.getName() + "/"
                     : "\u00a7a\u25c9 " + f.getName();
-            this.addRenderableWidget(Button.builder(Component.literal(this.fit(label, w - 90)),
+            this.addRenderableWidget(Button.builder(Component.literal(this.fit(label, bw - 12)),
                             b -> {
                                 if (f.isDirectory()) {
                                     this.dir = f;
@@ -169,14 +179,14 @@ public class FilePickScreen extends Screen {
                                     this.onClose();
                                 }
                             })
-                    .bounds(cx - 150, y, 300, ROW_H).build());
+                    .bounds(bx, y, bw, ROW_H).build());
             y += ROW_H + 2;
         }
         if (this.entries.isEmpty()) {
             this.addRenderableWidget(Button.builder(Component.literal("\u00a77此目录没有匹配的文件"),
                             b -> {
                             })
-                    .bounds(cx - 150, y, 300, 18).build());
+                    .bounds(bx, y, bw, 18).build());
         }
         // 翻页（v1.1.0 实测二十五：100 宽按钮盖底行文件名——改 20 宽纯箭头，页码画中间）
         if (totalPages > 1) {
@@ -230,7 +240,8 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
         this.drawCentered(graphics, "\u00a7e" + this.pickTitle, 26, 0xFFFFFF);
         String pathText = this.dir == null ? "选择磁盘分区" : this.dir.getAbsolutePath();
         this.drawCentered(graphics, "\u00a77" + this.fit(pathText, this.width - 20), 42, 0x888888);
-        int totalPages = Math.max(1, (this.entries.size() + ROWS - 1) / ROWS);
+        int perPage = this.rowsPerPage();
+        int totalPages = Math.max(1, (this.entries.size() + perPage - 1) / perPage);
         if (totalPages > 1) {
             // v1.1.0 实测二十五：页码画在两箭头中间（h-24 行），不与按钮/条目重叠
             this.drawCentered(graphics, "\u00a77第 " + (this.page + 1) + "/" + totalPages + " 页",

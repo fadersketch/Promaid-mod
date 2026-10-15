@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
@@ -25,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 时崩溃（服务端不加载该类，故服务器测试没暴露）。
  * 【签名】{@code checkExtraStartConditions} 返回 boolean——必须用 {@code CallbackInfoReturnable<Boolean>}（用 {@code CallbackInfo} 会报 Invalid descriptor）；本注入不 setReturnValue，原判定不受影响。
  * 口径：4 格内不动；超过 4 格重新 {@code setWalkAndLookTarget} 指向主人；守家/脑冻结/无主/跨维度/干活中不拉
- * （防覆盖工作寻路）。总开关 {@code misc.followTighten}。
+ * （防覆盖工作寻路）。上面这条的总开关 {@code misc.followTighten}；本类另有一发"链路独占"取消（见下方方法）。
  */
 @Mixin(MaidFollowOwnerTask.class)
 public abstract class MaidFollowOwnerTickMixin {
@@ -66,6 +67,28 @@ public abstract class MaidFollowOwnerTickMixin {
             }
             // 超过 4 格：重断言跟随目标（参考改版 jar 的每 tick 驱动）
             BehaviorUtils.setWalkAndLookTargetMemories(maid, owner, this.speedModifier, this.stopDistance);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFollowOwnerTickMixin", ignored);
+        }
+    }
+
+    /**
+     * 链路走位独占期间【整段取消跟随行为的 start】（实测九百一十三）。
+     * 跟随行为"太远就把主人写回她的寻路目标"与"更远就传送"两个分支都落在 start 里，而**传送被拦下后
+     * 它紧接着无条件 {@code resetNavigation()}**（停寻路 + 导航模式重置回 GROUND）——她刚起步的寻路
+     * 每 tick 被清一次 = 原地走一步停一步，只在传送点拦截拦不住这一下。
+     */
+    @Inject(method = "start(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;J)V",
+            at = @At("HEAD"), cancellable = true)
+    private void maidsmart$yieldWhileChainDriving(ServerLevel level, LivingEntity entity, long gameTime,
+                                                  CallbackInfo ci) {
+        if (!(entity instanceof EntityMaid maid)) {
+            return;
+        }
+        try {
+            if (com.maidsmart.task.MaidWorkTags.isChainDrive(maid)) {
+                com.maidsmart.combat.CombatStallProbe.note(maid, "follow-cut"); // 滞留探针（诊断）
+                ci.cancel(); // 干活/接战中：本行为的走位与传送整段不生效
+            }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFollowOwnerTickMixin", ignored);
         }
     }

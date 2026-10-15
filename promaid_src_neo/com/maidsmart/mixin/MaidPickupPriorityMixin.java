@@ -8,6 +8,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
@@ -16,10 +17,11 @@ import java.util.List;
 /**
  * 拾取优先级：捡掉落物 = 最低优先级的能力。
  *
- * TLM 的拾取是 core 行为（优先级 10，任何 activity 都运行）——挖矿时女仆会中途跳下去捡附近的掉落物（包括
- * 自己柱子 10 秒销毁掉的），打断工作甚至从柱子上跳下来。这里在拾取任务启动前
- * （{@code checkExtraStartConditions}）拦截：女仆正在挖矿 → 拾取任务不启动（矿石掉落物由挖矿流程即时回收，
- * 不走拾取任务）。
+ * TLM 的拾取是 core 行为（优先级 10，任何 activity 都运行）。这里在拾取任务启动前
+ * （{@code checkExtraStartConditions}）按开关 {@code misc.pickupPriority} 决定是否让位：**默认关**
+ * （干活时也去捡掉落物，反馈："砍树伐木时不捡掉落物"）；打开后女仆挖矿/伐木期间拾取任务不启动
+ * （旧版行为：防她中途跳下柱子去捡）。干活期间"去捡东西"这一发 WALK_TARGET 由链路独占闸
+ * （{@code MaidMoveSuppressMixin}）按 {@code MaidWorkTags#isPickupDrive} 放行。
  * 【拾取目标价值重排】TLM 拾取任务按可见列表顺序取第一个（距离近优先），没有价值概念；这里在 {@code getItems}
  * 返回时按价值重排：原版低价值物品（废石/沙/粘土等）权重 0.5 排后，其余（矿石/模组物品）权重 1 排前，同权
  * 保持原顺序（距离近优先）。模组物品天然权重 1，不会被原版垃圾挤掉——不做"挖矿×N"放大，只降权原版低价值
@@ -82,5 +84,13 @@ public abstract class MaidPickupPriorityMixin {
             return 0;
         }
         return 1;
+    }
+
+    /** 实测九百一十六：拾取任务开始挑目标驱动走位时打戳——让链路独占闸（{@code MaidMoveSuppressMixin}）
+     *  对"去捡掉落物"这一发 WALK_TARGET 放行（干活期间也捡东西，见 MaidWorkTags#isPickupDrive）。 */
+    @Inject(method = "start(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)V",
+            at = @At("HEAD"))
+    private void promaid$markPickupDrive(ServerLevel level, EntityMaid maid, long gameTime, CallbackInfo ci) {
+        com.maidsmart.task.MaidWorkTags.markPickupDrive(maid, gameTime);
     }
 }

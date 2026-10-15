@@ -223,7 +223,7 @@ public final class MaidSelfPropelledWings {
      * <p>【为什么只认胸甲槽】自推的前提是"她正在滑翔"，而原版滑翔闸门
      * （{@code LivingEntity.updateFallFlying} → 胸甲槽 {@code ItemStack.canElytraFly}）
      * **只认胸甲槽那一件**——背包里有、胸甲槽没有，她根本滑不起来，推力也就无从谈起。
-     * 所以资格必须与"能滑翔"同口径，否则会出现"判定说能飞、她却在往下沉"。
+     * 所以**推力**只从胸甲槽那一件发（资格那件事见 {@link #hasWings}：放宽到"能不能穿上来"）。
      */
     public static ItemStack wornWings(EntityMaid maid) {
         try {
@@ -237,9 +237,14 @@ public final class MaidSelfPropelledWings {
         }
     }
 
-    /** 她此刻有没有资格靠自推鞘翅飞（开关 + 胸甲槽那件在表里） */
+    /**
+     * 她此刻有没有资格靠自推鞘翅飞（开关 + 能不能把它穿到胸甲槽，判据见
+     * {@link MaidFlightKit#canWearSelfWings}）：胸甲槽那件在表里 → true；胸甲槽空着、
+     * 而**双手 / 饰品栏 / 背包**里有那一件 → 同样算数——equip()/takeElytra() 本就会把它
+     * 取来穿上（判定与取用同一处），穿上之后推力仍只从胸甲槽那件发（{@link #wornWings}）。
+     */
     public static boolean hasWings(EntityMaid maid) {
-        return enabled() && !wornWings(maid).m_41619_();
+        return enabled() && MaidFlightKit.canWearSelfWings(maid);
     }
 
     /** 这一件物品对应的推力参数（表里没有 → {@link #FALLBACK}） */
@@ -391,7 +396,9 @@ public final class MaidSelfPropelledWings {
             ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
             StringBuilder sb = new StringBuilder("自推鞘翅: 开关=").append(enabled())
                     .append(" 胸甲=").append(describe(chest))
-                    .append(" 在表里=").append(isSelfPropelled(chest));
+                    .append(" 在表里=").append(isSelfPropelled(chest))
+                    // v1.3.2：判定已放宽到双手/饰品栏/背包——这一项把"她到底能不能靠它飞"写全
+                    .append(" 可获得=").append(MaidFlightKit.canWearSelfWings(maid));
             if (isSelfPropelled(chest)) {
                 Params p = paramsOf(chest);
                 sb.append(" 型号=").append(p.label)

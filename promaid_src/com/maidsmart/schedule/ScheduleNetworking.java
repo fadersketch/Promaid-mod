@@ -88,9 +88,7 @@ public final class ScheduleNetworking {
                 SchedulePacketsMaid.MaidCoordPacket::encode, SchedulePacketsMaid.MaidCoordPacket::decode, SchedulePacketsMaid.MaidCoordPacket::handle);
         CHANNEL.registerMessage(17, SchedulePacketsMaid.MaidTeleportToPacket.class,
                 SchedulePacketsMaid.MaidTeleportToPacket::encode, SchedulePacketsMaid.MaidTeleportToPacket::decode, SchedulePacketsMaid.MaidTeleportToPacket::handle);
-        // 实测五百六十二：潜行+中键 工位标记（把身边 home 女仆的工作区域锚点标过去）
-        CHANNEL.registerMessage(18, SchedulePacketsMaid.MarkWorkPosPacket.class,
-                SchedulePacketsMaid.MarkWorkPosPacket::encode, SchedulePacketsMaid.MarkWorkPosPacket::decode, SchedulePacketsMaid.MarkWorkPosPacket::handle);
+        // 实测九百一十四：中键工位标记（旧索引 18）已删除——功能下线，索引不补位
         // v1.3.0 实测六百五十五：快捷设置页「女仆配置」按钮 → 服务端替玩家打开她的原版女仆界面
         //（排班表挡着右键不到她；她骑上扫帚后右键又变成"上/下扫帚"——两条路都断了，
         // 只能让服务端开）。索引 19 取的是本条新槽位，13 依旧空着不补位（见上面那段注释）。

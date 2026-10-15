@@ -61,8 +61,7 @@ public final class ScheduleNetworking {
         r.playToServer(SchedulePacketsMaid.MaidCoordRequestPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.MaidCoordRequestPacket::encode, SchedulePacketsMaid.MaidCoordRequestPacket::decode), SchedulePacketsMaid.MaidCoordRequestPacket::handle);
         r.playToClient(SchedulePacketsMaid.MaidCoordPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.MaidCoordPacket::encode, SchedulePacketsMaid.MaidCoordPacket::decode), SchedulePacketsMaid.MaidCoordPacket::handle);
         r.playToServer(SchedulePacketsMaid.MaidTeleportToPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.MaidTeleportToPacket::encode, SchedulePacketsMaid.MaidTeleportToPacket::decode), SchedulePacketsMaid.MaidTeleportToPacket::handle);
-        // 实测五百六十二：潜行+中键 工位标记（把身边 home 女仆的工作区域锚点标过去）
-        r.playToServer(SchedulePacketsMaid.MarkWorkPosPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.MarkWorkPosPacket::encode, SchedulePacketsMaid.MarkWorkPosPacket::decode), SchedulePacketsMaid.MarkWorkPosPacket::handle);
+        // 实测九百一十四：中键工位标记包已删除（功能下线）
         // v1.3.0 实测六百五十五：快捷设置页「女仆配置」按钮 → 服务端替玩家打开她的原版女仆界面
         //（排班表挡着右键不到她；她骑上扫帚后右键又变成"上/下扫帚"——两条路都断了，
         // 只能让服务端开）

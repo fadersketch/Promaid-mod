@@ -52,6 +52,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     private static final int BOOST_INTERVAL = 30;
     /** 一趟飞行的最长时长（tick，1200 = 60 秒）——到点还没追上就放弃 */
     private static final long MAX_TICKS = 1200L;
+    /** 收手后再起手的最短间隔（tick，60 = 3 秒）：防"刚收手又立刻起飞"来回烧烟花（实测九百六十六） */
+    private static final long RESTART_COOLDOWN = 60L;
+    /** 「无进展」判定窗口（tick，100 = 5 秒）与"算拉近了"的最小改善（格）——实测九百六十六 */
+    private static final long PROGRESS_TIMEOUT = 100L;
+    private static final double PROGRESS_EPS = 1.5;
     /** "补推"日志限频（tick，100 = 5 秒）——补推每次都会发生，不能每 1.5 秒刷一行 */
     private static final long LOG_INTERVAL = 100L;
     /**
@@ -88,6 +93,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * 窗口。落地那一 tick 由 {@link #settleOnGround} 收尾。撞墙免疫与"免耐久"都要认这条。
      */
     private static final Set<UUID> SETTLING = new HashSet<>();
+    /** 上次收手时刻（gameTime）：起手冷却用（实测九百六十六） */
+    private static final Map<UUID, Long> LAST_STOP = new HashMap<>();
+    /** 本趟最接近过的距离 + 最近一次"拉近了"的时刻：无进展判定用（实测九百六十六） */
+    private static final Map<UUID, Double> BEST_DIST = new HashMap<>();
+    private static final Map<UUID, Long> LAST_PROGRESS = new HashMap<>();
+    /** 「这一趟该收了」的一次性标记（无进展判定置位）——canContinue 见它即收手（实测九百六十六） */
+    private static final Set<UUID> STOP_NOW = new HashSet<>();
+    /** 判过「追不上」的女仆：暂不自动追，等她与目标的距离回到起手距离以内再解除（实测九百六十六） */
+    private static final Set<UUID> CHASE_BLOCKED = new HashSet<>();
     /** 补推日志限频 */
     private static final Map<UUID, Long> LAST_LOG = new HashMap<>();
     /**
@@ -329,6 +343,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         RELEASE_LOG.remove(maidId);
         SKIP_LOG.remove(maidId);
         CANUSE_THROTTLE.remove(maidId);
+        LAST_STOP.remove(maidId);
+        BEST_DIST.remove(maidId);
+        LAST_PROGRESS.remove(maidId);
+        STOP_NOW.remove(maidId);
+        CHASE_BLOCKED.remove(maidId);
         GOTO.remove(maidId);
         GOTO_DIM.remove(maidId);
         try {
@@ -351,6 +370,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         RELEASE_LOG.clear();
         SKIP_LOG.clear();
         CANUSE_THROTTLE.clear();
+        LAST_STOP.clear();
+        BEST_DIST.clear();
+        LAST_PROGRESS.clear();
+        STOP_NOW.clear();
+        CHASE_BLOCKED.clear();
         GOTO.clear();
         GOTO_DIM.clear();
         DEBUG_TARGET.clear();
@@ -397,6 +421,17 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 }
                 return true;
             }
+            // 实测九百六十六【两条防烧料闸】——都排在"贵判定"（背包扫描/视线/威胁）之前：
+            // ① 刚收手 3 秒内不起手（"收手→立刻再起飞"的抖动会一枚一枚地烧烟花）；
+            // ② 判过「追不上」的，等距离回到起手距离以内再解（下面"距离不够"那一支里清）。
+            UUID mid = maid.m_20148_();
+            Long lastStop = LAST_STOP.get(mid);
+            if (lastStop != null && now - lastStop < RESTART_COOLDOWN) {
+                return skip(maid, now, "刚收手（" + (now - lastStop) + " tick 前），3 秒内不再起手");
+            }
+            if (CHASE_BLOCKED.contains(mid)) {
+                return skip(maid, now, "上一趟判过「追不上」：等距离回到起手距离内再追");
+            }
             Aim aim = aimOf(maid, level);
             if (aim == null) {
                 return skip(maid, now, isGoto(maid)
@@ -405,6 +440,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             }
             double dSq = aim.distSq(maid);
             if (dSq <= cfgDist() * cfgDist()) {
+                CHASE_BLOCKED.remove(maid.m_20148_()); // 回到起手距离内 → 解除「追不上」封禁（实测九百六十六）
                 return skip(maid, now, String.format("距离不够（%.1f 格 ≤ 起手距离 %.1f）",
                         Math.sqrt(dSq), cfgDist())); // 还不够远：走路/搭路足够
             }
@@ -469,6 +505,8 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         FOLLOWING.add(id);
         BOOST_READY.remove(id);
         STARTED_AT.put(id, gameTime);
+        BEST_DIST.put(id, Double.MAX_VALUE); // 无进展判定的初值（实测九百六十六）
+        LAST_PROGRESS.put(id, gameTime);
         wearElytra(maid, id);
         // 【六百一十四】坐标档的措辞单列一句（"目标点飞远了"不成话）；实体档那一句逐字未动——
         // 它是验收（logs 里搜「飞行跟随」）与 test_spellfly613 / test_flight612 断言的原文。
@@ -551,6 +589,22 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (aim == null) {
             return; // canContinue 会收手
         }
+        // 实测九百六十六【无进展判定】——"主人稍远一点她就丢目标、原地乱飞烧烟花"的兜底：
+        // 比本趟历史最近距离再拉近 PROGRESS_EPS 才算有进展；PROGRESS_TIMEOUT（5 秒）都没拉近
+        // → 判「追不上」：本趟收手（STOP_NOW），并封禁自动起手（CHASE_BLOCKED，
+        // 等距离回到起手距离内才在 canUse 里解除）。坐标档是一次性任务（玩家显式命令）：
+        // 只收手，不封禁。
+        double nowDist = aim.dist(maid);
+        if (nowDist < BEST_DIST.getOrDefault(id, Double.MAX_VALUE) - PROGRESS_EPS) {
+            BEST_DIST.put(id, nowDist);
+            LAST_PROGRESS.put(id, gameTime);
+        } else if (gameTime - LAST_PROGRESS.getOrDefault(id, gameTime) > PROGRESS_TIMEOUT) {
+            if (!isGoto(maid)) {
+                CHASE_BLOCKED.add(id);
+            }
+            STOP_NOW.add(id);
+            return; // canContinue 下一 tick 收手（stop 里打「追不上」那一行日志）
+        }
         // ── 起跳滑翔（与空袭的 jumpForLaunch 同一套：先离地，滑翔位才站得住）──
         if (maid.m_20096_()) {
             faceToward(maid, aim, true);
@@ -597,6 +651,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         UUID id = maid.m_20148_();
         if (!cfg()) {
             return false;
+        }
+        if (STOP_NOW.contains(id)) {
+            return false; // 无进展判定判「追不上」：本趟到此（"追不上"日志与起手冷却在 stop 里）
         }
         Aim aim = aimOf(maid, level);
         if (aim == null) {
@@ -655,6 +712,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         STARTED_AT.remove(id);
         LAST_LOG.remove(id);
         TETHER_STEER.remove(id);   // 实测六百八十七：本趟结束，操控日志的"一次性"标记跟着清
+        // 实测九百六十六：收手记账——起手冷却 3 秒的起点、本趟无进展痕迹清掉（CHASE_BLOCKED
+        // **不在这里清**：它是"追不上"封禁，要等距离回到起手距离内由 canUse 解除）。
+        boolean noProgress = STOP_NOW.remove(id);
+        LAST_STOP.put(id, gameTime);
+        BEST_DIST.remove(id);
+        LAST_PROGRESS.remove(id);
         // 【实测六百一十二】本趟若是"主人进到收手半径内"才停的，**这一 tick** 就解除推进矢量
         // （收掉还挂着的助推火箭 + 速度归零；为什么不能在 tick() 里做，见 RELEASE_ON_STOP 注释）
         if (RELEASE_ON_STOP.remove(id)) {
@@ -682,6 +745,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         logState(END_LOG, maid, id, gameTime, "结束（" + (gotoMode ? "目标点" : "主人") + " "
                 + fmtDist(maid, aim) + " 格，"
+                + (noProgress ? "5 秒没拉近——判「追不上」，收手不再烧推进；" : "")
                 + (grounded ? "她已落地，胸甲还回去" : "她还在滑翔，落地后自动还回胸甲") + "）");
         // 日志都打完了，这才摘掉坐标档（见本方法开头那段注释：摘早了上面两行会退回主人版措辞）
         if (gotoMode) {

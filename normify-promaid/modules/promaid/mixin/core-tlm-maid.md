@@ -13,10 +13,11 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidStationaryMixin.java, line: 1, end_line: 44}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java, line: 1, end_line: 110}
+  - {path: promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java, line: 1, end_line: 27}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java, line: 1, end_line: 161}
-revision: 8fbb6334b1c5b0d47a7c9642f74052c0698d3b0f
+revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: c89862942f6a265c7bf663921388d1786eb3ec1b56bba930b06657e7bd2b0aa3
+fingerprint: 632f4cca034ae0d8ab83619a883c19f407b183b90656e4a2984d3aba19dde15b
 state: active
 tags: [mixin]
 apis:
@@ -39,4 +40,5 @@ deps:
 
 - `promaid_src_neo/com/maidsmart/mixin/MaidStationaryMixin.java`:1
 - `promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java`:1
 - `promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java`:1

@@ -171,11 +171,14 @@ public final class SystemTTSManager {
     /**
      * 实测四百四十五：这些短促关键台词不受「内置包最小间隔」限制——被间隔吞掉时
      * 玩家会以为语音包失效（落地水/落地雪是自行动作反馈；敌人靠近是敌袭预警）。
+     * 实测九百九十一：加「敌人清掉（enemy_clear）」——收尾台词同样不该被间隔吞
+     * （它本来还挂着 300 秒共享限频，两条一起吞就没声了）。
      */
     private static boolean bypassJarInterval(String jarKey) {
         return "clutch_water.ogg".equals(jarKey)
                 || "clutch_snow.ogg".equals(jarKey)
-                || "enemy_near.ogg".equals(jarKey);
+                || "enemy_near.ogg".equals(jarKey)
+                || "enemy_clear.ogg".equals(jarKey);
     }
 
     /** 状态文本（设置面板"查看语音包状态"） */

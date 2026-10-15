@@ -166,11 +166,11 @@ public final class ScheduleManager {
             diag(maid, "off", who + " 排班总开关关闭（misc.scheduleEnabled=false）——调度停摆", level);
             return;
         }
-        // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【排班暂缓】——玩家手动把她切到
+        // v1.2.2 实测五百九十：第三方玩法模式（傀儡师）期间【排班暂缓】——玩家手动把她切到
         // 那个模式，本模组安排的战术（含排班换段）全体让位，只留那个模组自己的玩法；
-        // 玩家把她切回来之后排班照常接管（日程数据一直保留，没改过任何东西）
+        // 玩家把她切回来之后排班照常接管（日程数据一直保留，没改过任何东西）；实测九百九十二：名单扩到 拔刀剑模式 / 战斗模式
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
-            diag(maid, "puppet", who + " 傀儡模式（第三方玩法）中——排班暂缓，切回后照常接管", level);
+            diag(maid, "puppet", who + " 第三方玩法模式（傀儡师/拔刀剑/战斗）中——排班暂缓，切回后照常接管", level);
             return;
         }
         // v1.1.0 实测七十：排班中的女仆自动 home 模式——旧档已开排班的女仆在这里
@@ -190,7 +190,7 @@ public final class ScheduleManager {
         if (maidSchedulePos != null && !maidSchedulePos.isConfigured()) {
             // 实测八百一十五【罗盘优先】：玩家亲手画的圈不许被"拿当前位置自动锚定"顶掉
             if (!com.maidsmart.schedule.PlayerCircle.mayAutoAnchor(maid)) {
-                diag(maid, "player-circle", who + " 玩家画过圈（罗盘/中键）——排班不自动锚定，"
+                diag(maid, "player-circle", who + " 玩家画过圈（罗盘）——排班不自动锚定，"
                         + "沿用玩家画的圈", level);
             } else {
                 maidSchedulePos.setHomeModeEnable(maid, maid.m_20183_());

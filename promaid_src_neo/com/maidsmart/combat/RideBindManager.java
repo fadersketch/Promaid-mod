@@ -200,8 +200,7 @@ public final class RideBindManager {
         // "对着别的实体挥棍子没效果"里直接 return —— 玩家看不到任何提示。这里把它们收进来，
         // 让它们在 denyReason 里给出明确拒绝。
         boolean rejected = !maid && (MaidRideKit.isFurniture(target) || MaidRideKit.isBroom(target));
-        boolean recognized = maid || mount || rejected || (target instanceof Mob)
-                || MaidMountCompat.isUnridable(target); // 实测七百四十七：不可驾载具也要回话
+        boolean recognized = maid || mount || rejected || (target instanceof Mob);
         // 【实测七百二十·点2 独占档】手持骑乘棒时，这一下实体右击一律由棍子吃掉（认不出也吞）。
         if (!recognized && !batonExclusive()) {
             return;
@@ -246,8 +245,7 @@ public final class RideBindManager {
             }
             boolean recognized = target instanceof EntityMaid || target instanceof Mob
                     || MaidRideKit.isRideableMount(target, null)
-                    || MaidMountCompat.kindOf(target) != null
-                    || MaidMountCompat.isUnridable(target); // 实测七百四十七：不可驾载具也要吞这一下
+                    || MaidMountCompat.kindOf(target) != null;
             if (recognized) {
                 // 【实测七百二十四】客户端本地预测那一拍：SWB 的 VehicleEntity.interact 在**客户端**
                 // 也跑，setDriverAngle 会当场把玩家转向车头。快照 + 钉住几拍把这一下抹掉。
@@ -1301,7 +1299,6 @@ public final class RideBindManager {
         releaseMaidImpl(maid, true, "手动传送（只传人，解除绑定）");
     }
 
-
     /** 这条坐骑背上"悬空鞍位"占着的那只女仆（给"右击龙提示已占用"用）；没有 → null。 */
     public static EntityMaid chairRiderOf(Entity mount) {
         try {
@@ -1580,12 +1577,6 @@ public final class RideBindManager {
                     deferred.add(maid);
                     continue;
                 }
-                // 【实测七百四十七】名单是在 747 才加的：升级前绑在不可驾载具上的链路要能自愈——
-                // 每拍扫到时按"该解绑"处理（走 releaseMaidQuiet，重力/坐姿/龙的行动档都还原）。
-                if (MaidMountCompat.isUnridable(mount)) {
-                    deferred.add(maid);
-                    continue;
-                }
                 // 【实测七百二十三 / 七百二十四】悬空鞍位（龙）：她**不是乘客**，判据换成"由我们每拍摆位"。
                 // 723 的旧版这里 gap > CHAIR_MAX_GAP 就**解除链路**——但解除走的是 releaseMaidQuiet，
                 // 它不还原重力/龙的行动档（她永久无重力、龙永久卡跟随档），而且是"时不时断开"的来源：
@@ -1706,11 +1697,11 @@ public final class RideBindManager {
                 }
                 STARTUP_UNTIL.remove(maid.getUUID());
             }
-            // 【实测七百八十三 / 七百九十四】丢掉降落落点缓存——但**只在"从降到不降"的过渡那一拍**。
+            // 【实测七百八十三 / 七百九十四】丢掉降落用的跑道规划缓存——但**只在"从降到不降"的过渡那一拍**。
             //
             // 【七百九十四·修正】783 写的是这行注释（"离开 home 档 → 丢掉缓存"），代码却是
-            // **每拍无条件清**：于是**降落进行中**落点缓存每拍被清，`landingSpot` 每拍重扫
-            // 48 格方框（625 列 × 每列 9 次高度图 ≈ 5600 次/拍）且落点逐拍改选。现在换成
+            // **每拍无条件清**：于是**降落进行中**规划每拍被清，`aircraftLandPlan` 每拍重扫
+            // 48 格方框（625 列 × 每列 9 次高度图 ≈ 5600 次/拍）且跑道逐拍改选。现在换成
             // {@link MaidMountCompat#endAircraftLanding}——它按心跳（载具 UUID → 最后接管时刻）
             // 判"上一拍还在降吗"，只有真的不再降了才清。
             MaidMountCompat.endAircraftLanding(mount);
@@ -2593,6 +2584,10 @@ public final class RideBindManager {
         if (e == null) {
             return;
         }
+        // 实测九百八十五：总闸关掉就不点亮（链路与留痕照旧——那两样由调用方写）。
+        if (!batonMarkOn()) {
+            return;
+        }
         try {
             e.setGlowingTag(true);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
@@ -2610,14 +2605,32 @@ public final class RideBindManager {
     }
 
     /** 【实测七百一十六·点3】"待选光标"：选中即亮（未绑定也亮），单独留痕便于"只撤我们打的那一下" */
+
     private static void markPending(Entity e) {
         if (e == null) {
+            return;
+        }
+        // 实测九百八十五：总闸关掉时连留痕都不写——这道光不是我们打的，别让清扫链去管它。
+        if (!batonMarkOn()) {
             return;
         }
         try {
             e.setGlowingTag(true);
             e.getPersistentData().putBoolean(TAG_PENDING_MARK, true);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+    }
+
+    /**
+     * 【实测九百八十五】总闸：骑乘指挥棒那道光标（金色描边）**要不要渲染**（配置
+     * {@code combat.ride.batonMark}，默认开）。关掉只影响“点亮”这一条路——熄灯
+     * （{@link #unmark} 与 {@link #clearPendingMark}）永远不查它，免得关闸后旧光标熄不掉。
+     */
+    private static boolean batonMarkOn() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_BATON_MARK.get();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+            return true;
         }
     }
 
@@ -2823,6 +2836,18 @@ public final class RideBindManager {
                 }
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+
+        // 【实测九百八十五】总闸（combat.ride.batonMark）关掉时，把**已经点亮**的光标熄掉——
+        // 只熄灯，留痕（TAG_RIDE_MOUNT / TAG_RIDE_MAID）一个不动：{@link #restore} 重建龙的链路还要靠它们。
+        if (!batonMarkOn()) {
+            for (Map.Entry<UUID, Link> en : LINKS.entrySet()) {
+                unmark(en.getValue().maid.get());
+                unmark(en.getValue().mount.get());
+            }
+            for (java.lang.ref.WeakReference<Entity> ref : PENDING.values()) {
+                clearPendingMark(ref == null ? null : ref.get());
+            }
         }
     }
 

@@ -37,11 +37,27 @@ public final class BlueprintFileIo {
 
     static final Map<String, String> EXTERNAL_NAMES = new HashMap<>();
 
+    /** 登记项版本（材料/描述/尺寸缓存拿它当哨兵）：**只在内容真的变了时**才更新。
+     *  实测九百一十 起不再拿它判“文件变了没”——那是同名文件互相顶 mtime 的老根因。 */
     static final Map<String, Long> EXTERNAL_MTIMES = new HashMap<>();
+
+    /** 实测九百一十：扫描的“变了没”按**绝对路径**记（旧版按 id＝去扩展名的文件名记，
+     *  两个不同文件同名时共用一格 → 互相把对方的 mtime 顶掉 → 每趟重解析 + 重算材料）。
+     *  成功/失败都记，所以损坏文件也不再反复重扫。 */
+    private static final Map<String, Long> FILE_MTIMES = new HashMap<>();
 
     private static volatile long LAST_EXTERNAL_SCAN_MS = 0L;
 
     private static final long EXTERNAL_SCAN_INTERVAL_MS = 3000L;
+
+    /** 实测九百一十：一趟扫描最多占服务端线程多少毫秒。到点就停、下一跳自己接上
+     *  （每趟至少真解析一个，保证有进展、不会空转）。 */
+    private static final long SCAN_BUDGET_MS = 40L;
+
+    /** 实测九百一十：同一个 id 被两个文件争用时只提示一次（`config/blueprints` 与
+     *  `<存档>/schematics` 同名，或 zip 解出的内层文件与已有蓝图同名）。 */
+    private static final Set<String> WARNED_ID_CLASH =
+            java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
 
     private static final Map<String, java.nio.file.Path> EXTERNAL_PATHS = new HashMap<>();
 
@@ -53,6 +69,8 @@ public final class BlueprintFileIo {
         EXTERNAL_NAMES.clear();
         EXTERNAL_MTIMES.clear();
         EXTERNAL_PATHS.clear();
+        FILE_MTIMES.clear();
+        WARNED_ID_CLASH.clear();
         BlueprintMaterials.NEEDS_CACHE.clear();
         BlueprintMaterials.NEEDS_MTIME.clear();
         BlueprintCatalog.DESCRIBE_CACHE.clear();
@@ -134,13 +152,10 @@ public final class BlueprintFileIo {
         "武器__星球大战AT-AT 步行机.litematic",
         "武器__苏俄 天启坦克.litematic",
         "武器__鹦鹉螺号.litematic",
-        "水__圆形水族箱.litematic",
         "水__圣剑池.litematic",
         "水__樱花木小码头.litematic",
-        "水__水立方.litematic",
         "水__沙滩别墅.litematic",
         "水__河滨度假别墅.litematic",
-        "红石__中世纪刷石机.litematic",
         "红石__优雅的村民交易所.litematic",
         "红石__全树种树场（有红树）.litematic",
         "红石__国风刷铁机——黑金楼2024.1.15.litematic",
@@ -173,7 +188,10 @@ public final class BlueprintFileIo {
         "雕像__地球和月球.litematic",
         "雕像__巨型坦克.litematic",
         "雕像__无限手套.litematic",
-        "雕像__暴虐霸王龙.litematic"
+        "雕像__暴虐霸王龙.litematic",
+        // 实测九百八十四：玩家自用的两张，一并随包附赠
+        "唯一.litematic",
+        "《Mistry Memory》.litematic"
     };
 
     private static void cleanupLegacyBuiltinFiles() {
@@ -181,7 +199,11 @@ public final class BlueprintFileIo {
                 "seaside_villa.snbt", "grand_palace.snbt", "skyscraper.snbt",
                 "tabby_cat_statue.snbt",
                 "mega_castle.snbt", "mega_pyramid.snbt", "mega_colosseum.snbt",
-                "mega_knight_statue.snbt"
+                "mega_knight_statue.snbt",
+                // 实测九百八十五：三张从默认蓝图包里下架——已经在 config/maid_smart/
+                // blueprints/ 落过地的副本一并删（模组自己解压的，不是玩家导入的内容）
+                "水__圆形水族箱.litematic", "水__水立方.litematic",
+                "红石__中世纪刷石机.litematic"
         };
         try {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
@@ -349,10 +371,20 @@ public final class BlueprintFileIo {
     }
 
     public static void scanExternalBlueprints() {
-        scanExternalBlueprints(false);
+        scanExternalBlueprints(false, true);
     }
 
+    /** force=true（导入流程）：绕过节流、且**不设预算** —— 导入后必须当场登记，不能被预算截断。 */
     public static void scanExternalBlueprints(boolean force) {
+        scanExternalBlueprints(force, !force);
+    }
+
+    /** 实测九百一十：预算到点后的续跑（不节流、仍按预算），由服务端线程下一跳自己接上。 */
+    private static void scanExternalBlueprintsContinue() {
+        scanExternalBlueprints(true, true);
+    }
+
+    private static void scanExternalBlueprints(boolean force, boolean budget) {
         long nowMs = System.currentTimeMillis();
         if (!force && nowMs - LAST_EXTERNAL_SCAN_MS < EXTERNAL_SCAN_INTERVAL_MS) {
             return;
@@ -378,8 +410,14 @@ public final class BlueprintFileIo {
         }
         // v1.5.25 诊断日志：确认扫描到的目录与文件数（帮助排查"手册看不到蓝图"）
         int[] registered = {0};
+        // 实测九百一十：本趟预算的状态（lambda 里改不了局部变量，用一格数组兜）
+        int[] parsedThisCall = {0};
+        boolean[] reachedBudget = {false};
+        long deadline = nowMs + SCAN_BUDGET_MS;
         // 已扫描文件集合（用于删除检测）
         Set<String> seen = new HashSet<>();
+        // 实测九百一十：另记一份**路径**集合——FILE_MTIMES 按路径存，陈旧项也按路径清
+        Set<String> seenPaths = new HashSet<>();
         for (java.nio.file.Path dir : dirs) {
             try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(dir)) {
                 files.forEach(p -> {
@@ -397,13 +435,46 @@ public final class BlueprintFileIo {
                     }
                     String id = "maid_smart_ext:" + fileName.substring(0, fileName.length() - ext.length());
                     seen.add(id);
+                    seenPaths.add(p.toString());
                     try {
-                        long mtime = java.nio.file.Files.getLastModifiedTime(p).toMillis();
-                        if (mtime == EXTERNAL_MTIMES.getOrDefault(id, -1L)) {
-                            return; // 未变化
+                        if (reachedBudget[0]) {
+                            return; // 本趟预算已到：剩下的留给下一跳续跑
                         }
+                        long mtime = java.nio.file.Files.getLastModifiedTime(p).toMillis();
+                        if (mtime == FILE_MTIMES.getOrDefault(p.toString(), -1L)) {
+                            return; // 未变化（按**路径**判——同名文件不再互相顶 mtime）
+                        }
+                        // 实测九百一十：至少真解析一个才允许停（保证有进展，不会空转）
+                        if (budget && parsedThisCall[0] > 0 && System.currentTimeMillis() > deadline) {
+                            reachedBudget[0] = true;
+                            return;
+                        }
+                        parsedThisCall[0]++;
                         List<String> steps = loadExternalFile(p, ext);
+                        // 实测九百一十：成功/失败都按路径记 mtime —— 本会话不再反复重解析
+                        // （含损坏 zip / 世界 zip 提取失败那类 0.5s+ 的坑）
+                        FILE_MTIMES.put(p.toString(), mtime);
                         if (steps != null && !steps.isEmpty()) {
+                            // 实测九百一十：同名撞车（config/blueprints 与 <存档>/schematics 同名，
+                            // 或 zip 解出的内层文件与已有蓝图同名）→ **先到者胜**、不再来回覆盖。
+                            // 旧版这一对共享同一格 mtime，每趟互相顶掉 → 重解析 + 重算 → 卡死主线程。
+                            java.nio.file.Path owner = EXTERNAL_PATHS.get(id);
+                            if (owner != null && !owner.equals(p)) {
+                                if (WARNED_ID_CLASH.add(id)) {
+                                    BlueprintLib.LOGGER.warn(
+                                            "scanExternalBlueprints: 蓝图 id 撞车 {} → 保留 {}，忽略 {}",
+                                            id, owner, p);
+                                }
+                                return;
+                            }
+                            List<String> prev = EXTERNAL.get(id);
+                            if (prev != null && prev.equals(steps)) {
+                                // 实测九百一十：解析结果与已登记内容**逐字相同**（文件被外部 touch /
+                                // 被自己解压重写）→ 不重登记、不失效四个缓存。旧版每次都清缓存，
+                                // 于是开手册时把 234 张的材料重算一遍（spark 快照里 itemForBlock
+                                // "疯狂拼方块 ID" 就是这一半）。
+                                return;
+                            }
                             // v1.5.25g：不再在扫描阶段跳过超大蓝图——LLM smart_build 走
                             // getBlueprint/EXTERNAL 也需要大建筑（之前 5000 限制导致 LLM
                             // 也建不了）。大小限制只作用于手册目录显示（buildCatalogEntries）。
@@ -416,15 +487,24 @@ public final class BlueprintFileIo {
                             BlueprintMaterials.NEEDS_MTIME.remove(id);
                             BlueprintCatalog.DESCRIBE_CACHE.remove(id);
                             BlueprintStepMath.SIZE_CACHE.remove(id);
+                            // 实测九百一十：当场把这三样预热回来——把「开手册时重算材料 / 现算尺寸」
+                            // 挪到扫描这一趟（受预算约束），开手册就只剩纯读缓存。
+                            BlueprintMaterials.countNeedsCached(id, steps);
+                            BlueprintCatalog.describe(id, steps);
+                            BlueprintStepMath.blueprintSizeCached(id, steps);
                             registered[0]++;
-                        } else {
+                        } else if (EXTERNAL_PATHS.get(id) == null
+                                || EXTERNAL_PATHS.get(id).equals(p)) {
+                            // 解析失败/空：只有这份文件**自己**登记着这个 id 时才摘掉——
+                            // 否则会把同名撞车里先到那份的登记一起误摘
                             EXTERNAL.remove(id);
                             EXTERNAL_NAMES.remove(id);
                             EXTERNAL_PATHS.remove(id);
                             // v1.5.312：失败也记 mtime → 本次会话不再反复重扫（损坏 zip /
                             // 世界 zip 提取失败每次 0.5s+，目录循环重扫会卡死服务端主线程）；
-                            // 文件被替换后 mtime 变化才会重新尝试解析。
-                            EXTERNAL_MTIMES.put(id, mtime);
+                            // 文件被替换后 mtime 变化才会重新尝试解析。（实测九百一十：改由
+                            // FILE_MTIMES 按路径记，这里只把登记项版本一并清掉。）
+                            EXTERNAL_MTIMES.remove(id);
                             BlueprintMaterials.NEEDS_CACHE.remove(id);
                             BlueprintMaterials.NEEDS_MTIME.remove(id);
                             BlueprintCatalog.DESCRIBE_CACHE.remove(id);
@@ -435,16 +515,28 @@ public final class BlueprintFileIo {
                 });
             } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
             }
+            if (reachedBudget[0]) {
+                break; // 到点：别开下一个扫描目录
+            }
         }
-        // 删除的文件：移除缓存
-        EXTERNAL.keySet().removeIf(id -> !seen.contains(id));
-        EXTERNAL_NAMES.keySet().removeIf(id -> !seen.contains(id));
-        EXTERNAL_PATHS.keySet().removeIf(id -> !seen.contains(id));
-        EXTERNAL_MTIMES.keySet().removeIf(id -> !seen.contains(id));
-        BlueprintStepMath.SIZE_CACHE.keySet().removeIf(id -> !seen.contains(id));
+        if (!reachedBudget[0]) {
+            // 删除的文件：移除缓存（**只在走完整趟时**做——早停时 seen 不全，
+            // 清下去会把还没扫到的那批登记一起删掉）
+            EXTERNAL.keySet().removeIf(id -> !seen.contains(id));
+            EXTERNAL_NAMES.keySet().removeIf(id -> !seen.contains(id));
+            EXTERNAL_PATHS.keySet().removeIf(id -> !seen.contains(id));
+            EXTERNAL_MTIMES.keySet().removeIf(id -> !seen.contains(id));
+            BlueprintStepMath.SIZE_CACHE.keySet().removeIf(id -> !seen.contains(id));
+            FILE_MTIMES.keySet().removeIf(k -> !seenPaths.contains(k));
+        }
         if (registered[0] > 0) {
             // v1.5.25 诊断日志（LogUtils → 进 latest.log）
             BlueprintLib.LOGGER.info("scanExternalBlueprints: 新注册 {} 个外部蓝图，共 {} 个", registered[0], EXTERNAL.size());
+        }
+        if (reachedBudget[0] && SERVER != null) {
+            // 实测九百一十：剩下的下一跳自己接上（不节流、仍按预算），
+            // 把一次性灌进来的大批蓝图摊到多个 tick，而不是在主线程上一刀切跑完
+            SERVER.execute(BlueprintFileIo::scanExternalBlueprintsContinue);
         }
     }
 

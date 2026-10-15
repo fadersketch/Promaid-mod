@@ -60,14 +60,33 @@ public final class BombThrow {
                     it.remove(); // 已经炸了 / 被清掉了
                     continue;
                 }
-                if (h.level.m_46467_() >= h.until) {
-                    it.remove(); // v1.2.2 实测五百九十一：追踪时间到 → 撒手，按当前方向直飞
+                long now = h.level.m_46467_();
+                if (now >= h.expire) {
+                    it.remove(); // 引信早该走完还没炸（区块卸载等）→ 这条监看作废
+                    continue;
+                }
+                // ② 实测九百八十九【物理体积】：拿「上一 tick 位置 → 这一 tick 位置」这条扫掠线
+                //    撞一遍路上的敌人——撞上就把引信归 1，本 tick 的 PENDING 循环（同一次
+                //    Pre 事件、排在后面）在接触点当场引爆。与追踪开关无关：关掉追踪也要有体积，
+                //    不然 TNT 还是从敌人身上穿过去。
+                double cx = h.tnt.m_20185_();
+                double cy = h.tnt.m_20186_();
+                double cz = h.tnt.m_20189_();
+                if (hitsEnemyOnSegment(h, h.lx, h.ly, h.lz, cx, cy, cz)) {
+                    h.tnt.m_32085_(1);
+                    it.remove();
+                    continue;
+                }
+                h.lx = cx;
+                h.ly = cy;
+                h.lz = cz;
+                // ③ 追踪（实测五百九十一：限时 + 限转角）——到点 / 目标没了就只保留上面的体积监看
+                if (!h.track || now >= h.until) {
                     continue;
                 }
                 if (h.target == null || !h.target.m_6084_() || h.target.m_213877_()
                         || h.target.m_9236_() != h.level) {
-                    it.remove(); // 目标没了 / 换维度了 → 这一发按当前朝向直飞
-                    continue;
+                    continue; // 目标没了 / 换维度了 → 这一发按当前朝向直飞
                 }
                 double dx = h.target.m_20185_() - h.tnt.m_20185_();
                 double dy = (h.target.m_20186_() + h.target.m_20192_() * 0.5) - h.tnt.m_20186_();
@@ -115,6 +134,65 @@ public final class BombThrow {
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
             }
         }
+    }
+
+    /**
+     * 实测九百八十九【物理体积】：这一段扫掠线上有没有撞到"她打得着的敌人"。
+     *
+     * 只认敌人——她本人 / 主人 / 友军 / 路人生物一律不算，不然飞过一头牛、主人挡了一下
+     * 就把炸弹带炸了。判据 = 线段点到各候选**包围盒中心**的最近距离 ≤ 敌人半宽 + 炸弹半径；
+     * 候选先用"线段外扩 0.75 格的盒子"粗筛（盒子只用于查询，细判是纯算术，不碰映射名）。
+     */
+    private static boolean hitsEnemyOnSegment(MaidBombing.Homing h, double ax, double ay, double az,
+                                              double bx, double by, double bz) {
+        try {
+            if (h.maid == null) {
+                return false;
+            }
+            double pad = 0.75;
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    Math.min(ax, bx) - pad, Math.min(ay, by) - pad, Math.min(az, bz) - pad,
+                    Math.max(ax, bx) + pad, Math.max(ay, by) + pad, Math.max(az, bz) + pad);
+            for (LivingEntity le : h.level.m_6443_(LivingEntity.class, box, e -> true)) {
+                try {
+                    if (le == null || le == h.maid || !le.m_6084_()) {
+                        continue;
+                    }
+                    if (le != h.target && !legalThrowTarget(h.maid, le)) {
+                        continue; // 只认敌人：这一发原定的目标，或她任务认得的敌人
+                    }
+                    double px = le.m_20185_();
+                    double py = le.m_20186_() + le.m_20192_() * 0.5;
+                    double pz = le.m_20189_();
+                    double reach = le.m_20205_() * 0.5 + 0.5; // 敌人半宽 + 炸弹半径
+                    if (distToSegmentSqr(px, py, pz, ax, ay, az, bx, by, bz) <= reach * reach) {
+                        return true;
+                    }
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
+        }
+        return false;
+    }
+
+    /** 点到线段（三维）的最近距离平方——纯算术，不用任何带映射名的方法 */
+    private static double distToSegmentSqr(double px, double py, double pz,
+                                           double ax, double ay, double az,
+                                           double bx, double by, double bz) {
+        double abx = bx - ax;
+        double aby = by - ay;
+        double abz = bz - az;
+        double len2 = abx * abx + aby * aby + abz * abz;
+        double t = 0.0;
+        if (len2 > 1.0E-9) {
+            t = ((px - ax) * abx + (py - ay) * aby + (pz - az) * abz) / len2;
+            t = Math.max(0.0, Math.min(1.0, t));
+        }
+        double dx = px - (ax + abx * t);
+        double dy = py - (ay + aby * t);
+        double dz = pz - (az + abz * t);
+        return dx * dx + dy * dy + dz * dz;
     }
 
     static boolean legalThrowTarget(EntityMaid maid, LivingEntity le) {
@@ -179,15 +257,43 @@ public final class BombThrow {
         return Mth.m_14008_(vy, -1.5, 1.5);
     }
 
+    /**
+     * TNT 矿车版的飞行时间：矿车离轨后每拍 **先加重力 −0.04、位移、离地再 ×0.95 阻尼**（javap
+     * 实证 {@code AbstractMinecart.tick} 与 {@code comeOffTrack}），与引信 TNT 的 0.98 不同，
+     * 所以闭式解另算一份。形状与 {@link #flightTicks} 一致（0.02 → 0.05），水平射程上限 = 初速 ÷ 0.05。
+     */
+    private static double flightTicksCart(double dh, double vx0) {
+        if (dh <= 1.0E-4 || vx0 <= 1.0E-6) {
+            return 1.0;
+        }
+        double base = 1.0 - 0.05 * dh / vx0;
+        if (base <= 0.02) {
+            return 200.0;
+        }
+        double n = Math.log(base) / Math.log(0.95);
+        return Math.max(1.0, Math.min(200.0, n));
+    }
+
+    /** TNT 矿车版的出膛竖直速度（形状同 {@link #requiredVy}：0.02 → 0.05 ⇒ 那个 0.04 系数变成 0.8）。 */
+    private static double requiredVyCart(double dh, double dy, double vx0) {
+        double n = flightTicksCart(dh, vx0);
+        double a = (1.0 - Math.pow(0.95, n)) / 0.05;
+        double b = (n - a) / 0.05;
+        double vy = (dy + 0.04 * b) / Math.max(1.0E-6, a) + 0.04;
+        return Mth.m_14008_(vy, -1.5, 1.5);
+    }
+
     private static int throwCount(EntityMaid maid) {
+        // 实测九百四十五【压缩盒差异化】：盒子里存了 TNT → 一次多投（与低血爆发取大者）
+        int boxBurst = BombItems.boxBurstTnt(maid);
         try {
             float max = maid.m_21233_();
             if (max > 0.0f && maid.m_21223_() / max <= BombConfig.cfgTntBurstRatio()) {
-                return Math.max(1, BombConfig.cfgTntBurstCount());
+                return Math.max(boxBurst, Math.max(1, BombConfig.cfgTntBurstCount()));
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
         }
-        return 1;
+        return boxBurst;
     }
 
     static int throwTntAt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
@@ -206,6 +312,9 @@ public final class BombThrow {
                 break;
             }
             usedId = BombItems.idOf(tntStack);
+            // 【TNT 矿车：弹道另算一份】矿车离轨后的阻尼是 0.95（见 flightTicksCart 的 javap 实证），
+            // 用引信 TNT 那条 0.98 的闭式解会系统性打短——所以这一发走矿车自己那套解。
+            boolean cart = BombItems.isTntMinecart(tntStack);
             // v1.2.2 实测五百九十一【打火石不再被吞】：从**原槽**取出 → 扣 1 点耐久 → 放回**原槽**
             //（旧版是整件取出、只对取出来的那份扣耐久 = 玩家看到的"直接把打火石吞掉"）
             // v1.2.2 实测六百〇三：没有打火石时用 **1 个烈焰弹**（真的消耗掉）——返回的是"刚用掉的
@@ -236,7 +345,8 @@ public final class BombThrow {
             for (int it = 0; it < 2; it++) {
                 double ddx = aimX - sx;
                 double ddz = aimZ - sz;
-                double flight = flightTicks(Math.sqrt(ddx * ddx + ddz * ddz), speed);
+                double dhd = Math.sqrt(ddx * ddx + ddz * ddz);
+                double flight = cart ? flightTicksCart(dhd, speed) : flightTicks(dhd, speed);
                 aimX = tx + tv.f_82479_ * flight;
                 aimZ = tz + tv.f_82481_ * flight;
                 aimY = ty + tv.f_82480_ * flight * 0.5;
@@ -258,7 +368,7 @@ public final class BombThrow {
                     vz += sz2;
                 }
             }
-            double vy = requiredVy(dh, dy, speed);
+            double vy = cart ? requiredVyCart(dh, dy, speed) : requiredVy(dh, dy, speed);
             // ── v1.2.2 实测六百〇五【认出来的 TNT，就放它自己那一枚】──
             // 旧版（含实测六百〇四）不论手上拿的是哪一件，扔出去的都是这里 new 出来的**原版**引信 TNT
             // ——模组 TNT 的威力 / 破不破方块 / 带不带火全被抹掉。现在先问那一件自己：方块继承
@@ -283,12 +393,19 @@ public final class BombThrow {
                 usedNote = primed.note;
             }
 
-            // v1.2.2 实测五百九十【追踪】/ 实测五百九十一【限时】：登记这一发——只在离手后的
-            // cfgTntTrackTicks（默认 10 tick = 0.5 秒）内朝目标修正方向，之后按当时方向直飞
-            //（模组自己的 TNT 实体也继承 PrimedTnt，追踪照旧生效）
-            if (tnt != null && BombConfig.cfgTntTrack() && BombConfig.cfgTntTrackTicks() > 0 && MaidBombing.HOMING.size() < MaidBombing.MAX_PENDING) {
-                MaidBombing.HOMING.add(new MaidBombing.Homing(level, tnt, target, Math.sqrt(vx * vx + vy * vy + vz * vz),
-                        gameTime + BombConfig.cfgTntTrackTicks()));
+            // v1.2.2 实测五百九十【追踪】/ 实测五百九十一【限时】/ 实测九百八十九【物理体积】：
+            // 登记这一发飞行监看——追踪只是其中附带的一小段转向（限时 cfgTntTrackTicks）；而
+            // "撞到敌人就引爆"不管追踪开关都必须做（不然近身还是穿孔而过）。条目留到它自己
+            // 炸掉为止，最迟 expire（引信 + 余量）兜底，防表泄漏。模组自己的 TNT 实体也继承
+            // PrimedTnt，同样登记。
+            // 【TNT 矿车不进这一档】它不是 PrimedTnt、也不吃追踪：它自己的"撞一下"是原版那套
+            //（撞到方块/墙且水平速度 ≥ 0.1 就炸，javap 实证 MinecartTNT.tick），不需要我们接管。
+            if (tnt != null && MaidBombing.HOMING.size() < MaidBombing.MAX_PENDING) {
+                boolean track = BombConfig.cfgTntTrack() && BombConfig.cfgTntTrackTicks() > 0;
+                MaidBombing.HOMING.add(new MaidBombing.Homing(level, maid, tnt, target,
+                        Math.sqrt(vx * vx + vy * vy + vz * vz), track,
+                        gameTime + BombConfig.cfgTntTrackTicks(),
+                        gameTime + BombConfig.cfgTntFuse() + 100L));
             }
             SoundEvent snd = BombItems.sound(BombItems.ID_TNT_PRIMED_SOUND);
             if (snd != null) {
@@ -315,6 +432,7 @@ public final class BombThrow {
         }
         if (thrown > 0) {
             MaidBombing.TNT_NEXT.put(id, gameTime + BombConfig.cfgTntInterval());
+            MaidBombing.SETTLE_NEXT.put(id, gameTime + MaidBombing.SETTLE_TNT_TICKS); // 实测九百九十五：离手 +3 秒静置
             MaidBombing.log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 投掷 TNT ×" + thrown
                     + "（" + (usedId.isEmpty() ? "未知物品" : usedId) + "，引信 " + BombConfig.cfgTntFuse() + " tick"
                     + (usedNote.isEmpty() ? "" : "，" + usedNote) + "）");
@@ -339,6 +457,19 @@ public final class BombThrow {
     private static TntOut primeTnt(ServerLevel level, EntityMaid maid, ItemStack stack,
                                    double sx, double sy, double sz) {
         try {
+            // ── v1.3.2【TNT 矿车：认哪件就放它那一辆】──
+            // 注册名带 tnt 的矿车物品本来就会被 isTnt 认到，但老兜底会把它换成一枚普通引信 TNT
+            // ——矿车就没了。它自己的形式是**点着的 TNT 矿车**：撞到方块/墙、或引信到点都会炸，
+            // 威力随水平速度涨（javap 实证 MinecartTNT：4.0 + rand×1.5×min(5, √水平速度²)），
+            // 所以照「认出来的那一件就放它自己那一枚」的老规矩：放出它自己那一辆。
+            // 地形权限（不破坏方块）与"她扔的"归因照模组 TNT 那套收回本模组开关管，登记见下。
+            if (BombItems.isTntMinecart(stack)) {
+                Entity cart = spawnTntMinecart(level, maid, sx, sy, sz);
+                if (cart != null) {
+                    return new TntOut(cart, false, false, "它自己那一辆 " + entityIdOf(cart)
+                            + (writeMinecartFuse(cart, BombConfig.cfgTntFuse()) ? "" : "（引信写不进去，退回固定 80 tick）"));
+                }
+            }
             TntBlock tb = BombItems.tntBlockOf(stack);
             if (tb != null && tb.getClass() != TntBlock.class) {
                 Entity made = igniteByBlock(level, maid, tb, sx, sy, sz);
@@ -363,6 +494,44 @@ public final class BombThrow {
             MaidBombing.log("模组 TNT 点火失败：" + t);
         }
         return new TntOut(new PrimedTnt(level, sx, sy, sz, maid), false, true, "");
+    }
+
+    /** 【TNT 矿车】造一辆点着的 TNT 矿车；放不出来（构造炸了）就 null，走老兜底那一枚普通 TNT。 */
+    private static Entity spawnTntMinecart(ServerLevel level, EntityMaid maid, double sx, double sy, double sz) {
+        try {
+            net.minecraft.world.entity.vehicle.MinecartTNT cart =
+                    new net.minecraft.world.entity.vehicle.MinecartTNT(level, sx, sy, sz);
+            // 与模组 TNT 同一张登记表：地形权限（不破坏方块）与"她扔的"归因都靠它兜住
+            MaidTntBlastGuard.rememberTnt(cart, maid, level.m_46467_() + MaidTntBlastGuard.TRACK_TTL);
+            return cart;
+        } catch (Throwable t) {
+            MaidBombing.log("TNT 矿车放出失败：" + t);
+            return null;
+        }
+    }
+
+    /**
+     * 【TNT 矿车】把引信写成配置值。两版原版都**没有**任意引信写口（javap 实证：字段
+     * {@code f_38647_} / {@code fuse} 是 private，公开口只有 {@code primeFuse()} 的固定 80），
+     * 所以反射直写那个字段（手法同 BrewRecipeResolver 对原版私有字段）；两个名字都试，都拿不到就
+     * 退回 {@code primeFuse()}（80 tick = 4 秒）并返回 false，让日志说清楚。
+     */
+    private static boolean writeMinecartFuse(Entity cart, int fuse) {
+        for (String name : new String[]{"f_38647_", "fuse"}) {
+            try {
+                java.lang.reflect.Field f = net.minecraft.world.entity.vehicle.MinecartTNT.class
+                        .getDeclaredField(name);
+                f.setAccessible(true);
+                f.setInt(cart, fuse);
+                return true;
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
+            }
+        }
+        try {
+            ((net.minecraft.world.entity.vehicle.MinecartTNT) cart).m_38693_();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombThrow", ignored);
+        }
+        return false;
     }
 
     private static Entity igniteByBlock(ServerLevel level, EntityMaid maid, TntBlock tb,

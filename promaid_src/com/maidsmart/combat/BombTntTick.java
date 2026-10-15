@@ -103,15 +103,19 @@ public final class BombTntTick {
             if (!BombThrow.legalThrowTarget(maid, target)) {
                 target = BombThrow.findThrowTarget(level, maid); // 记忆里的目标不合法（友军/非敌人）再按半径找
             }
-            // ② 攻击链路完成检测：攻击冷却记忆【由无到有】= 她刚打完一记（TLM 近战与远程
-            //    攻击都会写这个记忆）——轰炸与 TNT 都挂在「打完这一记」后面
-            boolean cooling = maid.m_6274_().m_21952_(MemoryModuleType.f_26373_).isPresent();
-            Boolean prev = MaidBombing.COOLDOWN_SEEN.put(id, cooling);
-            if (cooling && (prev == null || !prev)) {
+            // ② 实测九百八十八【凡 IAttackTask 类战斗任务一律可触发】：触发点改成**她自己有攻击
+            //    目标**（上面 ① 解出来的合法目标），不再依赖"刚打完一记"的任何外部信号——TLM 的
+            //    ATTACK_COOLING_DOWN 记忆只有近战/弓弩行为写（枪械 / 三叉戟这类任务不写）；
+            //    实测九百八十七试过"目标身上最近打它的人"，也仍要求伤害确实归在她的名下。
+            //    任务判定在上面 isCombatTask（IAttackTask 接口优先 + UID 名单兜底），这里只要
+            //    手上有合法目标就按既有节奏出手：先试轰炸起手（材料齐才动，相位自己收尾），
+            //    未起手就落到 ④ 投 TNT（最短间隔 / 引信 / 料与点火料判据一条都没动）。
+            if (target != null) {
                 MaidBombing.TNT_ARMED.put(id, gameTime);
-                // ③ v1.2.2 实测五百九十二【轰炸推广到所有攻击模式】：这一记打完 → 先试轰炸起手
+                // ③ v1.2.2 实测五百九十二【轰炸推广到所有攻击模式】：接敌 → 先试轰炸起手
                 //    （黑曜石+末地水晶 / 重生锚+萤石 / 床）。起手成功则整段交给轰炸相位，
                 //    相位收尾自己会投 TNT（见 tick 末尾的 flushTnt）——所以这里直接返回。
+                //    每段各有一条最短间隔（BOMB_NEXT），所以"每 2 tick 问一次"不会连放。
                 //    v1.2.2 实测六百〇三：远程空袭那道闸**删掉**（需求："将重生锚之类的放置
                 //    也加入到远程空袭"）——她飞在天上也照放，落点是目标脚边 / 她正下方 /
                 //    悬空 / 最后走 tryPlaceAirDrop 的后门。
@@ -173,6 +177,12 @@ public final class BombTntTick {
             // 按住时直接挂着（不耗料、不占冷却、不写 TNT_NEXT），下一拍她爬到位自然就投出去了。
             // 非飞行载具 / 关掉这道闸 / 安全高度填 0 → 本句恒 false，行为与旧版一字不差。
             if (com.maidsmart.combat.MaidAirCombat.holdDropForStandoff(maid, target)) {
+                return;
+            }
+            // 实测九百九十五【三条链路分开】：上一发（放置类 / 上一枚 TNT）还没落停时这一拍
+            // 不追投——与放置段共用同一条静置窗（MaidBombing.SETTLE_NEXT），防三炸同秒释放。
+            Long settle = MaidBombing.SETTLE_NEXT.get(id);
+            if (settle != null && gameTime < settle) {
                 return;
             }
             if (gameTime < MaidBombing.TNT_NEXT.getOrDefault(id, 0L)) {

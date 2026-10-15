@@ -6,8 +6,8 @@
   "max_columns": 3,
   "max_api_rows": 0,
   "reading": {
-    "zh": "本层 9 个子模块。",
-    "en": "9 submodules at this layer."
+    "zh": "本层 8 个子模块。",
+    "en": "8 submodules at this layer."
   },
   "order": [
     "promaid.core.config",
@@ -17,7 +17,6 @@
     "promaid.core.safety",
     "promaid.core.gui",
     "promaid.core.compat",
-    "promaid.core.marker",
     "promaid.core.prompt"
   ],
   "groups": [
@@ -35,7 +34,6 @@
         "promaid.core.safety",
         "promaid.core.gui",
         "promaid.core.compat",
-        "promaid.core.marker",
         "promaid.core.prompt"
       ]
     }

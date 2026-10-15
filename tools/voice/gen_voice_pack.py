@@ -109,7 +109,9 @@ STYLE_OF = {
               'leash_need_fly',
               'leash_need_mode',
               'leash_fail',
-              'leash_denied'],
+              'leash_denied',
+              # 实测九百八十：卡死自愈的「够不到」（为难档，与 mine_no_block_high 同调）
+              'work_stall_giveup'],
     'work': ['build_done', 'build_substitute', 'build_skip_bedrock', 'build_skip_unloaded',
              'tool_land',
              'tool_go',
@@ -119,7 +121,10 @@ STYLE_OF = {
              'fallback_missing', 'fallback_something',
              # v1.3.0 实测六百七十四：武装拴绳·新加气泡（work 档）
              'leash_seatback',
-             'mine_no_ore', 'farm_no_work'],
+             'mine_no_ore', 'farm_no_work',
+             'mine_area_cleared', 'wood_area_cleared',
+             # 实测九百八十二：目标路径上有岩浆（工作档）
+             'lava_path_ahead'],
 }
 
 # 日语台词（按中文 key 的情境重写；sched_* 是排班闲聊，走俏皮档）
@@ -158,7 +163,7 @@ JP = {
     'tool_follow.ogg': 'うん、ご主人様について行くね',
     'tool_here.ogg': 'ここは任せて',
     'aid_drink.ogg': 'ご主人様、喉渇いてるでしょ？飲み物持ってきたよ〜',
-    'fish_no_water_area.ogg': '活動範囲に座れる水辺が無いの〜ご主人様、スニーク＋中クリックで水辺のブロックを指定して、私の仕事エリアに設定してね',
+    'fish_no_water_area.ogg': '活動範囲に座れる水辺が無いの〜ご主人様、河童のコンパスで水辺のブロックを指定して、私の仕事エリアに設定してね',
     'build_no_blocks.ogg': '積むブロックがもう無いの…材料が見つからなかったら、先に止めるね',
     # -------- 武装拴绳（实测六百六十九：玩家要求把这些新文本也训练语音）--------
     'leash_on.ogg': 'さあ来て！ロープをしっかり掴んで、一緒に飛ぼう～',
@@ -255,6 +260,12 @@ JP = {
     'pat_02.ogg': '頭を撫でられると、また元気が出るの！',
     'pat_03.ogg': 'ご主人様になでなでされるのが、一番好き〜',
     # -------- 补漏（实测四百四十七：WorkStatusReporter 规则气泡 + 金苹果投喂） --------
+    'mine_area_cleared.ogg': 'この辺りにはもう目当ての鉱石がないみたい、しばらくここらで動いてるね～',
+    'wood_area_cleared.ogg': 'この辺りにはもう伐れる木がないみたい、しばらくここらで動いてるね～',
+    # 实测九百八十：卡死自愈（这块够不到 → 换个地方找）
+    'work_stall_giveup.ogg': 'ここは手が届かないの、ちょっと別の場所を探してくるね～',
+    # 实测九百八十二：去目标的路上有岩浆
+    'lava_path_ahead.ogg': '目標までの道にマグマがあるの、ちょっと回り道するね～',
     'mine_no_ore.ogg': '近くに掘る価値のある鉱石が無いの',
     'farm_no_work.ogg': '近くに手入れする畑はもう無いの',
     'work_no_pickaxe.ogg': 'ツルハシが無いから、掘れないの…ツルハシをちょうだい',

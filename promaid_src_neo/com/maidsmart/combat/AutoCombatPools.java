@@ -125,9 +125,9 @@ public final class AutoCombatPools {
                 }
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             }
-            // v1.2.2 实测五百九十【第三方玩法模式黑名单】：傀儡师（傀儡装配 Modular
-            // Golems）不是本模组该碰的战斗模式——自主参战/战中换战术都永不切进去
-            //（玩家手动切过去不受影响；届时本模组战术全体让位，见 MaidModeCompat）
+            // v1.2.2 实测五百九十 / 实测九百九十二【第三方玩法模式名单】：禁止自主切入的
+            // 只有「傀儡师」（傀儡装配 Modular Golems）——它不在战斗候选的语义里；拔刀剑/
+            // 战斗模式照常进池（切进去后本模组战术让位、战斗归那个模组，见 MaidModeCompat）
             if (com.maidsmart.compat.MaidModeCompat.isBlacklisted(task)) {
                 continue;
             }
@@ -309,6 +309,12 @@ public final class AutoCombatPools {
     static void retuneCombatTactics(EntityMaid maid) {
         IMaidTask cur = maid.getTask();
         if (cur == null) {
+            return;
+        }
+        // 实测九百九十二：让位名单里的模式在场（拔刀剑/战斗模式）——本模组不换战术：
+        // 换出等于拆那个模组的玩法（傀儡师到不了这里）；她按自己的打法打完，敌人清掉后
+        // 由还原链送回原任务（自主切换切进来是允许的，切进来之后这一战不再动她）
+        if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
             return;
         }
         // v1.1.0 实测一百零七（反馈："女仆不会自己的近远战切换"）：旧版只允许

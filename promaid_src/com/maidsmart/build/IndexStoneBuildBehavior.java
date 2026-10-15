@@ -159,7 +159,7 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
         }
         this.noMaterial = 0;
 
-        // 与建造一致：先瞬移到工地旁（4 tick 限频），再放置 + 挥臂 + 音效
+        // 与建造一致：先瞬移到工地旁（同建造的瞬移节流），再放置 + 挥臂 + 音效
         MaidBuildBehavior.teleportToWorkSite(level, maid, target);
         if (place(level, maid, target, material)) {
             s.cells.remove(0);

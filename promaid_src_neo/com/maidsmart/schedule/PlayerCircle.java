@@ -6,8 +6,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  * <p>【为什么需要单独记一件事】TLM 的 {@code SchedulePos} 只存"三个锚点 + configured + 维度"，
  * 不记来源。而锚点有三个写入方：
  * <ol>
- *   <li><b>河童的罗盘</b>（{@code ItemKappaCompass}）/ <b>潜行+中键工位标记</b>
- *       （{@link SchedulePacketsMaid}）——玩家亲手画；</li>
+ *   <li><b>河童的罗盘</b>（{@code ItemKappaCompass}）——玩家亲手画；</li>
  *   <li><b>排班表开启</b>（{@link ScheduleManager#applyNow}）——她没配过锚点时，拿
  *       <b>当前站的地方</b>自动锚定；</li>
  *   <li><b>对话工具</b>{@code smart_work_area}（{@link com.maidsmart.tool.WorkAreaTool}）
@@ -15,10 +14,10 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  * </ol>
  * 三者写的是同一份存储（谁后写谁生效）。
  * <p>【口径】玩家画过的圈在本模组侧打上 {@link #PLAYER_TAG}；我们自己的自动锚定打
- * {@link #AUTO_TAG}。**只要 PLAYER 在，{@link #mayAutoAnchor} 就恒为 false**——排班/建造 的一切"自动拿当前位置当锚点"都被拦下，玩家画的圈一直有效，直到玩家自己再画一次（罗盘/中键 会重新打 PLAYER）或在 TLM GUI 里改、或把罗盘切到清除模式清掉（{@link #clearPlayerCircle}）。 <p>【不干预】中键标记与罗盘之间仍然是「谁后写谁生效」（）—— 本类只回答"这圈是不是玩家画的"，不参与两者排序。开关 {@code misc.compassPriority}； 关掉 = 本类判定恒放行（回到旧行为）。
+ * {@link #AUTO_TAG}。**只要 PLAYER 在，{@link #mayAutoAnchor} 就恒为 false**——排班/建造 的一切"自动拿当前位置当锚点"都被拦下，玩家画的圈一直有效，直到玩家自己再画一次（罗盘会重新打 PLAYER）或在 TLM GUI 里改、或把罗盘切到清除模式清掉（{@link #clearPlayerCircle}）。 <p>【不干预】本类只回答"这圈是不是玩家画的"，不参与各写入方的排序。开关 {@code misc.compassPriority}； 关掉 = 本类判定恒放行（回到旧行为）。
  */
 public final class PlayerCircle {
-    /** 玩家亲手画过圈（罗盘 / 中键 / 明确的"这块归你管"） */
+    /** 玩家亲手画过圈（罗盘 / 明确的"这块归你管"） */
     public static final String PLAYER_TAG = "maid_smart_player_circle";
     /** 本模组自动锚定过（排班开启时拿当前位置兜底）——与 PLAYER_TAG 互斥 */
     public static final String AUTO_TAG = "maid_smart_auto_anchor";
@@ -30,7 +29,7 @@ public final class PlayerCircle {
         return ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData();
     }
 
-    /** 玩家画了圈（罗盘中键任一写锚点、或明确"这块归你管"）——落标记，自动锚定从此让位。 */
+    /** 玩家画了圈（罗盘写锚点、或明确"这块归你管"）——落标记，自动锚定从此让位。 */
     public static void markPlayerCircle(EntityMaid maid) {
         try {
             if (maid == null) {

@@ -3,8 +3,8 @@
 > 本文件是**架构总入口**。真正可下钻、可校验的结构数据在 `normify-promaid/`；
 > 用浏览器打开 `normify-promaid/normify.html` 即可逐层点开。
 
-- **修订**：`8fbb6334`（最后一次改动 `promaid_src*` 的提交）
-- **规模**：121 模块 / 61 API / 73 依赖箭头 / 最大深度 3
+- **修订**：`f94c12de`（最后一次改动 `promaid_src*` 的提交）
+- **规模**：120 模块 / 61 API / 76 依赖箭头 / 最大深度 3
 - **校验**：L1（写时）+ L2（全项目）+ L3（构建冻结）全部 **0 error**
 - **一键重建**：`python tools/arch/build_arch.py`（等价于下面三条依次跑）
 - **校验入口**：`python tools/arch/gen_arch.py` → `python tools/arch/render_arch.py` → `python tools/arch/finalize_arch.py`

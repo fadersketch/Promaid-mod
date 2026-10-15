@@ -57,9 +57,9 @@ MODULES = [
 
 # ============================================================== 2. mixin
 ("promaid.mixin", "注入层（Mixin）", "Mixin Layer",
- "85 个 Mixin（mixins.promaid.json 里 68 个 common 加 17 个 client），逐一核对无孤儿。这是本模组唯一能"
+ "96 个 Mixin（mixins.promaid.json 里 76 个 common 加 20 个 client），逐一核对无孤儿。这是本模组唯一能"
  "与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。",
- "85 mixins (68 common plus 17 client in mixins.promaid.json), verified 1:1 with no orphans. This layer is "
+ "96 mixins (76 common plus 20 client in mixins.promaid.json), verified 1:1 with no orphans. This layer is "
  "the mod's only legitimate channel for deep coupling into TLM/vanilla, and the reason it can change "
  "behavior without forking TLM.",
  [("promaid_src_neo/mixins.promaid.json", 1, None)], [], [], []),
@@ -71,6 +71,7 @@ MODULES = [
  "task/schedule guards, player-damage policy, compression-box inventory extension and bed interop.",
  [("promaid_src_neo/com/maidsmart/mixin/MaidStationaryMixin.java", 1, 44),
   ("promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java", 1, 110),
+  ("promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java", 1, 27),
   ("promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java", 1, 161)], ["mixin"], [],
  [("call", "promaid.work.tags", "站桩标记", "Work-still tags"),
   ("call", "promaid.core.safety", "无主降级", "Ownerless downgrade")]),
@@ -202,12 +203,18 @@ MODULES = [
 
 ("promaid.combat.targeting", "飞行索敌与诊断", "Flight Targeting & Diagnostics",
  "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供 "
- "/maid_smart combat check 自助判据检查。",
+ "/maid_smart combat check 自助判据检查；另挂一发**滞留探针**——走位独占咬住（或本该咬住）时"
+ "把「谁在咬 / 谁没在驱动」落成一行日志，用来分清闸门问题与闸门无关的滞留。",
  "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus the "
- "/maid_smart combat check self-test.",
+ "/maid_smart combat check self-test and a stall probe that logs who holds (or fails to drive) the maid "
+ "when she should be moving but is not.",
  [("promaid_src_neo/com/maidsmart/combat/FlightTargeting.java", 1, 462),
+  ("promaid_src_neo/com/maidsmart/combat/CombatStallProbe.java", 1, None),
   ("promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java", 1, 329)], ["combat", "diagnostics"], [],
  [("call", "promaid.system.work-area", "工作范围", "Work range"),
+  ("call", "promaid.work.tags", "独占标记", "Chain-drive tag"),
+  ("call", "promaid.combat.tactics", "驱动判定", "Pilot check"),
+  ("call", "promaid.combat.self-preservation", "自保判定", "Preserve check"),
   ("call", "promaid.core.command", "combat check", "combat check")]),
 
 ("promaid.combat.flight-raid", "空袭（近战/远程）", "Air Raid (Melee / Ranged)",
@@ -402,12 +409,17 @@ MODULES = [
 
 ("promaid.work.base", "采集行为共享基类", "Gathering Behavior Base",
  "挖矿与伐木两个 AI 行为逐字相同的部分上提而成的抽象基类：废石白名单、开路可破白名单、per-女仆 状态表与"
- "纯工具函数。上提后两个子类各留自己的差异（矿表 vs 原木表、连锁规则），不再各抄一份。",
+ "纯工具函数。上提后两个子类各留自己的差异（矿表 vs 原木表、连锁规则），不再各抄一份。另含 "
+ "MaidWorkRangeExpand：干活期间把「工作范围」圈的半径读数临时顶到罩得住「她到主人 / 到圈心」的距离，"
+ "让跟随与排班/在家两条\"太远就回去\"的判据都不把她从活上拽走。",
  "The abstract base that mining and woodcutting now both extend, holding what the two AI behaviors had verbatim "
  "in common: the junk-stone whitelist, the open-breakable whitelist, the per-maid state map and the pure "
  "helpers. After the hoist each subclass keeps only its own differences (ore table vs log table, chain rules) "
- "instead of carrying a second copy.",
- [("promaid_src_neo/com/maidsmart/task/MaidWorkBehavior.java", 1, 685)], ["work", "shared"], [], []),
+ "instead of carrying a second copy. Also holds MaidWorkRangeExpand, which temporarily inflates the restrict-"
+ "radius readout while mining/woodcutting so it covers the distance to the owner and to the work center, "
+ "keeping both the follow task and the schedule pull-back from dragging her off the job.",
+ [("promaid_src_neo/com/maidsmart/task/MaidWorkBehavior.java", 1, 694),
+  ("promaid_src_neo/com/maidsmart/task/MaidWorkRangeExpand.java", 1, 94)], ["work", "shared"], [], []),
 
 ("promaid.work.mine", "挖矿", "Mining",
  "按距离平方加深度惩罚减价值 扫最高价值矿，寻路过去逐块挖（原版破坏公式加工具等级门槛加女仆 1.2 倍加成），"
@@ -416,7 +428,7 @@ MODULES = [
  "block by block (vanilla break formula, tool-tier gated, 1.2x maid bonus), chain-mining the vein; temporary "
  "scaffold is reclaimed later. The static tables, state map and pure helpers shared with woodcutting were "
  "hoisted into MaidWorkBehavior.",
- [("promaid_src_neo/com/maidsmart/task/MaidMineBehavior.java", 1, 2329),
+ [("promaid_src_neo/com/maidsmart/task/MaidMineBehavior.java", 1, 2334),
   ("promaid_src_neo/com/maidsmart/task/MaidMineTask.java", 1, 73)], ["work"], [],
  [("call", "promaid.work.base", "共享基类", "Shared base"),
   ("call", "promaid.work.placed-block", "方块回收", "Block reclaim"),
@@ -428,7 +440,7 @@ MODULES = [
  "Isomorphic to mining with the table swapped to logs/bamboo (auto logs tag); leaves do not block line of "
  "sight and the whole tree is felled in a chain. The static tables, state map and pure helpers shared with "
  "mining were hoisted into MaidWorkBehavior, so it is no longer a full clone of mining.",
- [("promaid_src_neo/com/maidsmart/task/MaidWoodBehavior.java", 1, 2300),
+ [("promaid_src_neo/com/maidsmart/task/MaidWoodBehavior.java", 1, 2305),
   ("promaid_src_neo/com/maidsmart/task/MaidWoodTask.java", 1, 66)], ["work"], [],
  [("call", "promaid.work.base", "共享基类", "Shared base"),
   ("call", "promaid.work.mine", "同构来源", "Isomorphic origin"),
@@ -512,7 +524,8 @@ MODULES = [
  "cursor, deferred-retry map and placed sets; persisted per dimension via BuildArchive. BuildPlan exposes about "
  "40 public statics — a textbook god object.",
  [("promaid_src_neo/com/maidsmart/build/BuildPlan.java", 1, 1045),
-  ("promaid_src_neo/com/maidsmart/build/BuildArchive.java", 1, 176)], ["build"], [], []),
+  ("promaid_src_neo/com/maidsmart/build/BuildArchive.java", 1, 176),
+   ("promaid_src_neo/com/maidsmart/mixin/FluidFreezeMixin.java", 1, 44)], ["build"], [], []),
 
 ("promaid.work.build-exec", "建造执行", "Build Execution",
  "运行时核心：解析、重叠拒绝、障碍告警、已建扫描、材料预检、建或续计划（原点取玩家脚下、不需要女仆），"
@@ -840,6 +853,7 @@ MODULES = [
  "bubbles, autonomous task switching, a cross-turn work list, work reporting and world-probe tools.",
  [("promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java", 1, 605),
   ("promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java", 1, 53),
+  ("promaid_src_neo/com/maidsmart/dialogue/OutputLanguage.java", 1, 143),
   ("promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java", 1, 119)], ["dialogue", "ai"], [],
  [("call", "promaid.social.memory", "记忆", "Memory"),
   ("call", "promaid.social.affect", "情绪", "Affect")]),
@@ -1004,10 +1018,10 @@ MODULES = [
 
 # ============================================================== 8. core
 ("promaid.core", "核心与配置", "Core & Config",
- "配置定义与面板、管理指令、LLM 指挥工具、建构安全过滤器，以及若干薄壳（文件浏览器、工位标记、"
+ "配置定义与面板、管理指令、LLM 指挥工具、建构安全过滤器，以及若干薄壳（文件浏览器、"
  "第三方模式兼容、提示词追加）。",
  "Config definition and panel, admin commands, LLM command tools, build-safety filters, plus a few thin shells "
- "(file picker, work-position marker, third-party mode compat, prompt appending).",
+ "(file picker, third-party mode compat, prompt appending).",
  [("promaid_src_neo/com/maidsmart/config", 1, None)], [], [], []),
 
 ("promaid.core.config", "全模组配置定义", "Mod Config Definition",
@@ -1065,11 +1079,6 @@ MODULES = [
  "Blacklists Modular Golems' puppet-master task and suspends tactics in puppet mode. The blacklist currently "
  "holds a single hardcoded id; the rest is speculative generality.",
  [("promaid_src_neo/com/maidsmart/compat/MaidModeCompat.java", 1, 112)], ["core", "compat"], [], []),
-
-("promaid.core.marker", "工位标记", "Work-Position Marker",
- "潜行加中键标记女仆的工作锚点；会礼让 TLM 的罗盘。",
- "Sneak plus middle-click marks a maid's work anchor; yields to TLM's compass.",
- [("promaid_src_neo/com/maidsmart/marker/WorkPosMarkerClient.java", 1, 102)], ["core", "client"], [], []),
 
 ("promaid.core.prompt", "提示词追加", "Prompt Appender",
  "向系统提示词追加「工作姿态」一节，由注入类挂上。",

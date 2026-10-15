@@ -138,7 +138,8 @@ public final class FarmSweepCache {
     public static boolean isTillable(net.minecraft.server.level.ServerLevel world,
                                      com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid,
                                      net.minecraft.core.BlockPos pos) {
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_TAKE_OVER_FARM.get()
+                || !com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
             return false;
         }
         if (!world.m_46749_(pos)) {

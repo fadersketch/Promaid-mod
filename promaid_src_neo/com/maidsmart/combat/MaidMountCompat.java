@@ -813,84 +813,19 @@ public final class MaidMountCompat {
         }
     }
 
-    /* ==================== v1.3.0(beta) 实测七百四十七：不可驾名单 ==================== */
+    /* ==================== 实测九百一十九：不可驾名单已整体撤除 ==================== */
 
     /**
-     * v1.3.0(beta) 实测七百四十七【骑乘指挥棒·不可驾名单】。
-     * <h2>
-     * 「骑乘棒没有办法绑定 Ju-87 斯图卡轰炸机、A-10 雷电二攻击机、AC-130H 空中炮艇、
-     *  汤姆 F6F、KV-16 幽灵战斗机、迷你快艇。在手册里面就写这些载具要么对于操作的要求太高，
-     *  要么在代码上直接认准的人。让女仆来指会搞得一团糟，所以没有办法骑。」
-     * <h2>为什么这六台单独点名，而不是"凡是飞机都不许"</h2> 它们分两类，两类都**不是"女仆开得不好"，而是"这车根本不接受非玩家驾驶"**： <ol> <li><b>操作要求高</b>（Ju-87 / A-10 / AC-130H / KV-16）：全是固定翼。固定翼没有 竖直输入轴，高度只由"速度 + 俯仰"积分出来（`aircraftEngine` 反编译实证）， 起飞要助跑、盘旋要维持速度——把它交给"去某个点"这一层意图，结果必然是 要么一头栽地、要么一路飞走。玩家自己飞都得练，女仆没有"练"这件事。</li> <li><b>代码上直接认准的人</b>（汤姆 F6F / 迷你快艇）：引擎里油门与姿态整段写在 {@code passenger instanceof Player} 那一支里（`tomEngine` 反编译实证）， 女仆是 Mob、压根进不去那条分支 —— 我们前面为了 TOM6 硬写过一套"直写推力+俯仰" 的补丁，但它的**武器**（西瓜炸弹）与**座位**也都只按玩家语义设计； 迷你快艇则连座位都只有一个、且 {@code Type=Boat} 走的是水面物理。 与其继续打补丁，不如照玩家的话——**认人**，不给她开。</li> </ol> 名单判据 = **实体类型注册名**（{@code modid:entity}），与家具黑名单同一套写法： 不写死类引用，1.20.1 / 1.21.1 两树共用（两树的 SWB 实体 id 逐字相同，jar 实证）。 其余载具（坦克 / 装甲车 / 直升机 / 飞艇等）**一律不受影响**，照旧能骑能打。 <p>【实测七百七十五·点3】原名单六台，其中**四架固定翼已解禁**（Ju-87 / A-10 / AC-130H / KV-16）： {@code driveFlight} 里那条**固定翼定制起飞链路**——先验平地（落差不能太大，不行就报 "环境不允许起飞"）、向平地加速、够速抬机头、之后交给引擎 loiter（以主人/敌人为圆心 盘旋）并照常开火。剩下两台（汤姆 F6F / 迷你快艇）**代码上只认玩家**（引擎里油门与姿态 整段写在 {@code passenger instanceof Player} 分支里，反编译实证），女仆连输入通道都进不去， 继续拦。
+     * 实测九百一十九【不可驾名单·撤除】。名单本来只留两台（汤姆 F6F / 迷你快艇），理由是"引擎里油门与姿态整段写在乘客是玩家那一支里，女仆是 Mob 进不去"。【反编译复核】这个理由只对**输入通道**成立，对**能不能开**不成立：① 迷你快艇走 {@code shipEngine}，那个方法的第一道（也是唯一一道）闸是 {@code passenger0 == null}，之后读位掩码写 power / 转向，**没有任何 Player 判断**——同引擎的 {@code speedboat} 一直能开，两者一字不差；② 汤姆 F6F 走 {@code tomEngine}，输入那一段确实只在 Player 分支里，但方法**尾部**那段推力 / 升力是无条件的（{@code viewVector × 0.061 × speedRate × power} 加 {@code upVec × (dm·view) × 0.022 × lift}），直写 power 与姿态照样飞得起来——这正是本档汤姆6 分支在做的事。所以名单整体撤除，两台都交回正常驾驶链路：汤姆6 按固定翼口径接管（见 {@link #isFixedWingEngine}），迷你快艇与 {@code speedboat} 同路（水面物理照旧）。残留边界：汤姆6 的西瓜炸弹是 {@code AutoReload:false} 的弹药语义，女仆开得动，能不能自动装弹另说。
      */
-    private static final java.util.List<String> UNRIDABLE = java.util.List.of(
-            MOD_SWB + ":tom_6",            // 汤姆 F6F（油门/姿态只写给玩家）
-            MOD_SWB + ":tiny_speedboat");  // 迷你快艇（单座、只按玩家语义）
-
-    /**
-     * 不可驾名单里那几台的**中文名**（给玩家看的气泡用）。
-     * <p>为什么不从游戏里取本地化名：SWB 这几台的名字散在 {@code entity.superbwarfare.*} 与
-     * {@code superbwarfare.entry.vehicle.*} 两套键里，还要先判当前语言——而这份名单是固定几台，
-     * 名字就是玩家自己说出来的那几个，直接写死最稳，也不受 SWB 换翻译影响。
-     * <p>【实测七百七十五·点3】四架固定翼（Ju-87 / A-10 / AC-130H / KV-16）已从名单移除——
-     * （平地判据 → 向平地加速 → 抬机头 → 引擎 loiter 以主人/敌人为圆心盘旋 + 武器照打）； 真正的"只认玩家"两台（汤姆 F6F / 迷你快艇，引擎里油门姿态整段写在 {@code passenger instanceof Player} 分支里）继续拦。
-     */
-    private static final java.util.Map<String, String> UNRIDABLE_NAME = java.util.Map.of(
-            MOD_SWB + ":tom_6", "汤姆 F6F",
-            MOD_SWB + ":tiny_speedboat", "迷你快艇");
-
-    /**
-     * 这只实体是不是在**不可驾名单**里（{@link #UNRIDABLE}）。
-     *
-     * <p>拿不到注册名（别的模组换了 id / 探测失败）→ {@code false}，即**照旧可驾**：
-     * 这份名单是"已知要排除的少数"，不是白名单，探测失败不该把玩家正常的车也一起禁掉。
-     */
-    public static boolean isUnridable(Entity e) {
-        try {
-            if (e == null) {
-                return false;
-            }
-            net.minecraft.resources.ResourceLocation key =
-                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType());
-            if (key == null) {
-                return false;
-            }
-            return UNRIDABLE.contains(key.toString());
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
-            return false;
-        }
-    }
-
-    /** 不可驾名单里那台的中文名（拿不到 → 注册名）。 */
-    private static String unridableName(Entity e) {
-        try {
-            net.minecraft.resources.ResourceLocation key =
-                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType());
-            if (key != null) {
-                String n = UNRIDABLE_NAME.get(key.toString());
-                if (n != null) {
-                    return n;
-                }
-                return key.toString();
-            }
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
-        }
-        return "载具";
-    }
 
     /**
      * 这只模组坐骑此刻能不能被女仆绑：载具要看是不是报废的（{@code isWreck}），
      * 龙要看阶段（{@code getDragonStage() &gt;= 2}——原版里 1 阶段的小龙是"被玩家抱着"，
      * 不能骑）。能驾 → {@code null}；否则给一句给玩家看的理由。
-     * <p>【实测七百四十七】最前面加一道**不可驾名单**闸（见 {@link #isUnridable}）——
-     * 它必须在"报废/没座位"这些技术判据之前：玩家要看到的理由是"这架认人，不给她开"，
-     * 而不是"这辆载具没有能坐的位子"。
      */
     public static String denyReason(Entity e) {
         try {
-            if (isUnridable(e)) {
-                return "这架" + unridableName(e) + "操作门槛太高（或只认玩家来开），我驾驭不了～";
-            }
             if (isVehicle(e)) {
                 if (mIsWreck != null && Boolean.TRUE.equals(mIsWreck.invoke(e))) {
                     return "这辆载具已经报废了……";
@@ -1643,6 +1578,17 @@ public final class MaidMountCompat {
     }
 
     /**
+     * 【实测九百一十九】"按固定翼那套接管"的引擎：{@code AIRCRAFT} + {@code TOM6}。
+     * <p>汤姆6 的气动与固定翼同源——推力在 {@code viewVector}、升力在 {@code upVec}、没有竖直
+     * 输入轴、转弯靠姿态，所以那条"跑道 + 下滑道 + 复飞"的降落链路与固定翼的巡航口径都适用。
+     * 差别只在**控制通道**：它的输入位与鼠标通道对 Mob 乘客整段不生效，只能直写 power 与姿态，
+     * 所以降落链路里用 {@link #isTomEngine} 分出那几个直写点。
+     */
+    private static boolean isFixedWingEngine(String eng) {
+        return isAircraftEngine(eng) || isTomEngine(eng);
+    }
+
+    /**
      * 【实测七百七十九·点2】这只是不是固定翼（对外公开的口径，给 {@code RideBindManager} 用）。
      *
      * <p>固定翼有两处与直升机/飞艇**必须分开**：① 接敌时的胡萝卜是"敌正上方"而不是"绕圈的圈上点"；
@@ -1650,7 +1596,7 @@ public final class MaidMountCompat {
      * "固定翼巡航"那段注释），所以"主人离太远就收手"那道闸对它要放宽。
      */
     public static boolean isAircraft(Entity e) {
-        return isAircraftEngine(engineType(e));
+        return isFixedWingEngine(engineType(e));
     }
 
     /**
@@ -1709,6 +1655,12 @@ public final class MaidMountCompat {
     private static boolean outOfFuel(Entity mount) {
         if (mGetEnergy == null || mGetMaxEnergy == null || mount == null) {
             return false; // 反射拿不到 → 不启用这道闸（绝不能因为探测失败就锁死驾驶）
+        }
+        // 实测九百三十八【船与汤姆6 不吃电】：开发者口径——迷你快艇（SHIP）与汤姆6 不需要电就能开
+        //   （船引擎 {@code shipEngine} 压根没有能量闸；汤姆6 的推力段无条件）。这两台一律不拦。
+        String engFuel = engineType(mount);
+        if ("SHIP".equals(engFuel) || isTomEngine(engFuel)) {
+            return false;
         }
         try {
             int energy = ((Number) mGetEnergy.invoke(mount)).intValue();
@@ -1784,7 +1736,7 @@ public final class MaidMountCompat {
         // 模式的安全降落**（选平地 → 怠速 → 受控下沉 → 轻接地 → 停住）；直升机 / 飞艇 / 汤姆6
         // 仍是原来的"清输入位 + 收油门 + 留痕"（一个字节不变）。
         if (outOfFuel(mount)) {
-            if (isAircraftEngine(eng) && aircraftHomeLanding(mount, maid, "电量见底")) {
+            if (isFixedWingEngine(eng) && aircraftHomeLanding(mount, maid, "电量见底")) {
                 return true;   // 降落链路自己会（按 5 秒节流）写「固定翼降落·下降 / 接地段 / 完成」
             }
             brakeVehicleSafely(mount);
@@ -2028,14 +1980,14 @@ public final class MaidMountCompat {
                 return true;
             }
 
-            // ---------- 汤姆6（TOM6）：直写 power/姿态（位掩码与鼠标通道对它全不生效） ----------
-            // 根因（反编译 `tomEngine:953` 实证）：它的油门/俯仰/偏航/滚转**整段**写在
-            // `else if (passenger instanceof Player)` 分支里——女仆是 Mob，压根进不去那条分支，
-            // 于是 power 恒为 0（另一条 `passenger == null` 分支还会 setPower(0)、清所有输入位），
-            // **一动不动**。它的水平推力在 `viewVector` 上（`tomEngine:1004`：
-            // `deltaMovement += viewVector * 0.061 * speedRate * power`），升力在 `upVec` 上。
-            // 所以这一档**直写**：power（推力）+ XRot（俯仰→升力分量）+ YRot（机头），
-            // 与直升机 power PD 同源；位置/高度由目标点 Y 表达。
+            // ---------- 汤姆6（TOM6）：直写 power / 姿态（位掩码与鼠标通道对它全不生效） ----------
+            // 根因（反编译 tomEngine）：油门 / 俯仰 / 偏航**整段**写在"乘客是玩家"那一支里，女仆是 Mob 进不去；但同一方法**尾部**那段推力 / 升力是无条件的——
+            // {@code deltamovement += viewvector × 0.061 × speedrate × power}，升力在 upVec 上。
+            // 所以直写 power 与 XRot/YRot 就能开。【实测九百一十九】驾驶口径改成与固定翼同源：
+            //   · 航向 forceHeadingOnto（直写 yaw + serverYaw，同直升机）；
+            //   · 高度 aircraftHoldAltitude（写 XRot——它的推力在 viewVector 上，抬头就是爬升）；
+            //   · 目标高度先过地形净空线 aircraftSafeTargetY（山抬头时不至于一头撞进去）；
+            //   · 推力给**下限**而不是按距离比例：旧版一进停车带就把 power 归零，飞机没有升力会掉。
             if (isTomEngine(eng)) {
                 mSetMouseX(mount, 0.0f);
                 mSetMouseY(mount, 0.0f);
@@ -2043,51 +1995,54 @@ public final class MaidMountCompat {
                     mProcessInput.invoke(mount, (short) 0); // 清输入位（引擎那两条 setPower(0) 分支别打架）
                 } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
-                // 机头对准目标（直写 yaw，与直升机 forceHeadingOnto 同源）
-                forceHeadingOnto(mount, err);
-                // 俯仰：按高度差给目标角（负 = 抬头爬升 / 正 = 低头前飞），再直写 XRot。
-                // 【为什么不是 "dy * k" 的纯 P】她多半是**从地面起飞**：起飞时 dy 只有几格，纯 P
-                // 给的抬头角很小 → 升力不足 → 永远起不来。所以**起飞段**（贴地）给固定抬头角，
-                // 离地后才交回 P。反编译 tomEngine 实证升力项是
-                // {@code upVec × (dm·viewVector) × 0.022 × lift}，机头不抬就没有升力分量；
-                // 而 MC 约定 xRot 为负 = 机头朝上（viewVector 抬头）。
-                // 【判据必须是 onGround，不能用 dy】用 dy（"高差小就抬头"）会在巡航段形成
-                // **每拍 +15° 的棘轮**（高度差一小就抬头 → 升高 → 差又变小 → 再抬头）， 与七百三十四 修掉的那个悬停棘轮是同一类错误。贴地才是"还没起来"的充要条件。
+                forceHeadingOnto(mount, err);            // 机头对准目标（与直升机同源）
                 boolean grounded;
                 try {
                     grounded = mount.onGround();
                 } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     grounded = false;
                 }
-                float tomPitch;
-                if (grounded) {
-                    tomPitch = -TOM_TAKEOFF_PITCH; // 还没离地 → 强制抬头，保证能起来
-                } else {
-                    tomPitch = (float) clamp(-dy * TOM_PITCH_PER_BLOCK, -TOM_PITCH_MAX, TOM_PITCH_MAX);
-                }
-                try {
-                    mount.setXRot(tomPitch);
-                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
-                }
-                // 推力：够远就给油，进停车带归零（TOM6 的 power 松手按 0.995 衰减 → 会滑一会儿，
-                // 但它比直升机轻得多（Mass 0.02），滑不远）。
-                float tomPower = 0.0f;
-                if (horiz > FLIGHT_ARRIVE) {
-                    tomPower = (float) clamp(horiz * TOM_POWER_PER_BLOCK, 0.0, TOM_POWER_MAX);
-                    if (modifier > 1.05) {
-                        tomPower = TOM_POWER_MAX;
+                boolean wantAir = horiz > FLIGHT_ARRIVE || Math.abs(dy) > FLIGHT_ALT_DEADZONE;
+                if (grounded && !wantAir) {
+                    if (mSetPower != null) {
+                        try {
+                            mSetPower.invoke(mount, 0.0f);
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                        }
                     }
+                    logDrive(mount, "汤姆6待命（贴地、目标就在脚下，不强行起飞）");
+                    return true;
                 }
-                if (mSetPower != null) {
+                if (grounded) {
+                    // 起飞：抬头 35° + 推力顶满 + 直接补一点竖直速度，三条缺一不可——升力 ∝ 当前
+                    // 速度（反编译 tomEngine 的升力项），停在原地抬机头也不产生升力；而地面推力在
+                    // viewVector 上，机头不抬就全平推、起不来。补竖直速度与固定翼起飞是同一个物理
+                    // 后门（见 AIRCRAFT_TAKEOFF_LIFT 的说明）。
                     try {
-                        mSetPower.invoke(mount, tomPower);
+                        mount.setXRot(-TOM_TAKEOFF_PITCH);
                     } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
+                    try {
+                        net.minecraft.world.phys.Vec3 tdm = mount.getDeltaMovement();
+                        mount.setDeltaMovement(new net.minecraft.world.phys.Vec3(tdm.x,
+                                Math.max(tdm.y, 0.0) + AIRCRAFT_TAKEOFF_LIFT, tdm.z));
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                    }
+                    aircraftPowerAtLeast(mount, TOM_POWER_MAX);
+                    logDrive(mount, "汤姆6起飞 引擎=" + eng + " 抬头=" + TOM_TAKEOFF_PITCH + "°"
+                            + " 推力=" + powerText(mount)
+                            + " 竖直速度=" + fmt2(verticalSpeed(mount))
+                            + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                    return true;
                 }
-                // 【实测七百四十五·点2】汤姆6 也给同款急停（它与飞艇/固定翼一样原先没有）。
+                double carrotY = mount.getY() + dy;
+                double safeY = aircraftSafeTargetY(mount, carrotY, err);
+                aircraftHoldAltitude(mount, safeY - mount.getY(),
+                        safeY > carrotY + 0.5 ? AIRCRAFT_VY_AVOID_MAX : AIRCRAFT_VY_CRUISE_MAX);
+                aircraftPowerAtLeast(mount, TOM_POWER_MAX);
                 int tBrake = flightBrake(mount, shouldHardBrake(horiz, horizontalSpeed(mount), fighting), fighting);
-                logDrive(mount, "汤姆6档 引擎=" + eng + " 推力=" + fmt2(tomPower)
-                        + " 俯仰=" + Math.round(tomPitch)
+                logDrive(mount, "汤姆6档 引擎=" + eng + " 推力=" + powerText(mount)
+                        + " 俯仰=" + Math.round(mount.getXRot())
                         + ((tBrake & BRAKE_FLAG_HARD) != 0 ? " 硬刹(水平清零)" : "")
                         + ((tBrake & BRAKE_FLAG_PULSE) != 0 ? " 周期急停(0.5s)" : "")
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
@@ -2275,7 +2230,7 @@ public final class MaidMountCompat {
                 // 【实测七百八十一】目标高度再抬一档固定翼专属的 {@link #AIRCRAFT_ALT_BONUS}（15 格）：
                 // 。胡萝卜（主人+3 / 敌+15）与地形净空线
                 // **两个约束一起抬**——只抬胡萝卜的话，超平坦地面上实际管着她的仍是净空线（见常量注释）。
-                double carrotY = target.y + AIRCRAFT_ALT_BONUS;
+                double carrotY = target.y + aircraftAltBonus();
                 double safeY = aircraftSafeTargetY(mount, carrotY, err);
                 double dySafe = safeY - mount.getY();
                 boolean terrain = safeY > carrotY + 0.5;
@@ -2283,8 +2238,8 @@ public final class MaidMountCompat {
                 logDrive(mount, "固定翼巡航档 引擎=" + eng
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
-                        + " 固定翼加高" + (long) AIRCRAFT_ALT_BONUS + "格"
-                        + (terrain ? " 地形净空(抬到地面上" + (long) (AIRCRAFT_TERRAIN_CLEAR + AIRCRAFT_ALT_BONUS) + "格)"
+                        + " 固定翼加高" + (long) aircraftAltBonus() + "格"
+                        + (terrain ? " 地形净空(抬到地面上" + (long) (AIRCRAFT_TERRAIN_CLEAR + aircraftAltBonus()) + "格)"
                                 : "")
                         + " 鼠标X=" + Math.round(clamp(err, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD))
                         + " 滚转=" + rollText(mount)
@@ -2305,16 +2260,10 @@ public final class MaidMountCompat {
 
     /** 飞艇高度 PD：每 1 格预测落点给多少 liftSpeed（引擎 clamp 域 ±0.25）。 */
     private static final double AIRSHIP_LIFT_PER_BLOCK = 0.04;
-    /** 汤姆6 推力：每 1 格距离给多少 power（引擎里 power 上限 1，sprint 时 2.2）。 */
-    private static final float TOM_POWER_PER_BLOCK = 0.10f;
-    /** 汤姆6 推力上限（引擎里非冲刺档 maxPower=1）。 */
+    /** 汤姆6 推力下限（= 引擎非冲刺档 maxPower；更高的推力要冲刺位，而冲刺位只在"乘客是玩家"那一支里被读）。 */
     private static final float TOM_POWER_MAX = 1.0f;
-    /** 汤姆6 俯仰：每 1 格高差给多少度（engine clamp 是 ±120 空中）。 */
-    private static final float TOM_PITCH_PER_BLOCK = 3.0f;
-    /** 汤姆6 俯仰上限（度）：别一上来就垂直扎。 */
-    private static final float TOM_PITCH_MAX = 30.0f;
-    /** 汤姆6 起飞抬头角（度，负 = 抬头）。贴地时强制给这个角，保证能起来。 */
-    private static final float TOM_TAKEOFF_PITCH = 15.0f;
+    /** 汤姆6 起飞抬头角（度，负 = 抬头）：与固定翼起飞同值。贴地时强制给这个角并补一点竖直速度。 */
+    private static final float TOM_TAKEOFF_PITCH = 35.0f;
 
     /* ---------- 【实测七百七十九·点2】固定翼巡航：我们自己的航向 / 速度 / 高度环 ----------
      *
@@ -2350,24 +2299,44 @@ public final class MaidMountCompat {
      *  （急刹那一拍升力跟着掉，高度环还得额外补）。 */
     private static final double AIRCRAFT_SPEED_DECEL = 0.04;
 
+    /** 【实测九百四十】巡航**硬**速度环的每拍上限（格/拍）：巡航段也用
+     *  {@link #aircraftGovernSpeedHard} 真钳速度（软环压不住冲刺推力，见 {@link #aircraftCruise}）。
+     *  0.15 ⇒ 2.6 → 0.8 约 12 拍（0.6 秒）收敛，比软环的 45 拍快得多、又不至于急刹。 */
+    private static final double AIRCRAFT_CRUISE_SPEED_STEP = 0.15;
+
     /** 固定翼最小离地净空（格）——机身底面到地面至少留这么多。 */
     private static final double AIRCRAFT_TERRAIN_CLEAR = 14.0;
 
     /**
-     * <p>玩家七百八十一：「把盘旋高度和接敌再往上提 15 格左右」→ 本项 = 15；
-     * 玩家七百八十二（实机复查后）：「高度还是低，可能至少得在此基础上再高 15 格」→ 本项 = 30。
-     * <p>只作用在固定翼（{@code AIRCRAFT}）这一档，且**同时**抬两个约束（见巡航调用点）：
-     * <ul>
-     *   <li><b>胡萝卜高度</b>：跟随 = 主人 Y + {@code followAlt}(3) + 本项；接敌 = 敌人 Y +
-     *       {@code fightAlt}(15) + 本项。本项 30 ⇒ 跟随 = 主人 + 33、接敌 = 敌人 + 45。</li> <li><b>地形净空线</b>：{@link #columnFloor} 用 {@code AIRCRAFT_TERRAIN_CLEAR + 本项}。 超平坦上主人的胡萝卜比净空线低，真正管她的是这一条 ⇒ 她巡航在 "地面上 {@code 14+30=44} 格"。</li> </ul> <p>780 的教训：只把胡萝卜抬够没用，地面那条线仍会把她按在低空（实机日志 {@code 高差=-10→0}＝她正卡在净空线上、竖直通道无事可做），所以两个约束必须一起抬。
+     * <p>玩家七百八十一：「把盘旋高度和接敌再往上提 15 格左右」→ 本项 = 15；玩家七百八十二（实机复查后）：「高度还是低，可能至少得在此基础上再高 15 格」→ 本项 = 30。
+     * <p>只作用在固定翼（{@code AIRCRAFT}）这一档，且**同时**抬两个约束（见巡航调用点）：① <b>胡萝卜高度</b>：跟随 = 主人 Y + {@code followAlt}(3) + 本项、接敌 = 敌人 Y + {@code fightAlt}(15) + 本项（30 ⇒ 主人 + 33 / 敌人 + 45）；② <b>地形净空线</b>：{@link #columnFloor} 用 {@code AIRCRAFT_TERRAIN_CLEAR + 本项}——超平坦上主人的胡萝卜比净空线低，真正管她的是这一条 ⇒ 她巡航在「地面上 {@code 14+30=44} 格」。
+     * <p>780 的教训：只把胡萝卜抬够没用，地面那条线仍会把她按在低空（实机日志 {@code 高差=-10→0}＝她正卡在净空线上），两个约束必须一起抬。
+      * <p>实测九百八十五：本常量只留作**配置读不到时的兜底值**——实际取值改读 {@code combat.ride.fixedWingAltBonus}（同默认 60，面板可调）。
      */
-    private static final double AIRCRAFT_ALT_BONUS = 30.0;
+    private static final double AIRCRAFT_ALT_BONUS = 60.0;
 
-    /** 前瞻多少拍的路（按当前水平速度换算成格）：0.80 格/拍 × 100 拍 = 80 格。 */
-    private static final int AIRCRAFT_LOOKAHEAD_TICKS = 100;
+    /**
+     * 实测九百八十五：固定翼（滑翔式）的额外加高（格）——读配置
+     * {@code combat.ride.fixedWingAltBonus}（面板「物品 → 骑乘指挥棒」）。
+     * 数值口径与 781/782 那个常量一字不差，读不到 → 退回 {@link #AIRCRAFT_ALT_BONUS}。
+     */
+    private static double aircraftAltBonus() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_FIXEDWING_ALT_BONUS.get();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            return AIRCRAFT_ALT_BONUS;
+        }
+    }
+
+
+    /** 前瞻多少拍的路（按当前水平速度换算成格）：0.80 格/拍 × 160 拍 = 128 格。
+     *  【实测九百四十】100 → 160：地形净空线必须留够"爬得上去"的距离——抬 Δh 格需要
+     *  {@code v·Δh/vy_avoid ≈ 2.7·Δh} 格（v=0.80、vy=0.30），44 格的净空线就是 ~118 格；
+     *  80 格只够爬 30 格，山一抬头照样撞（实机日志 高差=-21→37 之后 `air_crash`）。 */
+    private static final int AIRCRAFT_LOOKAHEAD_TICKS = 160;
     /** 前瞻距离的上下限（格）——太快/太慢时都不至于扫得太离谱。 */
     private static final double AIRCRAFT_LOOKAHEAD_MIN = 24.0;
-    private static final double AIRCRAFT_LOOKAHEAD_MAX = 84.0;
+    private static final double AIRCRAFT_LOOKAHEAD_MAX = 140.0;
     /** 前瞻扫描时"往上多扫"的格数：用来发现**比机身还高**的山坡（见 {@link #columnFloor}）。 */
     private static final int AIRCRAFT_SCAN_UP = 20;
 
@@ -2439,7 +2408,10 @@ public final class MaidMountCompat {
         //    每拍的阻尼乘掉，只能抵消下沉、永远爬不上去，实机日志 高差+41 而 竖直速度恒 0.00）。
         aircraftHoldAltitude(mount, dy, terrain ? AIRCRAFT_VY_AVOID_MAX : AIRCRAFT_VY_CRUISE_MAX);
         // ④ 水平速度：巡航速度环（转弯半径 r ≈ v/0.0298 里的那个 v）
-        aircraftGovernSpeed(mount, AIRCRAFT_CRUISE_SPEED);
+        // 【实测九百四十】改用**硬**环：软的每拍只削 AIRCRAFT_SPEED_DECEL(0.04)、压不住引擎的
+        // 冲刺推力——实机日志巡航段 水平速度=2.79 / 推力=3.00（设计值 0.80 等于没有），于是
+        // 转弯半径 ≈94 格、撞地 `air_crash` 直接秒杀。硬环每拍真钳 max(0.80, 当前 − 0.15)。
+        aircraftGovernSpeedHard(mount, AIRCRAFT_CRUISE_SPEED, AIRCRAFT_CRUISE_SPEED_STEP);
     }
 
     /**
@@ -2521,9 +2493,9 @@ public final class MaidMountCompat {
     /* ======================================================================================
      * 做法（只作用于固定翼 AIRCRAFT 这一档）：
      *   ① **在地面** → {@link #stop}（清输入、抹水平速度）＝ 与别的坐骑一样"停住不动"；
-     *   ② **在空中** → 选一块"够平"的地面当落点，照一条下滑道（{@code 距离 × 0.30}，最低 2 格）
-     *      朝它进近；距落点 16 格内且离地 8 格内转"接地段"：压平、收油门、把下沉率压到
-     *      ≤ {@link #AIRCRAFT_LAND_VY_MAX}，轻轻接地。接地后转 ①。
+     *   ② **在空中** → 规划一条"能落下去的跑道"（条带选址 → 对准进近 → 下滑道 → 接地，见下面「九百一十八」那一区）；
+     *      距接地点 {@link #AIRCRAFT_LAND_TOUCH_D} 格内、离地 ≤ {@link #AIRCRAFT_LAND_FLARE_ALT} 格才转"接地段"：压平、收油门、
+     *      下沉率压到 ≤ {@link #AIRCRAFT_LAND_VY_MAX} 轻轻接地；八向条带全不合格就原地盘旋等下一轮规划（见 {@link #holdAircraftPattern}）。
      * 为什么不能"关油门让它自己掉"：载具一旦带 crash 标记又被摧毁，SWB 会把乘客**一次
      * 114514 伤害**打死（反编译 {@code VehicleDestroyUtils.crashPassengers}）；而擦地会置 crash （{@code VehicleMotionUtils.bounceVertical:596}）。所以唯一安全的路是"低速、小下沉率接地"， 让撞击伤害 {@code 18×(v−0.2)²}（{@code VehicleEntity:6005}）小到不致命；接地后再把 crash 标记清掉（{@link #mSetCrash}），免得留一颗"以后再被打一下就连坐"的雷。 ==================================================================================== */
 
@@ -2531,38 +2503,135 @@ public final class MaidMountCompat {
     private static final int AIRCRAFT_LAND_RADIUS = 48;
     /** 选址扫描步长（格）。 */
     private static final int AIRCRAFT_LAND_STEP = 4;
-    /** 选址缓存有效期（拍）——过期或找不到就重选（她拐弯/被吹走后要能改主意）。 */
-    private static final long AIRCRAFT_LAND_RETRY_TICKS = 100L;
+    /** 【实测九百二十六】规划好的跑道钉住多久（拍）——6000 拍 = 5 分钟。
+     *  旧版跑道规划只活 100 拍（5 秒），一过期就绕着她当前位置重挑，于是「5 秒换一条跑道」，
+     *  一条都对准不了（实机日志里三次复飞恰好间隔 5 秒）；她真被带走很远时由
+     *  {@link #AIRCRAFT_LAND_PLAN_KEEP_D} 兜底作废。 */
+    private static final long AIRCRAFT_LAND_PLAN_KEEP_TICKS = 6000L;
     /** 下降段的目标离地高度（格）。 */
     private static final double AIRCRAFT_LAND_MIN_ALT = 2.0;
     /** 转"接地段"的离地高度（格）。 */
     private static final double AIRCRAFT_LAND_FLARE_ALT = 6.0;
     /** 接地段的目标离地高度（格）。 */
     private static final double AIRCRAFT_LAND_TOUCH_ALT = 1.2;
-    /** 下降段 / 接地段的最大下沉率（格/拍）：下降 0.20（≈4 格/秒）、接地 0.10（≈2 格/秒）。 */
-    private static final double AIRCRAFT_LAND_DESCENT_VY_MAX = 0.20;
+    /** 下降段 / 接地段的最大下沉率（格/拍）：下降 0.30（≈6 格/秒，
+     *  实测九百三十五 由 0.20 抬高、配合"先下压"缩短降落）、接地 0.10（≈2 格/秒）。 */
+    private static final double AIRCRAFT_LAND_DESCENT_VY_MAX = 0.30;
     private static final double AIRCRAFT_LAND_VY_MAX = 0.10;
     /** 降落期间的怠速推力。 */
     private static final float AIRCRAFT_LAND_IDLE_POWER = 0.08f;
     /** 降落期间每拍的水平速度保留系数（下降段 / 接地段）——越小减速越快。 */
     private static final double AIRCRAFT_LAND_RETAIN = 0.94;
     private static final double AIRCRAFT_LAND_FLARE_RETAIN = 0.88;
+    /** 【实测九百三十四】降落链路的**硬**限速每拍允许的减速量（格/拍）：0.15 > 引擎每拍给的
+     *  速度增量（0.04 那个量级的削量压不住它），于是每拍都把速度真的钳回落，又远小于"一拍急停"。
+     *  （旧的 {@link #AIRCRAFT_SPEED_DECEL}=0.04 只用于巡航档。） */
+    private static final double AIRCRAFT_LAND_SPEED_STEP = 0.15;
+    /* ---------- 【实测九百一十八】固定翼降落：跑道条带选址 + 对准进近 + 下滑道 + 复飞 ----------
+     * <p>九百一十八之前只有"朝最平的那个点压高度"：代码里的目标高度是常数 {@code groundY + MIN_ALT}（本区上面那段注释当年写的"距离 × 0.30"从没落进代码），于是**不管离落点多远，目标高度都是地面 + 2 格**——离得远时等于一路平飞过去，到了跟前才垂直往下扎。固定翼没有悬停能力，垂直下扎只有两个结局：擦地置 crash（→ 乘客被连坐，见本区顶部），或者速度掉到失速线以下掉下去；实机表现就是"降落很难看、常常落不住"。
+     * <p>这里补的是**进近**这件事本身（思路取自另一个让女仆开卓越前线载具的模组，代码全部自写）：
+     * <p>① **条带选址**：先按 3×3 落差把候选点排序，再对靠前的几个候选点试八向"跑道条带"（{@link #AIRCRAFT_LAND_STRIP_HALF} 格半长 × {@link #AIRCRAFT_LAND_STRIP_HALF_W} 格半宽），要求整条带落差 ≤ {@link #AIRCRAFT_LAND_STRIP_RELIEF}、无悬空、无水面/岩浆；
+     * <p>② **对准进近**：以条带方向为跑道中线，追中线前方一点（横向偏了会被拉回中线），前视距离随横向偏离放大——固定翼纯追踪收敛的条件是"转弯半径 < 前视距离的一半"；机头朝反了就改成直接瞄接地点，先把方向拧回来；
+     * <p>③ **下滑道**：目标高度 = 接地点 + 距接地点距离 × {@link #AIRCRAFT_LAND_GLIDE_SLOPE}，再上抬到"脚下与去路上的地面 + {@link #AIRCRAFT_LAND_MIN_ALT}"之上防钻地；距离上限 {@link #AIRCRAFT_LAND_GLIDE_MAX_D} 格，免得进近还没开始就得先爬升；
+     * <p>④ **进场 / 接地**（九百二十六补）：没对准（横向出走廊或航向差过大）就沿跑道轴线飞出去重建距离（太近/过站/反着飞）或追中线前方一点，**并且一路压机头降高度**（目标 = 下滑道，实测九百三十五 起；不再钉在 {@link #AIRCRAFT_LAND_PATTERN_ALT} 之上）；对准了才走下滑道，距接地点 {@link #AIRCRAFT_LAND_TOUCH_D} 格内且降到 {@link #AIRCRAFT_LAND_FLARE_ALT} 以下才压平机翼、收油门轻轻接地。低空歪着撞地这条死路因此在结构上不存在；一条进近航道两分钟都进不了场（够不着、或高度一直压不下来）才拉黑换一条；一条条带都选不出来 → 原地盘旋等下一轮规划（见 {@link #holdAircraftPattern}），绝不交回巡航档。
+     * ========================================================================================= */
 
-    /** 选好的落点（UUID → 世界坐标，y = 该列地面高度）。 */
-    private static final java.util.Map<UUID, Vec3> AIRCRAFT_LAND_SPOT =
-            new java.util.concurrent.ConcurrentHashMap<>();
-    /** 落点选址时刻（UUID → gameTime），用来判缓存过期。 */
-    private static final java.util.Map<UUID, Long> AIRCRAFT_LAND_SPOT_AT =
-            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 进近下滑道斜率（格高 / 格远）：每远 1 格，目标高度就高 0.18 格（≈ 10.2°；
+     *  实测九百三十五 由 0.10 抬高，让她更快压到地面、缩短降落时间）。 */
+    private static final double AIRCRAFT_LAND_GLIDE_SLOPE = 0.18;
+    /** 下滑道的参考距离上限（格）：再远也不要求更高，免得进近还没开始就得先爬升。 */
+    private static final double AIRCRAFT_LAND_GLIDE_MAX_D = 90.0;
+    /** 追中线的前视距离（格）与其上限：中间随横向偏离线性放大。 */
+    private static final double AIRCRAFT_LAND_LOOKAHEAD = 24.0;
+    private static final double AIRCRAFT_LAND_LOOKAHEAD_MAX = 80.0;
+    /** 进场段：进近区最短距离（格）——离接地点近于它又没对准，就先沿跑道轴线飞出去重建距离。 */
+    private static final double AIRCRAFT_LAND_OUT_D = 90.0;
+    /** 飞出去重建距离的那一段长度（格）：重入瞄准点钉在「接地点外 {@link #AIRCRAFT_LAND_OUT_D} + 它」格的中线点上。
+     *  实测九百三十五 90 → 60：缩短那段外飞腿，少离主人一截。 */
+    private static final double AIRCRAFT_LAND_OUT_LEG = 60.0;
+    /** 规划好的跑道允许她漂多远（格）：超过就作废重规划（否则她会掉头飞几百格去落旧跑道）。
+     *  <p>实测九百二十九：这个窗口**必须装得下进场段那条几何**——重入瞄准点在"接地点外
+     *  {@code OUT_D + OUT_LEG} = 150 格"的中线点上，她沿那条腿飞出去时到接地点的距离本来就会逼近
+     *  150+（转向还有外扩）。旧值 200 只比它大一点，实机里她一往外飞就踩线 → 跑道每拍作废重建
+     *  → 方向每拍换一条、**永远落不下来**（日志 10:58:09 起每 100 毫秒一条「定跑道」）。
+     *  现取"那条腿 + 圈半径 + 余量"，让"钉住整场"这条口径真正成立。 */
+    private static final double AIRCRAFT_LAND_PLAN_KEEP_D =
+            AIRCRAFT_LAND_OUT_D + AIRCRAFT_LAND_OUT_LEG + AIRCRAFT_LAND_RADIUS + 40.0;
+    /** 还没对准时的参考高度（接地点以上格数）：用于「是否太高」判据与进圈目标高度。
+     *  实测九百三十五 起不再「钉住」——太高也照下滑道往下压。 */
+    private static final double AIRCRAFT_LAND_PATTERN_ALT = 24.0;
+    /** 「太高」判据的容差（格）：超过 {@link #AIRCRAFT_LAND_PATTERN_ALT} + 它就还算进场段，
+     *  但实测九百三十五 起也一路下降（不再盘旋降高度）。 */
+    private static final double AIRCRAFT_LAND_PATTERN_TOL = 10.0;
+    /** 连续这么多拍都进不了场（够不着 / 一直太高）= 这条航道没戏 → 拉黑换一条。2400 拍 = 2 分钟。 */
+    private static final long AIRCRAFT_LAND_PATTERN_LIMIT = 2400L;
+    /** 近端的横向走廊半宽（格）与航向偏差上限（度）。 */
+    private static final double AIRCRAFT_LAND_CORRIDOR = 14.0;
+    private static final double AIRCRAFT_LAND_MAX_BEARING = 40.0;
+    /** 选跑道方向时的"顺机头"优先角（度）：先只在机头这一侧挑方向，挑不到才放宽到八向。 */
+    private static final double AIRCRAFT_LAND_ALIGN_DEG = 45.0;
+    /** 航向偏差超过它（度）就当"机头朝反了"：不再追中线，直接瞄接地点把方向拧回来。 */
+    private static final double AIRCRAFT_LAND_WRONGWAY_DEG = 90.0;
+    /** 距接地点近于这么多格（格）就转"接地段"。 */
+    private static final double AIRCRAFT_LAND_TOUCH_D = 12.0;
+    /** 接地段最后收尾的恒定微下沉指令（格）：已经到接地区就别再"保持高度"了，让重力把最后一截收掉。 */
+    private static final double AIRCRAFT_LAND_SINK_CMD = 0.4;
+    /** 没有可用跑道时的原地盘旋半径（格）——以她侧向 R 格为圆心、追切向点绕圈。 */
+    private static final double AIRCRAFT_LAND_HOLD_R = 60.0;
+    /** 跑道条带的半长 / 半宽（格）与整条带的落差上限（格）：比起飞助跑道（6.0）略严，因为接地后还要能滚。 */
+    private static final int AIRCRAFT_LAND_STRIP_HALF = 24;
+    private static final int AIRCRAFT_LAND_STRIP_HALF_W = 4;
+    private static final double AIRCRAFT_LAND_STRIP_RELIEF = 5.0;
+    /** 条带选址：候选点按"3×3 落差 ×4 + 距离"排序后，最多试这么多个。 */
+    private static final int AIRCRAFT_LAND_TRY = 3;
+    /** 复飞拉黑这条跑道（候选点 + 方向）的时长（拍）：1200 拍 = 1 分钟。 */
+    private static final long AIRCRAFT_LAND_REJECT_TICKS = 1200L;
+
     /**
      * <h2>为什么需要它（原代码是"注释说 A、代码做 B"）</h2>
      * {@code RideBindManager.drive} 里原本**每拍无条件**调 {@link #resetAircraftLanding}
-     * （注释写的是"离开 home 档 → 丢掉缓存"，代码却没有任何条件）。于是**降落期间**落点缓存
-     * 每拍被清：{@link #landingSpot} 每拍重扫 48 格方框（25×25=625 列 × 每列 9 次高度图
-     * ≈ 5600 次查询/拍），而且落点会随她移动逐拍改选。
+     * （注释写的是"离开 home 档 → 丢掉缓存"，却没有任何条件）。于是**降落期间**跑道规划每拍被清：
+     * {@link #aircraftLandPlan} 每拍重扫 48 格方框（25×25=625 列 × 每列 9 次高度图 ≈ 5600 次查询/拍），
+     * 而且跑道会随她移动逐拍改选。
      * <p>心跳让"清缓存"只发生在**从降到不降**的过渡那一次：{@link #aircraftHomeLanding} 每拍 接管时都记一笔，调用方改用 {@link #endAircraftLanding}——它只在"上一拍没接过"时才真清。 时间基准而不是顺序基准，所以与调用方是在清之前还是之后接管无关。
      */
     private static final java.util.Map<UUID, Long> AIRCRAFT_LAND_BEAT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 规划好的跑道（UUID → {接地点x, 接地点y, 接地点z, 方向x, 方向z, 方向序号, 到期gameTime}）。 */
+    private static final java.util.Map<UUID, double[]> AIRCRAFT_LAND_PLAN =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 实测九百二十九：刚扫过、没挑出跑道的重试时刻（UUID → gameTime）。失败那一档旧版**不缓存**
+     * （缓存的是成功），于是每拍重扫整个 625 列方框——R928 日志里每 100 毫秒一条「定跑道」就是
+     * 它 + 漂移作废叠出来的。这里给它一个 20 拍（1 秒）的重试间隔。
+     */
+    private static final java.util.Map<java.util.UUID, Long> AIRCRAFT_LAND_RETRY =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 挑不出跑道的重试间隔（拍）。 */
+    private static final long AIRCRAFT_LAND_RETRY_TICKS = 20L;
+
+    /**
+     * 实测九百二十八：这一场降落里"主人那侧挑不出跑道、已退回以她自己为圆心"的载具。
+     * 成功落一次 / 收手即清（{@link #endAircraftLanding} / {@link #resetAircraftLanding}）。
+     */
+    private static final java.util.Set<java.util.UUID> AIRCRAFT_LAND_SELF_CENTER =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /**
+     * 复飞拉黑表（UUID → {候选点 + 方向的打包键 → 到期gameTime}）。
+     * <p>只在一次降落会话内有效：{@link #endAircraftLanding} / {@link #resetAircraftLanding} 一并清空，
+     * 免得她下次进降落档还记着一分钟前的账。
+     */
+    private static final java.util.Map<UUID, java.util.Map<Long, Long>> AIRCRAFT_LAND_REJECT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * 进场计时（UUID → 连续「没对准」的拍数）：判「这条进近航道是不是根本够不着」。
+     * 到 {@link #AIRCRAFT_LAND_PATTERN_LIMIT} 就拉黑这条换一条；对准一次即清零。
+     */
+    private static final java.util.Map<UUID, Long> AIRCRAFT_LAND_PATTERN =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /** 这只载具所在世界的 gameTime（拿不到 → 0，此时心跳判据恒"仍在降"，缓存留着最坏只是不刷新）。 */
@@ -2583,7 +2652,7 @@ public final class MaidMountCompat {
     }
 
     /**
-     * 【实测七百九十四】上一拍她**没**走降落链路 → 丢掉落点缓存（只在过渡那一次真清）。
+     * 【实测七百九十四】上一拍她**没**走降落链路 → 丢掉跑道规划缓存（只在过渡那一次真清）。
      *
      * <p>语义与 {@link #resetAircraftLanding} 不同：那个是"无条件清"，这个是"确认不再降了才清"。
      * {@code RideBindManager.drive} 每拍的开头调它，取代原来那句无条件清。
@@ -2598,17 +2667,25 @@ public final class MaidMountCompat {
             if (last != null && gameTimeOf(mount) - last <= 2L) {
                 return; // 两拍内还接管过 → 这一档还在降，缓存留着（免得每拍重扫 625 列）
             }
+            if (AIRCRAFT_LAND_PLAN.get(id) != null) {
+                logLand(mount, "作废（这一拍不再走降落档）", "丢掉手上的跑道与进场/复飞状态");
+            }
             AIRCRAFT_LAND_BEAT.remove(id);
-            AIRCRAFT_LAND_SPOT.remove(id);
-            AIRCRAFT_LAND_SPOT_AT.remove(id);
+            AIRCRAFT_LAND_PLAN.remove(id);
+            AIRCRAFT_LAND_SELF_CENTER.remove(id);
+            AIRCRAFT_LAND_RETRY.remove(id);
+            AIRCRAFT_LAND_REJECT.remove(id);
+            AIRCRAFT_LAND_PATTERN.remove(id);
+            AIRCRAFT_LAND_SPOT_LEGACY.remove(id);   // 旧链路那两张表同口径清掉
+            AIRCRAFT_LAND_SPOT_AT_LEGACY.remove(id);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
     /**
      * 固定翼的"降落一拍"。返回 {@code true} = 本拍已接管（调用方不要再驱动）。
-     * <p>只认固定翼（{@link #isAircraftEngine}）；拿不到驱动口 / 找不到平地 → 返回 {@code false}，
-     * 交回调用方原本的口径（一个字节不变）。
+     * <p>只认固定翼（{@link #isAircraftEngine}）；拿不到驱动口 → 返回 {@code false}（交回调用方原口径）。
+     * 规划不出跑道 → 不返回 {@code false}（那等于交回巡航档飞走，见下面的注释），而是原地盘旋等下一轮。
      * <p>两处入口共用同一条链路（红线"口径只有一处"）：
      * <ul>
      *   <li><b>home 模式</b>（实测七百八十三）——落地就停住不动；</li> <li><b>机上有人且周围没敌人</b>（实测七百九十四，{@code RideBindManager} 那一支）—— 玩家坐副驾时不再平飞漂走，而是自己慢慢降落，敌人一出现就照常起飞接敌。</li> </ul>
@@ -2622,11 +2699,17 @@ public final class MaidMountCompat {
      * 是**谁**触发的（"home 模式" / "机上有人且周围无敌人" / "电量见底"），排查时一眼能分辨。
      */
     public static boolean aircraftHomeLanding(Entity mount, Entity maid, String why) {
-        if (mount == null || !isAircraftEngine(engineType(mount))) {
+        if (mount == null || !isFixedWingEngine(engineType(mount))) {
             return false;
         }
         if (mSetMouseSpeedX == null && mMouseInput == null) {
             return false;
+        }
+        // v1.3.2【拟真降落：开关在「物品 → 骑乘指挥棒」页，默认关】关着 = 回到上一个版本的降落
+        // 方式（"最平点"那条链路，见 {@link #aircraftHomeLandingLegacy}）；开着 = 本区下面那条
+        // "跑道条带 + 对准进近 + 下滑道"的拟真链路（实测九百一十八 起）。
+        if (!realisticLanding()) {
+            return aircraftHomeLandingLegacy(mount, maid, why);
         }
         beatAircraftLanding(mount);
         try {
@@ -2641,7 +2724,635 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                     }
                 }
-                logDrive(mount, "固定翼降落完成：已接地 → 停住不动（" + why + "）");
+                // 实测九百三十六【落地后别再往下沉】：接地那一拍起她可能还留着一点向下的竖直速度，
+                // 引擎贴地时不管这个分量，机腹会继续往地里钻（"嵌到地里"）。已接地就把向下分量清掉。
+                try {
+                    Vec3 dmG = mount.getDeltaMovement();
+                    if (dmG.y < 0.0) {
+                        mount.setDeltaMovement(dmG.x, 0.0, dmG.z);
+                    }
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                }
+                // 实测九百三十八【落地后逐渐收速】：已接地就每拍按硬限速环往 0 收（同接地段口径），
+                //   不是一下子抹零——直到完全停住。
+                aircraftGovernSpeedHard(mount, 0.0, AIRCRAFT_SPEED_DECEL);
+                logLand(mount, "完成", "已接地 → 停住不动（" + why + "）");
+                return true;
+            }
+            // 【实测七百八十四】电量见底不再是"刹住不管"，而是照常走完这套安全降落（
+            // 「如果骑乘的飞机没电了，那就等于开了 home 模式。也就是说会执行缓慢降落。」）。
+            // 怠速推力仍每拍写下去（引擎那条"没电熄火"每拍把它乘 0.995，我们每拍写回）——目的是
+            // "受控滑降 + 轻接地"，不是继续巡航。直升机/飞艇那一档仍走 driveFlight 里的
+            // brakeVehicleSafely（本方法只服务固定翼，见开头的 isAircraftEngine 闸）。
+            boolean fuelDead = outOfFuel(mount);
+            if (fuelDead) {
+                logLand(mount, "电量见底", "→ 安全降落（" + why + "）");
+            }
+            // 【实测九百一十八】先规划一条"能落下去的跑道"（条带校验 + 对准进近 + 下滑道 + 复飞）。
+            // 【实测九百二十七】规划不出来（八向条带全不合格）时**一律原地盘旋等下一轮**——旧版只有
+            // 汤姆6 这么做，别的固定翼落到下面那条旧"最平点"口径，而那条口径的终点是 return false
+            //（交回调用方 = 巡航档）：实机日志「固定翼巡航档 … 距目标=1009 格」一路往外飞，也就是
+            //"飞走、一去不复回"；它还只靠鼠标 / 位掩码 / 滚转角三个通道，对 Mob 乘客整段不生效。
+            // 盘旋的这 60 格圈子高度不掉、位置不跑，规划出来（或拉黑的条带解禁）就接着进场。
+            long landNow = gameTimeOf(mount);
+            // 实测九百二十九【不在圈内先飞进圈】：跑道圈以**主人**为圆心（见 aircraftLandPlan）。
+            // 手上钉着跑道时一律照走（进场段本身就要她飞出圈去重建距离，不能被这条闸抢走）；
+            // 没有跑道、人又在圈外时**不找跑道、不进近**——先朝圈心（主人）飞进去，进圈再规划。
+            // 旧版这一档没闸：跑道钉在主人脚下、她在两百格开外，那条 180 格的远端腿一飞就把
+            // KEEP_D 踩爆 → 每拍重建跑道、方向每拍换 → 实机「直接没有办法降落」。
+            if (AIRCRAFT_LAND_PLAN.get(mount.getUUID()) == null && aircraftOutsideLandCircle(mount, maid)) {
+                aircraftFlyToCircle(mount, maid, why);
+                return true;
+            }
+            double[] plan = aircraftLandPlan(mount, maid, landNow);
+            if (plan != null) {
+                return aircraftLandFinal(mount, why, fuelDead, plan, landNow);
+            }
+            holdAircraftPattern(mount, why, isTomEngine(engineType(mount)), mount.getY());
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            return false;
+        }
+    }
+
+    /**
+     * 【实测九百一十八】固定翼降落的"进场 + 对准 + 下滑道 + 接地"一拍（跑道规划见 {@link #aircraftLandPlan}）。
+     * <p>【实测九百二十六】补了"进场段"：没对准或还太高时**先不往下降着冲**——绕圈降高度 / 沿跑道轴线
+     * 飞出去重建距离 / 追中线捕获，高度钉在 {@link #AIRCRAFT_LAND_PATTERN_ALT} 之上；对准且低到
+     * pattern 高度才开始走下滑道。旧版没有这一段，复飞就是"拉起 + 拉黑 + 换跑道"（见方法体注释）。
+     * <p>几何口径：把她的位置投影到跑道坐标系——{@code s} = 沿跑道坐标（正 = 已过接地点）、
+     * {@code cross} = 横向偏离。本拍仍由降落链路接管（返回 {@code true}）；来龙去脉见本区顶部那段。
+     */
+    private static boolean aircraftLandFinal(Entity mount, String why, boolean fuelDead,
+                                             double[] plan, long now) {
+        double tdX = plan[0];
+        double tdY = plan[1];
+        double tdZ = plan[2];
+        double dirX = plan[3];
+        double dirZ = plan[4];
+        double px = mount.getX();
+        double pz = mount.getZ();
+        double s = (px - tdX) * dirX + (pz - tdZ) * dirZ;            // 沿跑道坐标（正 = 已过接地点）
+        double before = -s;                                         // 正 = 还在接地点这一侧（进近区）
+        double cross = (px - tdX) * (-dirZ) + (pz - tdZ) * dirX;     // 横向偏离（只看绝对值）
+        boolean tom = isTomEngine(engineType(mount));                // 汤姆6：控制通道只能直写
+        float runwayYaw = (float) (Math.toDegrees(Math.atan2(dirZ, dirX)) - 90.0);
+        float hdgErr = wrapDegrees(runwayYaw - mount.getYRot());
+        double aboveRunway = mount.getY() - tdY;
+        double look = clamp(Math.abs(cross) * 1.5, AIRCRAFT_LAND_LOOKAHEAD, AIRCRAFT_LAND_LOOKAHEAD_MAX);
+        // 实测九百二十六【没对准、或者还太高 → 都不许一边降高度一边往场里冲】。对准判据 = 横向进
+        // 走廊 + 航向差在上限内；旧的"近端没对准 → 复飞 + 拉黑 + 换跑道"整段由此删掉：她本来就贴着
+        // 跑道、机头朝反（实机日志 航向误差=168度 距接地点=0格），而每条新跑道 5 秒就被拉黑，三条
+        // 候选点用完 → plan 为 null → 交回巡航档飞走。黑名单只留给"一条跑道两分钟都进不了场"。
+        if (Math.abs(cross) > AIRCRAFT_LAND_CORRIDOR || Math.abs(hdgErr) > AIRCRAFT_LAND_MAX_BEARING
+                || aboveRunway > AIRCRAFT_LAND_PATTERN_ALT + AIRCRAFT_LAND_PATTERN_TOL) {
+            aircraftLoiterOff(mount);
+            long patternFor = AIRCRAFT_LAND_PATTERN.merge(mount.getUUID(), 1L, Long::sum);
+            if (patternFor >= AIRCRAFT_LAND_PATTERN_LIMIT) {
+                AIRCRAFT_LAND_PATTERN.remove(mount.getUUID());
+                aircraftLandReject(mount, plan, now);
+                com.maidsmart.tool.PromaidLog.log("模组坐骑", describeKind(mount)
+                        + " 固定翼降落·换跑道（" + why + "）这条进近航道两分钟都没能进场 → 拉黑换一条"
+                        + " 距接地点=" + (long) Math.abs(before) + "格"
+                        + " 横向=" + (long) Math.abs(cross) + "格"
+                        + " 航向误差=" + (long) Math.abs(hdgErr) + "度"
+                        + " 离地=" + fmt2(aboveRunway) + "格");
+                return true;
+            }
+            // 实测九百三十五【先下压 · 删掉"太高就盘旋降高度"】：旧版这一段把"太高"单独拦去绕圈，
+            // 实机要十几秒、且中途飞离主人很远。现在太高也**直接走下面的"压机头降高度"**——速度
+            // 已被九百三十四 钳到 0.80，"降率追不上航程"那条老顾虑不再成立。
+            // 实测九百三十七【删掉"飞出去重建距离"】：旧版没对准就朝"接地点外 OUT_D+OUT_LEG 格"的固定
+            //   点飞出去掉头，实机（汤姆6）就是"总是要先飞得特别远"。滑翔/固定翼要的是**顺着原来的航迹
+            //   一路压机头往下**（开发者口径），不再外飞——直接追接地点前方一点（与对准段同一纯追踪），
+            //   配合下滑道与速度环，落点自然收在接地点一带。
+            double aimS = s + look;
+            float aimErr = wrapDegrees((float) (Math.toDegrees(Math.atan2(
+                    tdZ + dirZ * aimS - pz, tdX + dirX * aimS - px)) - 90.0) - mount.getYRot());
+            if (tom) {
+                forceHeadingOnto(mount, aimErr);
+            } else {
+                mSetMouseX(mount, clamp(aimErr, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD));
+                short pbits = 0;
+                if (Math.abs(aimErr) > AIRCRAFT_BANK_ERR) {
+                    pbits |= (aimErr > 0) ? (short) 0x002 : (short) 0x001;
+                }
+                try {
+                    mProcessInput.invoke(mount, pbits);
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                }
+            }
+            aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
+            if (!tom) {
+                aircraftGovernSpeed(mount, AIRCRAFT_CRUISE_SPEED);
+            }
+            // 实测九百三十四【硬限速】：没对准这一段也必须真的把速度压到巡航值，否则转弯半径
+            // 一百多格、她永远转不进走廊（见 aircraftGovernSpeedHard 的推导）。
+            aircraftGovernSpeedHard(mount, AIRCRAFT_CRUISE_SPEED, AIRCRAFT_LAND_SPEED_STEP);
+            // 实测九百三十五【先下压】：没对准也照样压机头降高度——目标 = 下滑道本身（与进近段同
+            // 一公式），地形净空线在下面兜底。于是从点 home 那一拍起她就一路往下压。
+            double glideY = tdY + clamp(Math.max(before, 0.0), 0.0, AIRCRAFT_LAND_GLIDE_MAX_D)
+                    * AIRCRAFT_LAND_GLIDE_SLOPE;
+            // 实测九百三十六【只降不抬】：飞出去重建距离时 before 变大、下滑道目标随之抬高——旧版
+            //   max(下滑道, 净空线) 会把她"抬"回去追下滑道（实机 7.4 → 15.6 又升回去）。这里再夹一道
+            //   "不高于当前高度"：低于下滑道就保持，绝不为了追下滑道往回爬（净空线仍可抬升＝防撞）。
+            double targetY = Math.max(Math.min(glideY, mount.getY()), aircraftLandFloor(mount));
+            double pdy = targetY - mount.getY();
+            aircraftHoldAltitude(mount, pdy, pdy > 0.0 ? AIRCRAFT_VY_CRUISE_MAX : AIRCRAFT_LAND_DESCENT_VY_MAX);
+            logLand(mount, "进场（" + why + "）", "还没对准 → 飞出去重新对正"
+                    + (fuelDead ? " 电量见底" : "")
+                    + " 距接地点=" + (long) Math.abs(before) + "格"
+                    + " 横向=" + (long) Math.abs(cross) + "格"
+                    + " 航向误差=" + (long) Math.abs(hdgErr) + "度"
+                    + " 离地=" + fmt2(aboveRunway) + "格"
+                    + " 竖直速度=" + fmt2(verticalSpeed(mount)));
+            return true;
+        }
+        AIRCRAFT_LAND_PATTERN.remove(mount.getUUID());                 // 对准了 → 进场计时清零
+        // 对准了才走这一段：追中线前方一点（横向偏了会被拉回中线；前视距离随横向偏离放大——
+        // 固定翼纯追踪收敛的条件是「转弯半径 < 前视距离的一半」）。
+        double aimS = s + look;
+        float aimErr = wrapDegrees((float) (Math.toDegrees(Math.atan2(
+                tdZ + dirZ * aimS - pz, tdX + dirX * aimS - px)) - 90.0) - mount.getYRot());
+        aircraftLoiterOff(mount);
+        if (tom) {
+            forceHeadingOnto(mount, aimErr);
+        } else {
+            mSetMouseX(mount, clamp(aimErr, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD));
+        }
+        short bits = 0;
+        if (Math.abs(aimErr) > AIRCRAFT_BANK_ERR) {
+            bits |= (aimErr > 0) ? (short) 0x002 : (short) 0x001;
+        }
+        // 实测九百二十四【接地段必须"又到点、又到底"】。旧口径只按"沿跑道方向进了 TOUCH_D 圈"就
+        // 切进接地段（下面的 if 只看 before）。可玩家实测 Tom6 是在【离地 79 格】时进的接地段：
+        // 接地段会把油门收到怠速、水平速度收到≈0，而固定翼的升力/舵效 ∝ 速度——速度没了，俯仰
+        // 通道就再也压不下去，她就吊在 79 格高、竖直速度 -0.10、"原地不动、永远不降落"（日志
+        // 「接地段 距接地点=0格 离地=79.78 竖直速度=-0.10 水平速度=0.00」逐 5 秒重复）。现在加一道
+        // 高度闸：只有真降到低空（离地 ≤ FLARE_ALT）才进接地段；还高着就走下面那条进近段
+        // （保巡航推力 → 沿下滑道继续下降），到低空再压平、收油、轻接地。
+        // 实测九百三十七【够低就落】：不再要求"进 TOUCH_D 圈"，只要离地 ≤ FLARE_ALT（或 ≤ TOUCH_ALT+1）就收油门压平接地。
+        if (aboveRunway <= AIRCRAFT_LAND_FLARE_ALT
+                && (before <= AIRCRAFT_LAND_TOUCH_D || aboveRunway <= AIRCRAFT_LAND_TOUCH_ALT + 1.0)) {
+            // 接地段：压平机翼、收油门、把水平速度收到亚音速以下再轻轻接地（撞击伤害 18×(v−0.2)²）
+            if (!tom) {
+                aircraftBank(mount, 0.0f);
+            }
+            try {
+                mProcessInput.invoke(mount, (short) 0);   // **不给前进/冲刺位**：让阻力把她减速
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            }
+            if (mSetPower != null) {
+                try {
+                    // 实测九百三十七【接地不再给发动机速度】：开发者口径"接地时不再给予发动机速度，只依靠
+                    //   惯性降落"——旧版留 0.08 怠速推力，滑翔翼落了地还被推着贴地滑行。这里直接归零。
+                    mSetPower.invoke(mount, 0.0f);
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                }
+            }
+            // 实测九百三十八【接地逐渐减速、不是一下子抹零】：开发者口径"应该是让速度逐渐降为零"——
+            //   九百三十七 那种直接抹零太生硬。改走硬限速环（每拍最多降 AIRCRAFT_SPEED_DECEL），
+            //   0.80 → 0 约 20 拍（1 秒）线性收完，既滑得住又停得下。
+            aircraftGovernSpeedHard(mount, 0.0, AIRCRAFT_SPEED_DECEL);
+            // 实测九百三十六【别压进土里】：落地高度旧版只认规划里的 tdY —— 可她漂到条带里别处落点时，
+            // 脚下真实地面可能与 tdY 差几格（条带允许 ≤ AIRCRAFT_LAND_STRIP_RELIEF 的落差），照 tdY 收
+            // 就把机腹压进土里（实机"嵌到地里"）。取 max(规划落点, 脚下滑行道净空线)：既不悬空也不入土。
+            double landFloorY = aircraftLandFloor(mount);
+            double restY = Math.max(tdY + AIRCRAFT_LAND_TOUCH_ALT,
+                    landFloorY == Double.NEGATIVE_INFINITY ? tdY + AIRCRAFT_LAND_TOUCH_ALT : landFloorY);
+            if (before <= 0.0) {
+                // 已经进了接地区（过站那一点点也算）：仍朝 restY 收最后一截，但绝不再往下钻
+                restY = Math.max(restY, mount.getY() - AIRCRAFT_LAND_SINK_CMD);
+            }
+            aircraftHoldAltitude(mount, restY - mount.getY(), AIRCRAFT_LAND_VY_MAX);
+            logLand(mount, "接地段（" + why + "）", ""
+                    + (fuelDead ? " 电量见底" : "")
+                    + " 距接地点=" + (long) Math.abs(before) + "格"
+                    + " 离地=" + fmt2(aboveRunway) + "格"
+                    + " 竖直速度=" + fmt2(verticalSpeed(mount))
+                    + " 水平速度=" + fmt2(horizontalSpeed(mount)));
+            return true;
+        }
+        // 进近段：**保巡航推力**（固定翼的升力 ∝ 速度，收了油门既没升力也没舵效），
+        // 高度交给下滑道（俯仰通道，见 aircraftHoldAltitude），速度交给速度环只压不拉。
+        try {
+            mProcessInput.invoke(mount, (short) (bits | 0x004 | 0x100));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+        aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
+        if (!tom) {
+            aircraftGovernSpeed(mount, AIRCRAFT_CRUISE_SPEED);
+        }
+        // 实测九百三十四【硬限速 · 逐渐降为零】：越靠近接地点，允许的最高速度越低——到接地点
+        // 正好为 0，于是她是**逐渐**减速到零、轻轻接地（「限速=」会写进下面那行日志里）。
+        double landSpeedCap = AIRCRAFT_CRUISE_SPEED
+                * clamp(Math.max(before, 0.0) / AIRCRAFT_LAND_GLIDE_MAX_D, 0.0, 1.0);
+        aircraftGovernSpeedHard(mount, landSpeedCap, AIRCRAFT_LAND_SPEED_STEP);
+        double glideY = tdY + clamp(Math.max(before, 0.0), 0.0, AIRCRAFT_LAND_GLIDE_MAX_D)
+                * AIRCRAFT_LAND_GLIDE_SLOPE;
+        // 实测九百三十六【只降不抬 · 同进场段】：不为了追下滑道往上爬（净空线仍可抬升＝防撞）。
+        double targetY = Math.max(Math.min(glideY, mount.getY()), aircraftLandFloor(mount));
+        // 实测九百二十六：上限提到巡航档那一档——0.20 撑不起 0.10 的下滑道（进近开头还挂着
+        // 2~3 格/拍的速度，需要的下沉率比 0.20 大），旧值下她一路高于下滑道、冲过接地点才落地。
+        // 接地段仍走 0.10（见上面那个 if），所以最后贴地那一段照旧轻。
+        aircraftHoldAltitude(mount, targetY - mount.getY(), AIRCRAFT_VY_CRUISE_MAX);
+        logLand(mount, "进近（" + why + "）", ""
+                + (fuelDead ? " 电量见底" : "")
+                + " 距接地点=" + (long) Math.abs(before) + "格"
+                + " 横向=" + (long) Math.abs(cross) + "格"
+                + " 限速=" + fmt2(landSpeedCap)
+                + " 离地=" + fmt2(aboveRunway) + "格"
+                + " 竖直速度=" + fmt2(verticalSpeed(mount))
+                + " 水平速度=" + fmt2(horizontalSpeed(mount)));
+        return true;
+    }
+
+    /** 实测九百二十九：她到**圈心（主人脚下）**的水平距离是否已超出跑道圈（{@link #AIRCRAFT_LAND_RADIUS}）。
+     *  主人不在场 / 不同维度（{@link #ownerLandAnchor} 给不出锚点）→ 不拦，交给原口径（以她自己为圆心规划）。 */
+    private static boolean aircraftOutsideLandCircle(Entity mount, Entity maid) {
+        if (!(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+            return false;
+        }
+        double[] o = ownerLandAnchor(maid, sl);
+        if (o == null) {
+            return false;
+        }
+        double dx = mount.getX() - o[0];
+        double dz = mount.getZ() - o[2];
+        return dx * dx + dz * dz > (double) AIRCRAFT_LAND_RADIUS * (double) AIRCRAFT_LAND_RADIUS;
+    }
+
+    /**
+     * 实测九百二十九【不在圈内先飞进圈】：朝圈心（主人）飞过去——执行器与巡航 / 跟随档同一套（{@link #aircraftCruise}：航向 + 滚转 + 高度环 + 速度环），
+     * 只是目标点换成主人的水平位置、高度按进场高度 {@link #AIRCRAFT_LAND_PATTERN_ALT} 压；进了圈就交回规划 / 进场那条链路。
+     * <p>为什么不"交回调用方"（返回 false）：home 档里那一条落到的是"飞行载具悬停"
+     * （{@link MaidAirCombat#holdHere}）或直接停住（{@link MaidRideKit#stopNavigation}），都不带她
+     * 去主人那边——九百二十六 的"飞走、一去不复返"就是当年把固定翼交给巡航档的结果。
+     */
+    private static void aircraftFlyToCircle(Entity mount, Entity maid, String why) {
+        if (!(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+            return;
+        }
+        double[] o = ownerLandAnchor(maid, sl);
+        if (o == null) {
+            return;
+        }
+        try {
+            float err = wrapDegrees((float) (Math.toDegrees(
+                    Math.atan2(o[2] - mount.getZ(), o[0] - mount.getX())) - 90.0) - mount.getYRot());
+            // 实测九百三十六【进圈不再往上抬】：旧版目标 = 主人 + PATTERN_ALT(24)，她比这低就得先爬
+            //   上去——明明是来降落的，却被"抬到 24 格再降"（实机 TOM6 进圈 12 秒里 -37.6 → -15.9
+            //   一路爬）。现在目标取 min(当前高度, 主人 + 24)：比它高才降过去，比它低就保持——只降不抬；
+            //   地形净空也换成**降落档**的 aircraftLandFloor（地面 + LAND_MIN_ALT），不用巡航那 45 格。
+            double carrotY = Math.min(mount.getY(), o[1] + AIRCRAFT_LAND_PATTERN_ALT);
+            double safeY = Math.max(carrotY, aircraftLandFloor(mount));
+            aircraftCruise(mount, engineType(mount), safeY - mount.getY(), err, safeY > carrotY + 0.5);
+            // 实测九百三十四【硬限速】：进圈这一段也压到巡航值（见 aircraftGovernSpeedHard）。
+            aircraftGovernSpeedHard(mount, AIRCRAFT_CRUISE_SPEED, AIRCRAFT_LAND_SPEED_STEP);
+            double dx = mount.getX() - o[0];
+            double dz = mount.getZ() - o[2];
+            logLand(mount, "进圈（" + why + "）", "还没进跑道圈 → 先朝主人飞"
+                    + " 距主人=" + (long) Math.sqrt(dx * dx + dz * dz) + "格"
+                    + " 高度=" + fmt2(mount.getY()) + "格"
+                    + " 竖直速度=" + fmt2(verticalSpeed(mount))
+                    + " 水平速度=" + fmt2(horizontalSpeed(mount)));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+    }
+    /**
+     * 【实测九百二十六】等待 / 降高度盘旋：以「她当前位置往侧向 {@link #AIRCRAFT_LAND_HOLD_R} 格」为
+     * 圆心，追切向瞄准点绕圈（起步就与机头相切，不会有折角），高度拉向 {@code targetY}（传"她当前
+     * 高度"=原地等下一轮规划；传"接地点 + {@link #AIRCRAFT_LAND_PATTERN_ALT}"=盘旋降高度），速度交回
+     * 巡航档。用它取代汤姆6 那条 {@code return false}：交回巡航档 = 她掉头飞去主人那边（实机表现
+     * 就是「飞走、一去不复回」）。盘旋方向按 UUID 定死，免得来回翻。
+     */
+    private static void holdAircraftPattern(Entity mount, String why, boolean tom, double targetY) {
+        try {
+            aircraftLoiterOff(mount);
+            float yaw = mount.getYRot();
+            double fx = -Math.sin(Math.toRadians(yaw));
+            double fz = Math.cos(Math.toRadians(yaw));
+            int dir = (mount.getUUID().hashCode() & 1) == 0 ? 1 : -1;
+            double cx = mount.getX() - fz * AIRCRAFT_LAND_HOLD_R * dir;
+            double cz = mount.getZ() + fx * AIRCRAFT_LAND_HOLD_R * dir;
+            double ux = (mount.getX() - cx) / AIRCRAFT_LAND_HOLD_R;
+            double uz = (mount.getZ() - cz) / AIRCRAFT_LAND_HOLD_R;
+            double tx = cx + (dir > 0 ? -uz : uz) * AIRCRAFT_LAND_HOLD_R;
+            double tz = cz + (dir > 0 ? ux : -ux) * AIRCRAFT_LAND_HOLD_R;
+            float aimErr = wrapDegrees((float) (Math.toDegrees(
+                    Math.atan2(tz - mount.getZ(), tx - mount.getX())) - 90.0) - yaw);
+            if (tom) {
+                forceHeadingOnto(mount, aimErr);
+            } else {
+                mSetMouseX(mount, clamp(aimErr, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD));
+                short bits = 0;
+                if (Math.abs(aimErr) > AIRCRAFT_BANK_ERR) {
+                    bits |= (aimErr > 0) ? (short) 0x002 : (short) 0x001;
+                }
+                try {
+                    mProcessInput.invoke(mount, bits);
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                }
+            }
+            aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
+            if (!tom) {
+                aircraftGovernSpeed(mount, AIRCRAFT_CRUISE_SPEED);
+            }
+            // 实测九百三十四【硬限速】：盘旋降高度这一段同样压到巡航值（见 aircraftGovernSpeedHard）。
+            aircraftGovernSpeedHard(mount, AIRCRAFT_CRUISE_SPEED, AIRCRAFT_LAND_SPEED_STEP);
+            double floor = aircraftLandFloor(mount);
+            double holdY = Math.max(targetY, floor + AIRCRAFT_LAND_MIN_ALT);
+            double hdy = holdY - mount.getY();
+            aircraftHoldAltitude(mount, hdy, hdy > 0.0 ? AIRCRAFT_VY_CRUISE_MAX : AIRCRAFT_LAND_DESCENT_VY_MAX);
+            logLand(mount, "盘旋（" + why + "）", "绕圈等：高度拉向 " + fmt2(targetY) + " 格"
+                    + " 当前高度=" + fmt2(mount.getY()) + "格"
+                    + " 竖直速度=" + fmt2(verticalSpeed(mount))
+                    + " 水平速度=" + fmt2(horizontalSpeed(mount)));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+    }
+
+    /**
+     * 进近段的地面下限（格）：脚下那一列 + 沿**机头方向**前方三列的地面高度取最大，再加
+     * {@link #AIRCRAFT_LAND_MIN_ALT}。下滑道在跑道前方本该是净空，但进近那一段可能压着一座山
+     * ——没有这条线时，下滑道就变成"照着坡往山里扎"。取不到 → 负无穷（不设约束）。
+     */
+    private static double aircraftLandFloor(Entity mount) {
+        if (!(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        double px = mount.getX();
+        double pz = mount.getZ();
+        double best = groundAt(sl, net.minecraft.util.Mth.floor(px), net.minecraft.util.Mth.floor(pz));
+        double len = clamp(horizontalSpeed(mount) * AIRCRAFT_LAND_LOOKAHEAD,
+                AIRCRAFT_LAND_LOOKAHEAD, AIRCRAFT_LAND_LOOKAHEAD_MAX);
+        float yaw = mount.getYRot();
+        double vx = -Math.sin(Math.toRadians(yaw));
+        double vz = Math.cos(Math.toRadians(yaw));
+        for (int i = 1; i <= 3; i++) {
+            double d = len * i / 3.0;
+            best = Math.max(best, groundAt(sl, net.minecraft.util.Mth.floor(px + vx * d), net.minecraft.util.Mth.floor(pz + vz * d)));
+        }
+        return best == Integer.MIN_VALUE ? Double.NEGATIVE_INFINITY : best + AIRCRAFT_LAND_MIN_ALT;
+    }
+
+    /**
+     * 【实测九百一十八】规划一条能落下去的跑道（缓存 {@link #AIRCRAFT_LAND_PLAN_KEEP_TICKS} 拍；漂太远见 {@link #AIRCRAFT_LAND_PLAN_KEEP_D} 作废）：
+     * 候选点按"3×3 落差 ×4 + 到圆心距离"排序，靠前 {@link #AIRCRAFT_LAND_TRY} 个试八向条带（{@link #stripRelief}），
+     * 落差 ≤ {@link #AIRCRAFT_LAND_STRIP_RELIEF} 且无悬空/水/岩浆者胜出，全不合格 → {@code null}（原地盘旋等下一轮）。
+     * <p>【实测九百二十八·落点认主人】圆心优先取<b>主人脚下</b>（旧版取她自己 → 实机"降下来了、可离主人几十上百
+     * 格"）；主人那侧挑不出条带（屋里/山里/跨维度/没主人）→ 下一轮退回她自己（{@link #AIRCRAFT_LAND_SELF_CENTER} 标记）。
+     * @return {@code {接地点x, 接地点y, 接地点z, 方向x, 方向z, 方向序号, 到期gameTime}}
+     */
+    private static double[] aircraftLandPlan(Entity mount, Entity maid, long now) {
+        if (!(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+            return null;
+        }
+        UUID id = mount.getUUID();
+        double[] cached = AIRCRAFT_LAND_PLAN.get(id);
+        if (cached != null && now <= cached[6]) {
+            // 实测九百二十六：一场降落钉同一条跑道（旧版 100 拍就作废，5 秒换一条，一条都对准不了）。
+            double ddx = mount.getX() - cached[0];
+            double ddz = mount.getZ() - cached[2];
+            if (ddx * ddx + ddz * ddz <= AIRCRAFT_LAND_PLAN_KEEP_D * AIRCRAFT_LAND_PLAN_KEEP_D) {
+                return cached;
+            }
+            logLand(mount, "跑道作废（漂出钉住窗口）", "距接地点=" + (long) Math.sqrt(ddx * ddx + ddz * ddz)
+                    + "格 > 窗口=" + (long) AIRCRAFT_LAND_PLAN_KEEP_D + "格 → 重规划");
+        }
+        if (AIRCRAFT_LAND_PLAN.size() > 256) {
+            AIRCRAFT_LAND_PLAN.clear();
+        }
+        Long retryAt = AIRCRAFT_LAND_RETRY.get(id);
+        if (retryAt != null && now < retryAt) {
+            logLand(mount, "规划退避（1 秒内不重扫）", "剩余=" + (retryAt - now) + " 拍");
+            return null;   // 这一框刚扫过、挑不出跑道 → 到点前不再重扫
+        }
+        // 实测九百二十八【落点认主人】：圆心先取主人脚下；主人那侧挑不出条带 → 下一轮退回她自己
+        //（AIRCRAFT_LAND_SELF_CENTER 标记，成功落一次即清）。
+        double[] ownerAnchor = ownerLandAnchor(maid, sl);
+        boolean tryOwner = ownerAnchor != null && !AIRCRAFT_LAND_SELF_CENTER.contains(id);
+        int cx = net.minecraft.util.Mth.floor(tryOwner ? ownerAnchor[0] : mount.getX());
+        int cz = net.minecraft.util.Mth.floor(tryOwner ? ownerAnchor[2] : mount.getZ());
+        int minY = sl.getMinBuildHeight();
+        java.util.List<double[]> cands = new java.util.ArrayList<>();
+        for (int ox = -AIRCRAFT_LAND_RADIUS; ox <= AIRCRAFT_LAND_RADIUS; ox += AIRCRAFT_LAND_STEP) {
+            for (int oz = -AIRCRAFT_LAND_RADIUS; oz <= AIRCRAFT_LAND_RADIUS; oz += AIRCRAFT_LAND_STEP) {
+                int x = cx + ox;
+                int z = cz + oz;
+                int h = groundAt(sl, x, z);
+                int relief = relief3x3(sl, x, z);
+                // 高度图在未加载区块给的是"世界底面"那个数 → 那不是平地、是没数据，必须剔掉
+                if (h == Integer.MIN_VALUE || h <= minY + 1 || relief == Integer.MIN_VALUE) {
+                    continue;
+                }
+                double d = Math.sqrt((double) ox * ox + (double) oz * oz);
+                cands.add(new double[]{x, z, h, relief * 4.0 + d});
+            }
+        }
+        cands.sort((a, b) -> Double.compare(a[3], b[3]));
+        java.util.Map<Long, Long> black = AIRCRAFT_LAND_REJECT.get(id);
+        // 实测九百二十七【顺着头选跑道】：先只在"与她当前机头相差 ≤ AIRCRAFT_LAND_ALIGN_DEG 度"的朝向里
+        // 挑，挑得到就直接用——旧版只按落差最小选方向，常常选中"她背后那条"，于是她得先拐一个 180°
+        // 大弯；固定翼的转弯半径 r ≈ v/0.0298 格（2.5 格/拍时 ≈ 84 格），实机上就是"围着机场绕、越绕
+        // 越远，最后交回巡航档飞走"。机头那几个朝向真跑不过去（落差超标 / 刚复飞拉黑）才放宽到八向。
+        float headingNow = mount.getYRot();
+        int tries = Math.min(AIRCRAFT_LAND_TRY, cands.size());
+        for (int ci = 0; ci < tries; ci++) {
+            double[] c = cands.get(ci);
+            int bx = (int) c[0];
+            int bz = (int) c[1];
+            int bestI = -1;
+            double bestRelief = Double.MAX_VALUE;
+            for (int pass = 0; pass < 2 && bestI < 0; pass++) {
+                for (int i = 0; i < 8; i++) {
+                    double yaw = i * 45.0;
+                    if (pass == 0 && Math.abs(wrapDegrees((float) (yaw - headingNow))) > AIRCRAFT_LAND_ALIGN_DEG) {
+                        continue;
+                    }
+                    if (black != null) {
+                        Long until = black.get(rejectKey(bx, bz, i));
+                        if (until != null && now < until) {
+                            continue;   // 这条跑道上刚复飞过 → 换个方向
+                        }
+                    }
+                    double relief = stripRelief(sl, bx, bz,
+                            -Math.sin(Math.toRadians(yaw)), Math.cos(Math.toRadians(yaw)));
+                    if (relief < bestRelief) {
+                        bestRelief = relief;
+                        bestI = i;
+                    }
+                }
+                if (bestI >= 0 && bestRelief > AIRCRAFT_LAND_STRIP_RELIEF) {
+                    bestI = -1;                 // 机头这一侧没有合格的条带 → 放宽到八向再来一遍
+                    bestRelief = Double.MAX_VALUE;
+                }
+            }
+            if (bestI >= 0 && bestRelief <= AIRCRAFT_LAND_STRIP_RELIEF) {
+                double yaw = bestI * 45.0;
+                double[] p = new double[]{bx + 0.5, c[2], bz + 0.5,
+                        -Math.sin(Math.toRadians(yaw)), Math.cos(Math.toRadians(yaw)),
+                        bestI, now + AIRCRAFT_LAND_PLAN_KEEP_TICKS};
+                if (tryOwner) {
+                    AIRCRAFT_LAND_SELF_CENTER.remove(id);               // 主人那侧落成了 → 标记清掉
+            AIRCRAFT_LAND_RETRY.remove(id);
+                }
+                AIRCRAFT_LAND_RETRY.remove(id);   // 挑出来了 → 重试闸清掉
+                AIRCRAFT_LAND_PLAN.put(id, p);
+                logLand(mount, "定跑道", " 接地点=(" + (long) p[0] + "," + (long) p[1] + ","
+                        + (long) p[2] + ") 方向=" + (long) (bestI * 45) + "度"
+                        + (ownerAnchor == null ? "（没主人：以她自己为圆心）"
+                        : " 距主人=" + (long) Math.sqrt((p[0] - ownerAnchor[0]) * (p[0] - ownerAnchor[0])
+                        + (p[2] - ownerAnchor[2]) * (p[2] - ownerAnchor[2])) + "格"));
+                return p;
+            }
+        }
+        if (tryOwner) {
+            AIRCRAFT_LAND_SELF_CENTER.add(id);   // 主人那侧没跑道 → 下一轮退回以她自己为圆心（老口径）
+        }
+        logLand(mount, tryOwner ? "规划失败（主人那一侧挑不出跑道）" : "规划失败（以她自己为圆心也挑不出跑道）",
+                "候选点=" + cands.size() + " 条带半长=" + AIRCRAFT_LAND_STRIP_HALF
+                        + "格 落差上限=" + fmt2(AIRCRAFT_LAND_STRIP_RELIEF) + "格");
+        AIRCRAFT_LAND_RETRY.put(id, now + AIRCRAFT_LAND_RETRY_TICKS);   // 实测九百二十九：失败也节流
+        return null;
+    }
+
+    /** 实测九百二十八：跑道圆心的"主人锚点"——主人与她在同一维度时返回 {@code {x,y,z}}，否则 null。 */
+    private static double[] ownerLandAnchor(Entity maid, net.minecraft.server.level.ServerLevel sl) {
+        try {
+            if (maid instanceof EntityMaid em) {
+                net.minecraft.world.entity.LivingEntity o = em.getOwner();
+                if (o != null && o.level() == sl) {
+                    return new double[]{o.getX(), o.getY(), o.getZ()};
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+        return null;
+    }
+
+    /**
+     * 一条跑道条带的落差（整条带内地面高度的 max−min）；任一处不可用就直接否决、返回
+     * {@code Double.MAX_VALUE}：高度图取不到（悬空 / 未加载）或那一列是水面 / 岩浆
+     * （{@link #isLandingFluid}）。横向按 {@link #AIRCRAFT_LAND_STEP} 取几列。
+     */
+    private static double stripRelief(net.minecraft.server.level.ServerLevel sl, int bx, int bz,
+                                      double hx, double hz) {
+        int min = Integer.MAX_VALUE;
+        int max = Integer.MIN_VALUE;
+        for (int d = -AIRCRAFT_LAND_STRIP_HALF; d <= AIRCRAFT_LAND_STRIP_HALF; d += 2) {
+            for (int w = -AIRCRAFT_LAND_STRIP_HALF_W; w <= AIRCRAFT_LAND_STRIP_HALF_W; w += 2) {
+                int x = net.minecraft.util.Mth.floor(bx + hx * d - hz * w);
+                int z = net.minecraft.util.Mth.floor(bz + hz * d + hx * w);
+                int g = groundAt(sl, x, z);
+                if (g == Integer.MIN_VALUE || isLandingFluid(sl, x, g, z)) {
+                    return Double.MAX_VALUE;
+                }
+                min = Math.min(min, g);
+                max = Math.max(max, g);
+            }
+        }
+        return max - min;
+    }
+
+    /**
+     * 这一列能不能落：地表那一格与它下面那一格里只要有一个是水 / 岩浆就算不能落。
+     * <p>为什么单拎出来：湖面是**平的**，落差判据拦不住它，而固定翼落水会当场置 crash（见本区顶部）。
+     * 世界高度图（MOTION_BLOCKING）把水也算作阻挡，所以水面就落在地表那一格。
+     */
+    private static boolean isLandingFluid(net.minecraft.server.level.ServerLevel sl,
+                                          int x, int g, int z) {
+        return landingFluidAt(sl, x, g, z) || landingFluidAt(sl, x, g - 1, z);
+    }
+
+    /** 这一格是不是水或岩浆（读不到 → 不算，宁可漏判也不误杀）。 */
+    private static boolean landingFluidAt(net.minecraft.server.level.ServerLevel sl,
+                                          int x, int y, int z) {
+        try {
+            net.minecraft.world.level.material.FluidState fs =
+                    sl.getBlockState(new net.minecraft.core.BlockPos(x, y, z)).getFluidState();
+            return fs.is(net.minecraft.tags.FluidTags.WATER) || fs.is(net.minecraft.tags.FluidTags.LAVA);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            return false;
+        }
+    }
+
+    /** 复飞拉黑表的键：候选点（4 格粒度）+ 方向序号打包进一个 long。 */
+    private static long rejectKey(int bx, int bz, int i) {
+        return (((long) (bx >> 2) & 0xFFFFFFL) << 40)
+                | (((long) (bz >> 2) & 0xFFFFFFL) << 16)
+                | ((long) i & 0xFL);
+    }
+
+    /**
+     * 拉黑一条进近航道（候选点 + 方向）{@link #AIRCRAFT_LAND_REJECT_TICKS} 拍，并作废本拍规划——
+     * 下一拍 {@link #aircraftLandPlan} 就改选别的方向或别的候选点。
+     * <p>实测九百二十六：只有「一条跑道两分钟都进不了场」（够不着、或高度一直压不下来）才走这里；
+     * 普通的没对准只走进场段，不再拉黑（旧版每次复飞都拉黑一条，三条候选点用完就彻底没跑道了 →
+     * 交回巡航档飞走）。
+     */
+    private static void aircraftLandReject(Entity mount, double[] plan, long now) {
+        try {
+            UUID id = mount.getUUID();
+            AIRCRAFT_LAND_REJECT.computeIfAbsent(id, k -> new java.util.HashMap<>())
+                    .put(rejectKey(net.minecraft.util.Mth.floor(plan[0]), net.minecraft.util.Mth.floor(plan[2]), (int) plan[5]),
+                            now + AIRCRAFT_LAND_REJECT_TICKS);
+            logLand(mount, "拉黑跑道（两分钟进不了场）", "接地点=(" + (long) plan[0] + "," + (long) plan[1]
+                    + "," + (long) plan[2] + ") 方向=" + ((int) plan[5] * 45) + "度 → 换一条");
+            AIRCRAFT_LAND_PLAN.remove(id);
+            AIRCRAFT_LAND_SELF_CENTER.remove(id);
+            AIRCRAFT_LAND_RETRY.remove(id);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+    }
+
+    /** 拟真降落开着吗（读不到 → 关：与上一个版本的降落方式一致，也是本项的默认）。 */
+    private static boolean realisticLanding() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_REALISTIC_LANDING.get();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            return false;
+        }
+    }
+
+    /* ======================================================================================
+     * 【v1.3.2 · 上一个版本的降落方式】——「拟真降落」关着时整段走这里（从上一个版本原样搬回，
+     * 只把两个后来被拟真链路改过值的常量与两张缓存表改名为 *_LEGACY，行为一字不差）：扫一块
+     * 「够平」的地面当落点（3×3 落差 ×4 + 距离打分），机头朝它：远时按受控下沉率往下压、进到
+     * {@link #AIRCRAFT_LAND_FLARE_ALT} 格内就压平机翼、收油门、轻接地；找不到平地 → 返回 false
+     * 交回调用方原本口径。
+     * ====================================================================================== */
+
+    /** 上一个版本：下降段的最大下沉率（拟真链路把它提到 0.30，旧值 0.20 留在这里）。 */
+    private static final double AIRCRAFT_LAND_DESCENT_VY_MAX_LEGACY = 0.20;
+    /** 上一个版本：落点选址缓存有效期（拍）——拟真链路把这个名字借去做"规划失败的重试间隔"（20）。 */
+    private static final long AIRCRAFT_LAND_SPOT_TTL_LEGACY = 100L;
+    /** 上一个版本的落点缓存（UUID → 世界坐标，y = 该列地面高度）。 */
+    private static final java.util.Map<java.util.UUID, Vec3> AIRCRAFT_LAND_SPOT_LEGACY =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 上一个版本的落点选址时刻（UUID → gameTime），用来判缓存过期。 */
+    private static final java.util.Map<java.util.UUID, Long> AIRCRAFT_LAND_SPOT_AT_LEGACY =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 上一个版本的"降落一拍"：{@link #aircraftHomeLanding} 在「拟真降落」关着时整段交给它
+     *（找到平地就落、找不到就 {@code false} 交回调用方）。正文从上一个版本原样搬回。
+     */
+    private static boolean aircraftHomeLandingLegacy(Entity mount, Entity maid, String why) {
+        beatAircraftLanding(mount);
+        try {
+            if (mount.onGround()) {
+                // ① 已接地 → 与别的坐骑一样停住不动（顺带清 crash 标记，见本区注释）
+                resetAircraftLanding(mount);
+                clearCrash(mount);
+                stop(mount);
+                if (mSetPower != null) {
+                    try {
+                        mSetPower.invoke(mount, 0.0f);   // 贴地怠速，免得一直往前蹭
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                    }
+                }
+                logDrive(mount, "固定翼降落完成·旧式：已接地 → 停住不动（" + why + "）");
                 return true;
             }
             // 【实测七百八十四】电量见底不再是"刹住不管"，而是照常走完这套安全降落（
@@ -2653,7 +3364,7 @@ public final class MaidMountCompat {
             if (fuelDead) {
                 logDrive(mount, "固定翼电量见底 → 安全降落（" + why + "）");
             }
-            Vec3 spot = landingSpot(mount);
+            Vec3 spot = landingSpotLegacy(mount);
             if (spot == null) {
                 return false;   // 找不到平地：不硬往下扎，交回 home 档原本口径
             }
@@ -2695,7 +3406,7 @@ public final class MaidMountCompat {
                 aircraftBank(mount, 0.0f);
                 aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_TOUCH_ALT) - mount.getY(),
                         AIRCRAFT_LAND_VY_MAX);
-                logDrive(mount, "固定翼降落·接地段（" + why + "）"
+                logDrive(mount, "固定翼降落·接地段·旧式（" + why + "）"
                         + (fuelDead ? " 电量见底" : "")
                         + " 距落点=" + (long) dist + "格"
                         + " 离地=" + fmt2(aboveGround) + "格"
@@ -2705,8 +3416,8 @@ public final class MaidMountCompat {
             }
             // ②a 下降段：保持航向、怠速、按受控下沉率往地面压
             aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_MIN_ALT) - mount.getY(),
-                    AIRCRAFT_LAND_DESCENT_VY_MAX);
-            logDrive(mount, "固定翼降落·下降（" + why + "）"
+                    AIRCRAFT_LAND_DESCENT_VY_MAX_LEGACY);
+            logDrive(mount, "固定翼降落·下降·旧式（" + why + "）"
                     + (fuelDead ? " 电量见底" : "")
                     + " 距落点=" + (long) dist + "格"
                     + " 离地=" + fmt2(aboveGround) + "格"
@@ -2718,37 +3429,12 @@ public final class MaidMountCompat {
         }
     }
 
-    /** 清掉这只固定翼的降落缓存（离开 home 档 / 落成 / 收手时都要调）。 */
-    public static void resetAircraftLanding(Entity mount) {
-        try {
-            if (mount == null) {
-                return;
-            }
-            UUID id = mount.getUUID();
-            AIRCRAFT_LAND_SPOT.remove(id);
-            AIRCRAFT_LAND_SPOT_AT.remove(id);
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
-        }
-    }
-
-    /** 接地后清掉 SWB 的 crash 标记（拿不到写口 → 什么都不做）。见本区注释。 */
-    private static void clearCrash(Entity mount) {
-        if (mSetCrash == null) {
-            return;
-        }
-        try {
-            mSetCrash.invoke(mount, false);
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
-        }
-    }
-
     /**
-     * 选一块"够平"的地面当落点：扫描 {@link #AIRCRAFT_LAND_RADIUS} 方框、步长
-     * {@link #AIRCRAFT_LAND_STEP}，对每列取 3×3 的地面落差（越小越平）与到她的水平距离，
-     * 打分 {@code 落差×4 + 距离}（先求平、再求近），取最小者。带 {@link #AIRCRAFT_LAND_RETRY_TICKS}
-     * 拍缓存（免得落点逐拍跳）。全都不合格 → {@code null}。
+     * 上一个版本：选一块"够平"的地面当落点——扫描 {@link #AIRCRAFT_LAND_RADIUS} 方框、步长
+     * {@link #AIRCRAFT_LAND_STEP}，对每列取 3×3 地面落差与到她的水平距离，打分 {@code 落差×4 + 距离}
+     * 取最小者，带 {@link #AIRCRAFT_LAND_SPOT_TTL_LEGACY} 拍缓存；全不合格 → {@code null}。
      */
-    private static Vec3 landingSpot(Entity mount) {
+    private static Vec3 landingSpotLegacy(Entity mount) {
         if (!(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
             return null;
         }
@@ -2758,9 +3444,9 @@ public final class MaidMountCompat {
             now = sl.getGameTime();
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
-        Vec3 cached = AIRCRAFT_LAND_SPOT.get(id);
-        Long at = AIRCRAFT_LAND_SPOT_AT.get(id);
-        if (cached != null && at != null && now - at < AIRCRAFT_LAND_RETRY_TICKS) {
+        Vec3 cached = AIRCRAFT_LAND_SPOT_LEGACY.get(id);
+        Long at = AIRCRAFT_LAND_SPOT_AT_LEGACY.get(id);
+        if (cached != null && at != null && now - at < AIRCRAFT_LAND_SPOT_TTL_LEGACY) {
             return cached;
         }
         int cx = net.minecraft.util.Mth.floor(mount.getX());
@@ -2785,10 +3471,38 @@ public final class MaidMountCompat {
             }
         }
         if (best != null) {
-            AIRCRAFT_LAND_SPOT.put(id, best);
-            AIRCRAFT_LAND_SPOT_AT.put(id, now);
+            AIRCRAFT_LAND_SPOT_LEGACY.put(id, best);
+            AIRCRAFT_LAND_SPOT_AT_LEGACY.put(id, now);
         }
         return best;
+    }
+
+    /** 清掉这只固定翼的降落缓存（离开 home 档 / 落成 / 收手时都要调）。 */
+    public static void resetAircraftLanding(Entity mount) {
+        try {
+            if (mount == null) {
+                return;
+            }
+            UUID id = mount.getUUID();
+            AIRCRAFT_LAND_PLAN.remove(id);
+            AIRCRAFT_LAND_SELF_CENTER.remove(id);
+            AIRCRAFT_LAND_REJECT.remove(id);
+            AIRCRAFT_LAND_PATTERN.remove(id);
+            AIRCRAFT_LAND_SPOT_LEGACY.remove(id);   // 旧链路那两张表一并清（一场降落只走其中一条）
+            AIRCRAFT_LAND_SPOT_AT_LEGACY.remove(id);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+    }
+
+    /** 接地后清掉 SWB 的 crash 标记（拿不到写口 → 什么都不做）。见本区注释。 */
+    private static void clearCrash(Entity mount) {
+        if (mSetCrash == null) {
+            return;
+        }
+        try {
+            mSetCrash.invoke(mount, false);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
     }
 
     /** 这一列的地面高度（世界高度图，与 {@link #columnFloor} 同源）；取不到 → {@code Integer.MIN_VALUE}。 */
@@ -2893,7 +3607,7 @@ public final class MaidMountCompat {
         }
         // 【实测七百八十一】净空 = CLEAR + 固定翼专属 ALT_BONUS（只这条路用，别处不碰）。
         return g == Integer.MIN_VALUE ? Double.NEGATIVE_INFINITY
-                : g + 1.0 + AIRCRAFT_TERRAIN_CLEAR + AIRCRAFT_ALT_BONUS;
+                : g + 1.0 + AIRCRAFT_TERRAIN_CLEAR + aircraftAltBonus();
     }
 
     /**
@@ -3226,6 +3940,10 @@ public final class MaidMountCompat {
     private static final double VEH_AVOID_LIFT = 6.0;
     /** 前方探测距离（格）：机身高度起连续三层都算。 */
     private static final int VEH_PROBE_LEN = 8;
+    /** 实测九百三十八：竖直往机身上方探这么多层（防高墙探不到顶）。 */
+    private static final int VEH_PROBE_UP = 4;
+    /** 实测九百三十八：单次避险抬升的上限（格）——按障碍高度抬，但也别抬到天上。 */
+    private static final double VEH_AVOID_LIFT_MAX = 16.0;
 
     /**
      * 这一拍该给期望高度加多少"避险抬升"（格）；不需要 → 0。
@@ -3265,18 +3983,23 @@ public final class MaidMountCompat {
                     hz = Math.cos(Math.toRadians(yaw));
                 }
                 int by = net.minecraft.util.Mth.floor(mount.getY());
-                for (int d = 1; d <= VEH_PROBE_LEN; d++) {
+                // 实测九百三十八【前瞻按速度加长 + 按障碍高度抬够】：旧版只看正前方 8 格、一次抬 6 格、
+                //   且只探机身上方三层——飞得快时她撞上才反应、高墙也探不到顶，看着像"完全不躲障碍"。
+                //   现在前瞻 = 8 + 速度×10（封顶 28 格）、竖直探到机身上方 5 层、抬升量取"从障碍顶上过
+                //   + 1 格余量"（不足 6 格也抬 6）。过了障碍前瞻自然归 0，她回落到原高度（与扫帚同款）。
+                int probe = VEH_PROBE_LEN + (int) Math.min(20.0, hspeed * 10.0);
+                for (int d = 1; d <= probe; d++) {
                     int bx = net.minecraft.util.Mth.floor(mount.getX() + hx * d);
                     int bz = net.minecraft.util.Mth.floor(mount.getZ() + hz * d);
-                    boolean blocked = false;
-                    for (int up = 0; up <= 2; up++) {
+                    int topBlock = Integer.MIN_VALUE;
+                    for (int up = 0; up <= VEH_PROBE_UP; up++) {
                         if (!sl.getBlockState(new net.minecraft.core.BlockPos(bx, by + up, bz)).isAir()) {
-                            blocked = true;
-                            break;
+                            topBlock = by + up;
                         }
                     }
-                    if (blocked) {
-                        lift = Math.max(lift, VEH_AVOID_LIFT);
+                    if (topBlock != Integer.MIN_VALUE) {
+                        double need = (topBlock + 2.0) - mount.getY();
+                        lift = Math.max(lift, clamp(need, VEH_AVOID_LIFT, VEH_AVOID_LIFT_MAX));
                         break;
                     }
                 }
@@ -3562,6 +4285,32 @@ public final class MaidMountCompat {
     }
 
     /**
+     * 【实测九百三十四】降落链路专用的**硬**速度环：形如 {@link #aircraftGovernSpeed}，只把每拍
+     *  允许的减速量从巡航的 {@link #AIRCRAFT_SPEED_DECEL}（0.04）换成 {@link #AIRCRAFT_LAND_SPEED_STEP}
+     *  （0.15）。巡航那个环"只压不拉"、每拍只削 0.04，压不住引擎的冲刺推力（实机日志降落全程
+     *  {@code 水平速度=2.8~3.2}、{@code 推力=3.00}），设计值 0.80 等于没有；而转弯半径 {@code r ≈ v/0.0298}
+     *  随 v 线性变大，v≈3 时 ≈100 格，她根本转不进 14 格宽的进近走廊。这里每拍都把速度真的钳回
+     *  {@code max(target, 当前值 − step)}；进近段 target 随距离收敛到 0（见调用点），于是她是**逐渐**减速到零。
+     */
+    static int aircraftGovernSpeedHard(Entity mount, double target, double step) {
+        try {
+            Vec3 dm = mount.getDeltaMovement();
+            double hs = Math.sqrt(dm.x * dm.x + dm.z * dm.z);
+            if (hs < 1.0E-6) {
+                return BRAKE_FLAG_CAP;
+            }
+            double cap = Math.max(target, hs - step);
+            if (hs <= cap) {
+                return BRAKE_FLAG_CAP;
+            }
+            double k = cap / hs;
+            mount.setDeltaMovement(dm.x * k, dm.y, dm.z * k);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+        return BRAKE_FLAG_CAP;
+    }
+
+    /**
      * <p>固定翼这一整条链上，有两处会主动把 {@code power} 往下拉：
      * 引擎自己的盘旋（{@code aircraftLoiter:1337}，收敛到 0.5~0.9）与空中每拍 0.012 的衰减
      * （{@code aircraftEngine:753}）。而 {@code power} 直接决定推力
@@ -3737,7 +4486,6 @@ public final class MaidMountCompat {
      * （那条通道同时驱动滚转，见 {@link #forceHeadingOnto}）。
      */
     private static final float FLIGHT_YAW_TRIM = 1.5f;
-
 
     /**
      * 【实测七百三十二】急停脉冲的间隔（拍）：
@@ -5886,6 +6634,36 @@ public final class MaidMountCompat {
                 LOG_AT.clear(); // 兜底：表不会无限涨
             }
             com.maidsmart.tool.PromaidLog.log("模组坐骑", describeKind(mount) + " " + detail);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+    }
+
+    /** 【实测九百三十一】降落链路的独立日志节流（按"种类"分开限频：{@code uuid|种类} → 上次打印毫秒）。 */
+    private static final java.util.Map<String, Long> LAND_AT = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 【实测九百三十一】降落链路每条"种类"的限频间隔（毫秒）：1000 = 1 秒/种类。 */
+    private static final long LAND_LOG_INTERVAL_MS = 1000L;
+
+    /**
+     * 【实测九百三十一】降落链路专用留痕：{@code kind} = 种类（定跑道 / 进圈 / 进场 / 接地段 / 进近 /
+     * 盘旋 / 完成 / 电量见底 / 规划失败 / 规划退避 / 跑道作废 / 拉黑跑道），{@code detail} = 现场值。
+     * <p>为什么另开一条：旧版全部走 {@link #logDrive}，那是**每只载具一个 5 秒槽、所有降落行共用**
+     * ——实机日志里正好每 5 秒只出现一条，`定跑道`（到底有没有找到跑道）被整个饿死，九百三十 之前
+     * 的降落排查全是猜。现在按种类分开限频 1 秒，每一种都看得见。
+     */
+    private static void logLand(Entity mount, String kind, String detail) {
+        try {
+            long now = System.currentTimeMillis();
+            String key = mount.getUUID() + "|" + kind;
+            Long last = LAND_AT.get(key);
+            if (last != null && now - last < LAND_LOG_INTERVAL_MS) {
+                return;
+            }
+            LAND_AT.put(key, now);
+            if (LAND_AT.size() > 1024) {
+                LAND_AT.clear(); // 兜底：表不会无限涨
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑", describeKind(mount) + " 固定翼降落·" + kind + " " + detail);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }

@@ -7,8 +7,8 @@
 
 | 树 | 配置项 | 布尔 | 节数 |
 |---|---|---|---|
-| promaid_src（Forge 1.20.1） | 597 | 259 | 24 |
-| promaid_src_neo（NeoForge 1.21.1） | 601 | 263 | 24 |
+| promaid_src（Forge 1.20.1） | 591 | 261 | 24 |
+| promaid_src_neo（NeoForge 1.21.1） | 595 | 265 | 24 |
 
 同一路径被定义两次的（TOML 后者覆盖前者，见 `DEBT.md` TD-08）：（无）
 Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`combat.maceCooldown`、`combat.maceSmash`、`combat.maceTriggerRange`、`combat.maceWindCharge`、`misc.freeFlight`、`misc.freeFlightGravity`、`misc.freeFlightIdle`、`misc.freeFlightIdleSeconds`、`misc.freeFlightNearDist`、`misc.freeFlightTravel`、`misc.freeFlightTravelDist`、`misc.glideElytraAnimation`、`tether.maceSmash`
@@ -46,7 +46,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.autoCollect` | bool | false | 自动收集（挖掘掉落物直接进女仆背包，不进世界 |
 | `wood.pillarGuard` | bool | true | 搭方块防掉落（潜行效果，速度不变） |
 | `wood.autoCollect` | bool | false | 自动收集（砍伐掉落物直接进女仆背包，不进世界） |
-| `misc.pickupPriority` | bool | true | 挖矿中禁止拾取（捡掉落物最低优先级） |
+| `misc.pickupPriority` | bool | false | 挖矿中禁止拾取（捡掉落物最低优先级 |
 | `misc.pickupValueReorder` | bool | true | 拾取按价值重排（默认开） |
 | `misc.autoCollect` | bool | false | 农场掉落物立即拾取（默认关） |
 
@@ -68,7 +68,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.dimensionFollow` | bool | true | 跟随女仆跨维度传送（主人换维度后，跟随模式女仆自动传送到主人身边 |
 | `misc.maidChunkLoad` | bool | true | 女仆区块强制加载（所有有主女仆所在区块持续保持实体 ticking，随时可传送/召回/救援 |
 | `misc.maidTeleportRebuild` | bool | true | 传送后客户端重建（默认开） |
-| `misc.workTeleportHold` | bool | true | 干活时不被传送召回（默认开） |
+| `misc.workTeleportHold` | bool | true | 干活时不被召回（默认开） |
 
 ### 排班 / 作息　（14 项）
 
@@ -89,7 +89,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.scheduleActivityRange` | num | 12 | 排班活动半径（格，默认 12） |
 | `misc.scheduleRangeFloor` | bool | true | 排班活动半径下限生效（默认开） |
 
-### 战斗 / 自保　（134 项）
+### 战斗 / 自保　（135 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -213,6 +213,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `combat.autoSwitchThreatExpandSeconds` | num | 10 | 动态威胁圈（秒，默认 10） |
 | `combat.combatWorkRange` | num | 15 | 战斗时临时扩圈（格，默认 15，0 = 关闭） |
 | `combat.assistRadius` | num | 16 | 援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3） |
+| `combat.takeOverMovement` | bool | true | 接管走位（默认开） |
 | `combat.sweepAlways` | bool | true | 平A必横扫（默认开） |
 | `combat.attackThoseAttackingUs` | bool | true | 反击类型判不出的攻击者（默认开） |
 | `combat.friendlyFireGuard` | bool | true | 主人/友军免伤总闸（默认开） |
@@ -354,7 +355,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `ride.airCombat` | bool | true | 骑飞行载具时的悬停与低空盘旋（默认开） |
 | `ride.ammoFeed` | bool | true | 骑载具时替她装弹（默认开） |
 
-### 挖矿 / 伐木　（72 项）
+### 挖矿 / 伐木　（59 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -362,12 +363,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.extraBreakables` | list | List.of( | 额外可挖穿方块（障碍物名单，path 名如 oak_log——女仆挖矿遇到会挖穿而非当硬挡路报点弃置） |
 | `mine.disabledBreakables` | list | List.of(
                         "oak_log" | 已取消挖穿的障碍物（排除名单，path 名如 spruce_log） |
-| `mine.searchRadius` | num | 24 | 矿物检索半径（水平） |
+| `mine.searchRadius` | num | 48 | 矿物检索半径（水平） |
 | `mine.downRange` | num | 12 | 垂直向下搜索范围 |
 | `mine.upRange` | num | 24 | 垂直向上搜索范围 |
 | `mine.breakBudget` | num | 22 | 穿透预算（默认 22） |
-| `mine.valueWeight` | num | 2.0 | 价值权重（高价值矿优先程度） |
-| `mine.depthPenalty` | num | 3.0 | 深度惩罚（越深成本越高） |
 | `mine.speedFactor` | num | 1.2 | 挖矿速度系数（1.0=玩家速度，1.2=快20%） |
 | `mine.moveSpeed` | num | 0.6 | 发现矿物后的移动速度（0.6 = TLM 伐木任务同款移速（IFarmTask 同款 0.6f），走路观感自然） |
 | `mine.junkKeep` | num | 32 | 废石保留量（每种超出销毁） |
@@ -375,34 +374,27 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致） |
 | `mine.pillarGuard` | bool | true | 搭方块防掉落（潜行效果，速度不变） |
 | `mine.hardBlockReport` | bool | true | 硬挡路（箱子/机器等）报点弃置该矿 |
-| `mine.creativeDefaultValue` | num | 300 | 创造面板添加矿物的默认价值 |
-| `mine.seekThroughWalls` | bool | false | 透视感知（隔墙找矿，默认关） |
+| `mine.seekThroughWalls` | bool | true | 智能挖矿（默认开） |
 | `mine.anchorTimeout` | num | 200 | 锚点出框超时（tick，出框超过此时长重埋锚点） |
 | `mine.relocateThrottle` | num | 20 | 重定位节流（tick，防边界抖动） |
-| `mine.targetTimeout` | num | 300 | 目标超时（tick，够不到矿超时放弃） |
 | `mine.reach` | num | 4.5 | 挖掘/捡拾距离（格） |
 | `mine.pillarCooldown` | num | 4 | 搭方块冷却（tick，垫脚下/搭路节奏） |
 | `mine.rideNoPillar` | bool | true | 骑乘/坐下中禁止搭方块（默认开；对**所有**搭方块行为生效） |
 | `mine.junkCheckInterval` | num | 100 | 废石清理检查间隔（tick） |
 | `mine.scanBudget` | num | 4096 | 挖矿扫描预算（格/tick，默认 4096） |
 | `mine.skipReportInterval` | num | 600 | 跳过矿/捡不到掉落播报间隔（tick，防刷屏） |
+| `mine.noTargetPause` | num | 10 | 无目标静默闲逛时长（秒，挖矿与伐木共用） |
 | `mine.chainMining` | bool | true | 连锁采集（默认开） |
 | `mine.autoCollect` | bool | false | 自动收集（挖掘掉落物直接进女仆背包，不进世界 |
 | `mine.chainLimit` | num | 16 | 连锁采集上限（块） |
 | `mine.chainFullDurability` | bool | false | 连锁采集每块都消耗耐久（默认关） |
-| `mine.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
-| `mine.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8，发呆出现很快） |
 | `mine.requirePick` | bool | true | 没镐不启动（默认开） |
-| `mine.repick` | bool | true | 锁定期间持续重挑（默认开） |
 | `wood.woodValues` | list | List.of(
                                 "minecraft:oak_log=300" | 可砍伐木材表 |
-| `wood.tagAuto` | bool | true | 自动识别模组原木（默认开） |
-| `wood.searchRadius` | num | 24 | 木材检索半径（水平） |
+| `wood.searchRadius` | num | 48 | 木材检索半径（水平） |
 | `wood.downRange` | num | 4 | 垂直向下搜索范围（格）——树在地表，默认只往下看 4 格 |
 | `wood.upRange` | num | 24 | 垂直向上搜索范围（格）——树冠/巨型蘑菇很高，默认 24 |
 | `wood.breakBudget` | num | 22 | 穿透预算（允许挖开多少层不可开路挡路方块）——与挖矿共享障碍物名单 |
-| `wood.valueWeight` | num | 2.0 | 价值权重 |
-| `wood.depthPenalty` | num | 0.0 | 深度惩罚（每格扣分）——树在地表，默认 0（不偏好浅层） |
 | `wood.speedFactor` | num | 1.2 | 砍伐速度系数（1.0=玩家速度，1.2=快20%） |
 | `wood.moveSpeed` | num | 0.3 | 接近木材速度倍率（0.6→0.3——伐木移速至少快一倍，观感像狂奔 |
 | `wood.junkKeep` | num | 32 | 废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组 |
@@ -410,11 +402,9 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `wood.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗斧耐久 |
 | `wood.pillarGuard` | bool | true | 搭方块防掉落（潜行效果，速度不变） |
 | `wood.hardBlockReport` | bool | true | 硬挡路（箱子/机器等）报点弃置该木材 |
-| `wood.creativeDefaultValue` | num | 300 | 创造面板默认价值 |
 | `wood.seekThroughWalls` | bool | true | 透视感知（隔墙找木材，默认开）——开启后女仆能发现视线被方块挡住的木材并挖通开路 |
 | `wood.anchorTimeout` | num | 200 | 锚点出框超时（tick） |
 | `wood.relocateThrottle` | num | 20 | 重定位节流（tick，防边界抖动） |
-| `wood.targetTimeout` | num | 300 | 目标超时（tick，够不到木材超时放弃） |
 | `wood.reach` | num | 4.5 | 砍伐距离（格） |
 | `wood.pillarCooldown` | num | 4 | 搭方块冷却（tick，垫脚下/搭路节奏） |
 | `wood.plantSaplingEnabled` | bool | true | 随手种树（默认开） |
@@ -426,14 +416,12 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `wood.autoCollect` | bool | false | 自动收集（砍伐掉落物直接进女仆背包，不进世界） |
 | `wood.chainLimit` | num | 16 | 连锁砍伐上限（块） |
 | `wood.leavesClear` | bool | true | 树冠清理（默认开） |
-| `wood.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
-| `wood.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8） |
 | `aitools.switchTask` | bool | true | smart_switch_task 工具（切换任务/工作模式——TLM 原生 + 本模组任务全可切，支持空袭/挖矿/ |
 | `bridge.reclaimToMaid` | bool | true | 搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用） |
-| `misc.pickupPriority` | bool | true | 挖矿中禁止拾取（捡掉落物最低优先级） |
+| `misc.pickupPriority` | bool | false | 挖矿中禁止拾取（捡掉落物最低优先级 |
 | `misc.orbJoin` | bool | true | 经验球归挖矿女仆（默认开） |
 
-### 建造 / 蓝图　（36 项）
+### 建造 / 蓝图　（37 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -454,6 +442,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `build.keepFluids` | str | "auto" | 图纸流体保留（水/岩浆） |
 | `build.looseMaterials` | str | "machine" | 缺料同类宽松 |
 | `build.tntIgnitionGrace` | num | 120 | TNT 点火保护期（秒，默认 120） |
+| `build.snapFinish` | bool | true | 完工整体重放（默认开） |
 | `build.projection` | bool | true | 蓝图投影预览 |
 | `build.fetchFromChests` | bool | true | 从箱子取材料（默认开） |
 | `build.chestSearchMargin` | num | 4 | 取料扫描外扩（格，默认 4） |
@@ -750,7 +739,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `aitools.ownerInventory` | bool | true | smart_owner_inventory 工具（查看主人背包里有什么——只读查询，不修改物品） |
 | `aitools.switchTask` | bool | true | smart_switch_task 工具（切换任务/工作模式——TLM 原生 + 本模组任务全可切，支持空袭/挖矿/ |
 | `aitools.airRaid` | bool | true | smart_air_raid 工具（起飞空袭/停止空袭——可指定近战或远程、锁定目标，并回报"缺不缺件"） |
-| `aitools.workArea` | bool | true | smart_work_area 工具（把工作区设到此处并驻守 / 解除驻守恢复跟随 / 查看锚点——写的是与中键工位 |
+| `aitools.workArea` | bool | true | smart_work_area 工具（把工作区设到此处并驻守 / 解除驻守恢复跟随 / 查看锚点——写的就是 TLM |
 | `aitools.readiness` | bool | true | smart_readiness 工具（只读自检——空袭三件套/弹药/驻守/排班/工作锚点/血量，让模型"先查后做"） |
 
 ### bombing　（25 项）
@@ -781,7 +770,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `bombing.fireRender` | bool | true | 粉色火焰渲染（默认开） |
 | `bombing.fireProtect` | bool | true | 火焰伤害保护（默认开） |
 | `bombing.tntTrack` | bool | true | TNT 追踪飞行（默认开） |
-| `bombing.tntTrackTicks` | num | 10 | TNT 追踪时长（tick，默认 10 = 0.5 秒，0 = 不追踪） |
+| `bombing.tntTrackTicks` | num | 20 | TNT 追踪时长（tick，默认 20 = 1 秒，0 = 不追踪） |
 
 ### bridge　（14 项）
 
@@ -824,7 +813,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `broom.clearance` | num | 1.5 | 新建航迹的默认净空半径（格，默认 1.5，0.5~6.0） |
 | `broom.maxRadius` | num | 128 | 巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制） |
 
-### build　（34 项）
+### build　（35 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -845,6 +834,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `build.keepFluids` | str | "auto" | 图纸流体保留（水/岩浆） |
 | `build.looseMaterials` | str | "machine" | 缺料同类宽松 |
 | `build.tntIgnitionGrace` | num | 120 | TNT 点火保护期（秒，默认 120） |
+| `build.snapFinish` | bool | true | 完工整体重放（默认开） |
 | `build.projection` | bool | true | 蓝图投影预览 |
 | `build.fetchFromChests` | bool | true | 从箱子取材料（默认开） |
 | `build.chestSearchMargin` | num | 4 | 取料扫描外扩（格，默认 4） |
@@ -863,7 +853,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `build.areaProtection` | bool | true | 建造区保护（默认开） |
 | `build.forceWorkActivity` | bool | true | 建造任务强制工作时段（默认开） |
 
-### combat　（124 项）
+### combat　（125 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -987,6 +977,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `combat.autoSwitchThreatExpandSeconds` | num | 10 | 动态威胁圈（秒，默认 10） |
 | `combat.combatWorkRange` | num | 15 | 战斗时临时扩圈（格，默认 15，0 = 关闭） |
 | `combat.assistRadius` | num | 16 | 援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3） |
+| `combat.takeOverMovement` | bool | true | 接管走位（默认开） |
 | `combat.sweepAlways` | bool | true | 平A必横扫（默认开） |
 | `combat.attackThoseAttackingUs` | bool | true | 反击类型判不出的攻击者（默认开） |
 | `combat.friendlyFireGuard` | bool | true | 主人/友军免伤总闸（默认开） |
@@ -998,7 +989,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
-| `compat.puppetBlacklist` | bool | true | 傀儡模式黑名单（默认开） |
+| `compat.puppetBlacklist` | bool | true | 第三方玩法模式黑名单（默认开） |
 
 ### compressionBox　（2 项）
 
@@ -1117,7 +1108,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `memory.embedTimeout` | num | 5000 | embeddings 请求超时（毫秒） |
 | `memory.embedBatch` | num | 16 | embeddings 单批文本数上限 |
 
-### mine　（35 项）
+### mine　（29 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1125,12 +1116,10 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.extraBreakables` | list | List.of( | 额外可挖穿方块（障碍物名单，path 名如 oak_log——女仆挖矿遇到会挖穿而非当硬挡路报点弃置） |
 | `mine.disabledBreakables` | list | List.of(
                         "oak_log" | 已取消挖穿的障碍物（排除名单，path 名如 spruce_log） |
-| `mine.searchRadius` | num | 24 | 矿物检索半径（水平） |
+| `mine.searchRadius` | num | 48 | 矿物检索半径（水平） |
 | `mine.downRange` | num | 12 | 垂直向下搜索范围 |
 | `mine.upRange` | num | 24 | 垂直向上搜索范围 |
 | `mine.breakBudget` | num | 22 | 穿透预算（默认 22） |
-| `mine.valueWeight` | num | 2.0 | 价值权重（高价值矿优先程度） |
-| `mine.depthPenalty` | num | 3.0 | 深度惩罚（越深成本越高） |
 | `mine.speedFactor` | num | 1.2 | 挖矿速度系数（1.0=玩家速度，1.2=快20%） |
 | `mine.moveSpeed` | num | 0.6 | 发现矿物后的移动速度（0.6 = TLM 伐木任务同款移速（IFarmTask 同款 0.6f），走路观感自然） |
 | `mine.junkKeep` | num | 32 | 废石保留量（每种超出销毁） |
@@ -1138,27 +1127,23 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `mine.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致） |
 | `mine.pillarGuard` | bool | true | 搭方块防掉落（潜行效果，速度不变） |
 | `mine.hardBlockReport` | bool | true | 硬挡路（箱子/机器等）报点弃置该矿 |
-| `mine.creativeDefaultValue` | num | 300 | 创造面板添加矿物的默认价值 |
-| `mine.seekThroughWalls` | bool | false | 透视感知（隔墙找矿，默认关） |
+| `mine.seekThroughWalls` | bool | true | 智能挖矿（默认开） |
 | `mine.anchorTimeout` | num | 200 | 锚点出框超时（tick，出框超过此时长重埋锚点） |
 | `mine.relocateThrottle` | num | 20 | 重定位节流（tick，防边界抖动） |
-| `mine.targetTimeout` | num | 300 | 目标超时（tick，够不到矿超时放弃） |
 | `mine.reach` | num | 4.5 | 挖掘/捡拾距离（格） |
 | `mine.pillarCooldown` | num | 4 | 搭方块冷却（tick，垫脚下/搭路节奏） |
 | `mine.rideNoPillar` | bool | true | 骑乘/坐下中禁止搭方块（默认开；对**所有**搭方块行为生效） |
 | `mine.junkCheckInterval` | num | 100 | 废石清理检查间隔（tick） |
 | `mine.scanBudget` | num | 4096 | 挖矿扫描预算（格/tick，默认 4096） |
 | `mine.skipReportInterval` | num | 600 | 跳过矿/捡不到掉落播报间隔（tick，防刷屏） |
+| `mine.noTargetPause` | num | 10 | 无目标静默闲逛时长（秒，挖矿与伐木共用） |
 | `mine.chainMining` | bool | true | 连锁采集（默认开） |
 | `mine.autoCollect` | bool | false | 自动收集（挖掘掉落物直接进女仆背包，不进世界 |
 | `mine.chainLimit` | num | 16 | 连锁采集上限（块） |
 | `mine.chainFullDurability` | bool | false | 连锁采集每块都消耗耐久（默认关） |
-| `mine.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
-| `mine.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8，发呆出现很快） |
 | `mine.requirePick` | bool | true | 没镐不启动（默认开） |
-| `mine.repick` | bool | true | 锁定期间持续重挑（默认开） |
 
-### misc　（82 项）
+### misc　（84 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1173,7 +1158,6 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.strollSpeed` | num | 0.4 | 散步速度倍率（默认 0.4；范围 0.05~2.5） |
 | `misc.bedInterop` | bool | true | 床铺互通（默认开） |
 | `misc.cooldownHud` | bool | true | 冷却可视化 HUD（默认开） |
-| `misc.workPosMarker` | bool | true | 中键工位标记（默认开） |
 | `misc.noPlaceInAir` | bool | true | 悬空禁搭方块（默认开） |
 | `misc.noPlaceOnOwner` | bool | true | 不得搭在主人身上（默认开） |
 | `misc.cakeEdible` | bool | true | 蛋糕可食用（默认开） |
@@ -1188,7 +1172,7 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.bubbleLimitMs` | num | 5000 | 对话气泡限频（毫秒，防刷屏） |
 | `misc.scheduleBubbleEnabled` | bool | true | 排班贴身气泡（默认开） |
 | `misc.scheduleBubbleDist` | num | 3.5 | 排班贴身气泡触发距离（格，默认 3.5） |
-| `misc.pickupPriority` | bool | true | 挖矿中禁止拾取（捡掉落物最低优先级） |
+| `misc.pickupPriority` | bool | false | 挖矿中禁止拾取（捡掉落物最低优先级 |
 | `misc.pickupValueReorder` | bool | true | 拾取按价值重排（默认开） |
 | `misc.verticalRange` | num | 4 | 烹饪/酿造垂直搜索范围 |
 | `misc.brewAuto` | bool | true | 酿造自动下料（true=自动两阶段酿药 / false=只维持 |
@@ -1240,11 +1224,14 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `misc.baubleTotem` | bool | true | 饰品/背包不死图腾复活（默认开） |
 | `misc.orbJoin` | bool | true | 经验球归挖矿女仆（默认开） |
 | `misc.equipRescue` | bool | true | 装备救回（默认开） |
-| `misc.workTeleportHold` | bool | true | 干活时不被传送召回（默认开） |
+| `misc.workTeleportHold` | bool | true | 干活时不被召回（默认开） |
 | `misc.homeMovement` | bool | true | home 模式走位（默认开） |
 | `misc.stationaryLock` | bool | true | 站桩锁位（默认开） |
 | `misc.fishingChair` | bool | true | 钓鱼自动坐垫（默认开） |
+| `misc.takeOverFishing` | bool | true | 接管钓鱼（默认开） |
+| `misc.takeOverFarm` | bool | true | 接管农场（默认开） |
 | `misc.drivenNoStroll` | bool | true | 坐骑不闲逛（默认开） |
+| `misc.serverForcedConfig` | bool | false | 多人服务器 |
 
 ### perception　（12 项）
 
@@ -1256,14 +1243,14 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `perception.weather` | bool | true | 天气变化检测 |
 | `perception.scanInterval` | num | 20 | 快照扫描间隔（tick） |
 | `perception.eventCooldown` | num | 30 | 同类事件播报限频（秒，非敌对事件用） |
-| `perception.hostileShowCooldown` | num | 300 | 敌对感知显示限频（秒，感知检测照常、仅'发现怪物'类显示大大降频 |
+| `perception.hostileShowCooldown` | num | 300 | 敌对感知显示限频（秒，默认 300 = 5 分钟一条） |
 | `perception.ownerLowHealth` | num | 30 | 主人血量低阈值（%） |
 | `perception.lookTicks` | num | 3 | 主人持续注视判定时长（秒） |
 | `perception.lookEnterDeg` | num | 35.0 | 看向进入角度（度） |
 | `perception.lookExitDeg` | num | 55.0 | 看向退出角度（度） |
 | `perception.lookCooldown` | num | 1800 | 「主人一直在看着我…」触发间隔（秒，每只女仆各自计时 |
 
-### ride　（18 项）
+### ride　（21 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
@@ -1285,6 +1272,9 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `ride.orbitRadius` | num | 4.0 | 盘旋半径（格，默认 4，2~24） |
 | `ride.ammoFeed` | bool | true | 骑载具时替她装弹（默认开） |
 | `ride.bombStandoff` | num | 20.0 | 投弹安全高度（格，默认 20，0~64） |
+| `ride.fixedWingAltBonus` | num | 60.0 | 固定翼（滑翔式）额外加高（格，默认 60，0~80） |
+| `ride.realisticLanding` | bool | false | 拟真降落（默认关） |
+| `ride.batonMark` | bool | true | 骑乘指挥棒·光标（默认开） |
 
 ### spawnerTorch　（7 项）
 
@@ -1333,19 +1323,16 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `voice.freeFlightTravelDist` | num | 8.0 | 仿创造飞行·超过多远就改飞（格，默认 8） |
 | `voice.glideElytraAnimation` | bool | false | 滑翔时改用模型自己的鞘翅动画（默认关） |
 
-### wood　（33 项）
+### wood　（26 项）
 
 | 配置键 | 类型 | 默认 | 作用（注释首句） |
 |---|---|---|---|
 | `wood.woodValues` | list | List.of(
                                 "minecraft:oak_log=300" | 可砍伐木材表 |
-| `wood.tagAuto` | bool | true | 自动识别模组原木（默认开） |
-| `wood.searchRadius` | num | 24 | 木材检索半径（水平） |
+| `wood.searchRadius` | num | 48 | 木材检索半径（水平） |
 | `wood.downRange` | num | 4 | 垂直向下搜索范围（格）——树在地表，默认只往下看 4 格 |
 | `wood.upRange` | num | 24 | 垂直向上搜索范围（格）——树冠/巨型蘑菇很高，默认 24 |
 | `wood.breakBudget` | num | 22 | 穿透预算（允许挖开多少层不可开路挡路方块）——与挖矿共享障碍物名单 |
-| `wood.valueWeight` | num | 2.0 | 价值权重 |
-| `wood.depthPenalty` | num | 0.0 | 深度惩罚（每格扣分）——树在地表，默认 0（不偏好浅层） |
 | `wood.speedFactor` | num | 1.2 | 砍伐速度系数（1.0=玩家速度，1.2=快20%） |
 | `wood.moveSpeed` | num | 0.3 | 接近木材速度倍率（0.6→0.3——伐木移速至少快一倍，观感像狂奔 |
 | `wood.junkKeep` | num | 32 | 废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组 |
@@ -1353,11 +1340,9 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `wood.softNoDurability` | bool | true | 软方块（徒手可挖）开路不消耗斧耐久 |
 | `wood.pillarGuard` | bool | true | 搭方块防掉落（潜行效果，速度不变） |
 | `wood.hardBlockReport` | bool | true | 硬挡路（箱子/机器等）报点弃置该木材 |
-| `wood.creativeDefaultValue` | num | 300 | 创造面板默认价值 |
 | `wood.seekThroughWalls` | bool | true | 透视感知（隔墙找木材，默认开）——开启后女仆能发现视线被方块挡住的木材并挖通开路 |
 | `wood.anchorTimeout` | num | 200 | 锚点出框超时（tick） |
 | `wood.relocateThrottle` | num | 20 | 重定位节流（tick，防边界抖动） |
-| `wood.targetTimeout` | num | 300 | 目标超时（tick，够不到木材超时放弃） |
 | `wood.reach` | num | 4.5 | 砍伐距离（格） |
 | `wood.pillarCooldown` | num | 4 | 搭方块冷却（tick，垫脚下/搭路节奏） |
 | `wood.plantSaplingEnabled` | bool | true | 随手种树（默认开） |
@@ -1369,8 +1354,6 @@ Neo 树比 Forge 树多出的配置项（14 个）：`airRaid.smashMinFall`、`c
 | `wood.autoCollect` | bool | false | 自动收集（砍伐掉落物直接进女仆背包，不进世界） |
 | `wood.chainLimit` | num | 16 | 连锁砍伐上限（块） |
 | `wood.leavesClear` | bool | true | 树冠清理（默认开） |
-| `wood.stuckWatchdog` | bool | true | 发呆看门狗（默认开） |
-| `wood.stuckResetSeconds` | num | 8 | 看门狗判定时长（秒，默认 8） |
 
 ## 4. 文案存量（`WORKFLOW.md` §6：只减不增）
 

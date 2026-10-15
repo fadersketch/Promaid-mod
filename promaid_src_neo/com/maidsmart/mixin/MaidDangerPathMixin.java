@@ -28,7 +28,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
     @Mixin({WalkNodeEvaluator.class, net.minecraft.world.level.pathfinder.FlyNodeEvaluator.class})
     public abstract class MaidDangerPathMixin {
 
-    @Inject(method = "getPathType", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "getPathType(Lnet/minecraft/world/level/pathfinder/PathfindingContext;III)"
+            + "Lnet/minecraft/world/level/pathfinder/PathType;",
+            at = @At("RETURN"), cancellable = true)
     private void maidsmart$avoidDangerBlocks(net.minecraft.world.level.pathfinder.PathfindingContext ctx, int x, int y, int z,
                                              CallbackInfoReturnable<PathType> cir) {
         // 1.21.1 重构：评估器不再接收 mob 参数，PathfindingContext 也只留 mobPosition——

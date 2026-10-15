@@ -6,23 +6,29 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import java.util.Map;
 
 /**
- * 第三方「玩法模式」黑名单——对象 =《傀儡装配》Modular Golems 给女仆注册的任务「傀儡师」
- * （UID {@code modulargolems:summon_golems}，实现 {@code IRangedAttackTask}，进入条件=主手万能手杖）。
- *
- * 【为什么拉黑】它是 {@code IRangedAttackTask}——本模组所有「战斗任务」口径（自主参战任务池、投弹链路、
- * 单兵战术）都会当成战斗模式，可它的玩法是"女仆站后面指挥傀儡"，本模组那套跳劈/贴脸绕圈/投弹会把她从
- * 指挥官变成突击兵，等于拆了那个模组的玩法。
- * 两条口径：① 自动系统（自主参战选任务 / 战中换战术 / LLM 自主切换的候选与可用列表）**永不切进去**
- * （{@link #isBlacklisted}）；② 玩家手动切进去后本模组**战术全体让位**（{@link #isPuppetMode}）：单兵
- * 作战战术、自动换装、投弹与轰炸、自主参战与还原、排班换段全停手——**保命动作不在让位之列**（自保、落地
- * 水、防火、宠物免疫）。切回别的任务即全部恢复（全程没动存档数据）。
- * 检测口径：UID 硬编码比对——**没装那个模组时就是一句恒假判断**（黑名单等于空），对不装它的存档零影响。
+ * 第三方「玩法模式」名单——对象 = 自带一整套战斗玩法的模组任务：目前三条——《傀儡装配》的「傀儡师」
+ * （{@code modulargolems:summon_golems}）、《车万女仆：真正的力量》的「拔刀剑模式」
+ * （{@code true_power_of_maid:slashblade_attack}）、《史诗战斗联动》的「战斗模式」（{@code ef_tlm:fight_mode_task}）。
+ * 【为什么拉黑】它们对 TLM 而言都是攻击类任务，本模组的「战斗任务」口径（投弹与轰炸、单兵战术、
+ * 走位独占、威胁驱动）会把她们变成突击兵——等于拆了那个模组自己的玩法。
+ * 两条口径：① 处在名单里的她，本模组**战术与行动全体让位**（{@link #isPuppetMode}）：单兵战术、
+ * 投弹与轰炸、威胁驱动、走位独占、自动换装、排班换段全停手，**保命动作不在让位之列**（自保、
+ * 落地水、防火、宠物免疫）；自动化链路只保留「切进去」与「敌人清除后还原回战斗前任务」两件事。
+ * ② 其中只有「傀儡师」**自主切换永不切入**（{@link #isBlacklisted}）；拔刀剑模式 / 战斗模式
+ * **允许**被自主参战与 LLM 自主切换切进去——切进去之后同样全体让位。
+ * 检测口径：UID 硬编码比对——没装对应模组时就是一句恒假判断（名单等于空），对不装它们的存档零影响。
  * 总开关 {@code compat.puppetBlacklist}（面板可关）。
  */
 public final class MaidModeCompat {
-    /** 黑名单（UID → 人类可读名）：目前只有傀儡师；将来有同类「玩法模式」往这里加 */
+    /** 让位名单（UID → 人类可读名）：目前三条；她处在其中任一条里时本模组战术与行动全体让位 */
     private static final Map<String, String> BLACKLIST = Map.of(
-            "modulargolems:summon_golems", "傀儡师（傀儡装配 Modular Golems）");
+            "modulargolems:summon_golems", "傀儡师（傀儡装配 Modular Golems）",
+            "true_power_of_maid:slashblade_attack", "拔刀剑模式（车万女仆：真正的力量）",
+            "ef_tlm:fight_mode_task", "战斗模式（史诗战斗联动）");
+
+    /** 「自主切换永不切入」的 UID（傀儡师——它不在战斗候选的语义里）；拔刀剑模式 / 战斗模式
+     *  允许被自主参战与 LLM 自主切换切进去，切进去之后同样全体让位 */
+    private static final java.util.Set<String> NO_AUTO = java.util.Set.of("modulargolems:summon_golems");
 
     private MaidModeCompat() {
     }
@@ -36,12 +42,12 @@ public final class MaidModeCompat {
         }
     }
 
-    /** 任务 UID 是否在黑名单里 */
+    /** 该 UID 是否禁止自主切入（名单里只有傀儡师；LLM 工具闸与候选池过滤用） */
     public static boolean isBlacklistedUid(String uid) {
-        return uid != null && BLACKLIST.containsKey(uid);
+        return uid != null && NO_AUTO.contains(uid);
     }
 
-    /** 任务是否在黑名单里（自主切换/候选池过滤用；null 安全） */
+    /** 该任务是否禁止自主切入（只有傀儡师；自主切换/候选池过滤用；null 安全） */
     public static boolean isBlacklisted(IMaidTask task) {
         if (!enabled() || task == null) {
             return false;
@@ -70,8 +76,8 @@ public final class MaidModeCompat {
     }
 
     /**
-     * 她当前是不是正处在这个第三方玩法模式里。是的话本模组的战术全体让位，
-     * 只保留那个模组自己的玩法（见类注释的口径 ②）。
+     * 她当前是不是正处在让位名单的模式里（傀儡师 / 拔刀剑模式 / 战斗模式）。是的话本模组的
+     * 战术与行动全体让位，只保留那个模组自己的玩法（不管谁切进去的，见类注释口径 ①）。
      */
     public static boolean isPuppetMode(EntityMaid maid) {
         if (!enabled() || maid == null) {
@@ -79,7 +85,7 @@ public final class MaidModeCompat {
         }
         try {
             IMaidTask t = maid.getTask();
-            return t != null && isBlacklistedUid(String.valueOf(t.getUid()));
+            return t != null && BLACKLIST.containsKey(String.valueOf(t.getUid()));
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidModeCompat", ignored);
             return false;
         }

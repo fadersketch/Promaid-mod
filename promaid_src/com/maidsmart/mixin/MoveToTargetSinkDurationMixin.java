@@ -14,15 +14,16 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
  *
  * 修复：时长 150→600、250→1200（30~60 秒才"刹车"一次，走路基本连续）。
  * 我们的 5 个任务已改直接导航（不用 sink），不受影响。总开关：misc.nativeTaskSmooth。
+ * 【注入点写全签名】两个常量只在无参构造里；写成裸 {@code <init>} 会连另一个带参构造一起去碰。
  */
 @Mixin(MoveToTargetSink.class)
 public abstract class MoveToTargetSinkDurationMixin {
-    @ModifyConstant(method = "<init>", constant = @Constant(intValue = 150))
+    @ModifyConstant(method = "<init>()V", constant = @Constant(intValue = 150))
     private static int maidsmart$sinkMinDuration(int value) {
         return com.maidsmart.config.MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get() ? 600 : value;
     }
 
-    @ModifyConstant(method = "<init>", constant = @Constant(intValue = 250))
+    @ModifyConstant(method = "<init>()V", constant = @Constant(intValue = 250))
     private static int maidsmart$sinkMaxDuration(int value) {
         return com.maidsmart.config.MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get() ? 1200 : value;
     }

@@ -193,7 +193,8 @@ public final class MaidToolAutoEquip {
         // 武器/工具与精妙背包的适配）——她自己的背包里没有符合词条的 → 先请 TLM 的额外容器
         // 系统从精妙背包/旅行者背包搬一组进来（pull 先扫她自己的背包，有就什么都不做）。
         // 没装在饰品栏/没开女仆饰品时不产生任何行为（extraContainers 返回 null 直接早退）。
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, need, -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> need.test(s)
+                && !isNearlyBroken(s) && !brokeByDurability(maid, s), -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
@@ -201,6 +202,9 @@ public final class MaidToolAutoEquip {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_() || !need.test(stack)) {
                 continue;
+            }
+            if (brokeByDurability(maid, stack)) {
+                continue; // 实测九百八十二：刚被耐久用爆过的这一种先不再补给她
             }
             if (isNearlyBroken(stack)) {
                 continue; // v1.5.168：黑名单保护——即将用坏的物品不切（耐久恢复自动解除）
@@ -237,7 +241,8 @@ public final class MaidToolAutoEquip {
             return true; // 手中够用且未即将用坏，不换
         }
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上——换镐前先问一次精妙背包
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isPickaxe(s) && canHarvest(s, target), -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isPickaxe(s) && canHarvest(s, target)
+                && !isNearlyBroken(s) && !brokeByDurability(maid, s), -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
@@ -245,6 +250,9 @@ public final class MaidToolAutoEquip {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_() || !isPickaxe(stack) || !canHarvest(stack, target)) {
                 continue;
+            }
+            if (brokeByDurability(maid, stack)) {
+                continue; // 实测九百八十二：刚被耐久用爆过的这一种先不再补给她
             }
             if (isNearlyBroken(stack)) {
                 continue; // v1.5.168：黑名单保护——即将用坏的镐不切（耐久恢复自动解除）
@@ -271,6 +279,10 @@ public final class MaidToolAutoEquip {
             if (isPickaxe(cur) && canHarvest(cur, target)) {
                 return true;
             }
+            // 实测九百七十七：副手也算「手上」——镐临时挂在副手（换手 / 骨粉施肥）时不再误判
+            if (isPickaxe(maid.m_21206_()) && canHarvest(maid.m_21206_(), target)) {
+                return true;
+            }
             IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
@@ -293,6 +305,10 @@ public final class MaidToolAutoEquip {
         try {
             IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
             if (isPickaxe(hands.getStackInSlot(0))) {
+                return true;
+            }
+            // 实测九百七十七：副手也探一遍（主手为空但副手挂镐 = 有镐）
+            if (isPickaxe(maid.m_21206_())) {
                 return true;
             }
             IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
@@ -396,13 +412,15 @@ public final class MaidToolAutoEquip {
             return true;
         }
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：换斧前先问一次精妙背包
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isAxe(s) && !isNearlyBroken(s), -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isAxe(s) && !isNearlyBroken(s)
+                && !brokeByDurability(maid, s), -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
-            if (stack.m_41619_() || !isAxe(stack) || isNearlyBroken(stack)) {
+            if (stack.m_41619_() || !isAxe(stack) || isNearlyBroken(stack)
+                    || brokeByDurability(maid, stack)) {
                 continue;
             }
             long score = targetAxeScore(stack);
@@ -431,7 +449,8 @@ public final class MaidToolAutoEquip {
             return true; // 手中够用且未即将用坏，不换
         }
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：换斧前先问一次精妙背包
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isAxe(s) && canHarvest(s, target), -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isAxe(s) && canHarvest(s, target)
+                && !isNearlyBroken(s) && !brokeByDurability(maid, s), -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
@@ -439,6 +458,9 @@ public final class MaidToolAutoEquip {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_() || !isAxe(stack) || !canHarvest(stack, target)) {
                 continue;
+            }
+            if (brokeByDurability(maid, stack)) {
+                continue; // 实测九百八十二：刚被耐久用爆过的这一种先不再补给她
             }
             if (isNearlyBroken(stack)) {
                 continue; // 黑名单保护——即将用坏的斧不切
@@ -587,6 +609,53 @@ public final class MaidToolAutoEquip {
 
     /** v1.5.168：即将用坏阈值——剩余耐久 ≤ 总耐久的 10% 视为"即将用坏"（黑名单保护） */
     private static final double BROKEN_SOON_RATIO = 0.1;
+
+    /** 实测九百八十二：刚刚被耐久用爆的工具类型（她 → 物品注册名 → 时刻）。
+     *  补给/换装链路据此不再把这一种递给她——旧版会把快坏的家伙一件件补上来，
+     *  她一件件用爆，看上去就是"一个坏掉的道具被无限补"。 */
+    private static final java.util.Map<Integer, java.util.Map<String, Long>> BROKEN_BY_DURABILITY =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long BROKEN_SUPPLY_BLOCK_TICKS = 600L;
+
+    /** 碎裂那一下之前调用：这一下真会把主手工具用爆 → 记下它的类型 */
+    public static void recordDurabilityBreak(EntityMaid maid, ItemStack stack) {
+        try {
+            if (maid == null || stack == null || stack.m_41619_() || !stack.m_41763_()) {
+                return;
+            }
+            if (stack.m_41773_() + 1 < stack.m_41776_()) {
+                return; // 这一下还爆不了
+            }
+            net.minecraft.resources.ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            if (id == null) {
+                return;
+            }
+            long now = maid.m_9236_().m_46467_();
+            java.util.Map<String, Long> m = BROKEN_BY_DURABILITY.computeIfAbsent(
+                    maid.m_19879_(), k -> new java.util.HashMap<>());
+            m.entrySet().removeIf(e -> now - e.getValue() > BROKEN_SUPPLY_BLOCK_TICKS);
+            m.put(id.toString(), now);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
+        }
+    }
+
+    /** 这一种是不是"刚被耐久用爆"（窗口内不再补；过了窗口自动作废） */
+    private static boolean brokeByDurability(EntityMaid maid, ItemStack stack) {
+        try {
+            java.util.Map<String, Long> m = BROKEN_BY_DURABILITY.get(maid.m_19879_());
+            if (m == null || m.isEmpty()) {
+                return false;
+            }
+            net.minecraft.resources.ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            if (id == null) {
+                return false;
+            }
+            Long t = m.get(id.toString());
+            return t != null && maid.m_9236_().m_46467_() - t <= BROKEN_SUPPLY_BLOCK_TICKS;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
+            return false;
+        }
+    }
 
     /** v1.5.168：黑名单保护判定——即将用坏的物品不参与任何背包切换选择；
      *  无限耐久物品（maxDamage ≤ 0）永不保护；耐久恢复（>10%）后自动解除
@@ -751,7 +820,8 @@ public final class MaidToolAutoEquip {
             // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：盾牌也认精妙背包/旅行者背包
             //（副手本来就没盾才走到这里，所以这一问不会打断玩家自己的搭配）
             com.maidsmart.tool.MaidExtraContainer.pull(maid,
-                    s -> s.m_41720_() instanceof net.minecraft.world.item.ShieldItem, -1);
+                    s -> s.m_41720_() instanceof net.minecraft.world.item.ShieldItem
+                            && !isNearlyBroken(s) && !brokeByDurability(maid, s), -1);
             IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             int best = -1;
             long bestScore = Long.MIN_VALUE;
@@ -759,6 +829,9 @@ public final class MaidToolAutoEquip {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.ShieldItem)) {
                     continue;
+                }
+                if (brokeByDurability(maid, stack)) {
+                    continue; // 实测九百八十二：刚被耐久用爆过的盾先不再补
                 }
                 if (isNearlyBroken(stack)) {
                     continue; // v1.5.169：黑名单保护——即将用坏的盾不装
@@ -811,13 +884,15 @@ public final class MaidToolAutoEquip {
                 return true; // 手中已有锄头且未即将用坏 → 不换
             }
             // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：锄头也认精妙背包/旅行者背包
-            com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isHoe(s) && !isNearlyBroken(s), -1);
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isHoe(s) && !isNearlyBroken(s)
+                && !brokeByDurability(maid, s), -1);
             IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             long bestScore = Long.MIN_VALUE;
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
-                if (stack.m_41619_() || !isHoe(stack) || isNearlyBroken(stack)) {
+                if (stack.m_41619_() || !isHoe(stack) || isNearlyBroken(stack)
+                    || brokeByDurability(maid, stack)) {
                     continue;
                 }
                 long score = hoeScore(stack);

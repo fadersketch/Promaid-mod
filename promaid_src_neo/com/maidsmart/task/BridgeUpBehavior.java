@@ -612,6 +612,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
                 continue;
             }
+            // 实测九百七十八：铺这一格之前先转身——旧版只施速不转身，会倒着搭、倒着走
+            com.maidsmart.task.BlockWalkOn.faceToward(maid, tx + 0.5, tz + 0.5);
             Item item = takeBuildBlock(maid);
             if (item == null) {
                 return false;
@@ -679,6 +681,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, support)) {
                 continue;
             }
+            // 实测九百七十八：下行台阶先转身再垫那一格
+            com.maidsmart.task.BlockWalkOn.faceToward(maid, tx + 0.5, tz + 0.5);
             Item item = takeBuildBlock(maid);
             if (item == null) {
                 return false;
@@ -945,6 +949,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         double dz = tz - maid.getZ();
         double d = Math.sqrt(dx * dx + dz * dz);
         if (d > 1e-3) {
+            // 实测九百七十八：直推前先转身——推送方向就是朝向，别倒着走
+            com.maidsmart.task.BlockWalkOn.faceToward(maid, tx, tz);
             // 水平搭路/斜向垫块：只给水平速度，不跳——视觉自然（走过去）
             double v = Math.min(0.35, 0.08 + 0.10 * d);
             maid.setDeltaMovement(new net.minecraft.world.phys.Vec3(dx / d * v, 0.0, dz / d * v));

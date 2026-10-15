@@ -29,6 +29,8 @@ public class BuildArchive extends net.minecraft.world.level.saveddata.SavedData 
         public String foremanUuid = "";
         /** v1.1.0 实测九十七：朝向（0~3 × 90° 顺时针）——重启后按此重解析旋转步骤 */
         public int quarters = 0;
+        /** 【实测九百六十八】创建者玩家 UUID（旧档无此字段 → 空 = 未知） */
+        public String creatorUuid = "";
     }
 
     /** v1.5.180：本维度所有区块计划存档（多区块共存） */
@@ -53,7 +55,9 @@ public class BuildArchive extends net.minecraft.world.level.saveddata.SavedData 
                     .append(p.name).append('\u0001').append(p.cursor).append('\u0001').append(p.paused)
                     .append('\u0001').append(p.foremanUuid)
                     // v1.1.0 实测九十七：第 10 字段 = 朝向（旧档无此字段，读侧默认 0）
-                    .append('\u0001').append(p.quarters);
+                    .append('\u0001').append(p.quarters)
+                    // 【实测九百六十八】第 11 字段 = 创建者（旧档无此字段，读侧默认空）
+                    .append('\u0001').append(p.creatorUuid);
         }
         return sb.toString();
     }
@@ -91,6 +95,10 @@ public class BuildArchive extends net.minecraft.world.level.saveddata.SavedData 
                     p.quarters = Math.floorMod(Integer.parseInt(f[9]), 4);
                 } catch (NumberFormatException ignored) {
                 }
+            }
+            // 【实测九百六十八】第 11 字段 = 创建者（旧档 10 字段 → 空 = 未知）
+            if (f.length > 10) {
+                p.creatorUuid = f[10];
             }
             if (!p.blueprintId.isEmpty()) {
                 plans.add(p);

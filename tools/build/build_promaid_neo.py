@@ -19,18 +19,18 @@ OUT = os.path.join(BASE, 'out_promaid_neo')
 SRC = os.path.join(BASE, 'promaid_src_neo')
 JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.2-neoforge-1.21.1.jar')
 
-# 实测六百六十八：mixin 注入点审计闸门（只读）——javac 只保证注解字符串是合法 Java，**不保证
-# "目标类真的自己声明了这个方法"**；那种错要等游戏启动时 Mixin 才报，直接崩在 Bootstrap
-# （667 的武装拴绳就是这么把游戏搞开不起来的）。审计脚本 _mixchk.py 按本仓库惯例不入库
-# （helper 一律 _* ），所以缺了只告警不拦路。
-_mixchk = os.path.join(BASE, '_mixchk.py')
-if os.path.isfile(_mixchk):
-    import subprocess as _sp
-    import sys as _sys
-    if _sp.call([_sys.executable, _mixchk]) != 0:
-        raise SystemExit('FATAL: mixin 注入点审计不通过（详见 _out_mixchk.txt）——拒绝打包')
-else:
-    print('WARN: 未找到 _mixchk.py，跳过 mixin 注入点审计（该脚本不入库）')
+# 实测九百一十六 / v1.5.400：mixin 注入点审计闸门（只读，硬闸门）——javac 只保证注解字符串是
+# 合法 Java，**不保证目标类真有这个方法、更不保证签名对得上**；没有 refmap 的手工编译里名字
+# 逐字匹配，对不上就等那个类第一次被加载时崩（916：女仆一生成就崩，裸名字命中了协变桥接）。
+# 早先这里探的是从不入库的 helper（_mixchk.py），于是常年静默跳过；现在工具入库（tools/verify/），
+# 缺了也当 FATAL——宁可不出包，也不出必崩的包。
+_audit = os.path.join(BASE, 'tools', 'verify', 'check_mixin_targets.py')
+if not os.path.isfile(_audit):
+    raise SystemExit('FATAL: 缺 tools/verify/check_mixin_targets.py（mixin 注入点审计）——拒绝打包')
+import subprocess as _sp
+import sys as _sys
+if _sp.call([_sys.executable, _audit, '--tree', 'promaid_src_neo']) != 0:
+    raise SystemExit('FATAL: mixin 注入点审计不通过（tools/verify/check_mixin_targets.py）——拒绝打包')
 
 # 1. clean staging
 for d in ['com', 'assets', 'data']:
@@ -155,7 +155,8 @@ for _g in ('tools/verify/check_comment_style.py',
            'tools/verify/check_preset.py', 'tools/verify/check_workflow.py',
            'tools/verify/check_catch_swallow.py', 'tools/verify/check_i18n_keys.py',
            'tools/verify/check_dev_voice.py', 'tools/verify/check_comment_dup.py',
-           'tools/verify/check_reflection.py', 'tools/verify/check_arch.py'):
+           'tools/verify/check_reflection.py', 'tools/verify/check_arch.py',
+           'tools/verify/check_guide_i18n.py'):
     _p = os.path.join(BASE, _g)
     if os.path.isfile(_p):
         subprocess.call([sys.executable, _p, '--warn'])

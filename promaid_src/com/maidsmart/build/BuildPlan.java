@@ -61,6 +61,9 @@ public final class BuildPlan {
         /** v1.1.0 实测九十七：朝向（0~3 × 90° 顺时针）——创建时选定；随存档条目
          *  持久化，重启 restoreAll 按 quarters 重解析旋转版步骤（橙影同口径） */
         public int quarters = 0;
+        /** 【实测九百六十八】创建者玩家 UUID（空 = 未知 / 旧档）——刚创建、还没绑女仆这段
+         *  窗口里，本人不在区块内也要能看见自己的区块；随存档持久化，重启后仍认创建者。 */
+        public String creatorUuid = "";
 
         /** v1.5.287：toPlan 惰性缓存——steps/origin/name/planId 建后不可变 → 拼一次
          *  复用。旧版每次 toPlan 都 new ArrayList + 拷贝全部步骤（tick 热路径每 tick
@@ -272,12 +275,14 @@ public final class BuildPlan {
      */
     public static String setPlan(net.minecraft.server.level.ServerLevel level, BlockPos origin,
                                  List<String> steps, String name, String blueprintId) {
-        return setPlan(level, origin, steps, name, blueprintId, 0);
+        return setPlan(level, origin, steps, name, blueprintId, 0, null);
     }
 
-    /** v1.1.0 实测九十七：带朝向的创建（quarters = 0~3 × 90° 顺时针） */
+    /** v1.1.0 实测九十七：带朝向的创建（quarters = 0~3 × 90° 顺时针）。
+     *  【实测九百六十八】带创建者：creator = 在手册里确认这块地的玩家（null = 无从得知，如工具链创建）。 */
     public static String setPlan(net.minecraft.server.level.ServerLevel level, BlockPos origin,
-                                 List<String> steps, String name, String blueprintId, int quarters) {
+                                 List<String> steps, String name, String blueprintId, int quarters,
+                                 java.util.UUID creator) {
         for (PlanState ex : getPlans(level)) {
             if (ex.blueprintId.equals(blueprintId) && ex.origin.equals(origin)) {
                 return ex.planId; // 续建：同一区块
@@ -287,6 +292,7 @@ public final class BuildPlan {
         PlanState ps = new PlanState(planId, level.m_46472_(), origin, name, blueprintId,
                 new ArrayList<>(steps));
         ps.quarters = Math.floorMod(quarters, 4);
+        ps.creatorUuid = creator == null ? "" : creator.toString(); // 实测九百六十八：记住创建者
         PLANS.put(planId, ps);
         GLOBAL_BOX.remove(planId); // 新计划重新计算包围盒
         // 写存档（多区块列表）
@@ -316,6 +322,7 @@ public final class BuildPlan {
                 new ArrayList<>(centeredSteps));
         ps.paused = false;
         ps.foremanUuid = old.foremanUuid;
+        ps.creatorUuid = old.creatorUuid; // 实测九百六十八：原位换朝向保留创建者
         ps.savedCursor = 1;
         ps.quarters = Math.floorMod(quarters, 4);
         PLANS.put(planId, ps);
@@ -341,6 +348,7 @@ public final class BuildPlan {
         sp.paused = ps.paused;
         sp.foremanUuid = ps.foremanUuid;
         sp.quarters = ps.quarters;
+        sp.creatorUuid = ps.creatorUuid;
         return sp;
     }
 
@@ -969,6 +977,7 @@ public final class BuildPlan {
             ps.foremanUuid = sp.foremanUuid == null ? "" : sp.foremanUuid;
             ps.savedCursor = Math.max(1, sp.cursor);
             ps.quarters = sp.quarters;
+            ps.creatorUuid = sp.creatorUuid == null ? "" : sp.creatorUuid; // 实测九百六十八
             FOREMAN.put(ps.planId, ps.foremanUuid);
             PLANS.put(ps.planId, ps);
             restoreProgress(level, ps);

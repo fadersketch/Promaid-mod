@@ -368,6 +368,18 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 右击方块/右击女仆/建造收尾三处），于是"服务端会话已清空、客户端还以为锁着"
         // 会一直持续到下次 syncTo 为止 = 假死锁。
         com.maidsmart.build.IndexStoneNetworking.syncTo(player);
+        // 多人下「配置以服务端为准」：登录推一次配置状态；再广播一遍刷新"是不是多人"
+        // （LAN 里第二个人进来时它才变成多人，那一行开关要跟着出现）
+        com.maidsmart.config.ConfigSyncNetworking.pushState(player);
+        com.maidsmart.config.ConfigSyncNetworking.broadcast(player.level().getServer());
+    }
+
+    /** 有人下线时同样广播一次——"在线人数 > 1" 的判定要跟着回落。 */
+    @net.neoforged.bus.api.SubscribeEvent
+    public void onPlayerLoggedOut(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.maidsmart.config.ConfigSyncNetworking.broadcast(player.level().getServer());
+        }
     }
 
     /** v1.2.2 实测五百八十四（issue #13）：换维度同样补一次——跨维度后锁定格不在当前
@@ -933,7 +945,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 查能不能干"。此前 LLM 只能打怪（smart_attack 顺手切攻击任务），别的模式够不到：
         //   smart_switch_task —— 切换任意任务（TLM 原生 + 本模组，支持中文别名，认不出就回可用列表）
         //   smart_air_raid    —— 起飞空袭（近战/远程 + 锁目标 + 缺件回报）/ 停止空袭落地
-        //   smart_work_area   —— 设工作区并驻守 / 解除驻守跟随（写的就是中键标记那份 SchedulePos）
+        //   smart_work_area   —— 设工作区并驻守 / 解除驻守跟随（写的就是 TLM 那份 SchedulePos）
         //   smart_readiness   —— 只读自检（空袭三件套、弹药、驻守、排班、锚点、血量）
         register.register(new com.maidsmart.tool.SwitchTaskTool());
         register.register(new com.maidsmart.tool.AirRaidTool());

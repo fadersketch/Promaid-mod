@@ -24,11 +24,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * - PRESERVE_TAG（自保逃跑）：只清 WALK_TARGET + 取消本 tick，【不】停导航——逃跑路径是直连导航
  *   （{@code moveTo}）不是 WALK_TARGET，停了就跑不动了；拦 sink 是防 TLM 跟随/其他行为塞 WALK_TARGET 把逃跑
  *   路径盖掉。
- * 【映射】本树 SRG {@code m_6725_}；neo 树官方名 {@code tick}。
+ * 【映射】本树 SRG {@code m_6725_}、neo 树官方名 {@code tick}；两侧都写全签名——该类上同名方法有两份（自带的参数是 {@code Mob}、编译器留的协变桥接是 {@code LivingEntity}），裸名字会命中桥接、签名对不上就崩。
  */
 @Mixin(net.minecraft.world.entity.ai.behavior.MoveToTargetSink.class)
 public abstract class MaidMoveSuppressMixin {
-    @Inject(method = "m_6725_", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "m_6725_(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/Mob;J)V",
+            at = @At("HEAD"), cancellable = true)
     private void maidsmart$suppressMoveWhenStill(ServerLevel level, Mob mob, long gameTime, CallbackInfo ci) {
         if (!(mob instanceof EntityMaid maid)) {
             return;
@@ -56,6 +57,24 @@ public abstract class MaidMoveSuppressMixin {
             // v1.3.0(beta) 实测六百六十四【刷怪笼插火把的"优先"】：走去插火把期间她独占移动
             // ——清 WALK_TARGET + 取消本 tick（TLM 原生任务/跟随/远程走位写的走位目标一律不
             // 执行）；直连寻路那一侧由 SpawnerTorchNavGuardMixin 掐。
+            maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
+            ci.cancel();
+        } else if (com.maidsmart.task.MaidWorkTags.isChainDrive(maid)) {
+            // 实测九百一十三【链路走位独占】：挖矿/伐木锁着目标、或正在接战期间，本模组的链路
+            // 是唯一驱动（她自己的走位走直连 moveTo，见 MaidWorkBehavior.setWalkTarget）——
+            // TLM 其它行为写的 WALK_TARGET（跟随/闲逛/远程走位…）一律不执行。跟随行为本身
+            // 另有一道闸（MaidFollowOwnerTickMixin 取消它的 start），两条合起来 = 干活期间
+            // 原版走路逻辑整体让位。
+            // 实测九百一十六【干活也捡掉落物】：拾取任务（TLM 原生 CORE 行为）写的"去捡某件
+            // 掉落物"这一发 WALK_TARGET 例外放行——否则她干活时不会走过去捡东西（反馈："砍树
+            // 伐木时不捡掉落物"）。只认拾取任务刚打过的戳（isPickupDrive），其它 WALK_TARGET 照旧不执行。
+            if (com.maidsmart.task.MaidWorkTags.isPickupDrive(maid, gameTime)) {
+                if (maid.m_6274_().m_21952_(MemoryModuleType.f_26370_).isPresent()) {
+                    return; // 拾取驱动中：让 MoveToTargetSink 照常把 WALK_TARGET 变成寻路
+                }
+                com.maidsmart.task.MaidWorkTags.clearPickupDrive(maid); // 目标已消化 → 结束放行
+            }
+            com.maidsmart.combat.CombatStallProbe.note(maid, "walk-cut"); // 滞留探针（诊断）
             maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
             ci.cancel();
         } else if (com.maidsmart.flight.MaidFreeFlightController.isControlling(maid)) {

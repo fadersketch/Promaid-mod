@@ -25,7 +25,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(EntityMaid.class)
 public abstract class MaidCanAttackDefenseMixin {
 
-    @Inject(method = "canAttack", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "canAttack(Lnet/minecraft/world/entity/LivingEntity;)Z",
+            at = @At("RETURN"), cancellable = true)
     private void maidsmart$attackThoseAttackingUs(LivingEntity target, CallbackInfoReturnable<Boolean> cir) {
         if (Boolean.TRUE.equals(cir.getReturnValue())) {
             return; // 类型闸本来就放行 → 不动
