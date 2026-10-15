@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/tool/MaidBuildBlockFilter.java, line: 1, end_line: 452}
   - {path: promaid_src_neo/com/maidsmart/tool/MaidPlaceGuard.java, line: 1, end_line: 268}
   - {path: promaid_src_neo/com/maidsmart/tool/MaidExtraContainer.java, line: 1, end_line: 352}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 19f3a282f600f9c245fe5f568354416493fb51a88b4d70fddf3f69c8c59cf1bf
 state: active

@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/GunCompat.java, line: 1, end_line: 716}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidSpellCastCompat.java, line: 1, end_line: 727}
   - {path: promaid_src_neo/com/maidsmart/combat/CuriosElytraCompat.java, line: 1, end_line: 288}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: b08c6d492543e0a665e4d4c7aac5fce790946a9c69b8291ae1835e9d2098ac78
 state: active

@@ -16,7 +16,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/accessory/DaYunItem.java, line: 1, end_line: 38}
   - {path: promaid_src_neo/com/maidsmart/accessory/DaYunSounds.java, line: 1, end_line: 52}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 60bc6bebd754496955e677141b909f5e2bdc4288422b274eecfd85547980470e
 state: active

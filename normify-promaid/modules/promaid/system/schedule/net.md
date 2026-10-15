@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/schedule/SchedulePacketsPlan.java, line: 1, end_line: 640}
   - {path: promaid_src_neo/com/maidsmart/schedule/SchedulePacketsMaid.java, line: 1, end_line: 616}
   - {path: promaid_src_neo/com/maidsmart/schedule/ScheduleNetworking.java, line: 1, end_line: 274}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 026657fd04ca0e89505ea12a697e41749996de627d1ebaedc4e2ebf407742fda
 state: active

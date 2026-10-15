@@ -13,7 +13,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidConfigMemoryMixin.java, line: 1, end_line: 323}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidConfigFreeFlightMixin.java, line: 1, end_line: 114}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidConfigGoetyMixin.java, line: 1, end_line: 106}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 0b6b55d513f72afe9a86ca06e4319f5eb5e93b61d3307286e31547101794be3f
 state: active

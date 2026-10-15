@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/EntityGunnerHangMixin.java, line: 1, end_line: 94}
   - {path: promaid_src_neo/com/maidsmart/mixin/EntityBroomMaidTravelMixin.java, line: 1, end_line: 168}
   - {path: promaid_src_neo/com/maidsmart/mixin/PlayerMaceRideFallMixin.java, line: 1, end_line: 124}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 824f340254531c9cb5e1eb0852816c8d41338c141cce00618eeefc4f03e8bb86
 state: active

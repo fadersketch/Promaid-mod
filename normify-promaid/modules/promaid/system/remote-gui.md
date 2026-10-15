@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/schedule/RemoteMaidGui.java, line: 1, end_line: 252}
   - {path: promaid_src_neo/com/maidsmart/schedule/RemoteTrackBridge.java, line: 1, end_line: 54}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f06157ed8d03259d0996cd2863d5c01f1ee6e97daf8f3f17520311e5f0604f25
 state: active

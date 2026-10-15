@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/brew/BrewRecipeResolver.java, line: 1, end_line: 291}
   - {path: promaid_src_neo/com/maidsmart/brew/BrewManualScreen.java, line: 1, end_line: 607}
   - {path: promaid_src_neo/com/maidsmart/brew/BrewConfig.java, line: 1, end_line: 97}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 242f3685315d96345a95430d0a54ec90c9b8386a51da39b801b77336a45667ec
 state: active

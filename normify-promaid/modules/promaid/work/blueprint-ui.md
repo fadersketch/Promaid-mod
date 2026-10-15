@@ -15,7 +15,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintBookScreen.java, line: 1, end_line: 2139}
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintBookItem.java, line: 1, end_line: 93}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 78e22ab5a63b30aefea7c48cd2412c0fb23175954c5ac7b296b16b1494e6f7e5
 state: active

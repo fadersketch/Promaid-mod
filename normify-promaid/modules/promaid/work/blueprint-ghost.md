@@ -14,7 +14,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintAreaPreview.java, line: 1, end_line: 596}
   - {path: promaid_src_neo/com/maidsmart/build/BuildHudRenderer.java, line: 1, end_line: 228}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: e8aceea817236a1e9de823941d5355fb64b3e50ebac0dd162f1b325d96eb07d7
 state: active

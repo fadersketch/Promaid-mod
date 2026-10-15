@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/FlightTargeting.java, line: 1, end_line: 462}
   - {path: promaid_src_neo/com/maidsmart/combat/CombatStallProbe.java, line: 1}
   - {path: promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java, line: 1, end_line: 329}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 87aafe6af4501357e9a21e0701cfa7b8ff2418f200644ff0dc1f0702cdc3f3ad
 state: active

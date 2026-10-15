@@ -12,7 +12,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/ProMaidExtension.java, line: 1}
   - {path: promaid_src_neo/com/maidsmart/ProMaidMod.java, line: 1}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: e3015c44fdec666299a845f3e0b2352794e40718941ab973837066450844e065
 state: active

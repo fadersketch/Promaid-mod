@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java, line: 1, end_line: 110}
   - {path: promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java, line: 1, end_line: 27}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java, line: 1, end_line: 161}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 632f4cca034ae0d8ab83619a883c19f407b183b90656e4a2984d3aba19dde15b
 state: active

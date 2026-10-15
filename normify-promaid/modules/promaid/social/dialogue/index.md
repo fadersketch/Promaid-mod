@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java, line: 1, end_line: 53}
   - {path: promaid_src_neo/com/maidsmart/dialogue/OutputLanguage.java, line: 1, end_line: 143}
   - {path: promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java, line: 1, end_line: 119}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 02c297f5ce1474fa8ba3871142209f2d2cbdaa79f594ed6a22da8e8626c004cd
 state: active

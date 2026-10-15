@@ -12,7 +12,7 @@ description:
       speculative generality.
 source:
   - {path: promaid_src_neo/com/maidsmart/compat/MaidModeCompat.java, line: 1, end_line: 112}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 4f572c77fc6ca92184a8526b4fbf523c823d0fd56b284f70bb5baae02d3f49e6
 state: active

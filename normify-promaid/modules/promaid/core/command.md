@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/command/MaidArmyCommand.java, line: 1, end_line: 663}
   - {path: promaid_src_neo/com/maidsmart/command/MaidResyncCommand.java, line: 1, end_line: 616}
   - {path: promaid_src_neo/com/maidsmart/command/MaidGoetyFlyCommand.java, line: 1, end_line: 232}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 70e778433134adaef8bf63cb046a7b2a1d9ead37c1bc62a0ef9c0f27853dbebb
 state: active

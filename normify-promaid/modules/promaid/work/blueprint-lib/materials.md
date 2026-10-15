@@ -11,7 +11,7 @@ description:
       mapping and transfer — with five or more near-isomorphic variants.
 source:
   - {path: promaid_src_neo/com/maidsmart/build/BlueprintMaterials.java, line: 1, end_line: 584}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 3758354e6301f513afeaeee61c7205d868ac3530fcbb743f2aa10709938746cd
 state: active

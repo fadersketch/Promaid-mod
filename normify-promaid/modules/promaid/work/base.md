@@ -22,7 +22,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidWorkBehavior.java, line: 1, end_line: 694}
   - {path: promaid_src_neo/com/maidsmart/task/MaidWorkRangeExpand.java, line: 1, end_line: 94}
-revision: f94c12de83c73b74b57c4d736c614ed6bca9d571
+revision: 511124af04e5d93bda3ca416f6c81356ee49ca0c
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f92cbdc45694e103cc72abb0b16d51908b469c3d01874f295942276b9102f454
 state: active
