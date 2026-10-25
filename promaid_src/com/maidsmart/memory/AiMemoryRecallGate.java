@@ -61,8 +61,9 @@ public final class AiMemoryRecallGate {
             return new Decision(true, "explicit-cue");
         }
         long newMsgs = messageCount - this.lastRecallMessageCount;
-        boolean topicChanged = !this.lastTopicSignature.isEmpty()
-                && !topicSignature(query).equals(this.lastTopicSignature);
+        String signature = topicSignature(query);
+        boolean topicChanged = !signature.isEmpty() && !this.lastTopicSignature.isEmpty()
+                && !signature.equals(this.lastTopicSignature);
         if (this.cacheValid && this.lastRecallAt > 0
                 && nowMs - this.lastRecallAt < this.cacheTtlMs
                 && newMsgs < this.minNewMessages && !topicChanged) {

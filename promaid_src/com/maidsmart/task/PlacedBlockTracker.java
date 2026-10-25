@@ -84,6 +84,7 @@ public final class PlacedBlockTracker {
         placed.computeIfAbsent(level.m_46472_(), k -> new HashMap<>())
                 .put(pos.m_7949_(), new Mark(lifetimeSupplier.getAsLong(),
                         key != null ? key.toString() : "", maid.m_20148_()));
+        PlacedMarkNetworking.noteAdd(level, pos, key != null ? key.toString() : ""); // 实测一千〇六：金色描边同步（登记 + 预期方块 id）
     }
 
     /** 该位置是否是本追踪器登记的方块（挡路判定/防误挖用） */
@@ -130,12 +131,28 @@ public final class PlacedBlockTracker {
     /** 实测三百六十六：移除单个登记（女仆主动拆掉自己的方块时调用——
      *  防残留条目在到期扫描里空转/被 nearBlock 刷新永久滞留） */
     public static void untrackAny(Level level, BlockPos pos) {
+        boolean hit = false;
         for (PlacedBlockTracker t : ALL_INSTANCES) {
             Map<BlockPos, Mark> marks = t.placed.get(level.m_46472_());
-            if (marks != null) {
-                marks.remove(pos.m_7949_());
+            if (marks != null && marks.remove(pos.m_7949_()) != null) {
+                hit = true;
             }
         }
+        if (hit) {
+            PlacedMarkNetworking.noteRemove(level, pos); // 实测一千〇六：描边同步（撤）
+        }
+    }
+
+    /** 实测一千〇六：某维度当前全部描边点（跨实例去重；进服/换维度补发全量用） */
+    public static java.util.List<BlockPos> snapshot(Level level) {
+        java.util.Set<BlockPos> set = new java.util.LinkedHashSet<>();
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            Map<BlockPos, Mark> m = t.placed.get(level.m_46472_());
+            if (m != null) {
+                set.addAll(m.keySet());
+            }
+        }
+        return new java.util.ArrayList<>(set);
     }
 
     /**
@@ -342,6 +359,7 @@ public final class PlacedBlockTracker {
      */
     private static void destroyAndReclaim(ServerLevel level, BlockPos pos, Mark mark,
                                           EntityMaid owner) {
+        PlacedMarkNetworking.noteRemove(level, pos); // 实测一千〇六：描边同步（撤——含"被玩家换过"这档）
         BlockState state = level.m_8055_(pos);
         if (state.m_60795_()) {
             return;

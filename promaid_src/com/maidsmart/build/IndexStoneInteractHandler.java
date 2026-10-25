@@ -46,4 +46,31 @@ public class IndexStoneInteractHandler {
         IndexStoneService.bindOrUnbind(player, maid);
         IndexStoneNetworking.syncTo(player);
     }
+
+    /**
+     * 【R1108】512 格长射线选中：原版 EntityInteract 只在交互距离内才会触发，
+     * 远处右击走的是 RightClickItem——这里补一次自己的实体射线。
+     * 归属校验、必须先锁方块等规则仍由 {@link IndexStoneService#bindOrUnbind} 原样把关。
+     */
+    @SubscribeEvent
+    public void onUseItem(PlayerInteractEvent.RightClickItem event) {
+        if (event.isCanceled() || !IndexStoneService.isEnabled()) {
+            return; // 【R1110】叫醒等更高优先级处理已经吃掉这次右击
+        }
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        InteractionHand hand = event.getHand();
+        if (!isIndexStone(player.m_21120_(hand))) {
+            return;
+        }
+        EntityMaid maid = com.maidsmart.tool.MaidFarPick.pick(player);
+        if (maid == null) {
+            return;
+        }
+        event.setCanceled(true);
+        player.m_6674_(hand);
+        IndexStoneService.bindOrUnbind(player, maid);
+        IndexStoneNetworking.syncTo(player);
+    }
 }

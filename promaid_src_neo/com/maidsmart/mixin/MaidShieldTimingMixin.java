@@ -33,6 +33,11 @@ public abstract class MaidShieldTimingMixin {
         if (!com.maidsmart.tool.MaidScope.owned(maid)) {
             return; // v1.2.2 实测六百：无主女仆不干预（整合包对野生女仆的规则一律不动）
         }
+        if (com.maidsmart.combat.SpearAttackBehavior.takesOverMovement(maid)) {
+            // 实测一千〇一十八：长矛冲锋占着同一个使用物品槽位，战术关着也不能举盾顶掉它
+            cir.setReturnValue(false);
+            return;
+        }
         if (!MaidCombatTacticsBehavior.isTacticsEnabled(maid)) {
             return; // 战术关闭：原版"一直举盾"逻辑
         }

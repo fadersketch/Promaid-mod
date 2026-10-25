@@ -58,6 +58,31 @@ public final class MaidFlightRecall {
             if (!MaidFlightKit.isFlightTask(maid)) {
                 return; // 只管两种空袭任务
             }
+            // 【R1118】显式「飞过去」/ 拴绳挂载 / 飞行跟随进行中：牵引绳整条静默。
+            // 旧版在她飞向远处目标点时反复"距主人 101 格 → 传送回主人身边"，
+            // 而 Entity.teleportTo 的 unRide() 会把绳子上的玩家甩下去 = 绳子当场断。
+            if (com.maidsmart.patrol.MaidTravelTarget.active(maid)
+                    || com.maidsmart.combat.GunnerTetherManager.isHanging(maid)
+                    || com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+                return;
+            }
+            // 本轮空中攻击进行中（起飞/突袭/等待再点火）：牵引绳不抢。她可能正把敌人往外推，
+            // 这时传回主人身边会直接打断长矛突袭；一轮收尾后 isEngaged 自然为假，照常拉回。
+            if (MaidFlightCombatBehavior.isEngaged(maid)) {
+                return;
+            }
+            // 状态表在行为 stop/start 的那一拍可能短暂为空；只要她还有活着的交战目标，
+            // 这一拍就不算"打完收工"，牵引绳不抢——否则恰好在重新点火的瞬间把她拽回主人身边。
+            LivingEntity combatTarget = maid.getTarget();
+            if (combatTarget == null) {
+                combatTarget = maid.getBrain()
+                        .getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET)
+                        .orElse(null);
+            }
+            if (combatTarget != null && combatTarget.isAlive()
+                    && maid.distanceToSqr(combatTarget) <= 50.0 * 50.0) {
+                return;
+            }
             if (!(maid.level() instanceof ServerLevel level)) {
                 return;
             }

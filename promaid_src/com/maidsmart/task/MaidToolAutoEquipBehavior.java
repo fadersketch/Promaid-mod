@@ -24,6 +24,9 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
         // 实测九百八十二：无目标静默窗口的"切空闲 / 切回工作"由常驻 core 行为驱动
         // （她切到空闲任务后，挖矿/伐木行为本身已经不再 tick，必须挂在"任何 activity 都跑"的地方）
         com.maidsmart.task.MaidWorkBehavior.tickWorkIdleSwitch(maid, level.m_46467_());
+        // 实测一千〇六【指标石·最高优先级】：临时搭建期间移动钉死 + 任务被改走就抓回——
+        // 她的建造行为只在 WORK 活动评估，活动空档与任务被劫都要靠这个常驻 core 行为兜住
+        com.maidsmart.build.IndexStoneService.tickPriority(maid, level.m_46467_());
         // v1.2.2 实测五百九十一【炸弹动作的归收入口】：放置/充能/投掷/起爆那一刻副手会短暂举起
         // 正在用的那件（黑曜石 / 末地水晶 / 重生锚 / 床 / TNT，见 BombPose），到点在这里原样还回去——
         // 本行为是 core 行为、任何 activity 都跑、每 tick 一次，所以即使动作链路被强杀（切任务/死亡），

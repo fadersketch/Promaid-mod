@@ -32,6 +32,9 @@ public class AiMemoryContext extends AbstractMaidContext {
     private static final java.util.Map<String, AiMemoryRecallGate> GATES =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 「她记挂着的事」最长保留 14 个游戏日——超过就不再每次注入，避免一件旧事被反复提起。 */
+    private static final long OPEN_EVENT_MAX_AGE_TICKS = 14L * 24000L;
+
     private static AiMemoryRecallGate gateFor(EntityMaid maid) {
         return GATES.computeIfAbsent(maid.m_20148_().toString(), k -> new AiMemoryRecallGate(
                 com.maidsmart.config.MaidSmartConfig.MEMORY_RECALL_GATE.get(),
@@ -44,6 +47,24 @@ public class AiMemoryContext extends AbstractMaidContext {
     public static void forget(java.util.UUID maidUuid) {
         if (maidUuid != null) {
             GATES.remove(maidUuid.toString());
+        }
+    }
+
+    /** 记忆写入后让该女仆的召回缓存失效（下一轮立即按完整口径召回）。 */
+    public static void invalidate(java.util.UUID maidUuid) {
+        if (maidUuid == null) {
+            return;
+        }
+        AiMemoryRecallGate gate = GATES.get(maidUuid.toString());
+        if (gate != null) {
+            gate.invalidateCache();
+        }
+    }
+
+    /** 维护/清理后让全部女仆的召回缓存失效（删除也属于记忆变化）。 */
+    public static void invalidateAll() {
+        for (AiMemoryRecallGate gate : GATES.values()) {
+            gate.invalidateCache();
         }
     }
 
@@ -81,14 +102,15 @@ public class AiMemoryContext extends AbstractMaidContext {
         // 省 token 省 CPU；显式回忆线索（记得/上次/之前）在本入口拿不到
         // QueryMemoryTool 那侧强制放行。
         boolean full = true;
+        String recallQuery = lastUserMessage(maid);
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_RECALL_GATE.get()) {
             long nowMs = System.currentTimeMillis();
-            long count = paragraphs.size();
+            long count = historyMessageCount(maid);
             AiMemoryRecallGate gate = gateFor(maid);
-            AiMemoryRecallGate.Decision d = gate.evaluate("", nowMs, count);
+            AiMemoryRecallGate.Decision d = gate.evaluate(recallQuery, nowMs, count);
             full = d.allow();
             if (full) {
-                gate.markCompleted("", nowMs, count);
+                gate.markCompleted(recallQuery, nowMs, count);
             }
         }
         // 1. 关系三元组（v1.5.95：单独段，高置信度在前——主人的关系是对话最重要参考；
@@ -148,7 +170,28 @@ public class AiMemoryContext extends AbstractMaidContext {
                 .thenComparing(AiMemoryModels.Paragraph::lastAccessed, Comparator.reverseOrder()));
         int n = com.maidsmart.config.MaidSmartConfig.MEMORY_PROMPT_TOP_N.get();
         if (full) {
-            appendSection(sb, "相关记忆", ext, n, p -> "（重要度" + p.salience() + "）" + p.content());
+            List<AiMemoryModels.Paragraph> related = new ArrayList<>();
+            if (!recallQuery.isBlank()) {
+                java.util.Set<String> hitContents = new java.util.HashSet<>();
+                for (AiMemorySearch.Hit h : AiMemorySearch.searchEnvironment(
+                        store, recallQuery, n, level.m_46467_())) {
+                    if ("paragraph".equals(h.type())) {
+                        hitContents.add(h.content());
+                    }
+                }
+                for (AiMemoryModels.Paragraph p : ext) {
+                    for (String c : hitContents) {
+                        if (c.endsWith(p.content())) {
+                            related.add(p);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (related.isEmpty()) {
+                related.addAll(ext.subList(0, Math.min(n, ext.size())));
+            }
+            appendSection(sb, "相关记忆", related, n, p -> "（重要度" + p.salience() + "）" + p.content());
         }
         // 4. 今日回顾（最近 2 条 daily 摘要）
         List<AiMemoryModels.Paragraph> daily = new ArrayList<>();
@@ -174,7 +217,7 @@ public class AiMemoryContext extends AbstractMaidContext {
                 if (full) {
                     appendSection(sb, "记忆日记", diaries, 2,
                             r -> "【第" + r.startDay() + "~" + r.endDay() + "天】"
-                                    + AiMemoryModels.clip(r.content(), 150));
+                                    + AiMemoryModels.clip(r.content(), 300));
                 }
             }
         }
@@ -194,13 +237,17 @@ public class AiMemoryContext extends AbstractMaidContext {
         //     这里把它们单独拎出来——让女仆能主动接上"上次那件事怎么样了"，
         //     而不是等主人自己再提。只取最近 2 条，且与「相关记忆」去重不会重复啰嗦。
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_OPEN_EVENTS.get()) {
+            long nowTick = level.m_46467_();
             List<AiMemoryModels.Paragraph> open = new ArrayList<>();
             for (AiMemoryModels.Paragraph p : paragraphs) {
                 if (AiMemoryStore.hasErrorTag(p)) {
                     continue;
                 }
                 if (p.tags() != null && p.tags().contains("open:1")) {
-                    open.add(p);
+                    long eventTick = p.eventTimeEnd() > 0 ? p.eventTimeEnd() : p.eventTimeStart();
+                    if (eventTick <= 0 || nowTick - eventTick <= OPEN_EVENT_MAX_AGE_TICKS) {
+                        open.add(p);
+                    }
                 }
             }
             open.sort(Comparator.comparingLong(AiMemoryModels.Paragraph::createdAt).reversed());
@@ -246,6 +293,48 @@ public class AiMemoryContext extends AbstractMaidContext {
             sb.append(tail);
         }
         return sb.toString();
+    }
+
+    /** 当前对话历史条数（召回闸门的“新增消息数”口径）。 */
+    private static long historyMessageCount(EntityMaid maid) {
+        try {
+            com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.MaidAIChatManager cm =
+                    maid.getAiChatManager();
+            if (cm == null || cm.getHistory() == null || cm.getHistory().getDeque() == null) {
+                return 0;
+            }
+            return cm.getHistory().getDeque().size();
+        } catch (Exception e) {
+            com.maidsmart.diag.Diag.swallow("AiMemoryContext", e);
+            return 0;
+        }
+    }
+
+    /** 最近一条主人发言（去掉 TLM 注入的 <context> 段）；没有则空串。 */
+    private static String lastUserMessage(EntityMaid maid) {
+        try {
+            com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.MaidAIChatManager cm =
+                    maid.getAiChatManager();
+            if (cm == null || cm.getHistory() == null) {
+                return "";
+            }
+            java.util.Iterator<com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMMessage> it =
+                    cm.getHistory().getDeque().descendingIterator();
+            while (it.hasNext()) {
+                com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMMessage m = it.next();
+                if (m.role() != com.github.tartaricacid.touhoulittlemaid.ai.service.llm.Role.USER) {
+                    continue;
+                }
+                String text = com.github.tartaricacid.touhoulittlemaid.ai.manager.entity
+                        .UserPromptContexts.removeContext(m.message());
+                if (text != null && !text.isBlank()) {
+                    return AiMemoryModels.clip(text, 300);
+                }
+            }
+        } catch (Exception e) {
+            com.maidsmart.diag.Diag.swallow("AiMemoryContext", e);
+        }
+        return "";
     }
 
     /**

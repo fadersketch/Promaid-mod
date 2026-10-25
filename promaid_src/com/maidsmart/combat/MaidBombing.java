@@ -135,9 +135,26 @@ public final class MaidBombing {
         final long due;
         /** 起爆那一刻副手要亮一下的那件东西（实测五百九十一："好像真的打了一下水晶/重生锚"） */
         final ItemStack display;
+        /**
+         * 【实测一千〇六十】压缩盒一次放多枚（同格叠放 / 并排重生锚）：
+         * 同 tick 连炸会撞上原版受击无敌帧，第二炸起全被吞成 0 伤害。
+         * 这一档在每一炸前清一次无敌帧，让每一枚按自己的威力结算。
+         */
+        final boolean burst;
+        /**
+         * 【实测一千〇六十一】本 tick 已由“批次预拆”主动 {@code discard} 的实体。
+         * 预拆之后 {@code isAlive()} 必为 false，主循环不能把它当成“半路被 /kill”作废。
+         */
+        boolean disarmedForBatch;
 
         Bomb(ServerLevel level, EntityMaid maid, Entity entity, BlockPos pos,
              List<BlockPos> placedPos, List<Block> placedBlock, Kind kind, long due, ItemStack display) {
+            this(level, maid, entity, pos, placedPos, placedBlock, kind, due, display, false);
+        }
+
+        Bomb(ServerLevel level, EntityMaid maid, Entity entity, BlockPos pos,
+             List<BlockPos> placedPos, List<Block> placedBlock, Kind kind, long due, ItemStack display,
+             boolean burst) {
             this.level = level;
             this.maid = maid;
             this.entity = entity;
@@ -147,6 +164,7 @@ public final class MaidBombing {
             this.kind = kind;
             this.due = due;
             this.display = display;
+            this.burst = burst;
         }
     }
 
@@ -489,7 +507,12 @@ public final class MaidBombing {
      */
     public static boolean tryStartMelee(ServerLevel level, EntityMaid maid, LivingEntity target) {
         try {
-            if (level == null || maid == null || target == null || !BombConfig.cfgMelee()) {
+            if (level == null || maid == null || target == null || !BombConfig.cfgAnyPlacement()) {
+                return false;
+            }
+            // 【实测一千〇六十】重锤 + 风弹档：炸弹等这一记猛击**真的落地命中**之后再放。
+            // 否则 TNT / 水晶会在她起跳途中把目标掀飞，重锤砸空。非重锤档不受影响。
+            if (!MaidMaceSmashBehavior.bombingAllowed(maid)) {
                 return false;
             }
 
@@ -578,16 +601,18 @@ public final class MaidBombing {
         }
         EnumMap<Kind, Long> next = BOMB_NEXT.get(id);
         // ① 末地水晶（黑曜石 / 基岩底座）
-        if (BombItems.has(maid, BombItems.ID_END_CRYSTAL) && BombItems.has(maid, BombItems.ID_OBSIDIAN, BombItems.ID_BEDROCK)
+        if (BombConfig.cfgCrystal()
+                && BombItems.has(maid, BombItems.ID_END_CRYSTAL) && BombItems.has(maid, BombItems.ID_OBSIDIAN, BombItems.ID_BEDROCK)
                 && !onCooldown(next, Kind.CRYSTAL, now)) {
             out.add(Kind.CRYSTAL);
         }
         // ② 重生锚（需要 1 颗萤石当引信；维度闸见 explodesHere）
-        boolean anchorReady = explodesHere(level, Kind.ANCHOR) && BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR)
+        boolean anchorReady = BombConfig.cfgAnchor() && explodesHere(level, Kind.ANCHOR)
+                && BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR)
                 && (!BombConfig.cfgAnchorNeedsGlowstone() || BombItems.has(maid, BombItems.ID_GLOWSTONE));
         if (anchorReady && !onCooldown(next, Kind.ANCHOR, now)) {
             out.add(Kind.ANCHOR);
-        } else if (!anchorReady) {
+        } else if (BombConfig.cfgAnchor() && !anchorReady) {
             // ── v1.2.2 实测五百九十四【把原因说到玩家脸上】──
             // 第三次反馈"重生锚还是放不下来"，而实测日志（latest.log 搜「空袭轰炸」）里那一行写得
             // 明明白白：她带着重生锚、**缺萤石**。旧版这条原因只落在日志里（玩家不看日志就等于没有），
@@ -596,7 +621,8 @@ public final class MaidBombing {
             hintAnchorSkip(level, maid);
         }
         // ③ 床（同样走维度闸：主世界 = bedWorks 为 true = 不开放）
-        if (explodesHere(level, Kind.BED) && BombItems.hasBed(maid) && !onCooldown(next, Kind.BED, now)) {
+        if (BombConfig.cfgBed() && explodesHere(level, Kind.BED) && BombItems.hasBed(maid)
+                && !onCooldown(next, Kind.BED, now)) {
             out.add(Kind.BED);
         }
         if (out.isEmpty() && (running == null || running.isEmpty())) {
@@ -628,10 +654,10 @@ public final class MaidBombing {
     /** 材料齐但没有可用链路时的限频诊断（每 10 秒最多一条/女仆；她什么都没带就静默） */
     private static void diagSkip(ServerLevel level, EntityMaid maid) {
         try {
-            boolean crystal = BombItems.has(maid, BombItems.ID_END_CRYSTAL);
+            boolean crystal = BombConfig.cfgCrystal() && BombItems.has(maid, BombItems.ID_END_CRYSTAL);
             boolean base = BombItems.has(maid, BombItems.ID_OBSIDIAN) || BombItems.has(maid, BombItems.ID_BEDROCK);
-            boolean anchor = BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR);
-            boolean bed = BombItems.hasBed(maid);
+            boolean anchor = BombConfig.cfgAnchor() && BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR);
+            boolean bed = BombConfig.cfgBed() && BombItems.hasBed(maid);
             if (!crystal && !anchor && !bed) {
                 return; // 她什么都没带：正常跳过，不刷日志
             }
@@ -660,7 +686,9 @@ public final class MaidBombing {
                 }
             }
             // v1.2.2 实测五百九十四：重生锚那一段的原因（缺萤石 / 这个维度不炸）同样写下来
-            hintAnchorSkip(level, maid);
+            if (BombConfig.cfgAnchor()) {
+                hintAnchorSkip(level, maid);
+            }
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸跳过（没有可用链路）：" + sb);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
         }
@@ -811,6 +839,12 @@ public final class MaidBombing {
             BombPlacement.rollback(level, ph);
             return Result.ABORT;
         }
+        // 【实测一千〇六十】重锤档：起跳一开始就作废在飞的相位，已放的底座原物还她；
+        // 等这一跳落地砸中之后（SMASH_HIT 重新写上）才会再次起手。
+        if (!MaidMaceSmashBehavior.bombingAllowed(maid)) {
+            BombPlacement.rollback(level, ph);
+            return Result.ABORT;
+        }
         try {
             // v1.2.2 实测五百九十九【"近战空袭从不放重生锚"的根因】：旧版这一行目标是"死了/没了"
             // 就整段回滚 —— 而收翅猛击**常常就是致命一击**：起手那一 tick 之后目标马上就死了，
@@ -867,6 +901,36 @@ public final class MaidBombing {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
             return false;
         }
+    }
+
+    /**
+     * 【实测一千〇六十】她名下还有炸弹没走完（放置相位 / 待起爆 / 追踪中的 TNT）。
+     * 重锤猛击用这条让下一跳等炸弹先炸：否则目标被炸飞，下一记又砸空。
+     * 【为什么不看 TNT_ARMED】那只是"下一发可以扔"的标记，真正扔出去才进 PENDING/HOMING；
+     * 起跳期间轰炸链路本来就被 {@code bombingAllowed} 拦住，不存在"跳一半又扔一发"。
+     */
+    public static boolean hasLiveBomb(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            UUID id = maid.m_20148_();
+            if (isBombing(maid)) {
+                return true;
+            }
+            for (Bomb b : PENDING) {
+                if (b != null && b.maid != null && id.equals(b.maid.m_20148_())) {
+                    return true;
+                }
+            }
+            for (Homing h : HOMING) {
+                if (h != null && h.maid != null && id.equals(h.maid.m_20148_())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBombing", ignored);
+        }
+        return false;
     }
 
     /**
@@ -963,16 +1027,36 @@ public final class MaidBombing {
             // v1.2.2 实测五百九十二：轰炸相位也由服务端统一驱动（所有攻击模式共用同一台机器）
             tickPhases();
             tickReclaims();
+            // 【实测一千〇六十一】批次预拆：先把这个 tick 所有到期炸弹的实体全部 discard，
+            // 再逐枚走本模组的自定义起爆。旧版按顺序逐枚炸：第一炸会把同格叠放的其余末地
+            // 水晶 / TNT 实体炸死，它们的死亡爆炸绕过本模组（无探针、无友军豁免）；而重生锚
+            // 是方块，不受这一炸影响，五枚全走自定义起爆——实测日志正是「五枚水晶只有一行
+            // 起爆、五个重生锚五行约 250 伤害」，重生锚看起来“伤害远高”就是这么来的。
+            for (Bomb b : PENDING) {
+                if (b == null || b.level == null || b.entity == null || !b.entity.m_6084_()) {
+                    continue;
+                }
+                long now = b.level.m_46467_();
+                boolean due = b.entity instanceof PrimedTnt pt ? pt.m_32100_() <= 1 : now >= b.due;
+                if (due) {
+                    b.disarmedForBatch = true;
+                    b.entity.m_142687_(Entity.RemovalReason.DISCARDED);
+                }
+            }
             Iterator<Bomb> it = PENDING.iterator();
             while (it.hasNext()) {
                 Bomb b = it.next();
-                if (b.level == null || b.maid == null || !b.maid.m_6084_()) {
+                // 【实测一千〇六十】女仆死了，已经放好的炸弹仍然要炸。
+                // 旧版这里连 !maid.isAlive() 一起判：五枚叠放水晶的第一炸把她自己炸死之后，
+                // 剩下四枚全被 settleBase + dropEntity 丢掉，目标只吃到一枚的伤害——
+                // 这正是"五枚叠放看不出一百多伤害"的直接原因（见 R1060 日志证据）。
+                if (b.level == null || b.maid == null) {
                     settleBase(b); // v1.3.8：这一发作废，已经放进世界的那块底座也要还她
                     dropEntity(b);
                     it.remove();
                     continue;
                 }
-                if (b.entity != null && !b.entity.m_6084_()) {
+                if (b.entity != null && !b.entity.m_6084_() && !b.disarmedForBatch) {
                     settleBase(b); // v1.3.8：同上——旧版这里只丢炸弹，黑曜石就永远留在地上
                     it.remove(); // 炸弹实体中途没了（被 /kill 之类）→ 这一发作废
                     continue;

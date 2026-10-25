@@ -256,6 +256,12 @@ public final class AiMemoryArchiver {
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
             return false;
         }
+        // 与提取器同口径：TLM 全局 LLM / 单女仆 LLM / 记忆开关任一关闭都不发请求
+        if (!com.maidsmart.memory.AiMemoryManager.isEnabled(maid)
+                || !com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig.LLM_ENABLED.get()
+                || !com.maidsmart.memory.LlmEnableManager.isEnabled(maid)) {
+            return false;
+        }
         if (store.index().has(lv, startTick, endTick)) {
             return true;
         }
@@ -286,6 +292,15 @@ public final class AiMemoryArchiver {
             ARCHIVING.remove(id); // 超时 → 允许重试
         }
         ARCHIVING.put(id, System.currentTimeMillis());
+        if (!AiMemoryExtractor.tryAcquireLlmSlot()) {
+            ARCHIVING.remove(id);
+            return false; // 并发槽满：下轮重试（pending 已存在）
+        }
+        if (!com.maidsmart.dialogue.ApiQuotaManager.tryAcquire(1)) {
+            AiMemoryExtractor.releaseLlmSlot();
+            ARCHIVING.remove(id);
+            return false; // 日配额满：下轮重试
+        }
         String role = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
         String prompt = buildPrompt(role, lv, startTick, endTick, eventBlock);
         sendIndexRequest(maid, level, os, model, prompt, store, lv, startTick, endTick);
@@ -385,20 +400,31 @@ public final class AiMemoryArchiver {
             if (site.hasThinkingField()) {
                 req = req.disableThinking();
             }
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(pick(site.url(),
-                            com.maidsmart.config.MaidSmartConfig.MEMORY_API_URL.get())))
-                    .header("Authorization", "Bearer " + pick(site.secretKey(),
-                            com.maidsmart.config.MaidSmartConfig.MEMORY_API_KEY.get()))
+            String customUrl = com.maidsmart.config.MaidSmartConfig.MEMORY_API_URL.get();
+            boolean useCustom = customUrl != null && !customUrl.isBlank();
+            String url = useCustom ? customUrl.trim() : site.url();
+            String key = useCustom
+                    ? com.maidsmart.config.MaidSmartConfig.MEMORY_API_KEY.get()
+                    : site.secretKey();
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                     .header("Content-Type", "application/json")
                     .timeout(Duration.ofSeconds(60))
                     .POST(HttpRequest.BodyPublishers.ofString(AiMemoryModels.GSON.toJson(req)));
-            if (site.headers() != null) {
+            if (key != null && !key.isBlank()) {
+                builder.header("Authorization", "Bearer " + key.trim());
+            }
+            if (!useCustom && site.headers() != null) {
                 site.headers().forEach(builder::header);
             }
             LLMSite.LLM_HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
                     .whenComplete((resp, err) -> server.execute(() -> {
                         UUID id = maid.m_20148_();
                         try {
+                            if (!com.maidsmart.memory.AiMemoryManager.isEnabled(maid)
+                                    || !com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig.LLM_ENABLED.get()
+                                    || !com.maidsmart.memory.LlmEnableManager.isEnabled(maid)) {
+                                return; // 请求在飞时 AI/记忆被关闭：丢弃结果，pending 仍在
+                            }
                             if (err != null || resp == null || resp.statusCode() != 200
                                     || resp.body() == null || resp.body().isBlank()) {
                                 LOGGER.info("AiMemoryArchiver: {}索引生成失败 {}（err={}，status={}）",
@@ -424,6 +450,7 @@ public final class AiMemoryArchiver {
                             addPending(store, lv, startTick, endTick);
                         } finally {
                             ARCHIVING.remove(id);
+                            AiMemoryExtractor.releaseLlmSlot();
                         }
                     }));
         } catch (Exception e) {
@@ -431,6 +458,7 @@ public final class AiMemoryArchiver {
             UUID id = maid.m_20148_();
             LOGGER.info("AiMemoryArchiver: 索引请求构造失败 {}（待重试）", id, e);
             ARCHIVING.remove(id);
+            AiMemoryExtractor.releaseLlmSlot();
             addPending(store, lv, startTick, endTick);
         }
     }

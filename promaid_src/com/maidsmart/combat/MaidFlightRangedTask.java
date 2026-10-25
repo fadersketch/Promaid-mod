@@ -494,6 +494,9 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
     /**
      * 找箭：副手优先，其次按【武器自己的 supportedProjectiles 判据】在女仆背包找
      * （弓弩认箭、模组弹射武器认自己的弹药），最后退回背包里的任意箭。
+     * v1.3.3 实测一千〇三【额外容器】：她自己背包一支都没有时，请 TLM 把 1 支匹配的箭从
+     * 精妙背包/旅行者背包搬进她自己的背包，再扫一遍——与判定侧 {@code MaidFlightKit#hasArrowFor}
+     * 的只读探针同一判据（先判背包、再判额外容器；与 findRiptide/fetchRiptide 同构）。
      */
     private static ItemStack findArrow(EntityMaid maid, net.minecraft.world.item.ProjectileWeaponItem pwi) {
         try {
@@ -503,19 +506,34 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
+        ItemStack own = scanOwnArrow(maid, pwi);
+        if (!own.m_41619_()) {
+            return own;
+        }
+        // v1.3.3 实测一千〇三【额外容器】：搬进来一支再扫（pull 先扫她自己的背包，有就什么都不做）
+        java.util.function.Predicate<ItemStack> sup = supportedOf(pwi);
+        if (com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.m_41619_() && s.m_41720_() instanceof ArrowItem
+                        && (sup == null || sup.test(s)), 1)) {
+            return scanOwnArrow(maid, pwi);
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** 她自己背包里的箭：先按武器 supportedProjectiles 判据、再退回任意箭（与 TLM 口径一致）。
+     *  与 {@link #findArrow} 拆开，是为了让"额外容器搬进来之后照原样再扫一遍"复用同一份判据。 */
+    private static ItemStack scanOwnArrow(EntityMaid maid, net.minecraft.world.item.ProjectileWeaponItem pwi) {
+        java.util.function.Predicate<ItemStack> supported = supportedOf(pwi);
         try {
-            java.util.function.Predicate<ItemStack> supported = pwi.m_6437_();
             IItemHandler inv = maid.getAvailableBackpackInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                ItemStack s = inv.getStackInSlot(i);
-                if (!s.m_41619_() && s.m_41720_() instanceof ArrowItem && supported.test(s)) {
-                    return s;
+            if (supported != null) {
+                for (int i = 0; i < inv.getSlots(); i++) {
+                    ItemStack s = inv.getStackInSlot(i);
+                    if (!s.m_41619_() && s.m_41720_() instanceof ArrowItem && supported.test(s)) {
+                        return s;
+                    }
                 }
             }
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
-        }
-        try {
-            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && s.m_41720_() instanceof ArrowItem) {
@@ -525,6 +543,16 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
         }
         return ItemStack.f_41583_;
+    }
+
+    /** 武器的 supportedProjectiles 判据（取不到 = null → 调用方退回"任意箭"兜底） */
+    private static java.util.function.Predicate<ItemStack> supportedOf(
+            net.minecraft.world.item.ProjectileWeaponItem pwi) {
+        try {
+            return pwi.m_6437_();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightRangedTask", ignored);
+            return null;
+        }
     }
 
     /**

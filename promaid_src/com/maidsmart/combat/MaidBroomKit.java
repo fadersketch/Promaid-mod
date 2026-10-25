@@ -4,8 +4,12 @@ import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.RelativeMovement;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Set;
 
 /**
  * ── 这是什么 ──
@@ -117,6 +121,58 @@ public final class MaidBroomKit {
 
     public static boolean isRidingBroom(EntityMaid maid) {
         return ridingBroom(maid) != null;
+    }
+
+    /** 递归闸：本类自己发起的传送不再被扫帚传送拦截器接住 */
+    private static final ThreadLocal<Boolean> TELEPORTING = new ThreadLocal<>();
+
+    /**
+     * 传送她时把脚下的扫帚一起搬走：原版 {@code teleportTo} 会先 {@code unRide}，
+     * 直接传她 = 她下扫帚、扫帚留在原地。这里按「下车 → 搬扫帚 → 搬她 → 重新落座」
+     * 四步在同一个 tick 内做完；跨维度按 UUID 取回 changeDimension 造出的新实例。
+     * <p>调用点：{@code EntityMoveToMarkMixin} 在 {@code Entity.teleportTo} 的 HEAD 调这里，
+     * 本模组、原版命令、别的模组的传送都覆盖。
+     * @return {@code null} = 她没骑扫帚（放行原版）；否则 = 已处理，值为传送结果
+     */
+    public static Boolean teleportWithBroom(EntityMaid maid, ServerLevel dest, double x, double y, double z,
+                                            Set<RelativeMovement> relatives, float yRot, float xRot) {
+        if (maid == null || dest == null || Boolean.TRUE.equals(TELEPORTING.get())) {
+            return null;
+        }
+        if (!isBroomTask(maid)) {
+            return null; // 扫帚模式专属：别的任务里骑在扫帚上不接管
+        }
+        EntityBroom broom = ridingBroom(maid);
+        if (broom == null || !broom.m_6084_()) {
+            return null;
+        }
+        java.util.UUID broomId = broom.m_20148_();
+        try {
+            // 先解开乘客关系：她还在鞍上时搬扫帚，会被原版的 teleportPassengers 抢着把她也挪走
+            maid.m_8127_();
+            try {
+                broom.m_264318_(dest, x, y, z, relatives, yRot, xRot);
+            } catch (Throwable ignored) {
+                com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
+            }
+            boolean ok;
+            TELEPORTING.set(Boolean.TRUE);
+            try {
+                ok = maid.m_264318_(dest, x, y, z, relatives, yRot, xRot);
+            } finally {
+                TELEPORTING.remove();
+            }
+            // 跨维度是 changeDimension 造出的新实例：一律按 UUID 取回，不缓存旧引用
+            if (dest.m_8791_(broomId) instanceof EntityBroom at && at.m_6084_()) {
+                at.m_20256_(Vec3.f_82478_); // 落点静止：别带着旧速度飞出去
+                MaidBroomDrive.clearIntent(at);
+                maid.m_7998_(at, true); // force 落座（跳过 canRide 判定）
+            }
+            return ok;
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("MaidBroomKit", ignored);
+            return Boolean.FALSE;
+        }
     }
 
     /* ==================== 远程武器（复用 MaidFlightKit 口径） ==================== */

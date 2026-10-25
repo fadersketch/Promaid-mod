@@ -164,11 +164,11 @@ public final class EmotionalActionExecutor {
                         maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID().toString(),
                         owner.getDisplayName() != null ? owner.getDisplayName().getString() : "?",
                         foodLevel, com.maidsmart.config.MaidSmartConfig.AID_FOOD_BLACKLIST.get().size());
-                maid.getChatBubbleManager().addTextChatBubble("主人，我背包里没有吃的了，给我备点食物吧～");
+                maid.getChatBubbleManager().addTextChatBubble("主人您饿了吗？但我没吃的了……");
                 // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
                 if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
                     owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                            "\u00a7e[maid_smart] " + maidName + "：我背包里没有吃的了，给我备点食物吧～"));
+                            "\u00a7e[maid_smart] " + maidName + "：主人您饿了吗？但我没吃的了……"));
                 }
             }
             return false;

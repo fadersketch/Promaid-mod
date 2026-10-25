@@ -162,6 +162,9 @@ public class ReplyFeedbackTracker {
 
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
+        if (!com.maidsmart.config.MaidSmartConfig.AI_ENABLE.get()) {
+            return; // Promaid AI 总开关关闭：不观察、不学习、不写任何记忆
+        }
 MinecraftServer server = event.getServer();
         if (server == null) {
             return;
@@ -300,6 +303,9 @@ MinecraftServer server = event.getServer();
         }
         LAST_ERROR_MARK.put(id, now);
         try {
+            if (!com.maidsmart.memory.AiMemoryManager.isEnabled(maid)) {
+                return; // 记忆开关关闭：不写记忆（反馈仍可在内存里生效）
+            }
             ServerLevel level = (ServerLevel) maid.level();
             // v1.1.0：统一走灵魂路由（与记忆读写一致）
             AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
@@ -309,6 +315,7 @@ MinecraftServer server = event.getServer();
             AiMemoryModels.Paragraph p = AiMemoryModels.Paragraph.create("dialogue", "user", content,
                     "error_mark,feedback", 5, false, now, level.getGameTime());
             store.addParagraph(p);
+            com.maidsmart.memory.AiMemoryContext.invalidate(id);
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", ignored);
         }
     }
@@ -320,10 +327,14 @@ MinecraftServer server = event.getServer();
             return;
         }
         try {
+            if (!com.maidsmart.memory.AiMemoryManager.isEnabled(maid)) {
+                return; // 记忆开关关闭：不强化记忆
+            }
             ServerLevel level = (ServerLevel) maid.level();
             // v1.1.0：统一走灵魂路由（同 writeErrorMark）
             AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
             store.reinforceByTopic(last);
+            com.maidsmart.memory.AiMemoryContext.invalidate(id);
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ReplyFeedbackTracker", ignored);
         }
     }

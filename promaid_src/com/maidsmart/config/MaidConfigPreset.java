@@ -38,6 +38,8 @@ public final class MaidConfigPreset {
             "build.indexStone", "build.projection", "build.noForceHome",
             // ---- 挖矿 / 伐木：只剩"报点弃置"这类不改行为的报告项（自愈/防塌/免搭柱/自动标签已随 DIY 关） ----
             "mine.hardBlockReport", "wood.hardBlockReport",
+            // ---- Promaid AI 总开关（DIY 也不关；工具等子项各自跟随 DIY） ----
+            "ai.enable",
             // ---- AI 记忆 ----
             "memory.enable", "memory.relationInject", "memory.conflictOverride", "memory.coreFold",
             "memory.workingNote", "memory.openEvents", "memory.lazySave", "memory.indexEnable",
@@ -66,7 +68,11 @@ public final class MaidConfigPreset {
             // ---- 保护玩家已有配置 / 修 bug：罗盘圈不被覆盖、传送后重建、背包溢出兜底 ----
             "misc.compassPriority", "misc.maidTeleportRebuild", "misc.backpackOverflow",
             // ---- 自己的显示与标记 ----
-            "misc.cooldownHud", "misc.scheduleBubbleEnabled",
+            "misc.cooldownHud", "misc.scheduleBubbleEnabled", "misc.placedGoldMark",
+            // 【R1109】气泡/系统消息总开关：纯提示显示，不改女仆行为 → DIY 保留
+            "misc.promaidHints",
+            // 【R1079】整合包的分发/界面开关：只管发不发书、手册显不显示配置页，不改女仆行为
+            "misc.giveStarterBooks", "misc.bookConfigAccess",
             // ---- 放置护栏：悬空禁搭、不搭在主人身上 ----
             "misc.noPlaceInAir", "misc.noPlaceOnOwner",
             // ---- 投弹/搭路的安全档 ----

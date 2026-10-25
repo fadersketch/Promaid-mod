@@ -15,8 +15,8 @@ import net.minecraft.world.item.ItemStack;
  *   的空魂符（TLM SMART_SLAB_EMPTY），成功则取消伤害；
  * - 触发条件：女仆存活/未移除/未骑乘 + 冷却未到 + 主人是同维度 ServerPlayer 且
  *   在半径内（默认 24 格）+ 主人背包（主手/副手/物品栏）有空魂符；
- * - 动作：新建 SMART_SLAB_HAS_MAID 魂符 → ItemSmartSlab.storeMaidData 存女仆数据 →
- *   魂符打自动标记（冷却时间戳）→ 放入主人背包空槽 → 主人收到提示 +
+ * - 动作：新建 SMART_SLAB_HAS_MAID 魂符 → 自己拍快照并校验 Owner（实测一千〇七，
+ *   issue #40）→ 魂符打自动标记（冷却）→ 放入主人背包空槽 → 主人收到提示 +
  *   再生药水效果（时长=冷却）+ 升级音效 → 女仆实体从世界移除（m_146870_ discard）；
  * - 冷却：成功收符后女仆 persistentData 写冷却时间戳（默认 180 秒），期间不再触发； - 防收放循环：魂符右键释放（MaidAndItemTransformEvent.ToMaid）时把冷却写回女仆 ForgeData，并清掉魂符上的自动标记——释放后冷却期内不会立刻又被收回去。 与自保的关系：自保是"活着保命"（喝药/搭高/珍珠），本功能是"保不住（要死了） 才收符"的兜底——低血量交给自保，只有必死一击且没有保命物品才收。玩家手动用 魂符收/放女仆不受影响（只认自动标记的魂符）。
  */
@@ -28,6 +28,9 @@ public final class MaidSoulSpellGuard {
     private static final String AUTO_SAVED_NAME_TAG = "maid_hp_low_protect_auto_name";
     private static final String MAID_INFO_TAG = "MaidInfo";
     private static final String FORGE_DATA_TAG = "ForgeData";
+    /** issue #40：废符清扫节流（UUID → 上次清扫的 gameTime）；首次进服没有记录 → 立刻扫一次 */
+    private static final java.util.Map<java.util.UUID, Long> LAST_SWEEP =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private static final net.minecraft.network.chat.Component SUCCESS_MESSAGE =
             net.minecraft.network.chat.Component.m_237113_("你的女仆受到致命伤害，已回到魂符中。");
@@ -159,16 +162,54 @@ public final class MaidSoulSpellGuard {
             }
             long until = level.m_46467_()
                     + com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20L;
-            // 实测四百四十一：先把冷却写进女仆数据再 storeMaidData——这样 ToItem 钩子
-            // 与魂符里的女仆 NBT 都拿得到本次冷却，收符期间 HUD 才有条目可显示
-            maid.getPersistentData().m_128356_(COOLDOWN_UNTIL_TAG, until);
             ItemStack slab = new ItemStack(
                     com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_HAS_MAID.get());
-            com.github.tartaricacid.touhoulittlemaid.item.ItemSmartSlab.storeMaidData(slab, maid);
+            // 实测一千〇七（issue #40，1.21.1 反馈、两树同修）：不再经过 TLM 的
+            // storeMaidData，自己拍快照 + 自己校验 Owner。1.21.1 那版 storeMaidData
+            // 在物品已有 maid_info 组件时静默不写 → 产出快照为空的废符 → 释放时
+            // TLM 读 Owner 崩客户端（javap + 崩溃栈实证）。这里写不进去就不收符，
+            // 绝不给玩家发点了就崩的废符。
+            net.minecraft.nbt.CompoundTag snapshot = new net.minecraft.nbt.CompoundTag();
+            maid.m_20240_(snapshot); // saveWithoutId（与魂符/TLM 取回同源）
+            // 1.20.1 的 TLM 是先 getOrCreateTagElement("MaidInfo") + save、再 post ToItem
+            // （javap 实证）——这里保持同一顺序：事件处理器改的就是栈上这一份快照
+            slab.m_41784_().m_128365_(MAID_INFO_TAG, snapshot);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(
+                    new com.github.tartaricacid.touhoulittlemaid.api.event.MaidAndItemTransformEvent.ToItem(
+                            maid, slab, snapshot));
+            if (snapshot.m_128456_() || !snapshot.m_128425_("Owner", 11)) {
+                com.maidsmart.tool.PromaidLog.log("回魂符",
+                        "快照" + (snapshot.m_128456_() ? "为空" : "缺失 Owner")
+                                + "，放弃收符（防发废符）："
+                                + com.maidsmart.tool.PromaidLog.nameOf(maid));
+                return false;
+            }
+            // 冷却在快照校验通过后才写：放弃收符时女仆身上不会留下冷却
+            maid.getPersistentData().m_128356_(COOLDOWN_UNTIL_TAG, until);
             markAutoSaved(slab, until);
             // 实测四百三十三：把女仆名写进魂符本身——HUD 在"女仆还在符里"的冷却窗口也能显示
             slab.m_41784_().m_128359_(AUTO_SAVED_NAME_TAG, com.maidsmart.tool.PromaidLog.nameOf(maid));
             slot.set(player, slab);
+            // 实测一千〇八（issue #40 新日志）：先确认她真的离开了世界，再发提示与特效。
+            // 现场里"已回到魂符"的提示和符都出现了、她却继续战斗了 50 秒——收符必须
+            // "移除成功才算成功"；失败就把符换回空符并清冷却，绝不留下可释放的符 +
+            // 还活着的那只（否则之后右键放符会凭空多出一只）。
+            boolean removed = false;
+            try {
+                maid.m_146870_(); // discard：从世界移除（收进魂符）
+                removed = maid.m_213877_();
+            } catch (Throwable t) {
+                com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", t);
+            }
+            if (!removed) {
+                slot.set(player, new ItemStack(
+                        com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_EMPTY.get()));
+                maid.getPersistentData().m_128473_(COOLDOWN_UNTIL_TAG);
+                com.maidsmart.tool.PromaidLog.log("回魂符",
+                        "收符未完成（女仆未被移除）→ 已退回空魂符、不取消伤害："
+                                + com.maidsmart.tool.PromaidLog.nameOf(maid));
+                return false;
+            }
             // v1.1.0 实测四百一十二：提示语带上当前 CD 值——玩家不知道冷却机制的
             // 常反馈"第二次就死了不收"，文案点明（0 = 无冷却，措辞区分）
             int cdSec = com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get();
@@ -181,7 +222,6 @@ public final class MaidSoulSpellGuard {
                     com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20, 0));
             level.m_5594_(null, maid.m_20183_(), net.minecraft.sounds.SoundEvents.f_11778_,
                     net.minecraft.sounds.SoundSource.NEUTRAL, 0.65f, 1.0f);
-            maid.m_146870_(); // 从世界移除（收进魂符）
             return true;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", ignored);
             return false;
@@ -268,6 +308,72 @@ public final class MaidSoulSpellGuard {
         net.minecraft.nbt.CompoundTag forge = data.m_128469_(FORGE_DATA_TAG);
         forge.m_128356_(COOLDOWN_UNTIL_TAG, until);
         data.m_128365_(FORGE_DATA_TAG, forge);
+    }
+
+    /** 快照里必须带 Owner（原版 UUID 写成 int 数组）：TLM 释放时
+     *  {@code getUUID("Owner")} 在键缺失时直接 NPE（javap 实证）——issue #40 的
+     *  崩溃点。1.20.1 用根标签下的 MaidInfo 子标签。 */
+    private static boolean snapshotHasOwner(ItemStack slab) {
+        net.minecraft.nbt.CompoundTag tag = slab.m_41783_();
+        if (tag == null || !tag.m_128425_(MAID_INFO_TAG, 10)) {
+            return false;
+        }
+        net.minecraft.nbt.CompoundTag maidInfo = tag.m_128469_(MAID_INFO_TAG);
+        return !maidInfo.m_128456_() && maidInfo.m_128425_("Owner", 11);
+    }
+
+    // ================== 废符兜底（issue #40） ==================
+
+    /**
+     * 每 100 tick 扫一次（首次进服立刻扫一次）玩家背包：把「有 MaidInfo 快照、但快照里没有 Owner」的魂符
+     * 换成空魂符。这类符是旧版自动收符可能留下的——TLM 释放时读 Owner 必 NPE，
+     * 客户端当场崩溃；快照本身已经不可用（空/缺 Owner 都无法还原女仆），换回空符
+     * 是唯一安全的回收方式。三个条件同时成立才动：物品是 SMART_SLAB_HAS_MAID、
+     * MaidInfo 存在、Owner 缺失或快照为空。
+     */
+    public static void sweepBrokenSlabs(ServerPlayer player) {
+        try {
+            long now = player.m_9236_().m_46467_();
+            Long last = LAST_SWEEP.get(player.m_20148_());
+            if (last != null && now - last < 100L) {
+                return;
+            }
+            LAST_SWEEP.put(player.m_20148_(), now);
+            net.minecraft.world.entity.player.Inventory inv = player.m_150109_();
+            int fixed = 0;
+            for (int i = 0; i < inv.f_35974_.size(); i++) {
+                if (isBrokenSlab(inv.f_35974_.get(i))) {
+                    inv.f_35974_.set(i, new ItemStack(
+                            com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_EMPTY.get()));
+                    fixed++;
+                }
+            }
+            if (isBrokenSlab(inv.f_35976_.get(0))) {
+                inv.f_35976_.set(0, new ItemStack(
+                        com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_EMPTY.get()));
+                fixed++;
+            }
+            if (fixed > 0) {
+                com.maidsmart.tool.PromaidLog.log("回魂符", "清理废符 " + fixed
+                        + " 枚（快照缺 Owner，释放会崩客户端）→ 已还原为空魂符："
+                        + player.m_5446_().getString());
+                player.m_5661_(net.minecraft.network.chat.Component.m_237113_(
+                        "检测到无法释放的魂符（女仆快照为空），已还原为空魂符。"), false);
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSoulSpellGuard", ignored);
+        }
+    }
+
+    private static boolean isBrokenSlab(ItemStack stack) {
+        if (stack == null || stack.m_41619_()
+                || !stack.m_150930_(com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_HAS_MAID.get())) {
+            return false;
+        }
+        net.minecraft.nbt.CompoundTag tag = stack.m_41783_();
+        if (tag == null || !tag.m_128425_(MAID_INFO_TAG, 10)) {
+            return false; // 没有快照：TLM 走"无数据"安全分支，不崩
+        }
+        return !snapshotHasOwner(stack);
     }
 
     /** 找主人背包里的空魂符（主手 → 副手 → 物品栏） */

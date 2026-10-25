@@ -176,14 +176,18 @@ public class ProMaidExtension implements ILittleMaid {
                 // v1.2.4 实测六百四十（六百四十一 起口径不变）：激流推进剂窗口同理（只在飞行链路的
                 // 每 tick 里被驱动，强杀时没人摘得掉它，留着就是表里一条陈旧 UUID）。
                 com.maidsmart.combat.MaidRiptideBoost.forget(maid.m_20148_());
+                // R1083：鞘翅长矛链路的静态状态同理
+                com.maidsmart.combat.SpearAirRaidBehavior.forget(maid.m_20148_());
                 com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
             }
         }
         // 全清兜底：static 表不能跨会话残留（世界已重新加载，此刻没有任何女仆在飞）
         com.maidsmart.combat.MaidFlightCombatBehavior.clearAll();
+        com.maidsmart.combat.MaidMaceSmashBehavior.clearAll();
         com.maidsmart.combat.MaidTridentSpinBehavior.clearAll();
         com.maidsmart.combat.MaidFlightFollowBehavior.clearAll(); // v1.2.2 实测六百〇八
         com.maidsmart.combat.MaidRiptideBoost.clearAll();         // v1.2.4 实测六百四十
+        com.maidsmart.combat.SpearAirRaidBehavior.clearAll();     // R1083 鞘翅长矛
     }
 
     /**
@@ -212,6 +216,17 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.combat.MaidSpawnerTorchBehavior.dropSavedOffhand(maid);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
+        // 空中/跃起中死亡：行为走不到 stop()，静态 LEAPING 残留会让复活后的女仆
+        // 永远不再触发重锤猛击（且连"重锤门"诊断都不打）。
+        try {
+            com.maidsmart.combat.MaidMaceSmashBehavior.forget(maid.m_20148_());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
+        }
+        // R1083：鞘翅长矛链路同理（飞行中死亡走不到 stop()）
+        try {
+            com.maidsmart.combat.SpearAirRaidBehavior.forget(maid.m_20148_());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
+        }
     }
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
@@ -225,15 +240,16 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.build.BuildPlan.clearAll();
         // v1.2.0：指标石会话清空（防跨存档残留锁定/绑定状态）
         com.maidsmart.build.IndexStoneService.clearAll();
+        // 实测一千〇六：金色描边的待发/镜像表清场（方块本身由各追踪器 clearAll 回收）
+        com.maidsmart.task.PlacedMarkNetworking.clearAll();
         com.maidsmart.build.ChunkFreeze.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
         // v1.1.0 实测四十四：撤掉全部女仆区块强制加载票（防票残留锁区块）
         com.maidsmart.follow.MaidChunkLoadManager.releaseAll(event.getServer());
         // 实测六百九十九：登记表会话复位（内存清空、落盘保留——下次启动再灌回来）
         com.maidsmart.follow.MaidChunkLoadManager.resetSeenSession();
-        // 【1.20.1 已撤掉末制导后门】MaidShellHoming 整条链路删除（原因见
-        // MaidMountCompat.tickAttack 里那段注释：与直瞄开火冲突、导致弹体漂移），
-        // 所以这里不再需要清它的两张表。
+        // 实测一千〇五十六：固定翼火炮末制导的两张表（在飞的炮弹 / 待认领）跨会话不能留
+        com.maidsmart.combat.MaidShellHoming.clearAll();
     }
 
     /**
@@ -263,6 +279,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.task.MaidMineBehavior.expirePlaced(server, gt);
         com.maidsmart.task.MaidWoodBehavior.expirePlaced(server, gt);
         com.maidsmart.task.BridgeUpBehavior.expirePlaced(server, gt);
+        // v1.3.3：金色描边视觉 TTL（约 3 秒）——只撤框，方块回收寿命不变
+        com.maidsmart.task.PlacedMarkNetworking.tick(server);
         // v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）60 秒到期清理
         com.maidsmart.combat.SelfPreservationBehavior.expireCombatPlaced(server, gt);
         // v1.5.103：每 30 秒清理挖矿静态 per-maid 数据（防长时运行内存泄漏）
@@ -343,9 +361,9 @@ public class ProMaidExtension implements ILittleMaid {
         //（"戴着 + 滑翔"就该响），闸门移到 DaYunPlayerHook.tick 内部（它自己判 mayBreak）。
         com.maidsmart.accessory.DaYunPlayerHook.tick(server);
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
-        // 【1.20.1 已撤掉末制导后门】原来这里每 tick 调 MaidShellHoming.tick(server)（把刚打出去
-        // 的炮弹逐拍纠向目标）。现在开火走直瞄、方向在开火那一刻就解算好了，这条后门与它冲突
-        // （弹体漂移），故整条删除——原因同上。
+        // 实测一千〇五十六：固定翼火炮末制导——把女仆从固定翼打出去的炮弹逐拍纠向她的目标。
+        // 只认固定翼（见 MaidShellHoming.note），空表时零开销。
+        com.maidsmart.combat.MaidShellHoming.tick(server);
     }
 
     /**
@@ -366,6 +384,8 @@ public class ProMaidExtension implements ILittleMaid {
         // 右击方块/右击女仆/建造收尾三处），于是"服务端会话已清空、客户端还以为锁着"
         // 会一直持续到下次 syncTo 为止 = 假死锁。
         com.maidsmart.build.IndexStoneNetworking.syncTo(player);
+        // 实测一千〇六：登录补一份女仆放置方块的金色描边全量（断线重连不丢描边）
+        com.maidsmart.task.PlacedMarkNetworking.pushSnapshot(player);
         // 多人下「配置以服务端为准」：登录推一次配置状态；再广播一遍刷新"是不是多人"
         // （LAN 里第二个人进来时它才变成多人，那一行开关要跟着出现）
         com.maidsmart.config.ConfigSyncNetworking.pushState(player);
@@ -386,6 +406,7 @@ public class ProMaidExtension implements ILittleMaid {
     public void onPlayerChangedDimension(net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             com.maidsmart.build.IndexStoneNetworking.syncTo(player);
+            com.maidsmart.task.PlacedMarkNetworking.pushSnapshot(player); // 实测一千〇六：换维度补描边全量
         }
     }
 
@@ -406,6 +427,8 @@ public class ProMaidExtension implements ILittleMaid {
         // 实测 G-16：超越维度（BeyondDimensions）存储联动——产物回收 / 溢出入库 / 自动补货 / 缓存冲刷
         // （默认关：见 misc.bdStorage；命令入口 /maid_smart bd_*）
         com.maidsmart.command.MaidBdProbeCommand.register(event.getDispatcher());
+        // R1114：/set goal <x> <y> <z> [女仆] —— 玩家自己指定目标点（记进航图 + 直接让她飞过去）
+        com.maidsmart.command.PatrolGoalCommand.register(event.getDispatcher());
         com.maidsmart.command.MaidBdRuleCommand.register(event.getDispatcher());
         // v1.3.8【巡逻航迹】/maid_smart broom_goto / broom_patrol（OP，测试用）
         com.maidsmart.patrol.PatrolCommand.register(event.getDispatcher());
@@ -424,6 +447,16 @@ public class ProMaidExtension implements ILittleMaid {
                 || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
             return; // 只服务端处理女仆
         }
+        // 魂符放出 / 死亡重生 / 区块重载：先清掉上一世残留的猛击状态（静态 LEAPING
+        // 残留会让她永远不再用风弹起跳，且不触发任何诊断日志）。
+        com.maidsmart.combat.MaidMaceSmashBehavior.forget(maid.m_20148_());
+        com.maidsmart.combat.SpearAirRaidBehavior.forget(maid.m_20148_());
+        // 魂符放出/区块重载：烧制/酿造解绑一次旧工位、重新扫台（避免一直抱着
+        // 收魂前的熔炉，看不见旁边新放的高炉）。
+        com.maidsmart.task.MaidWorkTags.bumpStationGen(maid);
+        com.maidsmart.task.MaidWorkTags.setStationLock(maid, false);
+        com.maidsmart.task.MaidCookBehavior.forgetStation(maid.m_20148_());
+        com.maidsmart.task.MaidBrewBehavior.forgetStation(maid.m_20148_());
         // 实测五百六十六（PR #10 移植）：入世界 → 延迟给主人补一次实体包（治"客户端实体丢失"）
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
         // 实测五百七十六：入世界第一拍法术数据可能还没就绪 —— 清掉位移法术的书单缓存，
@@ -444,6 +477,14 @@ public class ProMaidExtension implements ILittleMaid {
         //
         //  （事件链的最末）而不是魂符自己的流程里，正是因为"最后一步最安全"。
         com.maidsmart.combat.GunnerTetherManager.onMaidJoin(maid);
+        // 实测一千〇一十一：入世界第一拍就补一次「最后位置 + 跟随票」——旧版要等每 5 秒
+        // 一次的全量 tick；这 5 秒里主人若被命令瞬移走，她的区块会先卸载（EntityLeaveLevel
+        // reason=null），随后既不在实体表里、一键集合又只能靠可能过期的 LAST_SEEN 召回
+        // （实测「女仆突然彻底消失」）。tick 本身是幂等的，重复调用无害。
+        try {
+            com.maidsmart.follow.MaidChunkLoadManager.tick(maid.m_9236_().m_7654_());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
+        }
     }
 
     /**
@@ -467,6 +508,21 @@ public class ProMaidExtension implements ILittleMaid {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
+        // 收魂 / 死亡 / 换维度：排班表那条远程配置会话静默作废（否则她会报"没能打开"）
+        com.maidsmart.schedule.RemoteMaidGui.cancelForMaid(maid.m_20148_());
+        // 收魂/区块卸载：静态占用表里不再替她"预留"炉子/酿造台（放出后重新扫）。
+        com.maidsmart.task.MaidCookBehavior.forgetStation(maid.m_20148_());
+        com.maidsmart.task.MaidBrewBehavior.forgetStation(maid.m_20148_());
+        // 死亡 / 收魂 / 区块卸载：行为收尾不一定执行，静态 LEAPING 按 UUID 残留会让
+        // 她在重新入世后永远不再触发重锤猛击。离场统一清一次。
+        com.maidsmart.combat.MaidMaceSmashBehavior.forget(maid.m_20148_());
+        com.maidsmart.combat.SpearAirRaidBehavior.forget(maid.m_20148_()); // R1083：长矛链路状态同理
+        // 【R1121】收放魂符 / 死亡 = 这一趟「飞过去」到此为止（玩家口径）。区块卸载不清：
+        // 她重新加载后应当继续飞向原来的目标。
+        if (maid.m_146911_() == net.minecraft.world.entity.Entity.RemovalReason.DISCARDED
+                || maid.m_146911_() == net.minecraft.world.entity.Entity.RemovalReason.KILLED) {
+            com.maidsmart.patrol.MaidTravelTarget.cancel(maid, "魂符收回或死亡");
+        }
         // 实测六百九十八【幽灵建模的第二道门】：**她活着**却离场 = 这不是死亡，是区块被拆
         // （reason=null 那一档：区块掉出 entity-ticking / 被卸载）。原版这一刻会给客户端
         // 发一次删包（ChunkMap.removeEntity），而"新实体不补包"（实测五百九十六）又拦着
@@ -683,6 +739,18 @@ public class ProMaidExtension implements ILittleMaid {
                             return LOC_PLAYER; // 玩家背包 / 当前界面里的箱子 / 女仆界面里的她的背包格
                         }
                     }
+                    // 实测一千〇一十一【根因：取下的装备其实穿在玩家身上，托管看不见 → 1.5 秒后
+                    // 又补一件 = 复制】：女仆界面（MaidMainContainer）的玩家段只加了主背包+快捷栏
+                    // 36 格，**不含玩家自己的护甲/副手**（那些在玩家 InventoryMenu 里）。玩家把
+                    // 取下的装备穿到身上后，容器菜单的槽位里查不到 → locateEquip 误判"四处查无"
+                    // → putBack 往她背包塞一件 / 满了掉她脚下（玩家看到的"补包到脚下"）。
+                    // 这里直接扫玩家背包的完整 41 格（0..35 主背包、36..39 护甲、40 副手）。
+                    net.minecraft.world.entity.player.Inventory pinv = p.m_150109_();
+                    for (int i = 0; i < pinv.m_6643_(); i++) {
+                        if (matchOne(pinv.m_8020_(i), want)) {
+                            return LOC_PLAYER; // 玩家护甲/副手/背包（当前界面没列出的那些格）
+                        }
+                    }
                 }
             }
             if (maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel ml) {
@@ -882,6 +950,9 @@ public class ProMaidExtension implements ILittleMaid {
         }
         if (event.player instanceof net.minecraft.server.level.ServerPlayer sp) {
             com.maidsmart.box.CompressionBoxService.tickPlayer(sp);
+            // issue #40：旧版自动收符可能留下"快照为空"的废符，释放时 TLM 读 Owner
+            // 崩客户端。每 100 tick 扫一次背包，把这类符还原成空魂符。
+            com.maidsmart.combat.MaidSoulSpellGuard.sweepBrokenSlabs(sp);
         }
     }
 
@@ -896,30 +967,38 @@ public class ProMaidExtension implements ILittleMaid {
 
     @Override
     public void registerAITool(ToolRegister register) {
-        register.register(new SmartMoveToTool());
-        register.register(new SmartGiveItemTool());
-        register.register(new SmartPickupTool());
-        register.register(new SmartReportTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartMoveToTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartGiveItemTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartPickupTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartReportTool()));
         // v1.5.136：战斗指挥（"去打那只怪/攻击最近的怪/帮我打它"——切攻击任务+锁目标）
-        register.register(new com.maidsmart.tool.SmartAttackTool());
-        register.register(new SmartBuildTool());
-        register.register(new SmartBuildListTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SmartAttackTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartBuildTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartBuildListTool()));
         // v1.5.94：AI 画蓝图（子 Agent 设计器）——玩家对话描述 → 子 LLM 设计 → 存手册 → 正常建造
-        register.register(new com.maidsmart.build.SmartDesignTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.build.SmartDesignTool()));
         // v1.5.86：AI 记忆检索工具（LLM 对话中按需调用）
-        register.register(new QueryMemoryTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new QueryMemoryTool(),
+                m -> AiMemoryManager.isEnabled(m)));
         // v1.5.95：LLM 主动写记忆工具（"记住…"当场写，与被动提取互补）
-        register.register(new com.maidsmart.memory.RememberTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.memory.RememberTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_REMEMBER.get()));
         // v1.5.95：工作笔记工具（跨对话任务状态，临时可覆盖）
-        register.register(new com.maidsmart.memory.WorkingNoteTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.memory.WorkingNoteTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_WORKING_NOTE.get()));
         // 多级记忆索引查询工具（移植自 Sphantosis query_memory_index：日/3日/周/月
         // 日记式摘要，先列跨度再查内容，前缀和式逐步缩小时间范围）
-        register.register(new com.maidsmart.memory.QueryMemoryIndexTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.memory.QueryMemoryIndexTool(),
+                m -> AiMemoryManager.isEnabled(m)
+                        && com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()));
         // v1.5.190：帮主人做事的"双手"工具——合成 / 放方块（让 AI 女仆有玩家能力）
-        register.register(new com.maidsmart.tool.SmartCraftTool());
-        register.register(new com.maidsmart.tool.SmartPlaceTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SmartCraftTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_CRAFT.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SmartPlaceTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_PLACE.get()));
         // v1.5.196：感知查询工具（先查后做——look_around/terrain/build_site/inspect/scanblock/scanentity）
-        register.register(new com.maidsmart.dialogue.PerceptionQueryTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.dialogue.PerceptionQueryTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_PERCEPTION.get()));
         // v1.5.244：启动预热加载 WorldProbe——LLM 工具在异步线程首次访问该类时
         // ModuleClassLoader 偶发 ClassNotFoundException（实测"让女仆帮忙填坑"对话
         // 报 Async tool execution failed: NoClassDefFoundError: WorldProbe，jar 里
@@ -934,19 +1013,25 @@ public class ProMaidExtension implements ILittleMaid {
                     .warn("WorldProbe preload failed: {}", t.toString());
         }
         // v1.5.196：工作清单工具（query_todo/build_need——任务计划与材料缺口查询闭环）
-        register.register(new com.maidsmart.dialogue.WorkListTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.dialogue.WorkListTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_WORK_LIST.get()));
         // v1.5.287：查看主人物品栏工具（确认/获得主人背包里有什么——只读查询）
-        register.register(new com.maidsmart.tool.OwnerInventoryTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.OwnerInventoryTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_OWNER_INVENTORY.get()));
         // v1.2.2 实测五百七十八【指挥三件套 + 自检】：让模型真正能"换模式 / 起飞 / 定工位 /
         // 查能不能干"。此前 LLM 只能打怪（smart_attack 顺手切攻击任务），别的模式够不到：
         //   smart_switch_task —— 切换任意任务（TLM 原生 + 本模组，支持中文别名，认不出就回可用列表）
         //   smart_air_raid    —— 起飞空袭（近战/远程 + 锁目标 + 缺件回报）/ 停止空袭落地
         //   smart_work_area   —— 设工作区并驻守 / 解除驻守跟随（写的就是 TLM 那份 SchedulePos）
         //   smart_readiness   —— 只读自检（空袭三件套、弹药、驻守、排班、锚点、血量）
-        register.register(new com.maidsmart.tool.SwitchTaskTool());
-        register.register(new com.maidsmart.tool.AirRaidTool());
-        register.register(new com.maidsmart.tool.WorkAreaTool());
-        register.register(new com.maidsmart.tool.ReadinessTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SwitchTaskTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_SWITCH_TASK.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.AirRaidTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_AIR_RAID.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.WorkAreaTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_WORK_AREA.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.ReadinessTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_READINESS.get()));
     }
 
     @Override
@@ -1043,6 +1128,12 @@ public class ProMaidExtension implements ILittleMaid {
                         // 低于落地水（240）、高于战术（230）：突进本身是一次"贴脸手段"，
                         // 命中判定由 MaidSpinAttackTouchMixin 补（原版 doAutoAttackOnTouch 对非玩家是空实现）
                         Pair.of(235, new com.maidsmart.combat.MaidTridentSpinBehavior()),
+                        // v1.3.3：重锤猛击——1.21.1 版行为移植到 1.20.1，物品走「试炼密室」
+                        // 回移植的 trials:mace / trials:wind_charge；跃起期间战术让位
+                        Pair.of(235, new com.maidsmart.combat.MaidMaceSmashBehavior()),
+                        // 【R1080】鞘翅长矛：先按通用近战空袭起飞，0.5 秒后切换幻翼状态机
+                        // （环绕 → 俯冲 → 长矛冲锋 → 惯性平飞 1 秒 → 循环）。高于战术（230）。
+                        Pair.of(237, new com.maidsmart.combat.SpearAirRaidBehavior()),
                         // v1.5.134：单兵作战战术（PVP 式走位/拉扯/距离控制）——低于自保/落地水，
                         // 高于自动装备/施工区避让；Brain 1.20.1 无高优先级阻断，不影响 WORK 战斗行为
                         Pair.of(230, new com.maidsmart.combat.MaidCombatTacticsBehavior()),

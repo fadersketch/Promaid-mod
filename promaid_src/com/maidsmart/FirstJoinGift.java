@@ -34,6 +34,10 @@ public final class FirstJoinGift {
      */
     public static void onLogin(ServerPlayer player) {
         try {
+            // 【R1079】整合包开关：进入存档时是否发放开局手册/排班表（默认开）。
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_GIVE_STARTER_BOOKS.get()) {
+                return;
+            }
             net.minecraft.server.MinecraftServer server = player.m_9236_().m_7654_();
             if (server == null) {
                 return;

@@ -37,7 +37,8 @@ import java.util.UUID;
  * ——站在地上置位必被清掉，所以先跳离地、下一 tick 再放烟花才吃得到推力。
  * 收翅就能吃暴击：原版暴击要 {@code fallDistance>0 && !onGround && !climbing && !inWater &&
  * !blindness && !passenger && !sprinting}，而滑翔把 {@code fallDistance} 钳在 ≤1.0，收翅后再自由
- * 落体 2~3 tick 即满足。
+ * 落体 2~3 tick 即满足。主手是 Trials 重锤（{@code trials:mace}）时改走重锤路径：按
+ * 本轮最高点强制写 fallDistance，结算 1.21.1 的三段落差加成与猛击特效；其他近战仍走暴击。
  */
 public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
@@ -110,8 +111,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static double forcedHitRadius() {
         return MaidSmartConfig.AIR_RAID_FORCED_HIT_RADIUS.get();
     }
-    /** 猛击下落加成门槛（格）：滑翔中 fallDistance 被钳在 1.0，收翅后补几 tick 即可 */
-    private static final float SMASH_MIN_FALL = 1.5f;
+    /** 猛击下落加成门槛（格）：重锤下落加成要求严格大于此值 */
+    private static float smashMinFall() {
+        return MaidSmartConfig.AIR_RAID_SMASH_MIN_FALL.get().floatValue();
+    }
     /** 猛击段最长 tick：超时按打空收尾（不摔伤、切回滑翔） */
     private static int smashMaxTicks() {
         return MaidSmartConfig.AIR_RAID_SMASH_MAX_TICKS.get();
@@ -129,6 +132,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     private static final Map<UUID, Integer> LAUNCH_LEFT = new HashMap<>();
+    /** 【R1080】本次点火发生的 gameTime：长矛空袭据此判断"通用链路确实刚起飞"。 */
+    private static final Map<UUID, Long> LAUNCH_START = new HashMap<>();
     private static final Map<UUID, Integer> JUMP_LEFT = new HashMap<>();
     /** 【实测七百〇七】"起飞受阻"（起跳窗走完仍未离地）日志限频：每只女仆 5 秒一条 */
     private static final Map<UUID, Long> LAUNCH_STUCK_LOG = new HashMap<>();
@@ -142,6 +147,22 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final Map<UUID, Long> FIREWORK_READY = new HashMap<>();
     /** v1.2.0：攻击冷却到期 gameTime——强制受击的间隔 = 女仆自己的攻击频率，不是无条件触发 */
     private static final Map<UUID, Long> ATTACK_READY = new HashMap<>();
+    /** 本轮飞行周期内到过的最高 Y（每轮起飞重置）——重锤下落加成按"最高点→当前"算 */
+    private static final Map<UUID, Double> MAX_Y = new HashMap<>();
+
+    private static double maxYOf(EntityMaid maid) {
+        return MAX_Y.getOrDefault(maid.m_20148_(), maid.m_20186_());
+    }
+
+    /**
+     * 把「本轮最高上升高度」写进 fallDistance，让 Trials 重锤的猛击判定与下落加成按
+     * 实际砸下来的高度结算。滑翔会把 fallDistance 钳在 1.0，不这样写就永远吃不到。
+     * 调用方必须在 finally 里还原真实值。
+     */
+    private static float forcedFallDistance(EntityMaid maid) {
+        double drop = maxYOf(maid) - maid.m_20186_();
+        return (float) Math.max(smashMinFall() + 0.01, drop);
+    }
 
     /**
      * 实测五百六十七（PR #8 移植）：下一次可以在空袭中发起施法的 gameTime。
@@ -185,6 +206,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return;
         }
         LAUNCH_LEFT.remove(maidId);
+        LAUNCH_START.remove(maidId);
         JUMP_LEFT.remove(maidId);
         SMASH.remove(maidId);
         SMASH_TICKS.remove(maidId);
@@ -192,6 +214,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         CLIMB_BOOST.remove(maidId);
         FIREWORK_READY.remove(maidId);
         ATTACK_READY.remove(maidId);
+        MAX_Y.remove(maidId);
         RANGED_BOOST_LEFT.remove(maidId);
         RANGED_NEXT_BOOST.remove(maidId);
         RANGED_NEXT_SHOT.remove(maidId);
@@ -213,6 +236,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         STANDOFF_DONE.remove(maidId);     // 【实测七百〇六】"本轮已拉开过"标记
         FLOOR_LAST_LOG.remove(maidId);    // 【实测七百〇六】"高度地板"日志节流
         MaidBombing.forget(maidId);
+        // R1083：隐形烟花的推力窗/原地空推冷却随她一起丢
+        MaidVirtualFirework.forget(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
         // 【实测六百九十三】锁敌后的随机环绕参数（半径比例 / 重掷节拍）随她一起丢
@@ -238,12 +263,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return;
         }
         LAUNCH_LEFT.remove(maidId);
+        LAUNCH_START.remove(maidId);
         JUMP_LEFT.remove(maidId);
         SMASH.remove(maidId);
         SMASH_TICKS.remove(maidId);
         WAIT_LAUNCH.remove(maidId);
         CLIMB_BOOST.remove(maidId);
         ATTACK_READY.remove(maidId);
+        MAX_Y.remove(maidId);
         RANGED_BOOST_LEFT.remove(maidId);
         RANGED_NEXT_BOOST.remove(maidId);
         RANGED_NEXT_SHOT.remove(maidId);
@@ -262,6 +289,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     public static void clearAll() {
         LAUNCH_LEFT.clear();
+        LAUNCH_START.clear();
         JUMP_LEFT.clear();
         SMASH.clear();
         SMASH_TICKS.clear();
@@ -269,6 +297,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         CLIMB_BOOST.clear();
         FIREWORK_READY.clear();
         ATTACK_READY.clear();
+        MAX_Y.clear();
         RANGED_BOOST_LEFT.clear();
         RANGED_NEXT_BOOST.clear();
         RANGED_NEXT_SHOT.clear();
@@ -290,6 +319,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         STANDOFF_DONE.clear();     // 【实测七百〇六】"本轮已拉开过"标记
         FLOOR_LAST_LOG.clear();    // 【实测七百〇六】"高度地板"日志节流
         MaidBombing.clearAll();
+        MaidVirtualFirework.clearAll();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
         FlightFireworkPose.clearAll();
@@ -315,7 +345,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 自动传送把她当场拽走，这一记就白转了（与 实测四百八十七 收翅猛击被传送打断同一类）。
         // isDashing 自带过期自愈，所以豁免同样有界。
         return isEngaged(maid.m_20148_())
-                || com.maidsmart.combat.MaidTridentSpinBehavior.isDashing(maid);
+                || com.maidsmart.combat.MaidTridentSpinBehavior.isDashing(maid)
+                || SpearAirRaidBehavior.isActive(maid);
     }
 
     /** 同上（按 UUID 判定，供只在 server tick 里拿得到 id 的调用方用） */
@@ -345,6 +376,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean m_6114_(ServerLevel level, EntityMaid maid) {
+        if (SpearAirRaidBehavior.isActive(maid)) {
+            return false; // 长矛空袭独立链路正在接管
+        }
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_MODE.get()) {
             return false;
         }
@@ -526,12 +560,18 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
+        // 长矛空袭独立链路（SpearAirRaidBehavior）在 core 更高优先级先跑；它接管时通用空袭一字不动
+        if (SpearAirRaidBehavior.isActive(maid)) {
+            return;
+        }
         UUID id = maid.m_20148_();
         // 【实测七百一十一】烫伤脱困：空袭途中她真泡进岩浆/着火了 → 立刻传送出去，本 tick 就此
         // 打住（刚传送完再走相位会把她从落点上推走）。判据见 MaidHeatEscape。
         if (MaidHeatEscape.tick(maid)) {
             return;
         }
+        // 重锤下落加成按本轮最高点结算：每 tick 记录最高 Y（起飞时重置）
+        MAX_Y.merge(id, maid.m_20186_(), Math::max);
         LivingEntity target = currentTarget(maid);
         // 轰炸已改判为"附加链路"：旧版这里有一道 `if (MaidBombing.isBombing(maid)) return;`，整段让位
         // ——起手那一刻正是"收翅猛击打完、马上再起飞"，让位等于把起飞压后 0.5~1 秒，一轮反复几次肉眼
@@ -585,6 +625,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         //（各相位派发**之前**、只在她滑翔时生效）。窗口由 {@code tryLaunch} 的第五条腿 /
         // 飞行跟随的补推开，这里只负责"窗开着就推一下"。没有窗口时这只是一次 Map 查询。
         MaidSelfPropelledWings.tick(maid);
+        // 【R1083】隐形烟花的每 tick 推力：与上面两行同一个位置、同一个约定（各相位派发之前、
+        // 只在她滑翔时生效）。窗口由 tryLaunch / 俯冲加速 / 长矛冲刺打开，这里只负责"窗开着就推一下"。
+        MaidVirtualFirework.tick(maid);
 
         // ── 第 0 步：起跳滑翔（离地后立刻放烟花，才吃得到烟花推力）──
         Integer jumpLeft = JUMP_LEFT.get(id);
@@ -910,12 +953,18 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             faceLaunchDirection(maid, target);
             // 必须置位：与烟花同通道——鞘翅滑翔每 tick 吃朝向
             MaidFlightKit.setGliding(maid, true);
+            MAX_Y.put(id, maid.m_20186_());
             LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
             WAIT_LAUNCH.remove(id);
+            markLaunched(id, gameTime);
             FIREWORK_READY.put(id, gameTime + fanCooldown());
             com.maidsmart.tool.PromaidLog.log("飞行作战",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 挥羽扇起飞");
             return true;
+        }
+        // 【R1083】上一次推进被判定为"原地空推"时先别烧这一枚：等冷却过去再试
+        if (MaidVirtualFirework.isStalled(maid)) {
+            return false;
         }
         ItemStack fw = MaidFlightKit.takeFirework(maid);
         if (fw.m_41619_()) {
@@ -930,8 +979,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 faceLaunchDirection(maid, target);
                 if (MaidTridentSpinBehavior.boostForFlight(level, maid)) {
                     MaidFlightKit.setGliding(maid, true); // 与烟花/扇子同通道：滑翔每 tick 吃朝向
+                    MAX_Y.put(id, maid.m_20186_());
                     LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
                     WAIT_LAUNCH.remove(id);
+                    markLaunched(id, gameTime);
                     FIREWORK_READY.put(id, gameTime + fanCooldown()); // 与羽扇共用同一个间隔
                     com.maidsmart.tool.PromaidLog.log("飞行作战",
                             com.maidsmart.tool.PromaidLog.nameOf(maid) + " 激流三叉戟起飞");
@@ -947,31 +998,76 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             if (MaidSelfPropelledWings.hasWings(maid)) {
                 faceLaunchDirection(maid, target);
                 MaidFlightKit.setGliding(maid, true); // 与烟花/扇子同通道：滑翔每 tick 吃朝向
-                if (MaidSelfPropelledWings.ignite(maid)) {
+                // 【R1042】不再用那件鞘翅自己的型号公式：统一按普通鞘翅 + 隐形烟花的原版递推
+                //（v←v×0.5+视线×0.85），不消耗烟花，轨迹与普通鞘翅一致。
+                if (MaidVirtualFirework.ignite(maid, 1.0)) {
+                    MAX_Y.put(id, maid.m_20186_());
                     LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
                     WAIT_LAUNCH.remove(id);
+                    markLaunched(id, gameTime);
                     // 不写 FIREWORK_READY：它不吃那张冷却（见本方法开头），写进去反而会
                     // 连带把同一张表上的扇子/烟花那几条腿也一起冻住（它们共用这一张表）。
                     com.maidsmart.tool.PromaidLog.log("飞行作战",
-                            com.maidsmart.tool.PromaidLog.nameOf(maid) + " 自推鞘翅起飞");
+                            com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                    + " 自推鞘翅起飞（普通鞘翅物理·不消耗烟花）");
                     return true;
                 }
             }
             return false;
         }
+        // 朝向与滑翔位必须在点火之前摆好：隐形烟花从下一拍才推，但点火这一拍就得让
+        // 原版滑翔物理解算吃到正确的朝向（顺序错了会白丢一拍推力）。
+        faceLaunchDirection(maid, target);
+        MaidFlightKit.setGliding(maid, true);
         launchFirework(level, maid, fw, false);
         // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"烟花模型（纯表现，用完还原原物）；
         // 展示的就是本次真正消耗掉的那一枚（模型与它完全一致）
         FlightFireworkPose.show(maid, fw);
-        faceLaunchDirection(maid, target);
-        // 必须置位：挂载烟花只对"正在滑翔"的实体给推力
-        MaidFlightKit.setGliding(maid, true);
+        MAX_Y.put(id, maid.m_20186_());
         LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
         WAIT_LAUNCH.remove(id);
+        markLaunched(id, gameTime);
         FIREWORK_READY.put(id, gameTime + fireworkCooldown());
         com.maidsmart.tool.PromaidLog.log("飞行作战",
                 com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放烟花起飞");
         return true;
+    }
+
+    /** 任意一条起飞腿真正点着：记录点火时刻，长矛空袭据此判断"起飞后 0.5 秒"。 */
+    private static void markLaunched(UUID id, long gameTime) {
+        LAUNCH_START.put(id, gameTime);
+    }
+
+    /** 【R1080】距离本次点火过去了多少 tick；没有点火记录时返回 Long.MAX_VALUE。 */
+    static long launchAge(EntityMaid maid, long gameTime) {
+        if (maid == null) {
+            return Long.MAX_VALUE;
+        }
+        Long start = LAUNCH_START.get(maid.m_20148_());
+        return start == null ? Long.MAX_VALUE : gameTime - start;
+    }
+
+    /** 通用起飞链是否刚点着（长矛链路确认"真的起飞了"后再接管爬升）。 */
+    static boolean isLaunchActive(EntityMaid maid) {
+        return maid != null && LAUNCH_LEFT.getOrDefault(maid.m_20148_(), 0) > 0;
+    }
+
+    /** 【R1080】惯性平飞结束、还有敌人：请通用链路按原起飞链再点一次火。 */
+    static void requestRelaunch(UUID id) {
+        if (id != null) {
+            WAIT_LAUNCH.add(id);
+        }
+    }
+
+    /** 长矛水平突袭与通用空袭共用同一张烟花冷却表，避免"刚起飞又立刻烧一枚"。 */
+    static boolean flightFireworkReady(EntityMaid maid, long gameTime) {
+        return maid != null && !onFireworkCooldown(maid, gameTime);
+    }
+
+    static void markFlightFireworkUsed(EntityMaid maid, long gameTime) {
+        if (maid != null) {
+            FIREWORK_READY.put(maid.m_20148_(), gameTime + fireworkCooldown());
+        }
     }
 
     private static boolean onFireworkCooldown(EntityMaid maid, long gameTime) {
@@ -980,25 +1076,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 生成挂载型烟花助推。
-     * 【安全】1.20.1 烟花是 NBT：只写 {@code Fireworks.Flight}、**不写 Explosions**，这样
-     * {@code getExplosions()} 为空 → 到期 {@code explode()} 伤害为 0，不会像带爆炸星的挂载烟花按
-     * 5+2n 炸到骑乘者自己（她只有 20 血）。消耗的仍是玩家给的真实烟花（1 枚）。
-     * @param scaled true = 用 {@link DiveBoostRocket}——**只在俯冲段那一枚**上，除原版推力再补一份沿视线的
-     *               "俯冲段冲刺·烟花力度倍数"推力；起飞 / 爬升 / 盘旋一律 false（照原版）。
+     * 点一枚"隐形烟花"：推力由 {@link MaidVirtualFirework} 每 tick 直接施加，不再生成
+     * {@code FireworkRocketEntity}——原版那口 {@code v←v×0.5+视线×0.85} 与时长都保留，
+     * 只是火箭与烟花粒子不再出现（只留一条尾迹；R1083 修掉了看起来像两枚的球形粒子）。
+     *
+     * @param scaled true = 用「俯冲段冲刺·烟花力度倍数」（见 {@link #diveBoostFireworkScale()}）
      */
     private void launchFirework(ServerLevel level, EntityMaid maid, ItemStack consumedIgnored,
                                 boolean scaled) {
         try {
-            ItemStack rocketStack = new ItemStack(Items.f_42688_);
-            CompoundTag fireworks = new CompoundTag();
-            fireworks.m_128405_("Flight", 1);
-            rocketStack.m_41784_().m_128365_("Fireworks", fireworks);
-            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket = scaled
-                    ? new DiveBoostRocket(level, rocketStack, maid)
-                    : new net.minecraft.world.entity.projectile.FireworkRocketEntity(
-                            level, rocketStack, maid);
-            level.m_7967_(rocket);
+            double scale = scaled ? diveBoostFireworkScale() : 1.0;
+            MaidVirtualFirework.ignite(maid, scale);
             SoundEvent launch = ForgeRegistries.SOUND_EVENTS.getValue(
                     new ResourceLocation("minecraft", "entity.firework_rocket.launch"));
             if (launch != null) {
@@ -1134,6 +1222,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             if (MaidTridentSpinBehavior.isDashing(maid)) {
                 return; // 突进期间速度归它管（与 tick 的让位同口径）
             }
+            // 【R1096】"等待重新起飞"的那一拍交给 tryLaunch 点那一枚：两处同一 tick 点火时，
+            // 粒子束与发射音会叠成"一次释放冒出两次烟花"。她还没在俯冲，这一口也没有意义。
+            if (WAIT_LAUNCH.contains(id)) {
+                return;
+            }
             double d2 = maid.m_20275_(target.m_20185_(), target.m_20186_(), target.m_20189_());
             if (d2 < diveBoostMinRange() * diveBoostMinRange()
                     || d2 > diveBoostMaxRange() * diveBoostMaxRange()) {
@@ -1158,7 +1251,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             // ② 烟花：真的点一枚（原版推力沿视线生效，方向不变），并让副手亮一下
             //     六百一十五：这一枚走 **DiveBoostRocket**——原版推力之外再补一份
             //     "×（俯冲段冲刺·烟花力度倍数）"的沿视线推力（默认 1.4，见那个类的注释）
-            if (what == null && cfgDiveBoostFirework() && MaidFlightKit.hasFirework(maid)) {
+            if (what == null && cfgDiveBoostFirework() && MaidFlightKit.hasFirework(maid)
+                    && !MaidVirtualFirework.isStalled(maid)) {
                 ItemStack fw = MaidFlightKit.takeFirework(maid);
                 if (!fw.m_41619_()) {
                     launchFirework(level, maid, fw, true);
@@ -1209,7 +1303,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FIREWORK.get();
     }
     /** 俯冲段那一枚烟花的推力倍数（默认 1.4，v1.2.2 实测六百一十五）：1.0 = 完全照原版 */
-    private static double diveBoostFireworkScale() {
+    static double diveBoostFireworkScale() {
         return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FIREWORK_SCALE.get();
     }
     /** 日志里的倍数写法：1.4→"1.4"、2.0→"2"（去掉尾随的 0，别写"2.0 倍"这种别扭字） */
@@ -1233,10 +1327,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 收翅下落中的这一击（1.20.1 无重锤 → 走原版暴击）：
-     * 伤害 = 攻击力 × 1.5 + 附魔加成（与玩家暴击完全一致，本模组
-     * `MaidCombatTacticsBehavior.swingCritHit` 同款算法）+ 击退 + 火焰附加 + 荆棘 +
-     * 暴击粒子/音效；收尾 `fallDistance = 0`（不自我摔伤）。
+     * 收翅下落中的这一击：主手 Trials 重锤 → 附魔 + 下落三段加成 + 猛击粒子/音效；
+     * 其他近战武器 → 原版暴击 ×1.5 + 暴击粒子/音效。两者都带击退、火焰附加、
+     * 荆棘与耐久，收尾 `fallDistance = 0`（不自我摔伤）。
      */
     private static boolean smashHit(ServerLevel level, EntityMaid maid, LivingEntity target, long gameTime) {
         // v1.2.0：强制受击的间隔 = 女仆自己的攻击频率（不是无条件触发）：冷却没好就不出手
@@ -1308,45 +1401,105 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 单次命中结算：附魔 → 暴击 ×1.5 → **强制命中** → 击退 + 火焰附加 + 荆棘 + 特效。强制命中 = 若被
-     * 目标无敌帧吃掉（刚被别的来源打过）就清无敌帧再打一次，保证"触发了链路攻击就一定打到"。
-     * 击退量按原版算式：{@code ATTACK_KNOCKBACK 属性 + 击退附魔}，再 {@code ×0.5f}（旧版写死 1.0、整段
-     * 丢了击退附魔，所以"锋利 / 火焰附加生效而击退不生效"）；dx/len 方向归一化写法保持不变。
+     * 长矛飞行路径碰撞：与目标身体真正相交（或擦过）时补一次武器结算。
+     * 不是范围扫——一次只打这一个实体，判定来源就是"撞上了"。
+     */
+    static boolean spearPathHit(ServerLevel level, EntityMaid maid, LivingEntity victim) {
+        try {
+            hitOne(level, maid, victim);
+            return true;
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
+            return false;
+        }
+    }
+
+    /**
+     * 单次命中结算：附魔 →（重锤下落加成 / 其他武器暴击 ×1.5）→ **强制命中** → 击退 +
+     * 火焰附加 + 荆棘 + 特效。强制命中 = 若被目标无敌帧吃掉就清无敌帧再打一次，保证
+     * "触发了链路攻击就一定打到"。重锤按本轮最高点临时写 fallDistance，结算完还原。
+     * 击退量按原版算式：{@code ATTACK_KNOCKBACK 属性 + 击退附魔}，再 {@code ×0.5f}。
      */
     private static void hitOne(ServerLevel level, EntityMaid maid, LivingEntity victim) {
         ItemStack weapon = maid.m_21205_();
-        float base = (float) maid.m_21133_(Attributes.f_22281_);
-        float ench = EnchantmentHelper.m_44833_(weapon, victim.m_6336_());
-        boolean critical = isCriticalHit(maid);
-        float dmg = critical ? base * 1.5F + ench : base + ench;
-        boolean hit = victim.m_6469_(maid.m_269291_().m_269333_(maid), dmg);
-        if (!hit && victim.f_19802_ > 0) {
-            victim.f_19802_ = 0;
-            hit = victim.m_6469_(maid.m_269291_().m_269333_(maid), dmg);
+        boolean maceSmash = MaidMaceSmashBehavior.isMace(weapon);
+        float realFall = maid.f_19789_;
+        float forcedFall = 0.0f;
+        boolean critical = !maceSmash && isCriticalHit(maid);
+        if (maceSmash) {
+            // Trials 重锤的猛击判定与加成只读 fallDistance；滑翔会把它钳在 1.0，
+            // 所以按本轮最高点临时写入，结算完在 finally 还原真实值。
+            forcedFall = forcedFallDistance(maid);
+            maid.f_19789_ = forcedFall;
+            com.maidsmart.tool.PromaidLog.log("重锤后门",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + String.format(" 按最高点结算：落差=%.1f 格 → 写入 fallDistance=%.1f（真实值 %.1f）",
+                            maxYOf(maid) - maid.m_20186_(), forcedFall, realFall));
         }
-        if (hit) {
-            double dx = victim.m_20185_() - maid.m_20185_();
-            double dz = victim.m_20189_() - maid.m_20189_();
-            double len = Math.sqrt(dx * dx + dz * dz);
-            if (len > 0.01) {
-                // 原版口径：属性击退 + 击退附魔，再 ×0.5（Mob.m_7327_ 同款算式）
-                float knockback = (float) maid.m_21133_(Attributes.f_22282_);
-                try {
-                    knockback += (float) EnchantmentHelper.m_44894_(maid);
-                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
+        try {
+            float base = (float) maid.m_21133_(Attributes.f_22281_);
+            float ench = EnchantmentHelper.m_44833_(weapon, victim.m_6336_());
+            float dmg = base + ench;
+            if (maceSmash) {
+                dmg += MaidMaceSmashBehavior.maceFallBonus(forcedFall);
+            } else if (critical) {
+                dmg *= 1.5F;
+            }
+            // 【R1080】路径/落地补判也走长矛自己的"移动越快伤害越高"口径：
+            // 幻翼冲锋的伤害主体由 spearcore 的 onUseTick 结算，这里只补它扫不到的擦碰。
+            if (!maceSmash && SpearCoreCompat.isSpear(weapon)) {
+                dmg += SpearCoreCompat.speedDamageBonus(maid, victim, weapon);
+            }
+            net.minecraft.world.damagesource.DamageSource source = maid.m_269291_().m_269333_(maid);
+            boolean hit = victim.m_6469_(source, dmg);
+            if (!hit && victim.f_19802_ > 0) {
+                victim.f_19802_ = 0;
+                hit = victim.m_6469_(source, dmg);
+            }
+            if (hit) {
+                double dx = victim.m_20185_() - maid.m_20185_();
+                double dz = victim.m_20189_() - maid.m_20189_();
+                double len = Math.sqrt(dx * dx + dz * dz);
+                if (len > 0.01) {
+                    // 原版口径：属性击退 + 击退附魔，再 ×0.5（Mob.m_7327_ 同款算式）
+                    float knockback = (float) maid.m_21133_(Attributes.f_22282_);
+                    try {
+                        knockback += (float) EnchantmentHelper.m_44894_(maid);
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightCombatBehavior", ignored);
+                    }
+                    victim.m_147240_(knockback * 0.5, dx / len, dz / len);
                 }
-                victim.m_147240_(knockback * 0.5, dx / len, dz / len);
+                int fireAspect = EnchantmentHelper.m_44914_(maid);
+                if (fireAspect > 0 && !victim.m_6060_()) {
+                    victim.m_20254_(fireAspect * 4);
+                }
+                EnchantmentHelper.m_44823_(victim, maid);
+                if (maceSmash) {
+                    spawnSmashParticles(level, victim);
+                    level.m_5594_(null, victim.m_20183_(),
+                            MaidMaceSmashBehavior.smashSound(maid, forcedFall),
+                            SoundSource.PLAYERS, 1.0f, 1.0f);
+                } else if (critical) {
+                    spawnCritParticles(level, victim, 12);
+                    playCritSound(level, victim);
+                }
             }
-            int fireAspect = EnchantmentHelper.m_44914_(maid);
-            if (fireAspect > 0 && !victim.m_6060_()) {
-                victim.m_20254_(fireAspect * 4);
-            }
-            EnchantmentHelper.m_44823_(victim, maid);
-            if (critical) {
-                spawnCritParticles(level, victim, 12);
-                playCritSound(level, victim);
+        } finally {
+            if (maceSmash) {
+                maid.f_19789_ = realFall;
             }
         }
+    }
+
+    /** 重锤命中特效：目标脚下喷一圈烟尘（与跃起猛击同款） */
+    private static void spawnSmashParticles(ServerLevel level, LivingEntity victim) {
+        BlockPos pos = victim.m_20183_();
+        level.m_8767_(net.minecraft.core.particles.ParticleTypes.f_123796_,
+                pos.m_123341_() + 0.5, pos.m_123342_() + 0.2, pos.m_123343_() + 0.5,
+                8, 1.5, 0.15, 1.5, 0.0);
+        level.m_8767_(net.minecraft.core.particles.ParticleTypes.f_123813_,
+                pos.m_123341_() + 0.5, pos.m_123342_() + 0.2, pos.m_123343_() + 0.5,
+                4, 1.8, 0.15, 1.8, 0.0);
     }
 
     /** 原版 Player.attack 的暴击条件（与 1.21.1 同款；滑翔中 fallDistance 被钳在 1.0） */
@@ -1626,7 +1779,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * （yRotO/xRotO）一起写——渲染插值用的是 O 值，只写当前值会让模型在"上一帧角度→本帧角度"
      * 之间插值，看起来仍是旧的（水平）朝向。
      */
-    private static void applyRotation(EntityMaid maid, float yaw, float pitch) {
+    static void applyRotation(EntityMaid maid, float yaw, float pitch) {
         maid.m_146922_(yaw);
         maid.m_146926_(pitch);
         maid.f_19859_ = yaw;
@@ -1738,7 +1891,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 近战行为在飞行期间不插手（否则她会一边滑翔一边被原版近战逻辑拽过去挥砍，
      * 与"滑翔靠视线当操纵杆"打架）。1.21.1 早有这套，1.20.1 当时没同步。
      */
-    private static void suppressVanillaMelee(EntityMaid maid) {
+    static void suppressVanillaMelee(EntityMaid maid) {
         try {
             // f_26373_ = ATTACK_COOLING_DOWN（官方 mappings 实证：obf p → f_26373_；
             // 同一张表里 ATTACK_TARGET 是 f_26372_，与项目既有用法一致，可交叉验证）
@@ -2621,6 +2774,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return;
         }
         GUN_STATE_TICKED.put(id, gameTime);
+        // v1.3.3 实测一千〇三【额外容器·弹药桥】：主手这把枪喂不上也换不上、而弹药在她的
+        // 精妙背包/旅行者背包里 → 请 TLM 搬一组进她自己的背包（换弹只扫她自己背包那份能力面，
+        // javap 实证）。放在状态机推进之前：下一句 GunCommonUtil.tick 的换弹判定就能用上它。
+        GunCompat.fetchAmmoIfNeeded(maid, main);
         try {
             com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
                     .tick(maid, target, main);

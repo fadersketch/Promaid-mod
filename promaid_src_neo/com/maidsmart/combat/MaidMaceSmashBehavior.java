@@ -51,6 +51,12 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
     private static final double HORIZONTAL_BOOST = 0.15;
     /** 落地命中判定距离平方（4 格 = 参考 mod 的 distanceToSqr <= 16） */
     private static final double HIT_DIST_SQR = 16.0;
+    /**
+     * 【实测一千零五十九】猛击只贴身用：2 格外她手够得着，一律重锤平A。
+     * 旧版默认 3 格，配合战斗走位停在 2.6 格 → 每 3 秒就起跳一次，玩家看到的是
+     * “不用平A、只会风弹起跳下落”。配置上限也压到 2，这里再兜一道，老 toml 写 3 也按 2。
+     */
+    private static final double MACE_LEAP_MAX_RANGE = 2.0;
     /** 起跳后至少这么多 tick 才允许判定落地（起跳当帧 onGround 可能仍为 true） */
     private static final int MIN_AIR_TICKS = 3;
     /** 空中超时兜底（tick）：卡住/被击退也要收尾，避免状态残留 */
@@ -62,6 +68,13 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
     private static final Map<UUID, Integer> AIR_TICKS = new HashMap<>();
     /** 正在猛击跃起的女仆 */
     private static final Set<UUID> LEAPING = new HashSet<>();
+    /**
+     * 【实测一千〇六十】自上一次起跳以来，这一记猛击**真的打中了**。
+     * 轰炸链路（TNT / 末地水晶 / 重生锚 / 床）在重锤+风弹档必须等这一步：
+     * 起跳时清掉，落地 {@link #smashHit} 命中后写上——否则炸弹会在重锤落下之前
+     * 把目标掀飞，砸个空。非重锤档 / 空袭档不受此限（见 {@link #bombingAllowed}）。
+     */
+    private static final Set<UUID> SMASH_HIT = new HashSet<>();
     /** 实测四百四十二：落地帧"强制放一格缓冲"请求——由 WaterClutchBehavior 消费 */
     private static final Set<UUID> FORCED_CLUTCH = new HashSet<>();
     /** 实测四百三十七：门禁诊断节流（每只女仆 5 秒最多一条，pro maid.log 搜「重锤门」） */
@@ -102,16 +115,34 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.2.0：清理某只女仆的残留请求（女仆消失/服务端停止时的兜底） */
-    public static void forgetForcedClutch(java.util.UUID maidId) {
-        if (maidId != null) {
-            FORCED_CLUTCH.remove(maidId);
+    /**
+     * 死亡 / 收魂 / 区块卸载 / 重新入世：清掉按 UUID 残留的全部猛击状态。
+     *
+     * <p>空中或跃起中死亡时行为走不到 {@code stop()}，{@code LEAPING} 会留一条旧 UUID；
+     * 女仆复活后 UUID 不变的话，{@code checkExtraStartConditions} 的第一道
+     * {@code LEAPING.contains} 门永远返回 false——不消耗风弹、也不打「重锤门」诊断，
+     * 表现为「突然再也不用风弹起跳了」。必须由转移事件主动清。
+     */
+    public static void forget(java.util.UUID maidId) {
+        if (maidId == null) {
+            return;
         }
+        LEAPING.remove(maidId);
+        AIR_TICKS.remove(maidId);
+        NEXT_ALLOWED.remove(maidId);
+        FORCED_CLUTCH.remove(maidId);
+        LAST_GATE_LOG.remove(maidId);
+        SMASH_HIT.remove(maidId);
     }
 
-    /** v1.2.0：全清（服务端启动兜底；static 表不跨会话） */
-    public static void clearForcedClutch() {
+    /** 服务端启动/停止兜底：静态表不能跨会话残留。 */
+    public static void clearAll() {
+        LEAPING.clear();
+        AIR_TICKS.clear();
+        NEXT_ALLOWED.clear();
         FORCED_CLUTCH.clear();
+        LAST_GATE_LOG.clear();
+        SMASH_HIT.clear();
     }
 
     /**
@@ -247,14 +278,21 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         if (maid.distanceToSqr(target) > 256.0) {
             return false; // 参考 mod：16 格内
         }
-        double range = com.maidsmart.config.MaidSmartConfig.COMBAT_MACE_TRIGGER_RANGE.get();
+        double range = Math.min(com.maidsmart.config.MaidSmartConfig.COMBAT_MACE_TRIGGER_RANGE.get(),
+                MACE_LEAP_MAX_RANGE);
         if (maid.distanceTo(target) > range) {
-            noteGate(maid, "超出起跳距离", level.getGameTime());
+            noteGate(maid, "超出贴身距离（>2格，改用重锤平A）", level.getGameTime());
             return false;
         }
         Long next = NEXT_ALLOWED.get(maid.getUUID());
         if (next != null && level.getGameTime() < next) {
             noteGate(maid, "冷却中", level.getGameTime());
+            return false;
+        }
+        // 【实测一千〇六十】她名下还有炸弹没炸完：这一跳先等它——否则炸弹把目标掀飞，
+        // 这记重锤又砸空。没有炸弹时这条恒 false，不影响起跳频率。
+        if (MaidBombing.hasLiveBomb(maid)) {
+            noteGate(maid, "炸弹还没炸完（等它落地再起跳）", level.getGameTime());
             return false;
         }
         return true;
@@ -295,6 +333,9 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         UUID id = maid.getUUID();
         LEAPING.add(id);
         AIR_TICKS.put(id, 0);
+        // 新一跳开始：上一次的"已命中"到此作废。轰炸链路在重锤档必须等这一跳落地砸中，
+        // 免得炸弹先落地把目标掀飞（反馈："重锤还没打到怪，怪先被炸飞了"）。
+        SMASH_HIT.remove(id);
         // 兜底清理：落地水开关全关时 FORCED_CLUTCH 没人消费，防止长期残留
         if (FORCED_CLUTCH.size() > 256) {
             FORCED_CLUTCH.removeIf(u -> !LEAPING.contains(u));
@@ -371,7 +412,18 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         damage = EnchantmentHelper.modifyDamage(level, weapon, target, source, damage);
         float bonus = weapon.getItem().getAttackDamageBonus(target, damage, source);
         boolean hit = target.hurt(source, damage + bonus);
+        if (!hit && target.invulnerableTime > 0) {
+            // 平A 刚打中时目标还在无敌帧里，猛击会被原版直接吞掉（hurt 返回 false）。
+            // 与飞行作战 hitOne 同一口径：清掉无敌帧再结算一次——否则这一跳看起来砸中了，
+            // 实际 0 伤害，也不会给轰炸链路放行。
+            target.invulnerableTime = 0;
+            hit = target.hurt(source, damage + bonus);
+        }
         if (hit) {
+            if (SMASH_HIT.size() > 512) {
+                SMASH_HIT.clear();
+            }
+            SMASH_HIT.add(maid.getUUID());
             // 附魔后效（火焰附加等 POST_ATTACK 组件）
             EnchantmentHelper.doPostAttackEffects(level, target, source);
             // 附魔【击退】：原版由 Mob.doHurtTarget 计算并施加，我们直接 hurt 会绕过它
@@ -412,6 +464,53 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         return false;
     }
 
+    /** 这把武器是不是重锤（单兵战术据此让开通用跳劈，把起跳交给本行为）。 */
+    public static boolean isMace(ItemStack stack) {
+        return stack != null && stack.is(Items.MACE);
+    }
+
+    /**
+     * 【实测一千〇六十】这一拍是不是"重锤 + 风弹起跳猛击"档：主手重锤、猛击开着，
+     * 且风弹条件满足（要求消耗风弹时身上至少有一枚）。
+     * 单兵战术据此把绕圈半径压进猛击距离；轰炸链路据此等命中。
+     */
+    public static boolean maceLeapMode(EntityMaid maid) {
+        if (maid == null || !com.maidsmart.config.MaidSmartConfig.COMBAT_MACE_SMASH.get()) {
+            return false;
+        }
+        if (!isMace(maid.getMainHandItem())) {
+            return false;
+        }
+        return !com.maidsmart.config.MaidSmartConfig.COMBAT_MACE_WIND_CHARGE.get()
+                || hasWindCharge(maid);
+    }
+
+    /**
+     * 重锤档是否需要"先命中再放炸弹"。空袭任务（本行为让位给俯冲猛击）、骑乘、
+     * 鞘翅、睡觉这些状态下猛击不会起跳，不能把轰炸链路一起锁死。
+     */
+    public static boolean waitsForMaceHit(EntityMaid maid) {
+        if (!maceLeapMode(maid)) {
+            return false;
+        }
+        if (maid.isSleeping() || maid.isPassenger() || maid.isFallFlying()) {
+            return false;
+        }
+        return !(MaidFlightKit.isFlightTask(maid) && MaidFlightKit.isModeActive(maid));
+    }
+
+    /**
+     * 轰炸链路（TNT / 末地水晶 / 重生锚 / 床）现在能不能起手？
+     * 非重锤档恒 true；重锤档只在上一次起跳**落地真的打中**之后放行——
+     * 起跳那一 tick 清标记，{@link #smashHit} 命中后重新写上。
+     */
+    public static boolean bombingAllowed(EntityMaid maid) {
+        if (!waitsForMaceHit(maid)) {
+            return true;
+        }
+        return SMASH_HIT.contains(maid.getUUID());
+    }
+
     /** 身上是否有风弹（起跳前置条件：重锤 + 风弹缺一不可）——背包 + 副手都认 */
     public static boolean hasWindCharge(EntityMaid maid) {
         if (maid == null) {
@@ -426,7 +525,9 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
                 return true;
             }
         }
-        return false;
+        // 主手留给重锤，风弹只认副手/背包；额外容器（精妙背包/旅行者背包）也算。
+        return com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                s -> !s.isEmpty() && s.is(Items.WIND_CHARGE));
     }
 
     /**
@@ -435,6 +536,9 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
      * hasWindCharge=false（根本不触发）或消耗失败（白起跳），都是误判。
      */
     private static boolean consumeWindCharge(EntityMaid maid) {
+        // 真取物：先从额外容器搬一件到背包，下面的背包/副手扫描才拿得到。
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && s.is(Items.WIND_CHARGE), 1);
         net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (inv.getStackInSlot(i).is(Items.WIND_CHARGE)) {

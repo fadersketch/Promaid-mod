@@ -36,6 +36,11 @@ public abstract class ChatBubbleLimitMixin {
 
     @Inject(method = "addTextChatBubble", at = @At("HEAD"), cancellable = true)
     private void maidSmartBubbleLimit(String text, CallbackInfoReturnable<Long> cir) {
+        // 【R1109】气泡与系统消息总开关：关掉 = 整条提示链静默（不弹气泡、不同步聊天框、不朗读）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_PROMAID_HINTS.get()) {
+            cir.setReturnValue(-1L);
+            return;
+        }
         // 实测四百二十九：睡觉中不弹任何系统气泡（连带不同步聊天框、不朗读语音）
         if (this.maid != null && this.maid.isSleeping()) {
             cir.setReturnValue(-1L);

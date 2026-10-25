@@ -77,8 +77,10 @@ public final class SchedulePacketsMaid {
                     parts.add("§7" + r.kept() + " 名坐着/骑乘/在家模式保持原位");
                 }
                 if (parts.isEmpty()) {
+                    // v1.3.3 实测一千〇四：去距离限制后"已在身边"也照传（会进 summoned），
+                    // 走到这里只剩"根本没找到她"这一种
                     player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                            "§7没有需要集合的女仆（都在身边或不在场上）"));
+                            "§7没有可集合的女仆（不在场上或没登记过）"));
                 } else {
                     player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                             String.join("§r；", parts)));
@@ -409,39 +411,28 @@ public final class SchedulePacketsMaid {
                 }
                 if (maid.level() instanceof ServerLevel target
                         && !target.dimension().equals(player.level().dimension())) {
-                    // 跨维度：目的地用她脚下的安全落点（findStand 的判定口径与召回一致）
+                    // v1.3.3 实测一千〇四【直达坐标】：目的地 = 她的坐标本身（/tp 语义）——
+                    // 旧版用 findStandNear 在她脚下找"安全落点"，会把你放在旁边几格；
+                    // 现在与「召她过来」对称：她来你的坐标，你去她的坐标。
                     String nm = maid.getDisplayName() != null ? maid.getDisplayName().getString() : "女仆";
                     player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                             "§e她不在你这个维度（在" + ScheduleNetworking.dimName(maid.level()) + "）——正在把你送过去"));
-                    BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
-                            .findStandNear(target, maid.blockPosition());
-                    if (stand == null) {
-                        // v1.2.0 实测五百四十六【强制 + 无视地块】：旧版这里直接取消传送
-                        //（"她脚下没找到可站立的位置"）——空袭女仆悬停/飞在海上或虚空上时
-                        // 就永远传不过去。现在退到**她自己所在的那一格**（同维度分支早就
-                        // 是这么兜底的，跨维度漏了）；她那格若是空中，就把你放到空中。
-                        stand = maid.blockPosition();
-                    }
-                    boolean ok = player.teleportTo(target, stand.getX() + 0.5,
-                            stand.getY(), stand.getZ() + 0.5,
-                            java.util.Collections.emptySet(), player.getYRot(), player.getXRot());
+                    boolean ok = player.teleportTo(target, maid.getX(), maid.getY(),
+                            maid.getZ(), java.util.Collections.emptySet(),
+                            player.getYRot(), player.getXRot());
                     player.sendSystemMessage(net.minecraft.network.chat.Component.literal(ok
                             ? "§a已传送到「" + nm + "」身边（" + ScheduleNetworking.dimName(target) + "）"
                             : "§c传送失败"));
                     return;
                 }
-                // 同维度：她脚下找落点；找不到就退到她自己站的那一格（她站的地方总归能站人）
-                BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
-                        .findStandNear((ServerLevel) player.level(), maid.blockPosition());
-                if (stand == null) {
-                    stand = maid.blockPosition();
-                }
-                player.teleportTo((ServerLevel) player.level(), stand.getX() + 0.5,
-                        stand.getY(), stand.getZ() + 0.5,
-                        java.util.Collections.emptySet(), player.getYRot(), player.getXRot());
+                // 同维度：直达她脚下的坐标（/tp 语义；她站的地方总归能站人）
+                player.teleportTo((ServerLevel) player.level(), maid.getX(), maid.getY(),
+                        maid.getZ(), java.util.Collections.emptySet(),
+                        player.getYRot(), player.getXRot());
                 player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                        "§a已传送到她身边（" + stand.getX() + " " + stand.getY()
-                                + " " + stand.getZ() + "）"));
+                        "§a已传送到她身边（" + (int) Math.floor(maid.getX()) + " "
+                                + (int) Math.floor(maid.getY()) + " "
+                                + (int) Math.floor(maid.getZ()) + "）"));
             });
         }
 

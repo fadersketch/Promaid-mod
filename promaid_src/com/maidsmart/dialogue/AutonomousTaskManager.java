@@ -55,7 +55,9 @@ public class AutonomousTaskManager {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
-        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_AUTONOMOUS.get()) {
+        if (!com.maidsmart.config.MaidSmartConfig.AI_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.DIALOGUE_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.DIALOGUE_AUTONOMOUS.get()) {
             return;
         }
         if (!AIConfig.LLM_ENABLED.get()) {
@@ -95,6 +97,9 @@ public class AutonomousTaskManager {
                     return;
                 }
                 UUID maidId = maid.m_20148_();
+                if (!com.maidsmart.memory.LlmEnableManager.isEnabled(maid)) {
+                    return; // 单女仆 LLM 关闭：不推进冷却/日计数、不烧配额
+                }
                 Long last = this.lastDecideTime.get(maidId);
                 if (last != null && tick - last < decideCooldown()) {
                     return;
@@ -113,12 +118,14 @@ public class AutonomousTaskManager {
                 }
                 this.lastDecideTime.put(maidId, tick);
                 this.dailyCount.merge(maidId, 1, Integer::sum);
+                String env = ProactiveDialogueManager.environmentBrief(maid, player);
                 String selfPrompt = "（你独自待了一会儿，主人暂时没有吩咐。"
+                        + "此刻的真实环境：" + env + " "
                         + "请根据现在的天色、天气和你自己的状态，判断现在最该做什么："
                         + "需要干活就切换到合适的工作任务，"
                         + "一切正常也可以继续休息。不用问主人，自己决定就好。）";
                 // v1.5.198：语言强制（dialogue.outputLanguage；留空 = 跟随 TLM/客户端语言）
-                maid.getAiChatManager().chat(selfPrompt, ChatInfoUtil.fromMaid(maid), player);
+                maid.getAiChatManager().chat(ChatInfoUtil.internal(selfPrompt), ChatInfoUtil.fromMaid(maid), player);
             });
         }
     }

@@ -4,7 +4,7 @@
 > 用浏览器打开 `normify-promaid/normify.html` 即可逐层点开。
 
 - **修订**：`f33c45a1`（最后一次改动 `promaid_src*` 的提交）
-- **规模**：120 模块 / 61 API / 76 依赖箭头 / 最大深度 3
+- **规模**：121 模块 / 61 API / 77 依赖箭头 / 最大深度 3
 - **校验**：L1（写时）+ L2（全项目）+ L3（构建冻结）全部 **0 error**
 - **一键重建**：`python tools/arch/build_arch.py`（等价于下面三条依次跑）
 - **校验入口**：`python tools/arch/gen_arch.py` → `python tools/arch/render_arch.py` → `python tools/arch/finalize_arch.py`

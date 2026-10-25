@@ -75,7 +75,36 @@ public final class MaidSupportPolicy {
         Item it = s.m_41720_();
         return it instanceof net.minecraft.world.item.PotionItem
                 || it instanceof net.minecraft.world.item.SplashPotionItem
-                || it instanceof net.minecraft.world.item.LingeringPotionItem;
+                || it instanceof net.minecraft.world.item.LingeringPotionItem
+                || com.maidsmart.compat.EnigmaticLegacyCompat.isAdvancedPotion(s);
+    }
+
+    /** 饮用形态（原版药水瓶 / 神秘遗物 common_potion、ultimate_potion） */
+    public static boolean drinkable(ItemStack s) {
+        if (s == null || s.m_41619_()) {
+            return false;
+        }
+        return s.m_41720_() instanceof net.minecraft.world.item.PotionItem
+                || com.maidsmart.compat.EnigmaticLegacyCompat.isDrinkForm(s);
+    }
+
+    /** 投掷形态（原版喷溅/滞留 / 神秘遗物 splash、lingering） */
+    public static boolean throwable(ItemStack s) {
+        if (s == null || s.m_41619_()) {
+            return false;
+        }
+        Item it = s.m_41720_();
+        return it instanceof net.minecraft.world.item.SplashPotionItem
+                || it instanceof net.minecraft.world.item.LingeringPotionItem
+                || com.maidsmart.compat.EnigmaticLegacyCompat.isSplashForm(s)
+                || com.maidsmart.compat.EnigmaticLegacyCompat.isLingeringForm(s);
+    }
+
+    /** 喷溅形态（滞留不算——强度评分只给真喷溅加档） */
+    public static boolean splashPotion(ItemStack s) {
+        return s != null && !s.m_41619_()
+                && (s.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
+                || com.maidsmart.compat.EnigmaticLegacyCompat.isSplashForm(s));
     }
 
     /** 药水注册名（如 {@code minecraft:healing}）；非药水/取不到返回 null */
@@ -83,6 +112,10 @@ public final class MaidSupportPolicy {
         try {
             if (!potionItem(s)) {
                 return null;
+            }
+            if (com.maidsmart.compat.EnigmaticLegacyCompat.isAdvancedPotion(s)) {
+                String el = com.maidsmart.compat.EnigmaticLegacyCompat.advancedId(s);
+                return el == null || el.isEmpty() ? null : "enigmaticlegacy:" + el;
             }
             Potion p = PotionUtils.m_43579_(s);
             if (p == null) {
@@ -98,6 +131,68 @@ public final class MaidSupportPolicy {
     /** 物品裸注册名（不带变体后缀） */
     public static String baseId(ItemStack s) {
         return com.maidsmart.action.ItemUses.baseIdOf(s);
+    }
+
+    /**
+     * 药水效果全表：注册表效果 + NBT 自定义效果 + 神秘遗物进阶药水效果。
+     * <p>原版药水的两路合并顺序与旧版 {@code potionEffectsOf} 逐字节一致；
+     * 神秘遗物仅在 {@code EnigmaticPotion} NBT 在场时追加。
+     */
+    public static List<MobEffectInstance> effectsOf(ItemStack s) {
+        List<MobEffectInstance> out = new java.util.ArrayList<>();
+        try {
+            if (s == null || s.m_41619_()) {
+                return out;
+            }
+            Potion p = PotionUtils.m_43579_(s);
+            if (p != null) {
+                out.addAll(p.m_43488_()); // Potion.getEffects
+            }
+            out.addAll(PotionUtils.m_43571_(s)); // CustomPotionEffects
+            if (com.maidsmart.compat.EnigmaticLegacyCompat.isAdvancedPotion(s)) {
+                out.addAll(com.maidsmart.compat.EnigmaticLegacyCompat.effects(s));
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
+        }
+        return out;
+    }
+
+    /** 该药水是否含指定效果（效果注册名，如 {@code minecraft:fire_resistance}） */
+    public static boolean hasEffect(ItemStack s, String effectId) {
+        try {
+            for (MobEffectInstance e : effectsOf(s)) {
+                ResourceLocation k = ForgeRegistries.MOB_EFFECTS.getKey(e.m_19544_());
+                if (k != null && effectId.equals(k.toString())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
+        }
+        return false;
+    }
+
+    /**
+     * 药水【效果种类】key（同种 CD 用）：注册名去掉 {@code long_/strong_/ultimate_} 与
+     * 形态差异，例如 {@code minecraft:swiftness}、{@code enigmaticlegacy:healing}。
+     */
+    public static String effectKey(ItemStack s) {
+        try {
+            String pid = potionId(s);
+            if (pid == null) {
+                return "unknown";
+            }
+            int dot = pid.indexOf(':');
+            String ns = dot >= 0 ? pid.substring(0, dot + 1) : "minecraft:";
+            String base = dot >= 0 ? pid.substring(dot + 1) : pid;
+            for (String pre : new String[]{"long_", "strong_", "ultimate_"}) {
+                if (base.startsWith(pre)) {
+                    base = base.substring(pre.length());
+                }
+            }
+            return ns + base;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
+            return "unknown";
+        }
     }
 
     /** 记账键（写进分类表/网格勾选用的值） */
@@ -291,11 +386,11 @@ public final class MaidSupportPolicy {
             // 药水效果 / 食物自带效果走同一套 id 映射
             java.util.List<String> effIds = new java.util.ArrayList<>();
             if (potionItem(s)) {
-                Potion p = PotionUtils.m_43579_(s);
-                if (p == null) {
+                java.util.List<MobEffectInstance> effects = effectsOf(s);
+                if (effects.isEmpty()) {
                     return Cat.OFF;
                 }
-                for (MobEffectInstance e : p.m_43488_()) { // getEffects
+                for (MobEffectInstance e : effects) { // Potion 注册表 + 自定义 + 神秘遗物
                     ResourceLocation k = ForgeRegistries.MOB_EFFECTS.getKey(e.m_19544_());
                     if (k != null) {
                         effIds.add(k.toString());
@@ -352,6 +447,8 @@ public final class MaidSupportPolicy {
                 case "minecraft:conduit_power":
                 case "minecraft:slow_falling":
                 case "minecraft:glowing":
+                case "minecraft:haste":
+                case "minecraft:invisibility":
                     r = 2; break;
                 default:
                     r = 0; break;
@@ -505,7 +602,15 @@ public final class MaidSupportPolicy {
     public static String variantLabel(ItemStack s) {
         if (potionItem(s)) {
             String pid = potionId(s);
-            return pid == null ? "" : pid;
+            if (pid == null) {
+                return "";
+            }
+            // 神秘遗物带命名空间（enigmaticlegacy:ultimate_healing）——展示只留 id 段
+            if (com.maidsmart.compat.EnigmaticLegacyCompat.isAdvancedPotion(s)) {
+                int dot = pid.indexOf(':');
+                return dot >= 0 ? pid.substring(dot + 1) : pid;
+            }
+            return pid;
         }
         return com.maidsmart.action.ItemUses.label(s);
     }
@@ -541,16 +646,7 @@ public final class MaidSupportPolicy {
             if (!potionItem(s)) {
                 return false;
             }
-            Potion p = PotionUtils.m_43579_(s);
-            if (p == null) {
-                return false;
-            }
-            for (MobEffectInstance e : p.m_43488_()) { // getEffects
-                ResourceLocation k = ForgeRegistries.MOB_EFFECTS.getKey(e.m_19544_());
-                if (k != null && "minecraft:instant_health".equals(k.toString())) {
-                    return true;
-                }
-            }
+            return hasEffect(s, "minecraft:instant_health");
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
         }
         return false;
@@ -567,16 +663,7 @@ public final class MaidSupportPolicy {
             if (!potionItem(s)) {
                 return false;
             }
-            Potion p = PotionUtils.m_43579_(s);
-            if (p == null) {
-                return false;
-            }
-            for (MobEffectInstance e : p.m_43488_()) { // getEffects
-                ResourceLocation k = ForgeRegistries.MOB_EFFECTS.getKey(e.m_19544_());
-                if (k != null && "minecraft:regeneration".equals(k.toString())) {
-                    return true;
-                }
-            }
+            return hasEffect(s, "minecraft:regeneration");
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSupportPolicy", ignored);
         }
         return false;

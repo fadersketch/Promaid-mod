@@ -72,6 +72,9 @@ public final class PatrolNetworking {
         r.playToClient(MaidListPacket.TYPE,
                 StreamCodec.ofMember(MaidListPacket::encode, MaidListPacket::decode),
                 MaidListPacket::handle);
+        r.playToServer(FlyToTargetPacket.TYPE,
+                StreamCodec.ofMember(FlyToTargetPacket::encode, FlyToTargetPacket::decode),
+                FlyToTargetPacket::handle);
     }
 
     /* ==================== C2S：书操作（新建/删除/改名/选中） ==================== */
@@ -119,12 +122,8 @@ public final class PatrolNetworking {
                 if (!(ctx.player() instanceof ServerPlayer player)) {
                     return;
                 }
-                ItemStack stack = heldChart(player, p.offHand);
+                ItemStack stack = editableChart(player, p.offHand);
                 if (stack == null) {
-                    stack = heldChart(player, !p.offHand);
-                }
-                if (stack == null) {
-                    player.sendSystemMessage(Component.literal("§c巡逻航图不在手上"));
                     return;
                 }
                 PatrolBook book = PatrolChartData.readBook(stack);
@@ -206,6 +205,32 @@ public final class PatrolNetworking {
                         player.sendSystemMessage(Component.literal("§e「" + r.displayName()
                                 + "」已删掉第 " + (idx + 1) + " 个标记（还剩 " + r.size() + " 个）"));
                     }
+                    // 【R1127】标记管理页把第 N 个标记设为 / 取消减速点。
+                    case "slowat" -> {
+                        PatrolRoute r = book.byId(p.id);
+                        if (r == null) {
+                            return;
+                        }
+                        int idx = -1;
+                        try {
+                            idx = Integer.parseInt(p.text.trim());
+                        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
+                        }
+                        if (idx < 0 || idx >= r.size()) {
+                            return;
+                        }
+                        boolean slow = r.toggleSlow(idx);
+                        PatrolChartData.writeBook(stack, book);
+                        // 【R1128】绑定是深拷：改书不会自动落到女仆身上，必须同步一份。
+                        int synced = PatrolChartData.syncSlowToBound(
+                                player.getServer(), r.id(), idx, slow);
+                        player.sendSystemMessage(Component.literal(slow
+                                ? "§6已把「" + r.displayName() + "」第 " + (idx + 1)
+                                  + " 个标记设为减速点（周围 10×10×10 内巡逻速度降至 1/10"
+                                  + (synced > 0 ? "，已同步 " + synced + " 只女仆" : "") + "）"
+                                : "§7已取消「" + r.displayName() + "」第 " + (idx + 1)
+                                  + " 个标记的减速点"));
+                    }
                     case "clear" -> {
                         PatrolRoute r = book.byId(p.id);
                         if (r == null) {
@@ -215,6 +240,26 @@ public final class PatrolNetworking {
                         PatrolChartData.writeBook(stack, book);
                         player.sendSystemMessage(Component.literal(
                                 "§e已清空「" + r.displayName() + "」的全部标记"));
+                    }
+                    // 【R1113】独立目标点：与轨道同一套"客户端只发意图、服务端改书"口径
+                    case "tdelete" -> {
+                        PatrolTarget gone = book.removeTarget(p.id);
+                        if (gone == null) {
+                            return;
+                        }
+                        PatrolChartData.writeBook(stack, book);
+                        player.sendSystemMessage(Component.literal(
+                                "§e已删除目标点「" + gone.displayName() + "」"));
+                    }
+                    case "trename" -> {
+                        PatrolTarget t = book.targetById(p.id);
+                        if (t == null) {
+                            return;
+                        }
+                        t.setName(p.text);
+                        PatrolChartData.writeBook(stack, book);
+                        player.sendSystemMessage(Component.literal(
+                                "§a目标点已改名为「" + t.displayName() + "」"));
                     }
                     default -> {
                         return;
@@ -328,12 +373,8 @@ public final class PatrolNetworking {
                 if (!(ctx.player() instanceof ServerPlayer player)) {
                     return;
                 }
-                ItemStack stack = heldChart(player, p.offHand);
+                ItemStack stack = editableChart(player, p.offHand);
                 if (stack == null) {
-                    stack = heldChart(player, !p.offHand);
-                }
-                if (stack == null) {
-                    player.sendSystemMessage(Component.literal("§c巡逻航图不在手上"));
                     return;
                 }
                 com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid =
@@ -414,14 +455,18 @@ public final class PatrolNetworking {
      */
     private static String missingFor(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid) {
         StringBuilder sb = new StringBuilder();
-        if (!com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
-            sb.append("把她的任务切成「扫帚模式」");
+        // R1116：判据与 PatrolFlight.effective 同步——驾驶飞行载具（R1114）与扫帚同权；
+        // home 只看标志位，不再要求限制圈心（只开 home 没画圈的玩家同样在巡逻）。
+        if (!com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)
+                && !com.maidsmart.patrol.PatrolFlight.onFlyingVehicle(maid)) {
+            sb.append("把她的任务切成「扫帚模式」或让她驾驶飞行载具");
         }
-        if (com.maidsmart.follow.WorkAreaClamp.homeAnchor(maid) == null) {
+        if (!maid.isHomeModeEnable()
+                && !com.maidsmart.patrol.PatrolFlight.onFlyingVehicle(maid)) {
             if (sb.length() > 0) {
                 sb.append("；");
             }
-            sb.append("开启她的「在家模式」（巡逻替代的就是守家盘旋）");
+            sb.append("开启她的「在家模式」（巡逻替代的就是守家盘旋；驾驶飞行载具时可免）");
         }
         return sb.length() == 0 ? null : sb.toString();
     }
@@ -509,8 +554,120 @@ public final class PatrolNetworking {
             PacketDistributor.sendToPlayer(player, new OpenPatrolPacket(
                     open, offHand, book.save(),
                     new ArrayList<>(rep.problems()), new ArrayList<>(rep.notes()),
-                    rep.length(), rep.seconds()));
+                    rep.length(), rep.seconds(),
+                    findEligibleMaid(player) != null, dimensionOf(player)));
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
+        }
+    }
+
+    /* ==================== 「飞过去」：同行/拴绳状态识别 ==================== */
+
+    /** 玩家所在维度 id（与目标点里存的那一份同一口径） */
+    private static String dimensionOf(ServerPlayer player) {
+        try {
+            return player.level().dimension().location().toString();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
+            return "";
+        }
+    }
+
+    /** 这一下「飞过去」该由哪只女仆执行——只有四种"她载着玩家"的状态才算：
+     * 同乘扫帚 / 同乘飞行载具且女仆在驾驶位 / 武装拴绳挂在空袭女仆下 / 挂在扫帚女仆下。
+     * 武装拴绳**已绑但还没起飞**（牵绳档）也认：R1116 玩家要的正是"绑住她再点飞过去"。
+     * 不满足 = 界面里不出现「飞过去」。 */
+    public static com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid findEligibleMaid(
+            ServerPlayer player) {
+        try {
+            net.minecraft.world.entity.Entity vehicle = player.getVehicle();
+            if (vehicle != null) {
+                // 扫帚：两种座位都认（玩家驾驶 / 女仆驾驶）
+                if (vehicle instanceof com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom) {
+                    for (net.minecraft.world.entity.Entity p : vehicle.getPassengers()) {
+                        if (p instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
+                                && maid.getOwner() == player && !maid.isHomeModeEnable()) {
+                            return maid;
+                        }
+                    }
+                } else if (com.maidsmart.combat.MaidMountCompat.isFlyingVehicle(vehicle)) {
+                    // 飞行载具只认"女仆在驾驶位（0 号座）、玩家坐副驾"——玩家自己开的时候
+                    // 方向盘在玩家手里，RideBindManager 会整段让位，点了也不会飞。
+                    net.minecraft.world.entity.Entity first = vehicle.getFirstPassenger();
+                    if (first instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
+                            && maid.getOwner() == player && !maid.isHomeModeEnable()) {
+                        return maid;
+                    }
+                }
+            }
+            for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid : ownMaids(player)) {
+                // 【R1118】守家（home）的女仆只读：航图里不出现「飞过去」。
+                if (maid.isHomeModeEnable()) {
+                    continue;
+                }
+                // 【R1116·点5】用 tetheredPlayer（牵绳档也算）：空袭女仆还没起飞时
+                // 玩家已经被绳子绑住了她，这一趟「飞过去」正是让她起飞、把下面的人拖走。
+                if (com.maidsmart.combat.GunnerTetherManager.tetheredPlayer(maid) != player) {
+                    continue;
+                }
+                // 【R1118】不再要求任务模式是扫帚/空袭/骑载具：拴绳能绑任何任务模式，
+                // 「飞过去」就认同一条链路。缺鞘翅/推进剂时由飞行链路自己报"还差什么"。
+                return maid;
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
+        }
+        return null;
+    }
+
+    /**
+     * 【R1124】「飞过去」前置条件：返回 null = 她能飞；否则返回给玩家的具体原因。
+     * 只判"她这身装备 / 这辆车能不能飞"，关系判断仍由 {@link #findEligibleMaid} 负责。
+     */
+    private static String flyBlockedReason(
+            com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid) {
+        try {
+            net.minecraft.world.entity.Entity mount = maid.getVehicle();
+            if (mount instanceof com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom) {
+                // 扫帚只会被"扫帚模式"的自己驱动；换任务后它不会自己飞。
+                // R1125：玩家驾驶 + 女仆同乘（原版 TLM 扫帚）也放行——「飞过去」期间由她接管。
+                if (com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
+                    return null;
+                }
+                if (mount.getControllingPassenger() instanceof net.minecraft.world.entity.player.Player) {
+                    return null;
+                }
+                return "她的任务不是扫帚模式，扫帚不会起飞";
+            }
+            if (mount != null && com.maidsmart.combat.MaidMountCompat.isFlyingVehicle(mount)) {
+                return com.maidsmart.combat.MaidMountCompat.flightOutOfFuel(mount)
+                        ? "载具没电了，先给它充电" : null;
+            }
+            if (mount != null) {
+                return "她正被载具载着，先让她下车再飞";
+            }
+            // 没有载具：看扫帚（自己召唤）或鞘翅两条路，任一条齐了就能飞。
+            boolean canBroom = com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)
+                    && com.maidsmart.combat.MaidBroomKit.isModeActive(maid);
+            boolean canElytra = com.maidsmart.combat.MaidFlightKit.hasElytra(maid)
+                    && com.maidsmart.combat.MaidFlightKit.hasFlightPropellant(maid);
+            if (canBroom || canElytra) {
+                return null;
+            }
+            java.util.List<String> missing = new java.util.ArrayList<>();
+            if (com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
+                String broomMissing = com.maidsmart.combat.MaidBroomKit.missingParts(maid);
+                if (broomMissing != null) {
+                    missing.add(broomMissing);
+                }
+            }
+            if (!com.maidsmart.combat.MaidFlightKit.hasElytra(maid)) {
+                missing.add("可用鞘翅");
+            }
+            if (!com.maidsmart.combat.MaidFlightKit.hasFlightPropellant(maid)) {
+                missing.add("烟花火箭/孔雀羽扇/位移法术");
+            }
+            return missing.isEmpty() ? "没有可用的飞行方式"
+                    : "缺少 " + String.join("、", missing);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
+            return null; // 探测异常不拦（交回飞行链路自己报"还差什么"）
         }
     }
 
@@ -548,6 +705,7 @@ public final class PatrolNetworking {
             // 这里顺手写回一次，玩家下次打开就不用再迁（幂等）。
             PatrolBook book = PatrolChartData.readBook(stack);
             PatrolChartData.writeBook(stack, book);
+            PatrolChartData.refreshMarked(stack); // 【R1129】旧版打过点的书补"用过"标志
             // 【v1.3.9】右键回到界面 = 标记这一段结束（
             //
             boolean wasMarking = PatrolMarking.active(player);
@@ -556,7 +714,10 @@ public final class PatrolNetworking {
             if (wasMarking) {
                 PatrolMarking.stop(player);
                 sendMarking(player, false, "");
-                if (!markId.isEmpty()) {
+                if (PatrolMarking.TARGET_MODE.equals(markId)) {
+                    player.sendSystemMessage(Component.literal(
+                            "§7目标点标记已结束——进「目标点管理」可以改名/删除，或选「飞过去」"));
+                } else if (!markId.isEmpty()) {
                     player.sendSystemMessage(Component.literal(
                             "§7标记已结束——点「§a连接§7」把首尾接成闭环，通过后这条轨道才能用"));
                 }
@@ -585,10 +746,15 @@ public final class PatrolNetworking {
         public final List<String> notes;
         public final double length;
         public final double seconds;
+        /** 玩家此刻是否与自己的女仆同行/被拴着（决定「飞过去」是否出现） */
+        public final boolean canFlyToTarget;
+        /** 玩家所在维度（界面拿它与目标点维度比较，跨维度按钮变暗） */
+        public final String playerDim;
 
         public OpenPatrolPacket(boolean open, boolean offHand, net.minecraft.nbt.CompoundTag book,
                                 List<String> problems, List<String> notes,
-                                double length, double seconds) {
+                                double length, double seconds,
+                                boolean canFlyToTarget, String playerDim) {
             this.open = open;
             this.offHand = offHand;
             this.book = book;
@@ -596,6 +762,8 @@ public final class PatrolNetworking {
             this.notes = notes;
             this.length = length;
             this.seconds = seconds;
+            this.canFlyToTarget = canFlyToTarget;
+            this.playerDim = playerDim == null ? "" : playerDim;
         }
 
         public static void encode(OpenPatrolPacket p, FriendlyByteBuf buf) {
@@ -606,11 +774,14 @@ public final class PatrolNetworking {
             writeList(buf, p.notes);
             buf.writeDouble(p.length);
             buf.writeDouble(p.seconds);
+            buf.writeBoolean(p.canFlyToTarget);
+            buf.writeUtf(p.playerDim, 128);
         }
 
         public static OpenPatrolPacket decode(FriendlyByteBuf buf) {
             return new OpenPatrolPacket(buf.readBoolean(), buf.readBoolean(), buf.readNbt(),
-                    readList(buf), readList(buf), buf.readDouble(), buf.readDouble());
+                    readList(buf), readList(buf), buf.readDouble(), buf.readDouble(),
+                    buf.readBoolean(), buf.readUtf(128));
         }
 
         public static void handle(OpenPatrolPacket p, IPayloadContext ctx) {
@@ -685,7 +856,25 @@ public final class PatrolNetworking {
                     return;
                 }
                 ItemStack stack = heldChart(player, off);
+                if (!PatrolChartData.canUse(stack, player)) {
+                    // R1130：标记态是"玩家自己的状态"，不绑航图——换手拿别人的书也能走到这里。
+                    PatrolMarking.stop(player);
+                    sendMarking(player, false, "");
+                    player.sendSystemMessage(Component.literal("§c这本航图署的不是你的名字，不能在上面标记"));
+                    return;
+                }
                 PatrolBook book = PatrolChartData.readBook(stack);
+                // 【R1113】目标点标记：不依赖任何轨道，每按一次中键新增一个独立目标点
+                if (PatrolMarking.TARGET_MODE.equals(p.routeId)) {
+                    PatrolMarking.start(player, PatrolMarking.TARGET_MODE);
+                    sendMarking(player, true, PatrolMarking.TARGET_MODE);
+                    player.sendSystemMessage(Component.literal(
+                            "§c✦ 开始标记目标点——退出界面后按 §e鼠标中键§c 记录一个红色目标点"));
+                    player.sendSystemMessage(Component.literal(
+                            "§7可以连续按；再右键航图回来就能在「目标点管理」里看到，并选「飞过去」"));
+                    sendBook(player, stack, off, false);
+                    return;
+                }
                 PatrolRoute route = book.byId(p.routeId);
                 if (route == null) {
                     route = book.selected();
@@ -823,8 +1012,32 @@ public final class PatrolNetworking {
                 } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
                 }
                 ItemStack stack = heldChart(player, off);
+                if (!PatrolChartData.canUse(stack, player)) {
+                    PatrolMarking.stop(player);
+                    sendMarking(player, false, "");
+                    player.sendSystemMessage(Component.literal("§c这本航图署的不是你的名字，标记已结束"));
+                    return;
+                }
                 PatrolBook book = PatrolChartData.readBook(stack);
                 String rid = PatrolMarking.routeId(player);
+                // 【R1113】目标点模式：一次中键 = 新增一个目标点（不碰任何轨道）
+                if (PatrolMarking.TARGET_MODE.equals(rid)) {
+                    Vec3 at = new Vec3(player.getX(), player.getY(), player.getZ());
+                    PatrolTarget t = book.addTarget(at, dimensionOf(player));
+                    if (t == null) {
+                        player.sendSystemMessage(Component.literal(
+                                "§c目标点已满（上限 " + PatrolBook.MAX_TARGETS
+                                        + " 个），先去「目标点管理」删几个"));
+                        return;
+                    }
+                    PatrolChartData.sign(stack, player); // 【R1129】第一个有效标记 = 署名
+                    PatrolChartData.writeBook(stack, book);
+                    player.sendSystemMessage(Component.literal(String.format(
+                            "§c◆ 目标点「%s」已记录 (%.1f, %.1f, %.1f)",
+                            t.displayName(), at.x, at.y, at.z)));
+                    sendBook(player, stack, off, false);
+                    return;
+                }
                 PatrolRoute route = rid.isEmpty() ? book.selected() : book.byId(rid);
                 if (route == null) {
                     // 这条轨道在标记途中被删了 → 干净收尾
@@ -847,6 +1060,7 @@ public final class PatrolNetworking {
                 String rname = route.displayName();
                 int n = route.size();
                 boolean closedNow = route.closed();
+                PatrolChartData.sign(stack, player); // 【R1129】第一个有效标记 = 署名
                 PatrolChartData.writeItem(stack, route);
                 PatrolGeometry.Report rep = PatrolGeometry.geometryReport(route);
                 String tail = closedNow ? "" : "§7（加点后闭环失效，打完了记得点「连接」）";
@@ -905,12 +1119,8 @@ public final class PatrolNetworking {
                 if (!(ctx.player() instanceof ServerPlayer player)) {
                     return;
                 }
-                ItemStack stack = heldChart(player, p.offHand);
+                ItemStack stack = editableChart(player, p.offHand);
                 if (stack == null) {
-                    stack = heldChart(player, !p.offHand);
-                }
-                if (stack == null) {
-                    player.sendSystemMessage(Component.literal("§c巡逻航图不在手上"));
                     return;
                 }
                 PatrolBook book = PatrolChartData.readBook(stack);
@@ -1026,6 +1236,9 @@ public final class PatrolNetworking {
                 if (stack == null) {
                     return; // 航图不在手上了（收起来了）→ 不回；界面下一拍自己再问
                 }
+                if (!PatrolChartData.canUse(stack, player)) {
+                    return; // R1130：别人的航图连刷新都不回（改包也读不到内容）
+                }
                 // 【只回几何，不重跑净空、也不带女仆名单】净空要逐点扫方块（一条 128 格半径的轨道
                 // 是数万次 getCollisionShape），女仆名单要扫全维度实体——而这里每 0.5 秒被问一次，
                 // 两样都太贵。定时刷新只要"列表/时长/几何问题"跟着变；真正的净空裁决发生在点「连接」
@@ -1043,6 +1256,94 @@ public final class PatrolNetworking {
     /* ==================== 小工具 ==================== */
 
     /** 玩家手上那一格是不是巡逻航图（不是就返回 null） */
+    /* ==================== C2S：飞向目标点 ==================== */
+
+    /**
+     * 巡逻航图 → 目标点管理 →「飞过去」。
+     *
+     * <p>服务端做三件事：① 目标必须还在这本航图里、且与玩家同维度；② 玩家此刻必须真的
+     * 与自己的女仆同行/被拴着（{@link #findEligibleMaid}）；③ 把坐标写进
+     * {@link MaidTravelTarget}，三条飞行链路（扫帚 / 直升机 / 飞行跟随）各自在"跟随主人"
+     * 的入口处消费它。客户端不传坐标，只传目标 id——坐标以服务端物品里的那一份为准。
+     */
+    public static class FlyToTargetPacket implements CustomPacketPayload {
+
+        public static final CustomPacketPayload.Type<FlyToTargetPacket> TYPE =
+                new CustomPacketPayload.Type<>(ResourceLocation.fromNamespaceAndPath("maid_smart", "patrol_fly_to"));
+
+        public final boolean offHand;
+        public final String targetId;
+
+        public FlyToTargetPacket(boolean offHand, String targetId) {
+            this.offHand = offHand;
+            this.targetId = targetId == null ? "" : targetId;
+        }
+
+        public static void encode(FlyToTargetPacket p, FriendlyByteBuf buf) {
+            buf.writeBoolean(p.offHand);
+            buf.writeUtf(p.targetId, 64);
+        }
+
+        public static FlyToTargetPacket decode(FriendlyByteBuf buf) {
+            return new FlyToTargetPacket(buf.readBoolean(), buf.readUtf(64));
+        }
+
+        public static void handle(FlyToTargetPacket p, IPayloadContext ctx) {
+            ctx.enqueueWork(() -> {
+                try {
+                    if (!(ctx.player() instanceof ServerPlayer player)) {
+                        return;
+                    }
+                    ItemStack stack = editableChart(player, p.offHand);
+                    if (stack == null) {
+                        return;
+                    }
+                    PatrolTarget t = PatrolChartData.readBook(stack).targetById(p.targetId);
+                    if (t == null) {
+                        player.sendSystemMessage(Component.literal("§c这个目标点已经不在这本航图里了"));
+                        return;
+                    }
+                    String dim = dimensionOf(player);
+                    if (!t.dimension().isEmpty() && !t.dimension().equals(dim)) {
+                        player.sendSystemMessage(Component.literal(
+                                "§c目标点在其他维度（" + t.dimension() + "），飞不过去"));
+                        return;
+                    }
+                    com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid =
+                            findEligibleMaid(player);
+                    if (maid == null) {
+                        player.sendSystemMessage(Component.literal(
+                                "§c现在没有可执行的女仆——要和她同乘扫帚/直升机，"
+                                        + "或用武装拴绳把自己拴在能飞的女仆下面"));
+                        return;
+                    }
+                    // 【R1124】她能飞吗：没有鞘翅/推进剂、没有扫帚、载具没电都直接告诉玩家，
+                    // 不再"点了没反应"。
+                    String blocked = flyBlockedReason(maid);
+                    if (blocked != null) {
+                        com.maidsmart.tool.PromaidLog.log("飞过去",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid) + " 拒绝起飞：" + blocked);
+                        player.sendSystemMessage(Component.literal(
+                                "§c" + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                        + " 不能飞过去：" + blocked));
+                        return;
+                    }
+                    MaidTravelTarget.set(maid, t.pos());
+                    player.sendSystemMessage(Component.literal(String.format(
+                            "§a✈ %s 开始飞往目标点「%s」(%.1f, %.1f, %.1f)",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid), t.displayName(),
+                            t.x(), t.y(), t.z())));
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
+                }
+            });
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
     private static ItemStack heldChart(ServerPlayer player, boolean offHand) {
         try {
             ItemStack s = offHand ? player.getOffhandItem() : player.getMainHandItem();
@@ -1050,6 +1351,31 @@ public final class PatrolNetworking {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolNetworking", ignored);
             return null;
         }
+    }
+
+    /**
+     * 手上那本**能改**的航图（R1130）：先认包里说的那只手，再认另一只；署了别人名字的一律当没有。
+     * <p>【为什么界面进不去还要这一道】C2S 包是客户端能自己构造的——右键被拦只是界面上的门面，
+     * 改书 / 绑定 / 打点 / 连接 / 飞过去这几条链路的真正入口在这里。未署名（还没打过标记）的
+     * 航图谁都能用；有了 owner 之后，只有原作者能通过。
+     */
+    private static ItemStack editableChart(ServerPlayer player, boolean offHand) {
+        ItemStack s = heldChart(player, offHand);
+        if (s == null) {
+            s = heldChart(player, !offHand);
+        }
+        if (s == null) {
+            player.sendSystemMessage(Component.literal("§c巡逻航图不在手上"));
+            return null;
+        }
+        if (!PatrolChartData.canUse(s, player)) {
+            String owner = PatrolChartData.ownerName(s);
+            player.sendSystemMessage(Component.literal("§c这本航图署的是"
+                    + (owner.isEmpty() ? "别人" : "「" + owner + "」")
+                    + "的名字，只有原作者能改"));
+            return null;
+        }
+        return s;
     }
 
     /**

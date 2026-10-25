@@ -1,7 +1,7 @@
 # Promaid 上传 CurseForge / Modrinth 发布指南
 
 > 本文是**操作手册**，回答"点哪里、填什么"。两个平台都是**先提交、再人工审核**，新项目第一次提交会进审核队列（CurseForge 常见几小时到 3 天，Modrinth 常见 1~2 天，周末更慢）。
-> 版本：v1.3.2 · 对应 jar：`patched/promaid-1.3.2-forge-1.20.1.jar`（Forge）与 `patched/promaid-1.3.2-neoforge-1.21.1.jar`（NeoForge）
+> 版本：v1.3.3 · 对应 jar：`patched/promaid-1.3.3-forge-1.20.1.jar`（Forge）与 `patched/promaid-1.3.3-neoforge-1.21.1.jar`（NeoForge）
 
 ---
 
@@ -317,7 +317,7 @@ toml 每一项都有入口；DIY 模式改成只关「本模组对女仆原有�
 
 1. 把两个平台的项目链接加回仓库：`README.md` 顶部已留了"仓库"一行，可再加 CurseForge / Modrinth 徽章；
 2. 之后每次发版：**先**在本地重新构建两个 jar（`tools/build/build_promaid.py` / `tools/build/build_promaid_neo.py`）→ 部署本地 → 传两个平台的新版本 → 再在 GitHub 发 Release（顺序反了会出现"平台上的包和仓库里的不一致"）；
-3. 平台上的版本号与 `mods.toml` 里的 `version` 保持一致（当前两边都是 `1.3.2`）。
+3. 平台上的版本号与 `mods.toml` 里的 `version` 保持一致（上传新版时以本文件第 6 节的顺序对齐；工作区现行 `1.3.3`）。
 
 ---
 

@@ -166,6 +166,135 @@ public final class PatrolChartData {
         return readMaid(maid) != null;
     }
 
+    /**
+     * 【R1128】把减速点改动同步到"已绑定的深拷"。绑定是快照（见类注释）：改书不会自动落到
+     * 女仆身上。减速点要求"按下即生效"，所以这里把全服**已加载**、绑着同一条轨道的女仆就地
+     * 改一份并写回；未加载的女仆等下次加载后再点一次即可（她们当时也不在巡逻）。
+     * @return 实际改到几只女仆
+     */
+    public static int syncSlowToBound(net.minecraft.server.MinecraftServer server,
+                                      String routeId, int idx, boolean slow) {
+        int n = 0;
+        try {
+            if (server == null || routeId == null || routeId.isEmpty()) {
+                return 0;
+            }
+            for (net.minecraft.server.level.ServerLevel lvl : server.getAllLevels()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.MaidRoster.inAsEntities(lvl)) {
+                    if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
+                        continue;
+                    }
+                    PatrolRoute bound = readMaidRaw(maid);
+                    if (bound == null || !routeId.equals(bound.id())) {
+                        continue;
+                    }
+                    if (bound.setSlow(idx, slow)) {
+                        maid.getPersistentData().put(PatrolRoute.TAG_ROOT, bound.save());
+                        PatrolFlight.forget(maid);
+                        n++;
+                    }
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
+        }
+        return n;
+    }
+
+    /* ==================== R1129：署名 / 特殊航图 ==================== */
+
+    /** 物品根标签上的三个键（与 PatrolBook 的根键并列，互不干扰）。 */
+    private static final String TAG_OWNER = "chart_owner";
+    private static final String TAG_OWNER_NAME = "chart_owner_name";
+    private static final String TAG_MARKED = "chart_marked";
+
+    /** 物品根标签的可写副本（1.21.1 的 CUSTOM_DATA 组件）。 */
+    private static CompoundTag copyTag(ItemStack stack) {
+        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+    }
+
+    private static void saveTag(ItemStack stack, CompoundTag tag) {
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    /** 这本航图是否"真正被用过"（打过至少一个有效标记/目标点）——决定附魔光与金色名字。 */
+    public static boolean marked(ItemStack stack) {
+        try {
+            if (stack == null || stack.isEmpty()) {
+                return false;
+            }
+            return copyTag(stack).getBoolean(TAG_MARKED) || markedContent(stack);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
+            return false;
+        }
+    }
+
+    /** 书上此刻有没有任何内容（任一轨道有标记 / 有目标点）。 */
+    private static boolean markedContent(ItemStack stack) {
+        PatrolBook book = readBook(stack);
+        for (PatrolRoute r : book.routes()) {
+            if (r.size() > 0) {
+                return true;
+            }
+        }
+        return !book.targets().isEmpty();
+    }
+
+    /** 署名（第一次打出有效标记时记下）；没有 → 空串。 */
+    public static String ownerName(ItemStack stack) {
+        try {
+            if (stack == null || stack.isEmpty()) {
+                return "";
+            }
+            return copyTag(stack).getString(TAG_OWNER_NAME);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
+            return "";
+        }
+    }
+
+    /** 他能不能用这本航图：没署名（还没打过标记）谁都能用；署名后只认作者。 */
+    public static boolean canUse(ItemStack stack, net.minecraft.world.entity.player.Player player) {
+        try {
+            String owner = stack == null || stack.isEmpty() ? "" : copyTag(stack).getString(TAG_OWNER);
+            return owner.isEmpty() || (player != null && owner.equals(player.getUUID().toString()));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
+            return true;
+        }
+    }
+
+    /** 第一次打出有效标记：署名 + 置"用过"标志（已署名的不动，转手后仍保留原作者）。 */
+    public static void sign(ItemStack stack, net.minecraft.world.entity.player.Player player) {
+        try {
+            if (stack == null || stack.isEmpty() || player == null) {
+                return;
+            }
+            CompoundTag tag = copyTag(stack);
+            if (!tag.getString(TAG_OWNER).isEmpty()) {
+                return;
+            }
+            tag.putString(TAG_OWNER, player.getUUID().toString());
+            tag.putString(TAG_OWNER_NAME, player.getName().getString());
+            tag.putBoolean(TAG_MARKED, true);
+            saveTag(stack, tag);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
+        }
+    }
+
+    /** 旧版打过点的航图补一个"用过"标志（服务端打开时调用，不署名）。 */
+    public static void refreshMarked(ItemStack stack) {
+        try {
+            if (stack == null || stack.isEmpty()) {
+                return;
+            }
+            CompoundTag tag = copyTag(stack);
+            if (tag.getBoolean(TAG_MARKED) || !markedContent(stack)) {
+                return;
+            }
+            tag.putBoolean(TAG_MARKED, true);
+            saveTag(stack, tag);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolChartData", ignored);
+        }
+    }
+
     private static String dimensionOf(EntityMaid maid) {
         try {
             return maid.level().dimension().location().toString();

@@ -20,7 +20,27 @@ import java.util.List;
  * NeoForge 树**（1.2.4 / 1.2.5 / 1.3.0 三个已发布 neo 包全带此 bug，
  */
 public final class ChatInfoUtil {
+    /**
+     * 内部触发标记：带运行时随机串，玩家无法猜中；且只认**开头**（旧版 contains
+     * 会让玩家在聊天里打这一串就把自己的话伪装成 system 消息）。
+     */
+    private static final String INTERNAL_MARKER =
+            "[promaid:internal:" + java.util.UUID.randomUUID() + "]";
+
     private ChatInfoUtil() {
+    }
+
+    public static String internal(String prompt) {
+        return INTERNAL_MARKER + prompt;
+    }
+
+    public static boolean isInternal(String prompt) {
+        return prompt != null && prompt.startsWith(INTERNAL_MARKER);
+    }
+
+    public static String stripInternal(String prompt) {
+        return prompt != null && prompt.startsWith(INTERNAL_MARKER)
+                ? prompt.substring(INTERNAL_MARKER.length()) : prompt;
     }
 
     /** 取女仆 ChatClientInfo，并按配置强制输出语言（name/description 保持原样） */

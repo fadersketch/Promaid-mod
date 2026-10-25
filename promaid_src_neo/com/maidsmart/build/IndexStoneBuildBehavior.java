@@ -23,19 +23,23 @@ import java.util.Map;
  * 契约逐条对应：
  * - 站桩 + 瞬移到工地旁 + 挥臂 + 放置音效 → 与建造任务表现一致（复用
  *   MaidBuildBehavior.teleportToWorkSite + PlacedBlockTracker.placeSound）；
- * - 材料无限制：先女仆背包（含手部栏），不够从主人背包拉一组；选材复用搭路
- *   （MaidBuildBlockFilter.takeBuildBlock：数量最多者优先、必须有碰撞）；
+ * - 材料来源：她自己的双手/背包 + 全部附属容器（精妙背包/旅行者背包）+ 主人背包；
+ *   启动前先扫这三处（一件都没有就拒绝绑定），选材走建造黑名单（MaidBuildBlockFilter）；
  * - 填充顺序：会话 cells 已按"离女仆起点近→远"排序，逐格弹出；
  * - 全部填完 → IndexStoneService.onMaidFinished（播报 + 还原原任务）。
  *
- * 健壮性：会话丢失（玩家退出/重登）或长时间无法推进 → 自愈释放并还原任务。
+ * 健壮性：会话丢失（{@code s == null}）→ 自愈还原任务；**无进展 / 缺料一律不烂尾**
+ * （实测一千〇六）：等区块 / 等主人让格 / 等材料，直到搭完或玩家解锁主动取消。
  */
 public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
 
     private static final int PLACE_INTERVAL = 2;
-    /** 缺料判失败的宽限（tick，默认 60=3 秒）——防"刚消费完一叠、主人正在补"误判 */
-    private static final int NO_MATERIAL_GRACE = 60;
-    /** 无进展 tick 上限（20 秒）→ 卡死收尾 */
+    /** 缺料期间的重试节流（次）：首拍取材失败后，每这么多次尝试才再全量重试一次
+     *  （含从主人背包拉料），防高频拉取；材料一补上立刻续建 */
+    private static final int NO_MATERIAL_RETRY = 40;
+    /** 缺料提示节流（次）：每隔这么多次尝试提醒一次主人补料（没有放弃路径） */
+    private static final int NO_MATERIAL_REMIND = 100;
+    /** 无进展留痕阈值（tick，20 秒）：只记一条日志、**不再放弃**（实测一千〇六） */
     private static final int STALL_LIMIT = 400;
 
     private int cooldown = 0;
@@ -97,12 +101,14 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
             }
             return;
         }
+        // 进度推进检测（无进展太久 → 只留痕，不再烂尾：等区块/等主人让格/等材料）
         if (s.cells.size() != lastSize) {
             lastSize = s.cells.size();
             stall = 0;
-        } else if (++stall > STALL_LIMIT) {
-            IndexStoneService.failSession(maid, "长时间没有进展", true);
-            return;
+        } else if (++stall == STALL_LIMIT) {
+            com.maidsmart.tool.PromaidLog.log("指标石",
+                    "临时建造 20 秒无进展——继续等待（等区块/等主人让格/等材料；"
+                    + "不再烂尾，玩家解锁可主动取消）");
         }
         if (this.cooldown-- > 0) {
             return;
@@ -137,16 +143,17 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
             return;
         }
 
-        Block material = resolveMaterial(level, maid, target);
+        Block material = null;
+        // 实测一千〇六【执行到底】：缺料期间取材节流重试（首拍 + 每 NO_MATERIAL_RETRY 次），
+        // 材料一补上立刻续建；旧版"3 秒找不到材料就烂尾"整条删除（明明有材料也误杀）
+        if (this.noMaterial == 0 || this.noMaterial % NO_MATERIAL_RETRY == 0) {
+            material = resolveMaterial(level, maid, target);
+        }
         if (material == null) {
-            // v1.2.0：缺材料 = 失败（留 3 秒宽限防瞬时缺料误判）
-            if (++this.noMaterial >= NO_MATERIAL_GRACE) {
-                IndexStoneService.failSession(maid, "缺少搭建材料", true);
-                return;
-            }
-            if (this.noMaterial == 1 || this.noMaterial % 20 == 0) {
+            this.noMaterial++;
+            if (this.noMaterial == 1 || this.noMaterial % NO_MATERIAL_REMIND == 0) {
                 maid.getChatBubbleManager().addTextChatBubble(
-                        "没有可以搭建的方块了…再找不到材料我就先停啦");
+                        "没有可以搭建的方块了…主人给我一些方块吧（搭完才会走）");
             }
             return;
         }
@@ -199,12 +206,79 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 选材：女仆背包（含手部栏，搭路规则）→ 不够从主人背包拉一组 → 创造主人无限 */
+    /**
+     * 启动前"有没有料"总探针：主人背包 → 她的双手/背包 → 全部附属容器（精妙背包/旅行者背包）。
+     * 判定走 {@link MaidBuildBlockFilter#isUsableBuildStack}（含「搭方块禁用名单」），与取料同源；
+     * 只读（额外容器取出 1 件立刻放回）。一件都没有 → 调用方拒绝绑定。
+     *
+     * @param level 碰撞形状判定用；取料传目标格，启动探针传女仆脚下（null = 静态判定）
+     * @return 有无可用方块；创造模式主人视为无限材料
+     */
+    public static boolean hasAnyBuildMaterial(EntityMaid maid, Player owner,
+                                              net.minecraft.world.level.Level level, BlockPos pos) {
+        try {
+            if (owner != null && BlueprintLib.isCreative(owner)) {
+                return true;
+            }
+            if (maid == null) {
+                return false;
+            }
+            if (hasUsable(maid.getHandsInvWrapper(), level, pos)) {
+                return true;
+            }
+            if (hasUsable(maid.getAvailableBackpackInv(), level, pos)) {
+                return true;
+            }
+            if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> MaidBuildBlockFilter.isUsableBuildStack(s, level, pos))) {
+                return true;
+            }
+            return owner != null && hasUsableOwner(owner, level, pos);
+        } catch (Throwable t) {
+            com.maidsmart.diag.Diag.swallow("IndexStoneBuildBehavior", t);
+            return true; // 探针自身出错时放行：不因一次异常把指标石整条掐死
+        }
+    }
+
+    private static boolean hasUsable(net.neoforged.neoforge.items.IItemHandler inv,
+                                     net.minecraft.world.level.Level level, BlockPos pos) {
+        for (int i = 0; i < inv.getSlots(); i++) {
+            if (MaidBuildBlockFilter.isUsableBuildStack(inv.getStackInSlot(i), level, pos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasUsableOwner(Player owner,
+                                          net.minecraft.world.level.Level level, BlockPos pos) {
+        net.minecraft.world.entity.player.Inventory inv = owner.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            if (MaidBuildBlockFilter.isUsableBuildStack(inv.getItem(i), level, pos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 从她的附属容器（精妙背包/旅行者背包）搬一组可用方块进背包；成功返回 true。 */
+    private static boolean pullFromExtraContainers(EntityMaid maid) {
+        return com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> MaidBuildBlockFilter.isUsableBuildStack(s, null, null), 64);
+    }
+
+    /** 选材：她双手/背包 → 附属容器 → 不够从主人背包拉一组 → 创造主人无限 */
     private static Block resolveMaterial(ServerLevel level, EntityMaid maid, BlockPos target) {
         // v1.2.4【issue #19】：取材一律跳过"被动作表现借走的副手"（详见过滤器五参重载）
         boolean borrowed = com.maidsmart.combat.BombPose.offhandBorrowed(maid);
         Item it = MaidBuildBlockFilter.takeBuildBlock(
                 maid.getAvailableBackpackInv(), maid.getHandsInvWrapper(), level, target, borrowed);
+        // 【R1100】她自己的背包没有 → 先问"附属容器"（精妙背包/旅行者背包）。TLM 把这层容器
+        // 挂在她的饰品栏里，和背包一样算"她身上的料"；旧版只问主人，装了背包却不用里面的方块。
+        if (it == null && pullFromExtraContainers(maid)) {
+            it = MaidBuildBlockFilter.takeBuildBlock(
+                    maid.getAvailableBackpackInv(), maid.getHandsInvWrapper(), level, target, borrowed);
+        }
         if (it == null) {
             Player owner = maid.getOwner() instanceof Player p ? p : null;
             if (pullFromOwner(owner, maid)) {
@@ -337,6 +411,9 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
     /** 为补支撑再取一块【指定的】同种材料（女仆背包/手部 → 主人背包） */
     private static boolean takeOneFor(EntityMaid maid, BlockPos pos, Block block) {
         Item item = block.asItem();
+        // 真取物：先从额外容器（精妙背包/旅行者背包）搬 1 件到背包，下面的扫描才拿得到。
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && s.getItem() == item, 1);
         net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         // 【实测七百六十二·issue #19 三修】三处取材全部改走 MaidBuildBlockFilter.extractOneHonest：
         // 原来只看 extractItem 返回值非空，坏包装层"返回副本却不真扣"时等于白放一块

@@ -233,15 +233,43 @@ public final class BlueprintFileIo {
         }
     }
 
+    /**
+     * 【R1079】内置蓝图"解压一次"清单：清单里已有、文件却不在 → 说明是玩家/整合包作者
+     * **主动删的**，不再每次启动补回来（旧版无条件补，删了也白删）。想恢复：删掉清单文件
+     * {@value #BUNDLED_MANIFEST}，下次启动会把缺的内置蓝图重新解压。
+     */
+    static final String BUNDLED_MANIFEST = ".bundled-manifest";
+
     private static void ensureBundledBlueprints() {
         try {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
             java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Path manifest = dir.resolve(BUNDLED_MANIFEST);
+            java.util.Set<String> extracted = new java.util.LinkedHashSet<>();
+            if (java.nio.file.Files.isRegularFile(manifest)) {
+                try {
+                    for (String line : java.nio.file.Files.readAllLines(manifest,
+                            java.nio.charset.StandardCharsets.UTF_8)) {
+                        if (!line.isBlank()) {
+                            extracted.add(line.trim());
+                        }
+                    }
+                } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
+                }
+            }
+            boolean changed = !java.nio.file.Files.isRegularFile(manifest);
             for (String file : BUNDLED_BLUEPRINT_FILES) {
+                if (BlueprintStepMath.isDisabled(file)) {
+                    continue; // 【R1079】配置禁用：不复制、也不记清单
+                }
                 java.nio.file.Path out = dir.resolve(file);
                 if (java.nio.file.Files.exists(out)) {
-                    continue; // 已有则跳过，不覆盖玩家自己的内容
+                    changed |= extracted.add(file); // 已有则跳过，不覆盖玩家自己的内容
+                    continue;
+                }
+                if (extracted.contains(file)) {
+                    continue; // 清单里有、文件却没了 = 主动删除 → 尊重删除，不再补
                 }
                 try (java.io.InputStream in = BlueprintLib.class.getClassLoader()
                         .getResourceAsStream("assets/maid_smart/bundled_blueprints/" + file)) {
@@ -250,10 +278,15 @@ public final class BlueprintFileIo {
                         continue;
                     }
                     java.nio.file.Files.copy(in, out);
+                    extracted.add(file);
+                    changed = true;
                     BlueprintLib.LOGGER.info("ensureBundledBlueprints: 已内置蓝图 {}", file);
                 } catch (Exception e) {
                     BlueprintLib.LOGGER.warn("ensureBundledBlueprints: 复制失败 {}: {}", file, e.getMessage());
                 }
+            }
+            if (changed) {
+                java.nio.file.Files.write(manifest, extracted, java.nio.charset.StandardCharsets.UTF_8);
             }
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("BlueprintFileIo", ignored);
         }
@@ -431,6 +464,10 @@ public final class BlueprintFileIo {
                         }
                     }
                     if (ext == null) {
+                        return;
+                    }
+                    // 【R1079】配置禁用：不注册；已在内存里的会在本轮末尾按 seen 清理掉
+                    if (BlueprintStepMath.isDisabled(fileName)) {
                         return;
                     }
                     String id = "maid_smart_ext:" + fileName.substring(0, fileName.length() - ext.length());

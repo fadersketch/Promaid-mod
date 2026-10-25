@@ -8,7 +8,7 @@ import java.nio.file.Path;
  * 记忆快照（移植自 maidsoulcore v3 {@code MemorySnapshotStore}）。
  *
  * <p>与"摘要段落/多级日记"不同的东西：那些是**客观记录**（发生了什么）；快照是女仆以第一人称
- * 写下的、**不超过 200 字的一段心里话**——"我一直记得那天主人……"。它常驻注入，给对话提供
+ * 写下的、**不超过 400 字的一段心里话**——"我一直记得那天主人……"。它常驻注入，给对话提供
  * 情绪连续性：不是每条记忆都念一遍，而是"她心里一直放着一件事"。
  *
  * <p>落盘 {@code <store>/snapshot.txt}（纯文本，可人工查看/编辑）。只有值得长期记住的深刻经历
@@ -19,7 +19,7 @@ import java.nio.file.Path;
 public final class AiMemorySnapshotStore {
 
     /** 快照硬上限（与 maidsoulcore 的 MAX_CHARS 对齐）。 */
-    public static final int MAX_CHARS = 200;
+    public static final int MAX_CHARS = 400;
 
     private AiMemorySnapshotStore() {
     }

@@ -15,7 +15,7 @@ public final class GuideChaptersBasics {
         return new GuideContent.Chapter("功能总览 · 一键跳转配置",
                 "\u00a7e这里可以一键跳到任意配置页\u00a7r——点下面\u00a7b青色带下划线\u00a7r的链接，"
                         + "会直接打开「模组详细配置」的对应\u00a7e小类\u00a7r（跳转后目标参数行会高亮；"
-                        + "在配置面板点「保存并返回」会回到手册）。",
+                        + "在配置面板按 Esc 关闭（会自动保存）会回到手册）。",
                 "§e⓪ 常用§r：[[@COMMON:COMMON_PAGE|常用]]（一键预设 + 常用功能导览）",
                 "§e① 生产与工作§r：[[@WORK:BUILD|建造]] · [[@WORK:MINE|挖矿]] · "
                         + "[[@WORK:WOOD|伐木]] · [[@WORK:COOK_BREW|烹饪与酿造]] · [[@WORK:FARM|农场与宰杀]] · "
@@ -148,7 +148,7 @@ public final class GuideChaptersBasics {
                 + "\u6709\u00a7e\u8be6\u7ec6\u4ecb\u7ecd\uff08\u672c\u6307\u5357\uff09\u3001\u5efa\u9020\u3001\u5973\u4ec6\u7ba1"
                 + "\u7406\u3001\u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e\u3001\u5973\u4ec6\u8bb0\u5fc6\u3001\u2691 DIY / \u9ed8\u8ba4"
                 + "\u6a21\u5f0f\u00a7r\u516d\u4e2a\u5165\u53e3\uff1b",
-                "第 5 步\u00a7e调参数\u00a7r：所有可调参数都在「模组详细配置」面板里，改完点\u00a7a保存并返回\u00a7r立即生效"
+                "第 5 步\u00a7e调参数\u00a7r：所有可调参数都在「模组详细配置」面板里，改完按 Esc 关闭\u00a7a自动保存\u00a7r并立即生效"
                         + "（不用重启游戏）。");
     }
 
@@ -232,7 +232,7 @@ public final class GuideChaptersBasics {
                 "女仆缺料会暂停并气泡/系统消息告诉你缺什么（如「缺石砖 ×64」）——你背包有料她会\u00a7e自动取\u00a7r，"
                         + "你没有就去准备，补上后自动续建，已建部分不会重搭。",
                 "\u00a7e蓝图的四种来源\u00a7r：",
-                "① \u00a7e随模组附赠的蓝图包\u00a7r：81 套已授权蓝图（房屋/地形/天空/树木/武器/水/红石/节日/装饰/载具/雕像各系列——"
+                "① \u00a7e随模组附赠的蓝图包\u00a7r：79 套已授权蓝图（房屋/地形/天空/树木/武器/水/红石/节日/装饰/载具/雕像各系列——"
                         + "从中世纪庄园、上海中心大厦到天空之城、雕像合集、巨型载具都有），"
                         + "首次运行自动解压到 config/maid_smart/blueprints/，开箱即用，直接选一个点「建造此图纸」就能开工；",
                 "② \u00a7eLLM 现场生成\u00a7r：对话「造一个 5x5 的现代小屋」——AI 直接出蓝图（需 LLM，有大小限制）；",
@@ -336,6 +336,16 @@ public final class GuideChaptersBasics {
                         + "\u00a7e每格上限\u00a7r（默认 114514，范围 64~1000000）。"
                         + "\u00a7e禁入规则\u00a7r（压缩盒本身 + 带附魔的物品）与\u00a7e弹药加成\u00a7r（盒内爆炸物 → 一次投 / 放多个）在这一页\u00a7e各有一条只读说明行\u00a7r，\u00a7e不提供开关\u00a7r——写死。",
                 "\u00a7e\u6e38\u620f\u5185\u81ea\u68c0\u00a7r\uff1a\u00a7e/maid_smart box check [\u5973\u4ec6]\u00a7r \u4f1a\u628a\u6574\u5957\u5224\u5b9a\u9010\u6761\u8dd1\u4e00\u904d\u5e76\u6253\u5370\u00a7e[PASS]/[FAIL]\u00a7r\u2014\u2014\u300c\u76d2\u5b50\u4e0d\u8bb8\u88c5\u76d2\u5b50\u300d\uff08\u542b\u81ea\u5df1\u90a3\u4e00\u683c\u3001\u53e6\u4e00\u4e2a\u76d2\u5b50\u3001\u4ee5\u53ca\u00a7e\u5bf9\u7167\u00a7r\uff1a\u540c\u4e00\u4e2a\u52a8\u4f5c\u5b58\u666e\u901a\u7269\u54c1\u5fc5\u987b\u6210\u529f\uff09\u3001\u00a7e\u7981\u5165\u53e3\u5f84\u00a7r\uff08\u9644\u9b54\u7269\u54c1\u4e0e\u538b\u7f29\u76d2\u7684\u62d2\u7edd + \u77f3\u5934\u5fc5\u987b\u653e\u884c\uff09\u3001\u00a7e\u9f20\u6807\u9009\u4e0d\u4e2d\u538b\u7f29\u76d2\u00a7r\uff08\u62ff\u8d77\u4e0e\u4ea4\u6362\u4e24\u6761\u8def\uff09\u3001\u00a7e\u4e0d\u53ef\u5806\u53e0\u7269\u54c1\u4ea4\u7ed9\u5979/\u539f\u7248\u7684\u5806\u662f\u5426\u5408\u6cd5\u00a7r\u3001\u00a7e\u7bb1\u5b50\u5f0f\u9f20\u6807\u53d6\u653e\u5168\u6d41\u7a0b\u00a7r\uff08\u62ff\u8d77/\u653e\u4e0b/\u642c\u56de\u6765/\u5feb\u901f\u79fb\u52a8/\u6536\u624b\u4e0d\u4e22\uff09\u3001\u4ee5\u53ca\u00a7e\u300c\u5979\u5403\u996d\u90a3\u6761\u5224\u5b9a\u626b\u4e0d\u626b\u5f97\u5230\u76d2\u5b50\u91cc\u7684\u98df\u7269\u300d\u00a7r\u90fd\u5728\u91cc\u9762\u3002");
+    }
+
+    static GuideContent.Chapter specialThanks() {
+        return new GuideContent.Chapter("特别鸣谢",
+                "本模组随包附赠的蓝图全部来自 B 站 UP 主的授权分享。以下排名不分先后——感谢他们把作品免费公开，让每位玩家都能开箱即用：",
+                "· 《唯一》、《Mistry Memory》—— 蓝图提供者：B站 UP 主 §bYunCaiFLY§r；",
+                "· §e协议源石01、小蛋挞01§r（终末地 · 源石协议 / 小蛋挞）—— 蓝图提供者：B站 UP 主 §bPtAr伯亚§r；",
+                "· §e天空之城、哈尔的移动城堡、上海中心大厦§r…… 等共 §e73§r 个建筑 —— 蓝图提供者：B站 UP 主 §b天才_派大星-§r；",
+                "（另附 §e总统山、加冕圣地§r 两张地形投影，同样由 天才_派大星- 提供。）",
+                "如果你喜欢这些作品，欢迎去 B 站关注三位 UP 主；蓝图仅随模组附赠，请勿转售。");
     }
 }
                                                     

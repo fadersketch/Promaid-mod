@@ -109,6 +109,8 @@ public final class GuideChaptersSystem {
                         + "（manifest.json 映射文本→音频），命中直接播放、免 TTS——一次制作永久使用；"
                         + "面板里有「选择文件导入」按钮直接选 zip；",
                 "· 语音缓存：训练生成的音频会缓存复用（voice_cache/），上限可调，超出删最旧。",
+                "§e排班贴身气泡§r的开关与触发距离也在这页的「气泡与提示」小节"
+                        + "（与 TTS 总开关同页；键名和默认值未变）。",
                 "\u00a7e【举例】做一个语音包：\u00a7r",
                 "① 用 TTS 工具把「主人，小心！」生成成 ogg 文件，命名如 alert.ogg；"
                         + "② 放进 config/maid_smart/system_voice/；"
@@ -118,7 +120,7 @@ public final class GuideChaptersSystem {
 
         static GuideContent.Chapter configPanelGuide() {
         return new GuideContent.Chapter("模组详细配置面板导航",
-                "\u6253\u5f00\u65b9\u5f0f\uff1a\u624b\u518c \u2192 \u300c\u2699 \u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e\u300d\uff08\u6216\u5728 Forge \u6a21\u7ec4\u5217\u8868 \u2192 Config \u91cc\u6253\u5f00\uff09\u3002\u00a7e\u6240\u6709\u5f00\u5173/\u53c2\u6570\u90fd\u53ea\u5728\u8fd9\u4e2a\u9762\u677f\u91cc\u00a7r\uff08\u624b\u518c\u5185\u6ca1\u6709\u5355\u72ec\u7684\u8bbe\u7f6e\u9875\uff09\u3002\u7ed3\u6784\uff1a\u9996\u9875\u5217\u51fa\u5404\u7c7b\u00a7e\u5927\u7c7b\u00a7r\uff0c\u70b9\u5927\u7c7b\u540e\u4e00\u822c\u5148\u5217\u51fa\u8be5\u7c7b\u4e0b\u7684\u00a7e\u5c0f\u7c7b\u00a7r\u3001\u70b9\u5c0f\u7c7b\u8fdb\u5165\u53c2\u6570\u9875\uff08\u53ef\u7ffb\u9875\uff09\uff1b\u00a7e\u53ea\u6709\u4e00\u4e2a\u5b50\u7c7b\u7684\u5927\u7c7b\uff08\u5982\u7f6e\u9876\u7684\u300c\u5e38\u7528\u300d\uff09\u6ca1\u6709\u8fd9\u4e00\u5c42\u2014\u2014\u70b9\u5b83\u76f4\u63a5\u8fdb\u53c2\u6570\u9875\u00a7r\uff1b\u6539\u5b8c\u70b9 \u00a7a\u4fdd\u5b58\u5e76\u8fd4\u56de\u00a7r \u7acb\u5373\u751f\u6548\uff08\u4e0d\u7528\u91cd\u542f\uff09\u3002",
+                "\u6253\u5f00\u65b9\u5f0f\uff1a\u624b\u518c \u2192 \u300c\u2699 \u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e\u300d\uff08\u6216\u5728 Forge \u6a21\u7ec4\u5217\u8868 \u2192 Config \u91cc\u6253\u5f00\uff09\u3002\u00a7e\u6240\u6709\u5f00\u5173/\u53c2\u6570\u90fd\u53ea\u5728\u8fd9\u4e2a\u9762\u677f\u91cc\u00a7r\uff08\u624b\u518c\u5185\u6ca1\u6709\u5355\u72ec\u7684\u8bbe\u7f6e\u9875\uff09\u3002\u7ed3\u6784\uff1a\u9996\u9875\u5217\u51fa\u5404\u7c7b\u00a7e\u5927\u7c7b\u00a7r\uff0c\u70b9\u5927\u7c7b\u540e\u4e00\u822c\u5148\u5217\u51fa\u8be5\u7c7b\u4e0b\u7684\u00a7e\u5c0f\u7c7b\u00a7r\u3001\u70b9\u5c0f\u7c7b\u8fdb\u5165\u53c2\u6570\u9875\uff08\u53ef\u7ffb\u9875\uff09\uff1b\u00a7e\u53ea\u6709\u4e00\u4e2a\u5b50\u7c7b\u7684\u5927\u7c7b\uff08\u5982\u7f6e\u9876\u7684\u300c\u5e38\u7528\u300d\uff09\u6ca1\u6709\u8fd9\u4e00\u5c42\u2014\u2014\u70b9\u5b83\u76f4\u63a5\u8fdb\u53c2\u6570\u9875\u00a7r\uff1b\u6539\u5b8c\u6309 Esc \u5173\u95ed \u00a7a\u81ea\u52a8\u4fdd\u5b58\u00a7r \u5e76\u7acb\u5373\u751f\u6548\uff08\u4e0d\u7528\u91cd\u542f\uff09\u3002",
                 "\u00a7e\u4e03\u4e2a\u5927\u7c7b\u4e0e\u5404\u81ea\u7684\u5c0f\u7c7b\u00a7r\uff1a",
                 "① \u00a7e生产与工作\u00a7r：建造 / 挖矿 / 伐木 / 烹饪与酿造 / 农场与宰杀 / 钓鱼 / 排班表；",
                 "② \u00a7eAI 与对话\u00a7r：AI 记忆 / 对话与自主 / 感知 / 情绪 / AI 工具；",
@@ -140,8 +142,8 @@ public final class GuideChaptersSystem {
                 "· 床铺互通/手持光源/蛋糕可食用/悬空禁搭/运行日志 → 系统与杂项；",
                 "\u00a7e【举例】改投喂阈值（4 步）：\u00a7r",
                 "手册 → \u2699 模组详细配置 → \u00a7e战斗与自保\u00a7r → \u00a7e贴身辅助\u00a7r → "
-                        + "把「投喂触发饱食度」改成 20 → 保存并返回——立即生效，女仆 3 秒内会喂你。",
-                "小知识：输入框是延迟提交——打字只校验格式，\u00a7e必须点保存并返回\u00a7r才真正写入；"
+                        + "把「投喂触发饱食度」改成 20 → 按 Esc 关闭（自动保存）——立即生效，女仆 3 秒内会喂你。",
+                "小知识：输入框是延迟提交——打字只校验格式，\u00a7e按 Esc 关闭面板时\u00a7r才真正写入并保存；"
                         + "非法输入显示红字，合法白字。返回按钮：小类页「← 返回分类」回大类页（只有一个子类的大类没有中间层，直接回首页），"
                         + "大类页「← 返回大类」回首页。");
     }
@@ -209,6 +211,12 @@ public final class GuideChaptersSystem {
                 "\u00a7e\u2464 \u98df\u7269\u76f4\u63a5\u5582\u00a7r\uff1a\u719f\u98df/\u8702\u871c\u74f6\u4e0d\u585e\u4e3b\u4eba\u80cc\u5305\uff0c\u800c\u662f\u00a7e\u9971\u98df\u5ea6\u76f4\u63a5\u52a0\u00a7r\uff08\u539f\u7248\u5403\u98df\u7269\u8bed\u4e49\uff09\uff0c\u6709\u5403/\u559d\u97f3\u6548\u548c\u7cfb\u7edf\u6d88\u606f\uff1b\u8702\u871c\u74f6\u662f\u6295\u5582\u98df\u7269\u4e4b\u4e00\uff08\u997f\u4f1a\u5582\u3001\u4e2d\u6bd2\u65f6\u4f18\u5148\u89e3\u6bd2\uff09\uff0c\u5582\u8702\u871c\u8fd8\u8fd4\u8fd8\u73bb\u7483\u74f6\uff1b\u5973\u4ec6\u00a7e\u624b\u6301\u00a7r\u7684\u98df\u7269\u540c\u6837\u53c2\u4e0e\u9009\u4f18\u3002",
                 "\u00a7e⑥ 负面效果\u00a7r：中毒/凋零/虚弱等会投牛奶（清全部效果；主人身上\u00a7e有增益效果\u00a7r时"
                         + "不喂牛奶——会把增益一起清掉，此时只喂蜂蜜解中毒）。",
+                "\u00a7e⑦ 自己喝还是喂别人\u00a7r：她自己喝药只看\u00a7e自己的处境\u00a7r——12 格内有敌人时喝增益，"
+                        + "血量低于 50% 时喝治疗/吃金苹果，濒死才连同逃跑/搭高一起做全套自保；喂别人只看\u00a7e对方\u00a7r——"
+                        + "主人在 16 格内且着火/溺水/有负面效果/血量低于「治疗触发血量」才出手。两边同时满足时"
+                        + "\u00a7e自己优先\u00a7r（自保行为 250 高于投喂 190）；药水是同一份背包，只有一瓶时会被她自己先用掉。",
+                "\u00a7e⑧ 飞行 / 空袭中也喝\u00a7r：空中不做搭高/逃跑/传送，但治疗药水、金苹果与增益药水照喝——"
+                        + "血低于 50% 先补血，有攻击目标时按药水 CD 喝增益；不会再出现「血快没了还硬飞」。",
                 "排查浪费的日志关键词：latest.log 搜 aid-owner throw（投掷）、aid feed（投喂：含阈值/饱食度/喂了什么）、"
                         + "self drink（自喝）。");
     }

@@ -17,7 +17,8 @@ public class WorkListContext extends AbstractMaidContext {
 
     @Override
     public String getValue(EntityMaid maid) {
-        if (!com.maidsmart.config.MaidSmartConfig.TOOL_WORK_LIST.get()) {
+        if (!com.maidsmart.config.MaidSmartConfig.AI_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.TOOL_WORK_LIST.get()) {
             return "";
         }
         return MaidWorkList.toPromptString(maid);

@@ -108,6 +108,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         if (maid == null || !maid.m_6084_()) {
             return;
         }
+        // R1125：显式「飞过去」（巡逻航图）——本拍只认这个目标点：
+        //   · 接敌/跟随全部让位（她不会飞着飞着拐去追怪）；
+        //   · 玩家同乘扫帚时也由她飞（驾驶接管在 EntityBroomMaidTravelMixin），
+        //     玩家一按移动键，mixin 会取消目标、把方向盘还回去。
+        net.minecraft.world.phys.Vec3 travelAim = com.maidsmart.patrol.MaidTravelTarget.aim(maid);
         // ⓪【v1.3.6 实测六百六十一】牵引绳：她骑在扫帚上离主人太远（含「飞太高」）→ 立刻
         //    连人带扫帚一起传回主人身边，并就此打住——传送刚落地时写推进意图只会把她从落点上推走。
         //    口径与「空袭牵引绳」同源（她自己走了回不来的兜底），见 MaidBroomRecall。
@@ -178,7 +183,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         }
         if (!MaidBroomKit.hasRangedWeapon(maid)) {
             // 骑在扫帚上却没武器：先给 2 秒去抖，真的一直没有才下来
-            if (weaponlessLongEnough(maid, gameTime)) {
+            if (travelAim == null && weaponlessLongEnough(maid, gameTime)) {
                 MaidBroomDrive.dismount(maid, "缺远程武器");
                 notifyNotReady(maid, gameTime);
                 return;
@@ -207,6 +212,13 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         //   → 两套都齐就说一句「我已经准备好了」（带语音），**只说一次**。
         //   ④.4 之前，因为玩家自己开着这把扫帚时也要报（那一档同样满足玩家给的两个条件）。
         announceDualReady(maid, gameTime);
+        // R1125：飞过去优先于"玩家在驾驶"和接敌——这一趟只飞目标点，到点由
+        // MaidTravelTarget 收尾（收尾后本档自然失效，恢复接敌/跟随）。
+        if (travelAim != null) {
+            MaidBroomDrive.clearClimb(maid);
+            MaidBroomDrive.steerTo(maid, travelAim);
+            return;
+        }
 
         // ④.4 玩家在开这把扫帚 → 我们只开火，不碰飞行（见 drivenByPlayer 的注释：
         // mixin 那边"有玩家驾驶就一个字不改"，这里跟着让位，否则每 tick 都会写一份没人用的
@@ -222,21 +234,24 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             return;
         }
 
+        // ④.45【起飞/飞行统一门禁】远程空袭的 isModeActive = 扫帚 + 远程武器 + 弹药；旧版只把
+        //   这道理闸在 ④.5 的"抬高 1 格"上，⑤ 接敌 / ⑥ 跟随巡逻仍照飞。于是两条入口口径不一致：
+        //   - 主人把世界里的扫帚推给她（她已经骑着，跳过 ② 的 armed 判定）→ 只要手上有远程武器，
+        //     没弹药也能被 ⑤/⑥ 带着飞；
+        //   - 扫帚在她背包里 → ② 的 armed 要求武器 + 弹药，才肯取出来骑。
+        //   现在把门禁提到所有位移之前：缺件就**原地悬停**（不下鞍、不丢高度，保住"打空弹匣别摔下去"
+        //   的旧口径），补齐后下一 tick 自动继续。玩家在驾驶（④.4）时不算——方向盘在玩家手里。
+        if (!MaidBroomKit.isModeActive(maid)) {
+            MaidBroomDrive.hoverInPlace(maid);
+            notifyNotReady(maid, gameTime);
+            return;
+        }
+
         // ④.5 起飞相位：原地往上抬 1 格再到别的地方去（
         // 【v1.3.3：走 steerVerticalTo（扫帚坐标），不再拿她的坐标当目标点】见 Drive 里那段因果。
-        //  【旧版缺的是"弹药"这一条】进到这一档的判据是 ③ 的 {@code canStayMounted}
-        //  （= 扫帚 + 远程武器，**刻意不含弹药**——那是 实测六百九十二 为"弹匣打空别把她摔下来"
-        //  定的口径，管的是"要不要下鞍"）。于是"有武器、没弹药"的她照样会进入起飞相位、
-        //  飞上去，再靠开火链路自己换弹；而远程空袭那边（{@link MaidFlightKit#isModeActive}）
-        //  是**起飞前就要求三件齐 + 弹药**（实测四百九十五："没弹药就没必要起飞"）。
-        //  现在这一档改用同一个 {@code isModeActive}（扫帚 + 远程武器 + 弹药）—— 这就是"跟远程空袭一样的起飞判定"。 【为什么闸在 takeoffTarget **之前**】起飞相位是 {@link MaidBroomDrive} 里的一张状态表 （{@code CLIMB}），而它的收尾判据之一是"连续几拍没长高 = 头顶被顶住"。若先消费相位、 再原地悬停，那几拍会被它当成"顶住了"从而**结束相位**，下一 tick 她就直接落进 ⑤/⑥ 照飞不误——闸等于没关。所以先判、判假就**根本不碰相位**（相位原样留着，补齐弹药后 下一 tick 接着抬），她这一段停在原地悬停。 【为什么不与 实测六百九十二 打架】那条改的是**下鞍**判据（canStayMounted）， 本档只决定"要不要抬这 1 格"：判据为假时她**留在扫帚上原地待命**（不下鞍、 不丢高度）；而且弹药那条走 {@code ammoOk} → {@code canFeed || canReload} （实测六百九十四 / 六百九十五）："弹匣空着但背包里有对得上的弹药"算齐备， 所以冲锋枪/狙击枪那种"这一拍弹=无"不会把她钉在地面——真正被挡住的只有 "确实一点弹药都没有"这一种。
+        //  【v1.3.3 起起飞判定已在 ④.45 统一做过：能走到这里 = 扫帚 + 远程武器 + 弹药齐备】
         Double riseY = MaidBroomDrive.takeoffTarget(maid);
         if (riseY != null) {
-            if (!MaidBroomKit.isModeActive(maid)) {
-                MaidBroomDrive.hoverInPlace(maid);
-                notifyNotReady(maid, gameTime);
-                return;
-            }
             MaidBroomDrive.steerVerticalTo(maid, riseY);
             return;
         }

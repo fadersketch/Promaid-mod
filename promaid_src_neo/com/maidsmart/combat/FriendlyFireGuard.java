@@ -39,6 +39,13 @@ public final class FriendlyFireGuard {
     /** ① 最终保险（攻击事件，受伤链最上游）：女仆 → 主人/友方 直接取消 */
     @SubscribeEvent
     public static void onIncomingDamage(LivingIncomingDamageEvent event) {
+        // 【实测一千〇六十】放炸弹的她本人：无论有没有主人、伤害源归不归到她头上，
+        // 自己放的这一炸都不伤她。旧版只靠 isFriendly(maid, maid)，而无主女仆会被
+        // MaidScope.owned 直接放行 —— 实测日志里第一枚水晶就把她炸死，剩下四枚随之作废。
+        if (BombExplosion.isSelfImmuneBlastFor(event.getEntity())) {
+            event.setCanceled(true);
+            return;
+        }
         EntityMaid maid = maidOfDamage(event.getSource());
         if (maid != null && isFriendly(maid, event.getEntity())) {
             event.setCanceled(true);
@@ -64,6 +71,12 @@ public final class FriendlyFireGuard {
             Entity direct = source.getDirectEntity();  // 直接实体（箭矢 / 那一枚 TNT）
             if (direct instanceof EntityMaid m) {
                 return m;
+            }
+            // 【实测一千〇一十四】弹射物归属：枪械子弹/火箭常把"造成者"写成弹丸本身，
+            // 只有 getOwner 记得是谁开的枪——按它把账算回女仆，PvP 关闭/队友免伤才拦得住。
+            if (direct instanceof net.minecraft.world.entity.projectile.Projectile pr
+                    && pr.getOwner() instanceof EntityMaid pm) {
+                return pm;
             }
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_HURT_FRIENDLY.get()) {
                 return null; // 玩家要原版口径 → 这一层让位
@@ -139,6 +152,18 @@ public final class FriendlyFireGuard {
         if (owner != null && (target == owner || owner.getUUID().equals(target.getUUID()))) {
             return true;
         }
+        // 【实测一千〇一十四】别的玩家：跟随「玩家间伤害」(PvP gamerule) 同步开关。
+        // ① PvP 关着 → 女仆也不能打任何玩家：枪械流弹 / 爆炸命中队友时在这里整条取消；
+        // ② PvP 开着 → 与主人同队的队友仍免伤（原版队友免伤口径）。
+        // 主人本人不受 PvP 开关影响（上面已判）。
+        if (target instanceof net.minecraft.world.entity.player.Player other) {
+            if (!pvpAllowed(maid)) {
+                return true;
+            }
+            if (owner instanceof net.minecraft.world.entity.player.Player op && op.isAlliedTo(other)) {
+                return true;
+            }
+        }
         if (target instanceof EntityMaid other) {
             LivingEntity otherOwner = other.getOwner();
             if (owner != null && otherOwner != null
@@ -175,5 +200,16 @@ public final class FriendlyFireGuard {
 
     private static boolean isHostileTarget(EntityMaid maid, LivingEntity t) {
         return t != null && t != maid && t.isAlive() && !isFriendly(maid, t);
+    }
+
+    /** 世界是否允许玩家间伤害（1.21.1 的 PvP 是服务端属性）。取不到按"允许"。 */
+    static boolean pvpAllowed(EntityMaid maid) {
+        try {
+            net.minecraft.server.MinecraftServer s = maid.level().getServer();
+            return s == null || s.isPvpAllowed();
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("FriendlyFireGuard", ignored);
+            return true;
+        }
     }
 }

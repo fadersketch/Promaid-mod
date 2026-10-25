@@ -30,7 +30,7 @@ public final class AiMemoryModels {
         public static Paragraph create(String sourceType, String role, String content,
                                        String tags, int salience, boolean permanent,
                                        long now, long gameTime) {
-            return new Paragraph(hashOf(content), sourceType, role, clip(content, 300),
+            return new Paragraph(hashOf(content), sourceType, role, clip(content, 600),
                     tags, "", now, now, gameTime, gameTime,
                     salience, 0, now, permanent, false, 0L);
         }
@@ -99,7 +99,7 @@ public final class AiMemoryModels {
                                       double confidence, String sourceParagraph,
                                       boolean permanent, long now) {
             return new Relation(subject + "|" + predicate + "|" + object,
-                    subject, predicate, clip(object, 120), confidence,
+                    subject, predicate, clip(object, 240), confidence,
                     sourceParagraph, permanent, false, 0L, 0, now);
         }
     }
@@ -113,8 +113,8 @@ public final class AiMemoryModels {
         public static Episode create(String source, String title, String summary,
                                      long start, long end, double confidence,
                                      String evidenceId, long now) {
-            return new Episode(title.hashCode() + ":" + start, source, clip(title, 40),
-                    clip(summary, 200), "", "", evidenceId,
+            return new Episode(title.hashCode() + ":" + start, source, clip(title, 60),
+                    clip(summary, 400), "", "", evidenceId,
                     start, end, confidence, 1, now, now);
         }
     }
@@ -124,7 +124,7 @@ public final class AiMemoryModels {
                           long updatedAt) {
 
         public static Profile create(String personId, String text, String evidenceId, long now) {
-            return new Profile(personId, clip(text, 400), evidenceId, now);
+            return new Profile(personId, clip(text, 800), evidenceId, now);
         }
     }
 
@@ -144,7 +144,7 @@ public final class AiMemoryModels {
             return new ProfileItem(
                     category == null || category.isBlank() ? "preference" : category,
                     key == null ? "" : key,
-                    clip(content, 200),
+                    clip(content, 400),
                     Math.max(1, Math.min(5, confidence)),
                     evidenceHash == null ? "" : evidenceHash,
                     now);

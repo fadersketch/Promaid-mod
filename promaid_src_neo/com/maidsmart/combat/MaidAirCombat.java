@@ -456,6 +456,305 @@ public final class MaidAirCombat {
         }
     }
 
+    /* ==================== 固定翼：侧射炮艇 / 前射通场 ==================== */
+
+    /** 侧射炮艇的稳定盘旋半径（格）——与 maid-frontline 的 84/90 同档。 */
+    private static final double GUNSHIP_RADIUS = 84.0;
+    /** 侧射炮艇的目标上方高度（格）。 */
+    private static final double GUNSHIP_ABOVE = 165.0;
+    /**
+     * 盘旋前视角的上下限（度）。前视角**按当前速度反推**：要让半径保持在 84 格，所需角速度
+     * 随速度线性增长，旧版固定"弧长 60 格"在小半径时会变成更大的角、把圈越收越紧。
+     * 这里给固定**角度**，由 {@link #gunshipLeadDeg} 按所需坡度算出来。
+     */
+    private static final double GUNSHIP_LEAD_MIN_DEG = 8.0;
+    private static final double GUNSHIP_LEAD_MAX_DEG = 70.0;
+    /** 固定翼满舵坡度（度）——与 {@code MaidMountCompat.AIRCRAFT_BANK_MAX} 同值。 */
+    private static final double GUNSHIP_BANK_MAX = 45.0;
+
+    /** 前射固定翼：ingress 距离 / 进入距离 / 脱离距离 / egress 拉出距离。
+     * 【R1075~1077】从"横向通场"改成"俯冲"：ATTACK 胡萝卜挂在目标正上方
+     * （见 {@link #DIVE_DEPTH}），从上方压下来射击，过顶后按方位角翻 180° 自然拉升；
+     * RUN_MIN=25 触发拉升。更早两轮已把循环从 220→45→220 收到 150 格内、
+     * 并把 egress 从 140 收到 80——脱离静默约 2~3 秒。 */
+    private static final double RUN_LINE = 150.0;
+    private static final double RUN_ENTRY = 190.0;
+    private static final double RUN_MIN = 25.0;
+    private static final double RUN_EGRESS = 80.0;
+    private static final int RUN_ATTACK_TICKS = 160;
+    private static final int RUN_EGRESS_TICKS = 100;
+
+    /** 【R1077】俯冲深度：ATTACK 胡萝卜的高度 = 目标 Y + fightAlt − 本值（再经
+     *  {@code driveFlight} 的 aircraftAltBonus 与地形净空线修正，最终约在目标上方 30~44 格）。 */
+    private static final double DIVE_DEPTH = 45.0;
+
+    /** 【R1077】拉升高度：EGRESS / REJOIN 的胡萝卜在巡航高度上再抬这么多格。 */
+    private static final double DIVE_PULL_UP = 20.0;
+
+    /** 【R1077】俯冲段（ATTACK）是否生效到这一拍——按载具记，供速度环减速用。 */
+    private static final Map<UUID, Long> DIVE_UNTIL = new HashMap<>();
+
+    private static final int STAGE_REJOIN = 0;
+    private static final int STAGE_ATTACK = 1;
+    private static final int STAGE_EGRESS = 2;
+
+    /** 前射固定翼的一次通场：REJOIN → ATTACK → EGRESS，按女仆记。 */
+    private static final class FixedWingRun {
+        int stage = STAGE_REJOIN;
+        UUID targetId;
+        Vec3 ingress;
+        Vec3 runHeading;
+        Vec3 egress;
+        long stageAt;
+    }
+
+    private static final Map<UUID, FixedWingRun> FIXED_WING_RUN = new HashMap<>();
+
+    /**
+     * 炮艇的盘旋方向（+1 / -1），按女仆记。换目标不翻转：旧版每拍按"当前方位 + 切向"
+     * 重算胡萝卜，目标一换（或机身切进圈内）切向就整根翻过去，滚转从 +45 瞬间甩到 -45
+     * ——实机日志里就是每个 5 秒档 `滚转=45 → -45 → 45` 的剪刀形轨迹。
+     */
+    private static final Map<UUID, Integer> GUNSHIP_ORBIT_SIGN = new HashMap<>();
+
+    /**
+     * 侧射炮艇（AC-130H 这类）的盘旋点：目标上方 165 格、半径 84 格。
+     * 胡萝卜取"当前方位沿固定旋向、再往前推一个固定**角度**"的那个圆上点——角度由
+     * {@link #gunshipLeadDeg} 按当前速度反推，保证不同速度下半径都收敛在 84 格。
+     * 旧版是"当前位置 + 切向 × 60 格"：半径一变，切向与等效角都跟着变，滚转从 +45
+     * 甩到 -45（实机日志的剪刀形轨迹）。
+     * 侧射武器不需要机头对准，所以这里只给稳定的圈，不让机头去追目标。
+     */
+    public static Vec3 gunshipOrbitTarget(EntityMaid maid, Entity mount, LivingEntity target) {
+        try {
+            if (maid == null || mount == null || target == null) {
+                return null;
+            }
+            UUID id = maid.getUUID();
+            Vec3 p = mount.position();
+            Vec3 v = mount.getDeltaMovement();
+            double dx = p.x - target.getX();
+            double dz = p.z - target.getZ();
+            double d = Math.hypot(dx, dz);
+            if (d < 0.01) {
+                dx = 1.0;
+                dz = 0.0;
+            }
+            double speed = Math.hypot(v.x, v.z);
+            // 旋向只在第一次（或换遭遇后）定一次：按"径向 × 速度"的符号取当前转弯方向；
+            // 速度太小就用 UUID 稳定地任选一边，之后一直保持。
+            Integer stored = GUNSHIP_ORBIT_SIGN.get(id);
+            int sign;
+            if (stored == null) {
+                double cross = dx * v.z - dz * v.x;
+                if (speed < 0.05) {
+                    sign = (id.getLeastSignificantBits() & 1L) == 0L ? 1 : -1;
+                } else {
+                    sign = cross >= 0.0 ? 1 : -1;
+                }
+                if (GUNSHIP_ORBIT_SIGN.size() > 512) {
+                    GUNSHIP_ORBIT_SIGN.clear();
+                }
+                GUNSHIP_ORBIT_SIGN.put(id, sign);
+            } else {
+                sign = stored;
+            }
+            double theta = Math.atan2(dz, dx);
+            double aimTheta = theta + sign * Math.toRadians(gunshipLeadDeg(speed));
+            double cx = target.getX() + Math.cos(aimTheta) * GUNSHIP_RADIUS;
+            double cz = target.getZ() + Math.sin(aimTheta) * GUNSHIP_RADIUS;
+            // driveFlight 会给胡萝卜再加 aircraftAltBonus，这里先扣掉，保证圈在目标上方 165 格。
+            double y = target.getY() + GUNSHIP_ABOVE - MaidMountCompat.aircraftAltBonus();
+            if (firstOrbit(id)) {
+                log(maid, "侧射炮艇 → 目标上方 " + fmt(GUNSHIP_ABOVE) + " 格、半径 "
+                        + fmt(GUNSHIP_RADIUS) + " 格盘旋");
+            }
+            return new Vec3(cx, y, cz);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
+            return null;
+        }
+    }
+
+    /**
+     * 半径 84 格所需的固定前视角（度）。
+     * <p>引擎转向公式（反编译 {@code aircraftEngine:793-800}）：{@code ω(度/拍) =
+     * 0.9 × (0.3 + 3.2×|roll|/90)}。要绕半径 R 需要 {@code ω = v/R}，先反推所需坡度；
+     * 纯追踪的稳态航向偏角恰为前视角的一半，而滚转按
+     * {@code MaidMountCompat.AIRCRAFT_BANK_PER_DEG} 比例给出 ⇒ 前视角 = 2×坡度/增益。
+     * 这样速度从 0.8 变到 1.3，圈仍收敛在 84 格，不会出现"越转越紧/越飞越大"的极限环。
+     */
+    private static double gunshipLeadDeg(double speed) {
+        double turnDeg = Math.toDegrees(Math.max(speed, 0.0) / GUNSHIP_RADIUS);
+        double bank = (turnDeg / 0.9 - 0.3) * (90.0 / 3.2);
+        bank = Math.max(0.0, Math.min(GUNSHIP_BANK_MAX, bank));
+        double lead = 2.0 * bank / MaidMountCompat.AIRCRAFT_BANK_PER_DEG;
+        return Math.max(GUNSHIP_LEAD_MIN_DEG, Math.min(GUNSHIP_LEAD_MAX_DEG, lead));
+    }
+
+    /**
+     * 前射固定翼的攻击航线：REJOIN（找 ingress）→ ATTACK（直线通场）→ EGRESS（拉出）。
+     * 与 maid-frontline 同几何，数字按我们的 0.80 巡航速度取。
+     */
+    public static Vec3 fixedWingAttackTarget(EntityMaid maid, Entity mount, LivingEntity target) {
+        try {
+            if (maid == null || mount == null || target == null) {
+                return null;
+            }
+            UUID id = maid.getUUID();
+            FixedWingRun s = FIXED_WING_RUN.get(id);
+            if (s == null) {
+                s = new FixedWingRun();
+                if (FIXED_WING_RUN.size() > 512) {
+                    FIXED_WING_RUN.clear();
+                }
+                FIXED_WING_RUN.put(id, s);
+            }
+            if (!target.getUUID().equals(s.targetId)) {
+                s.targetId = target.getUUID();
+                s.stage = STAGE_REJOIN;
+                s.ingress = null;
+                s.runHeading = null;
+                s.egress = null;
+                s.stageAt = 0L;
+            }
+            long now = mount.level().getGameTime();
+            Vec3 pos = mount.position();
+            Vec3 center = target.getBoundingBox().getCenter();
+            Vec3 to = new Vec3(center.x - pos.x, 0.0, center.z - pos.z);
+            double dist = to.length();
+            Vec3 toN = dist > 0.01 ? to.normalize() : horizontalHeading(mount);
+            double cruiseY = center.y + fightAltCfg() + DIVE_PULL_UP;
+            // 【R1077】俯冲底点：目标正上方、比巡航低 DIVE_DEPTH（地形净空线会在下面兜底）。
+            double diveY = center.y + fightAltCfg() - DIVE_DEPTH;
+            if (s.stage == STAGE_REJOIN) {
+                if (s.ingress == null || now - s.stageAt > RUN_ATTACK_TICKS) {
+                    s.runHeading = toN;
+                    s.ingress = new Vec3(center.x - toN.x * RUN_LINE, cruiseY,
+                            center.z - toN.z * RUN_LINE);
+                    s.stageAt = now;
+                }
+                double bearing = angle(horizontalHeading(mount), toN);
+                if (horizontalDist(pos, s.ingress) < 45.0 || (dist < RUN_ENTRY && bearing < 35.0)) {
+                    s.stage = STAGE_ATTACK;
+                    s.stageAt = now;
+                    s.runHeading = toN;
+                    log(maid, "固定翼攻击航线 → ATTACK（距目标 " + fmt(dist) + " 格，进入俯冲）");
+                } else {
+                    DIVE_UNTIL.remove(mount.getUUID());
+                    return s.ingress;
+                }
+            }
+            if (s.stage == STAGE_ATTACK) {
+                Vec3 run = s.runHeading == null ? toN : s.runHeading;
+                // 过顶（方位角翻 180°）或压进 RUN_MIN → 拉升；超时兜底。
+                if (horizontalDist(pos, center) < RUN_MIN || angle(toN, run) > 60.0
+                        || now - s.stageAt > RUN_ATTACK_TICKS) {
+                    s.stage = STAGE_EGRESS;
+                    s.stageAt = now;
+                    s.egress = new Vec3(pos.x + run.x * RUN_EGRESS, cruiseY,
+                            pos.z + run.z * RUN_EGRESS);
+                    log(maid, "固定翼攻击航线 → EGRESS（拉升，拉出 " + fmt(RUN_EGRESS) + " 格）");
+                } else {
+                    if (DIVE_UNTIL.size() > 512) {
+                        DIVE_UNTIL.clear();
+                    }
+                    DIVE_UNTIL.put(mount.getUUID(), now + 2);
+                    // 胡萝卜挂在目标正上方：飞机从上方压下来，机炮朝下打。
+                    return new Vec3(center.x, diveY, center.z);
+                }
+            }
+            DIVE_UNTIL.remove(mount.getUUID());
+            if (s.egress == null || horizontalDist(pos, s.egress) < 30.0
+                    || now - s.stageAt > RUN_EGRESS_TICKS) {
+                s.stage = STAGE_REJOIN;
+                s.stageAt = now;
+                s.ingress = null;
+                s.runHeading = null;
+                s.egress = null;
+            } else {
+                return s.egress;
+            }
+            return new Vec3(center.x, cruiseY, center.z);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
+            return null;
+        }
+    }
+
+    /**
+     * 【实测一千零五十八】固定翼的**开火距离闸**（格，3D）。
+     * <p>炮弹寿命 40 拍只是纸面射程；400+ 格开火要飞 20+ 拍、下坠几十格，
+     * 地形/提前量一点误差就全打在地上（实机"子弹一直打在地上"）。
+     * <p>224 格按交战几何：炮艇 165 高、84 半径 → 3D≈185；前射机通场 150 以内（R1075
+     * 收紧，旧版 220——远点恰好在窗口边缘，掉头那一段打不到）。
+     */
+    public static final double FIXED_WING_FIRE_RANGE = 224.0;
+
+    /** 固定翼这一拍是否已经进入可开火距离（3D，从载具算到目标碰撞箱中心）。 */
+    public static boolean fixedWingInFireRange(Entity mount, LivingEntity target) {
+        try {
+            if (mount == null || target == null) {
+                return false;
+            }
+            Vec3 c = target.getBoundingBox().getCenter();
+            return mount.position().distanceTo(c) <= FIXED_WING_FIRE_RANGE;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
+            return false;
+        }
+    }
+
+    /** 前射固定翼只在本轮 ATTACK 通场里开火；侧射炮艇不走这个闸。 */
+    public static boolean fixedWingFireAllowed(EntityMaid maid) {
+        try {
+            FixedWingRun s = FIXED_WING_RUN.get(maid.getUUID());
+            return s == null || s.stage == STAGE_ATTACK;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
+            return true;
+        }
+    }
+
+    /** 【R1077】固定翼此刻是否在俯冲段（ATTACK）——巡航速度环据此把速度压到
+     *  {@code AIRCRAFT_DIVE_SPEED}（"一边减速一边射击"）。 */
+    public static boolean aircraftDiveActive(net.minecraft.world.entity.Entity mount) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            Long until = DIVE_UNTIL.get(mount.getUUID());
+            return until != null && mount.level().getGameTime() <= until;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
+            return false;
+        }
+    }
+
+    /**
+     * 【R1078】重进/重绑后作废这只载具的俯冲状态（按载具 UUID 记的那张表）。
+     * 与 {@link #clear(EntityMaid)} 分开：那个按女仆清，这张表按载具清。
+     */
+    public static void forgetMount(Entity mount) {
+        try {
+            if (mount != null) {
+                DIVE_UNTIL.remove(mount.getUUID());
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidAirCombat", ignored);
+        }
+    }
+
+    /** 载具当前水平航向；速度太小就退回机头朝向。 */
+    private static Vec3 horizontalHeading(Entity mount) {
+        Vec3 dm = mount.getDeltaMovement();
+        Vec3 h = new Vec3(dm.x, 0.0, dm.z);
+        return h.lengthSqr() > 0.01 ? h.normalize() : Vec3.directionFromRotation(0.0F, mount.getYRot());
+    }
+
+    private static double horizontalDist(Vec3 a, Vec3 b) {
+        return Math.hypot(a.x - b.x, a.z - b.z);
+    }
+
+    private static double angle(Vec3 a, Vec3 b) {
+        double dot = a.normalize().dot(b.normalize());
+        return Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0, dot))));
+    }
+
     /**
      * 地面载具绕圈的绝对半径下限（格）——由 {@code MaidMountCompat.groundOrbitRadius} 统一裁决
      * （那里还叠车速与车体尺寸）。这里只保留一个"配置值兜底"。
@@ -503,6 +802,8 @@ public final class MaidAirCombat {
         CLIMB_FIRST.remove(id);
         HOLD_FIRST.remove(id);
         BOMB_INTENT_CACHE.remove(id);
+        FIXED_WING_RUN.remove(id);
+        GUNSHIP_ORBIT_SIGN.remove(id);
         // 与扫帚同口径：这一场遭遇结束 = 随机环绕的抽签也重掷（下一场看得见换旋向/换快慢）
         CombatOrbit.forget(id);
         CombatManeuver.forget(id);

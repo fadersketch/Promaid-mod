@@ -83,6 +83,10 @@ public class AiMemoryManager {
 
     /** 女仆的 AI 记忆是否开启（per-maid 覆盖全局配置） */
     public static boolean isEnabled(EntityMaid maid) {
+        // Promaid AI 总开关：关闭后记忆提取/注入/检索/工具一并停手
+        if (!com.maidsmart.config.MaidSmartConfig.AI_ENABLE.get()) {
+            return false;
+        }
         // v1.5.226：客户端优先用服务端广播的缓存值（persistentData 不同步客户端，
         // 直接读会拿到过期旧值导致开关显示回"开"）
         if (maid.m_9236_() != null && maid.m_9236_().m_5776_()) { // isClientSide
@@ -182,14 +186,54 @@ public class AiMemoryManager {
     /** 索引扫描限频（毫秒）。 */
     private static long lastEmbedSweep = 0L;
 
-    private static AiMemoryEmbeddingClient embedClient() {
-        return new AiMemoryEmbeddingClient(
-                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_URL.get(),
-                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_KEY.get(),
-                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_MODEL.get(),
-                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_DIM.get(),
-                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_TIMEOUT_MS.get(),
-                com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_BATCH.get());
+    private static AiMemoryEmbeddingClient embedClientCache;
+    private static String embedClientSig = "";
+
+    /** 复用同一个 HttpClient：旧版每次扫描都 new，开向量后每秒都在造 selector 线程。 */
+    private static synchronized AiMemoryEmbeddingClient embedClient() {
+        String url = com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_URL.get();
+        String key = com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_KEY.get();
+        String model = com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_MODEL.get();
+        int dim = com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_DIM.get();
+        int timeout = com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_TIMEOUT_MS.get();
+        int batch = com.maidsmart.config.MaidSmartConfig.MEMORY_EMBED_BATCH.get();
+        String sig = url + "\u0000" + key + "\u0000" + model + "\u0000"
+                + dim + "\u0000" + timeout + "\u0000" + batch;
+        if (embedClientCache == null || !sig.equals(embedClientSig)) {
+            embedClientCache = new AiMemoryEmbeddingClient(url, key, model, dim, timeout, batch);
+            embedClientSig = sig;
+        }
+        return embedClientCache;
+    }
+
+    /**
+     * 查询向量（只允许在后台线程调用；解的是“语义检索从未真正参与召回”的死链）。
+     * 未开启向量 / 端点未配置 / 请求失败一律返回 null，调用方回退普通 RRF。
+     */
+    static float[] embedQuery(String text) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.MEMORY_VECTOR_ENABLE.get()
+                    || text == null || text.isBlank()) {
+                return null;
+            }
+            AiMemoryEmbeddingClient client = embedClient();
+            if (!client.usable()) {
+                return null;
+            }
+            AiMemoryEmbeddingClient.Result r = client.embed(List.of(text));
+            if (!r.ok() || r.vectors().isEmpty()) {
+                return null;
+            }
+            return r.vectors().get(0);
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
+            return null;
+        }
+    }
+
+    /** 异步算查询向量（工具异步链路用；失败返回 null，调用方回退普通检索）。 */
+    static java.util.concurrent.CompletableFuture<float[]> embedQueryAsync(String text) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> embedQuery(text), EMBED_WORKER);
     }
 
     /**
@@ -206,11 +250,6 @@ public class AiMemoryManager {
             if (!client.usable()) {
                 return;
             }
-            long now = System.currentTimeMillis();
-            if (now - lastEmbedSweep < 60000L) {
-                return;
-            }
-            lastEmbedSweep = now;
             java.util.Set<String> indexed = store.vector().indexedIds();
             List<AiMemoryModels.Paragraph> missing = new ArrayList<>();
             for (AiMemoryModels.Paragraph p : store.paragraphs()) {
@@ -222,19 +261,24 @@ public class AiMemoryManager {
                 }
             }
             if (missing.isEmpty()) {
+                return; // 没有待索引内容就不消耗全局限频槽，后面的女仆还能轮到
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastEmbedSweep < 60000L) {
                 return;
             }
+            lastEmbedSweep = now;
             EMBED_WORKER.submit(() -> {
                 try {
                     List<String> texts = new ArrayList<>(missing.size());
+                    List<String> ids = new ArrayList<>(missing.size());
                     for (AiMemoryModels.Paragraph p : missing) {
                         texts.add(p.content());
+                        ids.add(p.hash());
                     }
                     AiMemoryEmbeddingClient.Result r = client.embed(texts);
                     if (r.ok()) {
-                        for (int i = 0; i < missing.size() && i < r.vectors().size(); i++) {
-                            store.vector().put(missing.get(i).hash(), r.vectors().get(i));
-                        }
+                        store.vector().putAll(ids, r.vectors());
                     }
                 } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryManager", ignored);
                 }
@@ -266,7 +310,7 @@ public class AiMemoryManager {
         }
         String itemName = ForgeRegistries.ITEMS.getKey(held.m_41720_()).toString().replace("minecraft:", "");
         AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
-        writeParagraph(store, AiMemoryType.EVENT, "主人喂了我" + itemName,
+        writeParagraph(maid, store, AiMemoryType.EVENT, "主人喂了我" + itemName,
                 "food,user_profile", feedSalience(held, maid), System.currentTimeMillis(), level.m_46467_());
     }
 
@@ -300,7 +344,7 @@ public class AiMemoryManager {
             return;
         }
         AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
-        writeParagraph(store, AiMemoryType.RELATION,
+        writeParagraph(maid, store, AiMemoryType.RELATION,
                 "我们的关系等级达到了" + event.getNewLevel() + "，越来越亲密",
                 "relationship_event", 9, System.currentTimeMillis(), level.m_46467_());
     }
@@ -322,13 +366,13 @@ public class AiMemoryManager {
                 return;
             }
             AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
-            writeParagraph(store, AiMemoryType.EVENT, "主人曾经在我面前死去，我很害怕",
+            writeParagraph(maid, store, AiMemoryType.EVENT, "主人曾经在我面前死去，我很害怕",
                     "emotion", 10, System.currentTimeMillis(), level.m_46467_());
         });
     }
 
     /** 统一段落写入（走写入策略分层） */
-    private static void writeParagraph(AiMemoryStore store, AiMemoryType type, String content,
+    private static void writeParagraph(EntityMaid maid, AiMemoryStore store, AiMemoryType type, String content,
                                        String tags, int salience, long now, long gameTime) {
         List<String> tagList = new ArrayList<>();
         for (String t : tags.split(",")) {
@@ -341,6 +385,7 @@ public class AiMemoryManager {
         AiMemoryModels.Paragraph p = AiMemoryModels.Paragraph.create(plan.layer(), "event", content,
                 String.join(",", plan.tags()), plan.salience(), plan.permanent(), now, gameTime);
         store.addParagraph(p);
+        com.maidsmart.memory.AiMemoryContext.invalidate(maid.m_20148_());
     }
 
     // ---------- tick 调度 ----------
@@ -360,6 +405,10 @@ public class AiMemoryManager {
         this.tick = 0;
         // v1.5.190：防抖写盘——先批量落盘脏记忆（再扫描提取，提取回调里的写会再次标脏）
         AiMemoryStore.flushAll(System.currentTimeMillis());
+        // Promaid AI 总开关关闭：只把已写内容落盘，停止维护/扫描（不再衰减、删除或发起任何 AI 调用）
+        if (!com.maidsmart.config.MaidSmartConfig.AI_ENABLE.get()) {
+            return;
+        }
         // v1.5.191：维护周期——旧版 prune 只挂在写入路径上，老记忆永远不衰减；
         // 现在每 maintenanceMin 分钟对全部已加载存储跑一次 runMaintenance
         // （固化/年龄衰减/访问半衰/关系置信度衰减/error_mark 传播）
@@ -367,6 +416,7 @@ public class AiMemoryManager {
         if (this.maintainTicks >= (long) com.maidsmart.config.MaidSmartConfig.MEMORY_MAINTENANCE_MIN.get() * 60 * 20) {
             this.maintainTicks = 0;
             AiMemoryStore.maintainAll(System.currentTimeMillis());
+            com.maidsmart.memory.AiMemoryContext.invalidateAll();
         }
         for (ServerLevel level : server.m_129785_()) {
             // 审计M1修复（v1.5.383）：孤儿建造计划清扫（自限频 5 分钟/次，
@@ -432,6 +482,8 @@ public class AiMemoryManager {
         // 空中禁传送/落地缓冲全线卡死。本方法（EntityLeaveLevelEvent）是既有的
         // 统一清理点，一并清掉。（旧版 1.20.1 缺这一步，属漏同步。）
         com.maidsmart.combat.MaidFlightCombatBehavior.forget(maidUuid);
+        // 重锤跃起/落地缓冲的 static 表同样按 UUID 清，避免残留到下一次召唤
+        com.maidsmart.combat.MaidMaceSmashBehavior.forget(maidUuid);
         // 实测五百四十四：激流突进（MaidTridentSpinBehavior）的表同样要清——它现在会让空袭
         // 让位、并豁免自动传送，残留 = 该女仆再也飞不起来（与上面 实测四百八十三 同一类漏同步）。
         com.maidsmart.combat.MaidTridentSpinBehavior.forget(maidUuid);
@@ -546,10 +598,10 @@ public class AiMemoryManager {
         sb.append("。");
         int top = Math.min(2, today.size());
         for (int i = 0; i < top; i++) {
-            sb.append("难忘的事：").append(AiMemoryModels.clip(today.get(i).content(), 60)).append("。");
+            sb.append("难忘的事：").append(AiMemoryModels.clip(today.get(i).content(), 120)).append("。");
         }
         // v1.1.0：每日关心点（规则推导"下次该怎么对主人"，随每日回顾注入；
-        // 主动会话 TOPIC_PUSH 读 daily 标签段落会自动复用——记忆↔主动对话联动）
+        // 主动会话按环境关键词检索记忆——记忆↔主动对话联动）
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_CARE_POINTS.get()) {
             java.util.List<String> cares = CarePointGenerator.generate(store,
                     com.maidsmart.affect.AffectManager.load(maid));
@@ -557,7 +609,7 @@ public class AiMemoryManager {
                 sb.append("关心点：").append(String.join("；", cares)).append("。");
             }
         }
-        writeParagraph(store, AiMemoryType.SUMMARY, sb.toString(), "daily,summary",
+        writeParagraph(maid, store, AiMemoryType.SUMMARY, sb.toString(), "daily,summary",
                 6, System.currentTimeMillis(), gameTime);
     }
 }

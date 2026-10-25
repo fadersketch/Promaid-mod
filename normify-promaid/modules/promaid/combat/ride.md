@@ -6,15 +6,19 @@ name: {zh: 骑乘指挥棒, en: Ride Baton}
 description:
   zh: >
       把「已上鞍的坐骑」（原版生物 / 卓越前线载具 /
-      冰火传说飞龙）与女仆绑定，让她骑着它跟主人走、可攻击可飞行。顺序固定：先右击坐骑、再右击女仆；左键换座。
+      冰火传说飞龙）与女仆绑定，让她骑着它跟主人走、可攻击可飞行。顺序固定：先右击坐骑、再右击女仆；左键换座。战斗中地面寻路失败时退回 MoveControl
+      直推，避免目标在围栏/窄缝里时坐骑原地不动；平时跟随不启用。
   en: >
       Binds an already-saddled mount (vanilla mob / Superb Warfare vehicle / Ice
       and Fire dragon) to a maid so she rides it following the owner, and can
       fight and fly. Order is fixed: right-click the mount first, then the maid;
-      left-click swaps seats.
+      left-click swaps seats. In combat, when ground pathfinding fails, it falls
+      back to a direct MoveControl push so the mount does not stand still with the
+      target behind a fence or in a narrow gap; normal following keeps the old
+      behaviour.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/RideBindManager.java, line: 1, end_line: 2270}
-  - {path: promaid_src_neo/com/maidsmart/combat/MaidRideKit.java, line: 1, end_line: 534}
+  - {path: promaid_src_neo/com/maidsmart/combat/MaidRideKit.java, line: 1, end_line: 803}
   - {path: promaid_src_neo/com/maidsmart/combat/RideBatonItem.java, line: 1, end_line: 36}
 revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
@@ -34,7 +38,7 @@ deps:
 
 ## 骑乘指挥棒 · Ride Baton
 
-把「已上鞍的坐骑」（原版生物 / 卓越前线载具 / 冰火传说飞龙）与女仆绑定，让她骑着它跟主人走、可攻击可飞行。顺序固定：先右击坐骑、再右击女仆；左键换座。
+把「已上鞍的坐骑」（原版生物 / 卓越前线载具 / 冰火传说飞龙）与女仆绑定，让她骑着它跟主人走、可攻击可飞行。顺序固定：先右击坐骑、再右击女仆；左键换座。战斗中地面寻路失败时退回 MoveControl 直推，避免目标在围栏/窄缝里时坐骑原地不动；平时跟随不启用。
 
 **代码证据**
 

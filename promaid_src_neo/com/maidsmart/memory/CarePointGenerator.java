@@ -7,7 +7,7 @@ import java.util.List;
  * 每日关心点（v1.1.0，借鉴 maidsoulcore DailyMemoryConsolidator 的 carePoints）。
  *
  * 纯规则零 LLM：从情绪状态 + 记忆画像（边界/风格/情绪残留）推导"下次该怎么
- * 对主人"的行动建议，附加到每日回顾，随投影注入对话；主动会话（TOPIC_PUSH
+ * 对主人"的行动建议，附加到每日回顾，随投影注入对话；主动会话（环境观察
  * 读 daily 标签段落）会自动把关心点当作话题素材——实现记忆 ↔ 主动对话联动。
  */
 public final class CarePointGenerator {

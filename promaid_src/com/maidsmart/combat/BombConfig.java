@@ -52,8 +52,21 @@ public final class BombConfig {
     private BombConfig() {
     }
 
-    static boolean cfgMelee() {
-        return MaidSmartConfig.COMBAT_BOMBING_MELEE.get();
+    static boolean cfgCrystal() {
+        return MaidSmartConfig.COMBAT_BOMBING_END_CRYSTAL.get();
+    }
+
+    static boolean cfgAnchor() {
+        return MaidSmartConfig.COMBAT_BOMBING_RESPAWN_ANCHOR.get();
+    }
+
+    static boolean cfgBed() {
+        return MaidSmartConfig.COMBAT_BOMBING_BED.get();
+    }
+
+    /** 四条链路里任意一条的放置类开关（TNT 另算） */
+    static boolean cfgAnyPlacement() {
+        return cfgCrystal() || cfgAnchor() || cfgBed();
     }
 
     static boolean cfgTnt() {

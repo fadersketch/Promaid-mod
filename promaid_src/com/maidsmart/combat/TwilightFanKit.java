@@ -104,6 +104,9 @@ public final class TwilightFanKit {
         if (!findFan(maid).m_41619_()) {
             return true;
         }
+        if (com.maidsmart.tool.MaidExtraContainer.contains(maid, TwilightFanKit::isFan)) {
+            return true; // 精妙背包/旅行者背包里的也算"她身上有"（只读探针，不搬动）
+        }
         return isFan(com.maidsmart.combat.MaidFlightKit.borrowedOffhand(maid));
     }
 
@@ -114,6 +117,10 @@ public final class TwilightFanKit {
      */
     public static boolean boostGlide(ServerLevel level, EntityMaid maid) {
         ItemStack fan = findFan(maid);
+        if (fan.m_41619_() && com.maidsmart.tool.MaidExtraContainer.pull(
+                maid, TwilightFanKit::isFan, 1)) {
+            fan = findFan(maid); // 真要用 → 才从精妙背包/旅行者背包搬进来
+        }
         if (fan.m_41619_() || level == null || maid == null) {
             return false;
         }

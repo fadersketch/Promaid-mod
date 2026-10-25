@@ -1,27 +1,21 @@
 package com.maidsmart.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.TamableAnimal;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 /**
- * 宠物免疫总闸（v1.1.0 实测一百九十三，反馈："如果都被打上了玩家宠物的字样，
- * 那么女仆便不会再对他造成伤害（包括 aoe，防误伤）并去除仇恨"）。
- * 三层防线：
- * ① 目标选取拦截（PetImmunityTargetMixin → IAttackTask.canAttack HEAD）：宠物字样
- *    目标不进入攻击选取——仇恨不进；TLM TaskAttack 的 StopAttackingIfTargetInvalid
- *    同谓词自动清掉已持有的目标（去除仇恨）；
- * ② 本类 LivingIncomingDamageEvent 伤害总闸：凡伤害【造成者】(getDirectEntity)或【直接实体】
- *    (getEntity)是女仆，受害者命中宠物标记 → 整次伤害取消——近战/横扫/箭矢/弹幕/
- *    枪械/爆炸溅射全覆盖（扫场溅到宠物也零伤害，防误伤）；
- * ③ 仇恨残留兜底：目标选取层已拦，被扫清除（②只拦伤害不改目标——万一 TLM 其他
- *    入口把宠物塞进攻击记忆，②保零伤害、①保下一 tick 清掉）。
- * 宠物标记判定（isPetMarked）：
- *  a. 显示名包含「玩家宠物」「主人的宠物」（字样全覆盖——铁砧/命名牌取名即标记） b. 以「MaidNoAttack」开头（对齐 TLM 内置不攻击名，javap 实证其 canAttack 逻辑） c. 可驯服生物且持有者 = 攻击女仆的主人（主人的猫/狗/鹦鹉等——同主宠物）
+ * 宠物 / 友方单位免疫总闸（实测一百九十三）：女仆绝不对玩家宠物、模组召唤物、其他玩家的
+ * 女仆造成伤害（含 AoE），并清掉这类仇恨。
+ * 三层防线：① 目标选取层拦截——宠物标记目标不进攻击记忆；
+ * ② 本类伤害总闸：受害者命中宠物标记 → 整次伤害取消（近战/横扫/箭矢/弹幕/枪械/爆炸）；
+ * ③ 仇恨兜底：每 2 秒扫一遍攻击记忆，标记目标一律清掉。
+ * 宠物标记判定（isPetMarked）：a. 名字含「玩家宠物」「主人的宠物」或以「MaidNoAttack」开头；
+ * b. 有玩家主人的 OwnableEntity（可驯服宠物 / 模组召唤物 / 其他玩家的女仆）——
+ *    自己或同队队友名下的一律免伤，PvP 关闭时任何玩家名下的一律免伤，
+ *    PvP 开启且不同队按原版可交战。
  */
 @EventBusSubscriber(modid = "promaid")
 public final class PetImmunityGuard {
@@ -104,14 +98,9 @@ if (++scanCounter < 40) {
             if (source == null) {
                 return;
             }
-            Entity cause = source.getDirectEntity();   // 造成者（射手本体/爆炸主）
-            Entity direct = source.getEntity();  // 直接实体（箭矢/弹射物）
-            EntityMaid maid = null;
-            if (cause instanceof EntityMaid m) {
-                maid = m;
-            } else if (direct instanceof EntityMaid m2) {
-                maid = m2;
-            }
+            // 实测一千〇一十五：归因统一走 FriendlyFireGuard（含"弹丸 owner 是女仆"）——
+            // 枪械子弹常只把弹丸写进伤害源，只查 cause/direct 认不出是谁开的枪。
+            EntityMaid maid = FriendlyFireGuard.maidOfDamage(source);
             if (maid == null) {
                 return; // 不是女仆造成的伤害——不拦（玩家/怪打宠物照常）
             }
@@ -189,11 +178,22 @@ if (++scanCounter < 40) {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);
         }
         try {
-            if (target instanceof TamableAnimal t) {
-                var ownerId = t.getOwnerUUID();
-                if (ownerId != null && maid != null && maid.getOwner() != null
-                        && ownerId.equals(maid.getOwner().getUUID())) {
-                    return true; // 可驯服且持有者 = 女仆的主人（主人的宠物）
+            // 实测一千〇一十五：其他玩家名下的宠物 / 召唤物 / 女仆（OwnableEntity）——
+            // 按"主人玩家"同一口径：自己或同队队友的单位一律免伤；PvP 关闭时任何玩家
+            // 名下的单位都免伤；PvP 开启且不同队 → 保持原版可交战（否则 PvP 会变成
+            // "只能挨打不能还手"）。UUID 非空即视为"有玩家主人"（主人离线也认）。
+            if (target instanceof net.minecraft.world.entity.OwnableEntity own && maid != null) {
+                if (own.getOwnerUUID() != null) {
+                    LivingEntity petOwner = own.getOwner();
+                    LivingEntity myOwner = maid.getOwner();
+                    if (petOwner instanceof net.minecraft.world.entity.player.Player petPlayer
+                            && myOwner instanceof net.minecraft.world.entity.player.Player op
+                            && (op == petPlayer || op.isAlliedTo(petPlayer))) {
+                        return true; // 自己 / 同队队友名下的单位
+                    }
+                    if (!FriendlyFireGuard.pvpAllowed(maid)) {
+                        return true; // PvP 关：任何玩家名下的宠物/单位一律免伤
+                    }
                 }
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PetImmunityGuard", ignored);

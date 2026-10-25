@@ -312,6 +312,140 @@ public final class GunCompat {
         }
     }
 
+    /* ------------------- v1.3.3 实测一千〇三【额外容器·弹药桥】-------------------
+     * 枪械 mod 的换弹只扫**女仆实体自己的** ITEM_HANDLER 能力（javap 实证：TACZ `hasInventoryAmmo/canReload`
+     * → `entity.getCapability(...)`），该能力 = 护甲 + 双手 + 她自己背包(maidInv) + 饰品（TLM 两版实证）——
+     * **精妙背包里的东西是背包物品自己的嵌套容器、不在里面**，对枪械 mod 等于不存在。
+     * 桥接与弓那一侧同构：判定走只读探针 {@link #ammoInExtraContainer}，真取物走
+     * {@link #fetchAmmoFromExtra}（请 TLM 搬进她自己的背包，换弹/扣弹记账仍由枪械 mod 自己算）。
+     */
+    /** TACZ 弹药反射句柄：[0]=IAmmo 类，[1]=isAmmoOfGun(IS gun, IS ammo)；空数组 = 不可用 */
+    private static volatile Object[] TACZ_AMMO_API;
+    private static final Object TACZ_AMMO_LOCK = new Object();
+
+    private static Object[] taczAmmoApi() {
+        Object[] api = TACZ_AMMO_API;
+        if (api != null) {
+            return api;
+        }
+        synchronized (TACZ_AMMO_LOCK) {
+            if (TACZ_AMMO_API == null) {
+                try {
+                    Class<?> cls = Class.forName("com.tacz.guns.api.item.IAmmo");
+                    TACZ_AMMO_API = new Object[]{
+                            cls,
+                            cls.getMethod("isAmmoOfGun", ItemStack.class, ItemStack.class)};
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
+                    TACZ_AMMO_API = new Object[0];
+                }
+            }
+            return TACZ_AMMO_API;
+        }
+    }
+
+    /** 这一件是不是"这把枪用得上的弹药/弹药箱"：TACZ 走它自己的 {@code IAmmo.isAmmoOfGun}
+     *  （口径对得上这把枪）与 {@code IAmmoBox.isAmmoBoxOfGun}（既有 {@link #boxHasAmmoFor}）；
+     *  卓越前线走既有 5 类弹药判据；反射不可用回退旧宽松口径（与 {@link #looseAmmoScan} 同源）。 */
+    public static boolean ammoMatchesGun(ItemStack gun, ItemStack s) {
+        if (gun == null || gun.isEmpty() || s == null || s.isEmpty()) {
+            return false;
+        }
+        try {
+            if (isAmmoBox(s)) {
+                return boxHasAmmoFor(gun, s);
+            }
+            if (isSbwGun(gun)) {
+                return isAmmo(s);
+            }
+            Object[] api = taczAmmoApi();
+            if (api.length > 0) {
+                return ((Class<?>) api[0]).isInstance(s.getItem())
+                        && (Boolean) ((java.lang.reflect.Method) api[1]).invoke(s.getItem(), gun, s);
+            }
+            return isAmmo(s);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
+            return isAmmo(s) || boxHasAmmoFor(gun, s);
+        }
+    }
+
+    /** v1.3.3 实测一千〇三：她身上的精妙背包/旅行者背包里有没有这把枪对得上的弹药
+     *  （只读探针——取出 1 个立刻放回、净零，见 {@code MaidExtraContainer#contains}）。 */
+    public static boolean ammoInExtraContainer(EntityMaid maid, ItemStack gun) {
+        if (maid == null || gun == null || gun.isEmpty() || !isGun(gun) || !anyGunModLoaded()) {
+            return false;
+        }
+        try {
+            return com.maidsmart.tool.MaidExtraContainer.contains(maid, s -> ammoMatchesGun(gun, s));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
+            return false;
+        }
+    }
+
+    /** 「从额外容器取弹」的尝试限频（tick，20 = 1 秒/只女仆）：她没弹时每 tick 都问一次会白扫
+     *  她自己背包与精妙背包；1 秒一问足够跟上"打空 → 补弹"的节奏（第一次取仍是立即的）。 */
+    private static final java.util.Map<EntityMaid, Long> AMMO_FETCH_SINCE =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /**
+     * 请 TLM 把一组匹配这把枪的弹药从额外容器（饰品栏里的精妙背包/旅行者背包）搬进她自己的背包。
+     * 【为什么是"她自己的背包"】换弹扫的就是那个能力面（她自己的背包在里面，javap 实证）——搬进来
+     * 之后枪械 mod 自己会认、会扣、会装填，我们不替它们记账。限频在入口 {@link #fetchAmmoIfNeeded}。
+     * @return true = 这一趟问了取物链路（她背包里本来就有匹配弹时也为 true——"就绪"语义）
+     */
+    public static boolean fetchAmmoFromExtra(EntityMaid maid, ItemStack gun) {
+        if (maid == null || gun == null || gun.isEmpty() || !isGun(gun) || !anyGunModLoaded()) {
+            return false;
+        }
+        try {
+            return com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> ammoMatchesGun(gun, s), -1);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
+            return false;
+        }
+    }
+
+    /**
+     * v1.3.3 实测一千〇三：这一把枪此刻"就绪或可从额外容器补给"——**门禁 / 评分共用的唯一口径**
+     * （= {@link #canFeed} 或 {@link #canReload} 或 {@link #ammoInExtraContainer}）。枪械战斗池
+     * 进池闸、飞行/扫帚模式门禁、自动装备评分都问它，杜绝"两处各写一份或门"。
+     */
+    public static boolean isGunReady(EntityMaid maid, ItemStack gun) {
+        try {
+            return canFeed(maid, gun) || canReload(maid, gun) || ammoInExtraContainer(maid, gun);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
+            return false;
+        }
+    }
+
+    /**
+     * v1.3.3 实测一千〇三：**这一把枪**现在喂不上也换不上、而弹药在额外容器里 → 搬一组进来。
+     * 调用点只有"她已经决定要用这把枪"的两处：飞行/扫帚枪械状态机（{@code tickGunState}）
+     * 与枪械任务自动装备（{@code MaidToolAutoEquip} 的 gun_attack 分支）——整个探测
+     * （canFeed / canReload / 只读探针）按 20 tick/只限频，没有弹药时别每 tick 白扫。
+     * @return true = 确实搬了（枪械 mod 下一拍自己会换弹；调用方不必做别的）
+     */
+    public static boolean fetchAmmoIfNeeded(EntityMaid maid, ItemStack gun) {
+        try {
+            if (maid == null || gun == null || gun.isEmpty() || !isGun(gun) || !anyGunModLoaded()) {
+                return false;
+            }
+            long now = maid.level().getGameTime();
+            Long last = AMMO_FETCH_SINCE.get(maid);
+            if (last != null && now - last < 20L) {
+                return false; // 1 秒内刚问过 → 探测全跳过
+            }
+            AMMO_FETCH_SINCE.put(maid, now);
+            if (canFeed(maid, gun) || canReload(maid, gun)) {
+                return false; // 她自己背包里的就够（打得响或换得上）→ 一个字不动
+            }
+            if (!ammoInExtraContainer(maid, gun)) {
+                return false; // 额外容器里也没有对口径的弹药 → 不空搬
+            }
+            return fetchAmmoFromExtra(maid, gun);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunCompat", ignored);
+            return false;
+        }
+    }
+
     /** 是否装了任一枪械模组（主动切战斗的枪械优先分支用——没装就别浪费背包扫描） */
     public static boolean anyGunModLoaded() {
         try {
@@ -484,10 +618,11 @@ public final class GunCompat {
 
     /**
      * 女仆是否"有枪可用"——**身上至少有一把喂得上弹的枪**（自动切换枪械战斗池的闸）。
-     * （内部 ForgeEnergy 充能）——旧版持有它们时跳过弹药检查直接算可用。
-     * 能量武器的"免检"由 SBW 自己的 hasEnoughAmmoToShoot 回答（它算的就是充能），
-     * 反射不可用时才回到 looseAmmoScan 的老口径——**这一条只管"要不要进枪械池"**，
-     * 飞行远战 / 扫帚的模式门禁请用 {@link #canFeed}（按主手那把枪判）。
+     * 能量武器的"免检"由 SBW 自己的 hasEnoughAmmoToShoot 回答；反射不可用时回到 looseAmmoScan
+     * 的老口径——**这一条只管"要不要进枪械池"**，飞行远战 / 扫帚的模式门禁用 {@link #canFeed}。
+     * v1.3.3 实测一千〇三：与 {@code MaidFlightKit#hasAmmoForWeapon} 统一成"**打得响 或 换得上
+     * 或 额外容器里有**"（{@link #ammoInExtraContainer} 只读探针）——弹匣打空但备弹在她自己背包
+     * 或精妙背包里时也能进池；进池后由 {@code MaidToolAutoEquip} 的 gun_attack 分支搬弹进来。
      */
     public static boolean hasGunAndAmmo(EntityMaid maid) {
         if (maid == null || !anyGunModLoaded()) {
@@ -495,7 +630,7 @@ public final class GunCompat {
         }
         try {
             for (ItemStack gun : gunsOf(maid)) {
-                if (canFeed(maid, gun)) {
+                if (isGunReady(maid, gun)) {
                     return true;
                 }
             }

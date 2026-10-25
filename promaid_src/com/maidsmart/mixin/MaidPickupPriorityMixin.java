@@ -43,14 +43,15 @@ public abstract class MaidPickupPriorityMixin {
             at = @At("HEAD"), cancellable = true)
     private void promaid$pickupLowPriority(ServerLevel level, EntityMaid maid,
                                            CallbackInfoReturnable<Boolean> cir) {
-        // v1.5.88：拾取优先级开关（配置面板 misc.pickupPriority）
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_PICKUP_PRIORITY.get()) {
-            return;
-        }
-        // v1.5.87：工作中不捡——防止"挖矿中途跳下去捡掉落物 / 从柱子跳下又搭上"
-        // v1.1.0：伐木同样让位（砍树中途不捡掉落物，由伐木流程即时回收）
-        if (com.maidsmart.task.MaidMineBehavior.isMining(maid)
-                || com.maidsmart.task.MaidWoodBehavior.isWooding(maid)) {
+        // v1.5.88：挖矿中禁止拾取（配置面板 misc.pickupPriority）
+        // R1125：伐木有自己的开关 wood.noPickup（默认开）——砍树中途也不去捡掉落物；
+        // 总开关 misc.pickupPriority 打开时两种工作一起让位（旧行为不变）。
+        boolean mining = com.maidsmart.task.MaidMineBehavior.isMining(maid);
+        boolean wooding = com.maidsmart.task.MaidWoodBehavior.isWooding(maid);
+        boolean blockMine = mining && com.maidsmart.config.MaidSmartConfig.MISC_PICKUP_PRIORITY.get();
+        boolean blockWood = wooding && (com.maidsmart.config.MaidSmartConfig.WOOD_NO_PICKUP.get()
+                || com.maidsmart.config.MaidSmartConfig.MISC_PICKUP_PRIORITY.get());
+        if (blockMine || blockWood) {
             cir.setReturnValue(false);
         }
     }

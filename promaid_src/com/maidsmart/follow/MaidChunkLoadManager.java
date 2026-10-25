@@ -834,7 +834,12 @@ public final class MaidChunkLoadManager {
                         && maid.m_9236_() != airOwner.m_9236_();
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
-            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
+            if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
+                if (!crossDimAir || !airDeferAllows(maid, "mace-air-cross",
+                        "重锤跃起/空袭中，跨维度跟随不传——落地后自然恢复")) {
+                    return;
+                }
+            } else if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
                     || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 if (!crossDimAir || !airDeferAllows(maid, "flight-air-cross",
                         "飞行作战进行中（滑翔/扑击），跨维度跟随不传——本轮攻击结束后自然恢复")) {
@@ -862,9 +867,10 @@ public final class MaidChunkLoadManager {
             // v1.5.393 实测八百零三：建造/指标石临时搭建中跨维度【自动跟随】同样不传——
             // 不再借 home 压制 TLM 之后，这道自动跟随会把她从工地跨维度拽走（建造就地白费）。
             if (maid.isHomeModeEnable() || scheduled
+                    || com.maidsmart.task.MaidWorkTags.isStationLocked(maid)
                     || com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
                 throttledSkipLog(maid, "home-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 排班/在家/建造中，跨维度不传（想召回先解除排班/在家模式或等建造完）");
+                        + " 排班/在家/酿造台绑定/建造中，跨维度不传（想召回先解除排班/在家模式或等完工）");
                 return;
             }
             LivingEntity owner = maid.m_269323_();
@@ -923,12 +929,12 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * v1.1.0 实测七十：一键集合入口（SummonPacket 调用）。
-     * ① 扫描全部维度的在场女仆：坐着/骑乘/在家模式（含排班自动 home）的保持
-     * 原位——实测七十八起 home 女仆恢复"不响应传送"，想召回先解除她的排班/
-     * 在家模式；已在身边的不折腾；其余走 summonMaidTo 真传送（跨维度通用）。
-     * ② 不在场（未加载区块）的女仆：查 LAST_SEEN 最后出现位置，挂强载票 +
-     * 进待召回队列，由 tickPending 每 tick 推进——实体一出现就自动传回并回报。
+     * v1.1.0 实测七十：一键集合入口（SummonPacket 调用）。① 扫描全部维度在场的女仆：
+     * 坐着/骑乘/在家模式（含排班自动 home）保持原位——实测七十八起 home 女仆恢复"不
+     * 响应传送"，想召回先解除她的排班/在家模式；其余走 summonMaidTo 真传送（跨维度通用）。
+     * v1.3.3 实测一千〇四【去距离限制 + 直达坐标】旧口径"已在身边 5 格内不折腾"删除：
+     * 距离再近也照传，落点直达主人坐标（见 teleportDirect）。② 不在场（未加载区块）的
+     * 女仆：查 LAST_SEEN 挂强载票进待召回队列，tickPending 每 tick 推进——她一出场就自动传回。
      */
     public static SummonReport summonAll(net.minecraft.server.level.ServerPlayer player) {
         int summoned = 0;
@@ -976,9 +982,8 @@ BlockPos stand = findStand(newLevel,
                     kept++;
                     continue;
                 }
-                if (lvl == player.m_9236_() && md.m_20238_(player.m_20182_()) < 5.0) {
-                    continue; // 已在身边 5 格内
-                }
+                // v1.3.3 实测一千〇四【去距离限制】：原"已在身边 5 格内不折腾"闸已删——
+                // 距离再近也照传（人工意图优先）；落点也改直达主人坐标（见 teleportDirect）
                 boolean ok = broomRider ? recallBroomRider(md, player)
                         : rideRider ? recallRideRider(md, player)
                         : summonMaidTo(md, player);
@@ -996,6 +1001,71 @@ BlockPos stand = findStand(newLevel,
         MinecraftServer server = player.m_9236_().m_7654_();
         ensureSeenLoaded(server);
         long now = player.m_9236_().m_46467_();
+        // 实测一千〇一十一【/集合 召不回：LAST_SEEN 在跨维度/区块卸载的瞬间可能过期】：
+        // LAST_SEEN 是每 5 秒一张快照；主人在下界被命令瞬移走、女仆留在原地时，快照可能
+        // 还指着上一个维度或旧坐标。一键集合按它强载区块，她当然不会出现在那里——实测
+        // 15 秒后报「没能等到」，但存档里她明明还在（TLM 自己的 MaidWorldData 记着
+        // 412,104,236 / the_nether）。TLM 在女仆离场时写最后位置，这里把它当第二来源：
+        // 同一只女仆两处都有且位置不同时，用时间戳较新的 TLM 记录修正 LAST_SEEN。
+        try {
+            com.github.tartaricacid.touhoulittlemaid.world.data.MaidWorldData mwd =
+                    com.github.tartaricacid.touhoulittlemaid.world.data.MaidWorldData.get(player.m_9236_());
+            long nowWall = System.currentTimeMillis();
+            // TLM 同一只女仆可能有历史条目：先按 entityId 取时间戳最新的一条
+            Map<UUID, com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo> latest =
+                    new java.util.HashMap<>();
+            for (com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo info
+                    : mwd.getPlayerMaidInfos(player)) {
+                if (info.getEntityId() == null) {
+                    continue;
+                }
+                com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo old =
+                        latest.get(info.getEntityId());
+                if (old == null || info.getTimestamp() > old.getTimestamp()) {
+                    latest.put(info.getEntityId(), info);
+                }
+            }
+            for (com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo info : latest.values()) {
+                UUID mid = info.getEntityId();
+                if (mid == null || seen.contains(mid)
+                        || com.maidsmart.combat.MaidAutoResurrect.isPendingResurrect(mid)) {
+                    continue;
+                }
+                // 一天前的旧记录只当历史，不主动召回（避免每次集合都翻出早已收起的她）；
+                // 一天内的一键集合仍按 TLM 最后位置找——她可能已经在未加载区块里待了很久，
+                // LAST_SEEN 早被超时清掉，只有这里还留着坐标。
+                if (nowWall - info.getTimestamp() > 86_400_000L) {
+                    continue;
+                }
+                net.minecraft.resources.ResourceLocation dimId =
+                        net.minecraft.resources.ResourceLocation.m_135820_(info.getDimension());
+                if (dimId == null) {
+                    continue;
+                }
+                net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimKey =
+                        net.minecraft.resources.ResourceKey.m_135785_(
+                                net.minecraft.core.registries.Registries.f_256858_, dimId);
+                net.minecraft.server.level.ServerLevel dim = server.m_129880_(dimKey);
+                if (dim == null || info.getChunkPos() == null) {
+                    continue;
+                }
+                net.minecraft.core.BlockPos tpos = info.getChunkPos();
+                MaidSeen old = LAST_SEEN.get(mid);
+                if (old != null && old.dim().equals(dimKey) && old.pos().equals(tpos)) {
+                    continue; // 两处一致，不用改
+                }
+                // 保留旧的停放标记（home/坐/骑），只修正位置/维度；没有旧条目则按跟随中处理
+                boolean stay = old != null && old.stayPut();
+                boolean homeOnly = old != null && old.homeOnly();
+                String nm = info.getName() == null ? "" : info.getName().getString();
+                seenPut(mid, new MaidSeen(dimKey, tpos, pid, now, stay, homeOnly, nm), server);
+                com.maidsmart.tool.PromaidLog.log("集合", "按 TLM 最后位置修正登记："
+                        + (nm.isEmpty() ? mid.toString() : nm) + " @"
+                        + tpos.m_123341_() + "," + tpos.m_123342_() + "," + tpos.m_123343_()
+                        + " dim=" + dimId);
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
+        }
         for (Map.Entry<UUID, MaidSeen> en : LAST_SEEN.entrySet()) {
             MaidSeen ls = en.getValue();
             if (!ls.ownerId().equals(pid) || seen.contains(en.getKey())) {
@@ -1372,7 +1442,7 @@ BlockPos stand = findStand(newLevel,
             //
             if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                 com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
-                return teleportCore(maid, player, true) ? 1 : 2;
+                return teleportDirect(maid, player) ? 1 : 2;
             }
             // 【实测七百四十一·点4】她**自己**坐上模组载具（不是我们绑的）：
             //
@@ -1380,7 +1450,7 @@ BlockPos stand = findStand(newLevel,
             // 下来（只下鞍、不碰任何我们自己的标记），再走下面那条普通"传人"的链路。
             if (com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
                 com.maidsmart.combat.RideBindManager.dismountSelfBoarded(maid);
-                return teleportCore(maid, player, true) ? 1 : 2;
+                return teleportDirect(maid, player) ? 1 : 2;
             }
             // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬（"她们也可以被传送过来"）
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
@@ -1422,11 +1492,11 @@ BlockPos stand = findStand(newLevel,
         }
         if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
             com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
-            return teleportCore(maid, owner, true);
+            return teleportDirect(maid, owner);
         }
         if (com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
             com.maidsmart.combat.RideBindManager.dismountSelfBoarded(maid);
-            return teleportCore(maid, owner, true);
+            return teleportDirect(maid, owner);
         }
         if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
             return recallRideRider(maid, owner);
@@ -1437,14 +1507,14 @@ BlockPos stand = findStand(newLevel,
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", ignored);
             }
         }
-        return teleportCore(maid, owner, true);
+        return teleportDirect(maid, owner);
     }
 
     /**
-     * 排班表列表页「一键集合」按钮调用；复用 followIfCrossDimension 的真传送链路
+     * 排班表列表页「一键集合」按钮调用；复用真传送链路
      * （m_264318_ 原版 teleportTo + 摔落/导航/速度清理 + 末影人音效）。
-     * v1.2.0 实测五百四十六：人工传送走**强制**口径（findStand 失败就落在主人所在格，
-     * 无视地块、可空中）——见 teleportCore 的 force 注释。
+     * v1.2.0 实测五百四十六：人工传送强制落点（无视地块、可空中）；
+     * v1.3.3 实测一千〇四【直达坐标】：落点改主人坐标本身（见 teleportDirect）。
      * @return true = 传送成功；false = 女仆状态异常 / 主人不可达
      */
     public static boolean summonMaidTo(EntityMaid maid, LivingEntity owner) {
@@ -1483,16 +1553,16 @@ BlockPos stand = findStand(newLevel,
         if (!owner.m_6084_()) {
             return false;
         }
-        return teleportCore(maid, owner, true);
+        return teleportDirect(maid, owner);
     }
 
     /**
      * （调用方 = {@code com.maidsmart.combat.MaidFlightRecall}，挂在 core 行为上每 tick 一次）。
-     * 效力与人工传送完全一致：{@link #teleportCore} 的 {@code force = true}——强制
-     * （主人身边找不到可站立格就直接落在主人所在格）+ 无视地块 + 可空中。
-     * 与 {@link #summonMaidTo} 的唯一差别是**不查 home（在家）模式**：本入口只在她
-     * "正在空中"时被调用（MaidFlightRecall 把关），停放的语义已经被"她飞起来了"这件事
-     * 本身打破；而我们的排班表会自动给女仆锚定 home，若照抄那道门，结果恰恰是 "用了排班的那批女仆永远召不回"——正是用户报的场景。 @return true = 传送成功
+     * 落点口径 = {@link #teleportCore} 的 {@code force = true}（强制 + 无视地块 + 可空中）；
+     * v1.3.3 起人工传送改走 teleportDirect 直达坐标、不再经这里，但同为"人必须回来"的强制语义。
+     * 与 {@link #summonMaidTo} 的唯一差别是**不查 home（在家）模式**：本入口只在她"正在空中"
+     * 时被调用（MaidFlightRecall 把关），停放的语义已被"她飞起来了"本身打破；而排班表会自动给
+     * 女仆锚定 home，若照抄那道门，恰恰是"用了排班的那批女仆永远召不回"——正是用户报的场景。 @return true = 传送成功
      */
     public static boolean recallFromFlight(EntityMaid maid, LivingEntity owner) {
         if (maid == null || owner == null) {
@@ -1558,7 +1628,8 @@ BlockPos stand = findStand(newLevel,
             if (!(owner.m_9236_() instanceof ServerLevel dest)) {
                 return false;
             }
-            BlockPos stand = standSpot(dest, owner, true); // 人工/兜底：一律强制落点（可空中）
+            // v1.3.3 实测一千〇四【直达坐标】：载具落点 = 主人所在格（不再 findStand 向下找）
+            BlockPos stand = ownerBlock(owner);
             if (stand == null) {
                 return false;
             }
@@ -1695,7 +1766,8 @@ BlockPos stand = findStand(newLevel,
             if (!(owner.m_9236_() instanceof ServerLevel dest)) {
                 return false;
             }
-            BlockPos stand = standSpot(dest, owner, true); // 人工/兜底：一律强制落点（可空中）
+            // v1.3.3 实测一千〇四【直达坐标】：载具落点 = 主人所在格（不再 findStand 向下找）
+            BlockPos stand = ownerBlock(owner);
             if (stand == null) {
                 return false;
             }
@@ -1781,12 +1853,12 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * home 模式也要能被捞回来（基岩顶不是家）；主人存活性由调用方保证。
+     * home 模式也要能被捞回来（基岩顶不是家）；主人存活性由调用方保证。v1.3.3 实测一千〇四
+     * 起排班表人工传送不再走这里（改 teleportDirect 直达坐标）。
      * @param force v1.2.0 实测五百四十六【强制 + 无视地块】：主人身边找不到可站立格时，
-     *              不再拒绝，而是把女仆直接放在**主人当前所在格**（主人飞在高空 /
-     *              悬在虚空 / 站在岩浆边也照传）。排班表的人工传送（「传送到我身边」/
-     *              「一键集合」）走 true —— 玩家点这个按钮就是要她**立刻**出现在身边，
-     *              被"无可站立点"顶回来是最恼人的；自动路径（受困救援 / 远距拉回）走 false，保持"宁可她走路归队也不冒半空坠落风险"的老口径。
+     *              不再拒绝，而是把女仆直接放在**主人当前所在格**（主人飞在高空 / 悬在虚空 /
+     *              站在岩浆边也照传）；force=true 现由"她正在空中"的自动召回
+     *              （{@link #recallFromFlight}）使用；受困救援 / 远距拉回走 false，保持"宁可她走路归队也不冒半空坠落风险"的老口径。
      */
     private static boolean teleportCore(EntityMaid maid, LivingEntity owner, boolean force) {
         try {
@@ -1812,11 +1884,16 @@ BlockPos stand = findStand(newLevel,
      * 落座后那一下瞬移比不传还难看。落点口径只有一处，两条路共用。
      */
     private static BlockPos standSpot(ServerLevel dest, LivingEntity owner, boolean force) {
-        net.minecraft.core.BlockPos ownerPos = new net.minecraft.core.BlockPos(
+        return standSpotAt(dest, ownerBlock(owner), force);
+    }
+
+    /** v1.3.3 实测一千〇四【直达坐标】：主人所在格——人工传送（含扫帚/坐骑的载具落点）
+     *  一律落这里；旧口径经 findStand 在他身边 16 格内找可站立格，会偏出去几格。 */
+    private static BlockPos ownerBlock(LivingEntity owner) {
+        return new net.minecraft.core.BlockPos(
                 (int) Math.floor(owner.m_20185_()),
                 (int) Math.floor(owner.m_20186_()),
                 (int) Math.floor(owner.m_20189_()));
-        return standSpotAt(dest, ownerPos, force);
     }
 
     /**
@@ -1841,18 +1918,46 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
-     * 传送本体（落点已定）：清摔落 / 停导航 / 清速度 + 末影人音效。
-     * 与 {@link #teleportCore} 同一个实现——别处不要再抄第三份（扫帚那条路也走这里）。
+     * 传送本体（按格落点）：扫帚/坐骑的四步搬运落点都是 BlockPos，走这里委托到格心；
+     * 人工"直达坐标"走 {@link #teleportDirect}。清场+到达校验只留 teleportToExact 一份。
      */
     private static boolean teleportCoreTo(EntityMaid maid, ServerLevel dest, BlockPos stand,
                                           float yRot, float xRot) {
+        return teleportToExact(maid, dest, stand.m_123341_() + 0.5, stand.m_123342_(),
+                stand.m_123343_() + 0.5, yRot, xRot);
+    }
+
+    /**
+     * v1.3.3 实测一千〇四【直达坐标】：人工传送落点 = /tp 到目标坐标本身——不加格心
+     * 修正、不再 findStand 找可站立格（主人飞在空中也照传）。集合 / 召她过来 / 去她
+     * 身边都走这一支；主人存活性由调用方保证。
+     */
+    private static boolean teleportDirect(EntityMaid maid, LivingEntity owner) {
         try {
-            maid.m_264318_(dest, stand.m_123341_() + 0.5, stand.m_123342_(),
-                    stand.m_123343_() + 0.5, java.util.Collections.emptySet(), yRot, xRot);
+            if (!(owner.m_9236_() instanceof ServerLevel dest)) {
+                return false;
+            }
+            return teleportToExact(maid, dest, owner.m_20185_(), owner.m_20186_(),
+                    owner.m_20189_(), owner.m_146908_(), owner.m_146909_());
+        } catch (Exception e) {
+             com.maidsmart.diag.Diag.swallow("MaidChunkLoadManager", e); return false;
+        }
+    }
+
+    /**
+     * 传送本体（落点 = 精确坐标）：清摔落 / 停导航 / 清速度 + 末影人音效。
+     * 人工"直达坐标"与扫帚/坐骑"按格落点"共用——别处不要再抄第四份。
+     */
+    private static boolean teleportToExact(EntityMaid maid, ServerLevel dest, double x, double y,
+                                           double z, float yRot, float xRot) {
+        try {
+            maid.m_264318_(dest, x, y, z, java.util.Collections.emptySet(), yRot, xRot);
             maid.f_19789_ = 0.0f;
             maid.m_21573_().m_26569_();
             maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_);
-            dest.m_5594_(null, stand, net.minecraft.sounds.SoundEvents.f_11852_,
+            net.minecraft.core.BlockPos sound = new net.minecraft.core.BlockPos(
+                    (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+            dest.m_5594_(null, sound, net.minecraft.sounds.SoundEvents.f_11852_,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
             // v1.3.0(beta) 实测七百一十七【issue #27：远距/跨维传送后血上限掉回 20】：
             // 客户端可见的 MAX_HEALTH 只来自 ClientboundUpdateAttributesPacket，而传送
@@ -1878,8 +1983,7 @@ BlockPos stand = findStand(newLevel,
                     return true;
                 }
             }
-            double dist = live.m_20238_(new net.minecraft.world.phys.Vec3(
-                    stand.m_123341_() + 0.5, stand.m_123342_(), stand.m_123343_() + 0.5));
+            double dist = live.m_20238_(new net.minecraft.world.phys.Vec3(x, y, z));
             if (dist > 64.0) {
                 return false; // 她还在老地方（原封不动）→ 传送没生效
             }
@@ -1924,6 +2028,13 @@ BlockPos stand = findStand(newLevel,
             if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get()) {
                 return;
             }
+            // 【R1118】显式「飞过去」/ 玩家正吊在她下面：不拉回。
+            // teleportTo 的 unRide() 会把绳子上的玩家甩下去（= 绳子当场断），
+            // 而「飞过去」本来就是一趟远行，拉到 48 格内等于永远飞不到目标。
+            if (com.maidsmart.patrol.MaidTravelTarget.active(maid)
+                    || com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
+                return;
+            }
             int dist = com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get();
             double dSq = maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
             if (dSq < (double) dist * dist) {
@@ -1963,7 +2074,17 @@ BlockPos stand = findStand(newLevel,
                         + " 正在背鞘翅追主人（飞行跟随），不拉回——追上/超时后自然结束");
                 return;
             }
-            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
+            if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
+                if (!shouldPull) {
+                    throttledSkipLog(maid, "mace-air-samedim", name
+                            + " 重锤跃起/空袭中，不拉回——落地后自然恢复");
+                    return; // 没到该拉的距离：纯让位，不计时
+                }
+                if (!airDeferAllows(maid, "mace-air-samedim",
+                        "重锤跃起/空袭中，不拉回——落地后自然恢复")) {
+                    return; // 确实该拉，但这一轮让位还没超时
+                }
+            } else if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
                     || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 if (!shouldPull) {
                     throttledSkipLog(maid, "flight-air-samedim", name
@@ -1988,9 +2109,11 @@ BlockPos stand = findStand(newLevel,
             // 守家/干活中不拉，但落日志（限频）——这正是"她不回来"的可见原因
             // v1.5.393 实测八百零三：建造/指标石临时搭建中同样不拉——不再借 home 压制 TLM
             // 跟随之后，这道同维远距拉回会对建造女仆重新生效（她会当场离开工地）。
-            if (maid.isHomeModeEnable() || com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
+            if (maid.isHomeModeEnable()
+                    || com.maidsmart.task.MaidWorkTags.isStationLocked(maid)
+                    || com.maidsmart.build.MaidBuildBehavior.homeInert(maid)) {
                 throttledSkipLog(maid, "sam-dim-home", name + " 同维度距离 " + blocks
-                        + " 格但守家/建造中，不拉（想召回先解除排班/在家模式或等建造完）");
+                        + " 格但守家/酿造台绑定/建造中，不拉（想召回先解除排班/在家模式或等完工）");
                 return;
             }
             // v1.1.0 实测三百一十五（反馈："怀疑是老代码作祟"——基岩层传送问题复查）：

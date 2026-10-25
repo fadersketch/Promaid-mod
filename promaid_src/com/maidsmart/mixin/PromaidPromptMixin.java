@@ -26,6 +26,9 @@ public abstract class PromaidPromptMixin {
 
     @ModifyVariable(method = "systemChat", at = @At("HEAD"), argsOnly = true)
     private static String promaid$appendWorkPosture(String setting) {
+        if (!com.maidsmart.config.MaidSmartConfig.AI_ENABLE.get()) {
+            return setting; // Promaid AI 总开关关闭：不在 TLM 自己的提示词上追加任何内容
+        }
         String out = setting;
         if (com.maidsmart.config.MaidSmartConfig.DIALOGUE_PROMPT_SITTING_WORK.get()
                 && !out.contains(PromaidPromptAppender.MARKER)) {

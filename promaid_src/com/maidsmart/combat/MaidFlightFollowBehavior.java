@@ -57,6 +57,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     /** 「无进展」判定窗口（tick，100 = 5 秒）与"算拉近了"的最小改善（格）——实测九百六十六 */
     private static final long PROGRESS_TIMEOUT = 100L;
     private static final double PROGRESS_EPS = 1.5;
+    /**
+     * 【R1122】「飞过去」到点减速圈（格）：进入后不再补推，水平速度每 tick 乘 0.88。
+     * 鞘翅的推力是瞬时给的、惯性很大，不提前减速就会带着 1.7 格/tick 冲过目标点。
+     * 只对 travel 生效；普通跟随仍用 {@link #endRadius()} 的硬收手。
+     */
+    private static final double TRAVEL_BRAKE_RADIUS = 16.0;
+    private static final double TRAVEL_BRAKE_DRAG = 0.88;
+    /** 减速圈内保底前进速度（格/tick）——只在她还没进到到点盒时给，防止刹停在空中 */
+    private static final double TRAVEL_CREEP_SPEED = 0.18;
     /** "补推"日志限频（tick，100 = 5 秒）——补推每次都会发生，不能每 1.5 秒刷一行 */
     private static final long LOG_INTERVAL = 100L;
     /**
@@ -85,7 +94,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             BOOST_ROCKET = new HashMap<>();
     /** 本趟起飞时刻（超时用） */
     private static final Map<UUID, Long> STARTED_AT = new HashMap<>();
-    /** 我们替她换上的鞘翅：原胸甲物品（收手时原样还回去；她自己本来就穿着鞘翅时不记） */
+    /** 换下那件的【认领钥匙】（物品签名：物品 + 除耐久外 NBT + 数量；空栈 = 她本来没穿）。
+     *  v1.3.3 实测一千：只用来收手时"认出她背包里那一件"取回来穿上，【永不回流】
+     *  （旧版把它当"待穿回的副本"直接穿上 = 每趟复制一件胸甲）。 */
     private static final Map<UUID, ItemStack> SWAPPED_CHEST = new HashMap<>();
     /**
      * "已收手但还在滑翔下降"的小名单：收手那一刻她若还在空中，胸甲上那件鞘翅必须继续戴着
@@ -100,6 +111,20 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     private static final Map<UUID, Long> LAST_PROGRESS = new HashMap<>();
     /** 「这一趟该收了」的一次性标记（无进展判定置位）——canContinue 见它即收手（实测九百六十六） */
     private static final Set<UUID> STOP_NOW = new HashSet<>();
+    /** 本趟收手的可读原因（只给结束日志用；stop 取走后即清）——R1118 排查"起飞即结束" */
+    private static final Map<UUID, String> STOP_WHY = new HashMap<>();
+    /** 【R1120】「飞过去」进度日志限频（20 tick = 1 秒/只）：到点前每秒一行距离/速度 */
+    private static final Map<UUID, Long> TRAVEL_LOG = new HashMap<>();
+    /**
+     * R1125：「飞过去」水平停滞判定（原版 12:03 日志：水平速度 0.00、竖直反复 ±0.15/0.33，
+     * 距离一秒只掉 0.2 格——她卡在坑里/水里反复起跳，滑翔推力全被地形或水阻尼吃掉）。
+     * 连续 {@link #TRAVEL_STALL_TICKS} 拍水平位移不足 0.5 格 → 强制朝目标跃出 + 抬高。
+     */
+    private static final long TRAVEL_STALL_TICKS = 40L;
+    private static final Map<UUID, Long> TRAVEL_STALL_SINCE = new HashMap<>();
+    private static final Map<UUID, double[]> TRAVEL_LAST_XZ = new HashMap<>();
+    /** 【R1120】「飞过去」到点收手：stop 要把它打成"结束（已到达目标点）"而不是"追主人失败" */
+    private static final Set<UUID> ARRIVAL_STOP = new HashSet<>();
     /** 判过「追不上」的女仆：暂不自动追，等她与目标的距离回到起手距离以内再解除（实测九百六十六） */
     private static final Set<UUID> CHASE_BLOCKED = new HashSet<>();
     /** 补推日志限频 */
@@ -185,24 +210,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         return MaidSmartConfig.FLIGHT_FOLLOW_END_DIST.get();
     }
 
-    private static boolean cfgFirework() {
-        return MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.get();
-    }
-
-    private static boolean cfgElytra() {
-        return MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get();
-    }
-
     /**
-     * 需求原文："飞行跟随没有不消耗三叉戟耐久的开关。" 与 {@code flightFollow.firework}
-     * （消耗烟花）、{@code flightFollow.elytra}（消耗鞘翅耐久）凑成同一档三个省料开关。
-     * 只管**飞行跟随**这一条链路：空袭的起飞/抬升/俯冲是战斗动作，照旧扣耐久（那边没有、
-     * 也不该有这个开关）。她包里有烟花时依旧先烧烟花（顺序不变），所以这个开关对
-     * "有烟花可烧"的存档没有任何影响。
+     * 飞行跟随是否消耗飞行物（烟花数量 / 三叉戟耐久 / 鞘翅耐久三合一）。
+     * 只管**飞行跟随**这一条链路：空袭的起飞/抬升/俯冲是战斗动作，照旧扣耐久；
+     * 位移法术本来不消耗物资，不受这条影响。她包里有烟花时依旧先烧烟花（顺序不变）。
      */
-    private static boolean cfgTrident() {
+    private static boolean cfgConsume() {
         try {
-            return MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.get();
+            return MaidSmartConfig.FLIGHT_FOLLOW_CONSUME.get();
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return true; // 读不到配置时按"照原版扣"处理（与默认值一致，绝不放纵）
         }
@@ -257,7 +272,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (!(entity instanceof EntityMaid maid)) {
                 return false;
             }
-            return !cfgElytra() && (isFollowing(maid) || isSettling(maid));
+            return !cfgConsume() && (isFollowing(maid) || isSettling(maid));
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false;
         }
@@ -332,6 +347,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         FOLLOWING.remove(maidId);
         BOOST_READY.remove(maidId);
+        STOP_WHY.remove(maidId);
         BOOST_ROCKET.remove(maidId);
         RELEASE_ON_STOP.remove(maidId);
         STARTED_AT.remove(maidId);
@@ -347,6 +363,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         BEST_DIST.remove(maidId);
         LAST_PROGRESS.remove(maidId);
         STOP_NOW.remove(maidId);
+        TRAVEL_LOG.remove(maidId);
+        TRAVEL_STALL_SINCE.remove(maidId);
+        TRAVEL_LAST_XZ.remove(maidId);
+        ARRIVAL_STOP.remove(maidId);
         CHASE_BLOCKED.remove(maidId);
         GOTO.remove(maidId);
         GOTO_DIM.remove(maidId);
@@ -374,6 +394,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         BEST_DIST.clear();
         LAST_PROGRESS.clear();
         STOP_NOW.clear();
+        STOP_WHY.clear();
+        TRAVEL_LOG.clear();
+        TRAVEL_STALL_SINCE.clear();
+        TRAVEL_LAST_XZ.clear();
+        ARRIVAL_STOP.clear();
         CHASE_BLOCKED.clear();
         GOTO.clear();
         GOTO_DIM.clear();
@@ -387,27 +412,33 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 【落地结算】胸甲的归还只允许在"她已经站到地上"时发生（见 settleOnGround 的注释：
         // 空中一摘鞘翅 = 原版下一 tick 就清滑翔位 = 自由落体）。绝大多数 tick 这里零开销。
         settleOnGround(maid);
-        if (!cfg()) {
-            return false; // 开关关着：完全不介入（也不记日志，默认档零噪音）
+        // 【R1117】「飞过去」是玩家显式命令：即使【飞行跟随】总开关关着，命令也得执行
+        // （否则按钮出现了却永远不起飞——玩家把"自动追主人"的开关关掉是很常见的用法）。
+        boolean travel = com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null;
+        if (!cfg() && !travel) {
+            return false; // 开关关着且没有显式命令：完全不介入（也不记日志，默认档零噪音）
         }
         long now = level.m_46467_(); // getGameTime（诊断日志限频用）
         try {
-            if (maid.m_5803_() || maid.m_20159_() || maid.isMaidInSittingPose()) {
+            // 【R1118】显式「飞过去」期间"其他阻挠项目全静默"（玩家口径）：睡/骑/坐、
+            // 守家、自保都不再拦这一趟——到点/失败由飞行链路自己收尾。
+            if (!travel && (maid.m_5803_() || maid.m_20159_() || maid.isMaidInSittingPose())) {
                 return skip(maid, now, "睡觉/骑乘/坐下中"); // 与搭路同口径
             }
-            if (maid.isHomeModeEnable()) {
-                return skip(maid, now, "守家（home）模式中");
+            if (!travel && maid.isHomeModeEnable()) {
+                return skip(maid, now, "守家（home）模式中——「飞过去」对守家女仆只读");
             }
-            if (ownFlightBusy(maid)) {
+            if (!travel && ownFlightBusy(maid)) {
                 // 【六百一十二】旧版这里是"她是空袭任务就不起飞"（"它自己有飞行作战链路"）。
                 // 那一条被用户否了："2 个空袭状态（未接敌），也可以触发飞行跟随，不做额外抑制。
                 // 简单来说，就是目前飞行跟随触发判定推广到所有模式下。" 现在只挡"真在打"。
+                // 【R1117】显式「飞过去」不挡：玩家点了就飞，战斗交接由下一趟重新起手。
                 return skip(maid, now, "空袭任务正在接敌（这一轮出手不可打断，她自己的飞行链路优先）");
             }
-            if (SelfPreservationBehavior.isSelfPreserving(maid)) {
+            if (!travel && SelfPreservationBehavior.isSelfPreserving(maid)) {
                 return skip(maid, now, "自保中");
             }
-            if (com.maidsmart.task.BridgeUpBehavior.isTaskOccupied(maid)) {
+            if (!travel && com.maidsmart.task.BridgeUpBehavior.isTaskOccupied(maid)) {
                 return skip(maid, now, "任务占用中（在干活/正在接战）");
             }
             // 【实测六百六十九：武装拴绳】主人挂在女仆下面时，"离主人几格"永远小得起手距离（默认 25），
@@ -425,11 +456,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // ① 刚收手 3 秒内不起手（"收手→立刻再起飞"的抖动会一枚一枚地烧烟花）；
             // ② 判过「追不上」的，等距离回到起手距离以内再解（下面"距离不够"那一支里清）。
             UUID mid = maid.m_20148_();
+            // 【R1113】航图「飞过去」是玩家显式命令：不受"刚收手 3 秒"与"上一趟追不上"两道
+            // 防烧料闸的限制（那两条是为自动追主人设的，命令目标不该被它们拖住）。
             Long lastStop = LAST_STOP.get(mid);
-            if (lastStop != null && now - lastStop < RESTART_COOLDOWN) {
+            if (!travel && lastStop != null && now - lastStop < RESTART_COOLDOWN) {
                 return skip(maid, now, "刚收手（" + (now - lastStop) + " tick 前），3 秒内不再起手");
             }
-            if (CHASE_BLOCKED.contains(mid)) {
+            if (!travel && CHASE_BLOCKED.contains(mid)) {
                 return skip(maid, now, "上一趟判过「追不上」：等距离回到起手距离内再追");
             }
             Aim aim = aimOf(maid, level);
@@ -439,11 +472,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                         : "没有可追的目标（主人离线/跨维度，或调试目标没挂上）");
             }
             double dSq = aim.distSq(maid);
-            if (dSq <= cfgDist() * cfgDist()) {
+            if (!travel && dSq <= cfgDist() * cfgDist()) {
                 CHASE_BLOCKED.remove(maid.m_20148_()); // 回到起手距离内 → 解除「追不上」封禁（实测九百六十六）
                 return skip(maid, now, String.format("距离不够（%.1f 格 ≤ 起手距离 %.1f）",
                         Math.sqrt(dSq), cfgDist())); // 还不够远：走路/搭路足够
             }
+            CHASE_BLOCKED.remove(maid.m_20148_()); // 玩家显式点的目标点：不再受「追不上」封禁
             // 昂贵的判定（背包扫描 + 视线 raycast + 威胁扫描）10 tick 一次，与搭路同款节流
             int eid = maid.m_19879_();
             Integer cd = CANUSE_THROTTLE.get(eid);
@@ -465,10 +499,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return skip(maid, now, "背包里没有「可以飞行的道具」"
                         + "（烟花火箭 / 孔雀羽扇 / 能上天的位移法术 / 激流三叉戟 / 自推鞘翅，五选一）");
             }
-            if (!sightOk(maid, aim)) {
+            // 【R1113】航图目标点可能远隔几百格：视线 raycast 必然被地形挡住，若照旧拦下
+            // 「飞过去」就永远起不了飞。玩家点名飞那里 → 不看视线，让她自己绕。
+            if (!travel && !sightOk(maid, aim)) {
                 return skip(maid, now, "与目标之间被方块挡住视线"); // 让她自己绕（搭路/走路）
             }
-            if (threatNearby(level, maid)) {
+            // 【R1117】显式「飞过去」连威胁半径都让路：玩家已经点名要去那儿，
+            // 不能因为半路有个怪就永远不起飞（到达后战斗链路自己会接上）。
+            if (!travel && threatNearby(level, maid)) {
                 return skip(maid, now, "附近有敌对生物（威胁半径内）");
             }
             return true;
@@ -511,15 +549,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 【六百一十四】坐标档的措辞单列一句（"目标点飞远了"不成话）；实体档那一句逐字未动——
         // 它是验收（logs 里搜「飞行跟随」）与 test_spellfly613 / test_flight612 断言的原文。
         Aim aim = aimOf(maid, level);
-        String head = isGoto(maid)
+        String head = (isGoto(maid)
+                || com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null)
                 ? "飞向指定坐标（" + fmtDist(maid, aim) + " 格）"
                 : "主人飞远了（" + fmtDist(maid, aim) + " 格）";
         logState(START_LOG, maid, id, gameTime, head
                 + "，背上鞘翅追过去（燃料=" + fuelLabel(maid)
-                + "，烟花=" + (cfgFirework() ? "消耗" : "不消耗")
-                + "，位移法术=" + (cfgClimbSpell() ? "开" : "关")
-                + "，鞘翅耐久=" + (cfgElytra() ? "照原版扣" : "不消耗")
-                + "，激流耐久=" + (cfgTrident() ? "照原版扣" : "不消耗") + "）");
+                + "，消耗飞行物=" + (cfgConsume() ? "开（烟花/三叉戟/鞘翅都扣）" : "关（都不消耗）")
+                + "，位移法术=" + (cfgClimbSpell() ? "开" : "关") + "）");
     }
 
     /**
@@ -581,9 +618,18 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             return;
         }
         // 【实测六百六十九：武装拴绳】挂在下面的主人要的是"直升机悬停"，不是"追着主人转圈"
-        if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
+        // 【R1113】但航图里点了「飞过去」时例外：这一趟要真的飞向目标点（下方的人被绳子拖着走）
+        if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)
+                && com.maidsmart.patrol.MaidTravelTarget.aim(maid) == null) {
             maidsmart$tetherHold(maid);
             return;
+        }
+        // 【R1120】「飞过去」是显式一次性命令：到点只由 MaidTravelTarget 的 10×10×10 盒判，
+        // 这里既不踩"收手半径"刹车、也不踩"5 秒没拉近"——旧版刹车圈 5 格比到点盒 2.5 格还大，
+        // 她一进 5 格速度就被清零，于是永远差那 2.5 格（玩家看到的"到点减速、状态解不掉"）。
+        boolean travelNow = com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null;
+        if (!travelNow && com.maidsmart.patrol.MaidTravelTarget.justArrived(maid)) {
+            return; // 已到点：本拍不动，下一拍 canContinue 收手（避免回落成"追主人"）
         }
         Aim aim = aimOf(maid, level);
         if (aim == null) {
@@ -593,13 +639,25 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 比本趟历史最近距离再拉近 PROGRESS_EPS 才算有进展；PROGRESS_TIMEOUT（5 秒）都没拉近
         // → 判「追不上」：本趟收手（STOP_NOW），并封禁自动起手（CHASE_BLOCKED，
         // 等距离回到起手距离内才在 canUse 里解除）。坐标档是一次性任务（玩家显式命令）：
-        // 只收手，不封禁。
+        // 只收手，不封禁。【R1120】「飞过去」连收手都不做——它有自己的到点盒，途中再慢也继续飞。
         double nowDist = aim.dist(maid);
+        // 【R1123】刚下单的 1 秒内不踩到点减速：从目标 1 改飞目标 2 时，新目标可能就在附近，
+        // 但起飞本身仍需要一小段加速。减速圈之外本来就不会刹车，这个窗口只管"很近的新目标"。
+        boolean travelBraking = travelNow && nowDist <= TRAVEL_BRAKE_RADIUS
+                && !com.maidsmart.patrol.MaidTravelTarget.justOrdered(maid);
+        if (travelNow) {
+            logTravel(maid, id, gameTime, nowDist, travelBraking);
+        }
+        // R1125：水平停滞/泡水脱困（只对「飞过去」；普通跟随仍走原来的无进展收手）
+        if (travelNow && travelStall(level, maid, id, gameTime, aim)) {
+            return;
+        }
         if (nowDist < BEST_DIST.getOrDefault(id, Double.MAX_VALUE) - PROGRESS_EPS) {
             BEST_DIST.put(id, nowDist);
             LAST_PROGRESS.put(id, gameTime);
-        } else if (gameTime - LAST_PROGRESS.getOrDefault(id, gameTime) > PROGRESS_TIMEOUT) {
-            if (!isGoto(maid)) {
+        } else if (!travelNow
+                && gameTime - LAST_PROGRESS.getOrDefault(id, gameTime) > PROGRESS_TIMEOUT) {
+            if (!isGoto(maid) && com.maidsmart.patrol.MaidTravelTarget.aim(maid) == null) {
                 CHASE_BLOCKED.add(id);
             }
             STOP_NOW.add(id);
@@ -615,7 +673,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         // ── 空中：保持滑翔 + 视线钉在主人身上 + 需要时补一口推进 ──
         MaidFlightKit.setGliding(maid, true);
-        if (aim.dist(maid) <= endRadius()) {
+        // 【R1120】「飞过去」不在这里刹车：它由 MaidTravelTarget 的到点盒收尾，刹车会把
+        // 她停在盒外（旧版 5 格刹车圈 > 2.5 格盒，就是"到点减速却结束不了"的根因）。
+        if (!travelNow && aim.dist(maid) <= endRadius()) {
             // 目标已经进到收手半径内：本趟到此为止（canContinue 下一 tick 收手并解除矢量）。
             // 【这段理论上是死代码】canContinue 先跑、为假就直接 stop（tick 不执行），所以正常
             // 情况下走不到这里；留着当"判定顺序哪天变了"的安全带——真跑到了也只是提前解除一次。
@@ -632,7 +692,18 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 【实测七百一十】自推鞘翅的每 tick 推力：与上一行同一个约定（视线刚被钉在主人身上，
         // 这一句就顺着这个方向推她）——只在她滑翔时生效、没有窗口时零开销。
         com.maidsmart.combat.MaidSelfPropelledWings.tick(maid);
-        if (shouldBoost(maid, aim, gameTime)) {
+        // 【R1083】隐形烟花的每 tick 推力：与上面两行同一个约定（视线刚被钉在主人身上，
+        // 这一句就顺着这个方向推她）——只在她滑翔时生效、没有窗口时零开销。
+        com.maidsmart.combat.MaidVirtualFirework.tick(maid);
+        // 【R1122】「飞过去」到点减速（只对 travel）：进 16 格圈后不再补推、水平速度每拍 ×0.88，
+        // 并收掉还在生效的推进窗口；还没进到点盒时给一个保底前进速度，避免刹停在空中。
+        // 这是把 R1120 拆掉的那道"到点减速"按玩家要求装回来，但刹车圈大于到点盒（16 > 5）。
+        if (travelBraking) {
+            com.maidsmart.combat.MaidVirtualFirework.clear(maid);
+            com.maidsmart.combat.MaidRiptideBoost.clear(maid);
+            com.maidsmart.combat.MaidSelfPropelledWings.clear(maid);
+            brakeForArrival(maid, aim, nowDist);
+        } else if (shouldBoost(maid, aim, gameTime)) {
             boost(level, maid, id, gameTime, aim);
         }
         // 【v1.3.0(beta) 实测七百〇四：跟随这一路补上"不往危险格里沉"】本条链路原先只有
@@ -649,43 +720,76 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     @Override
     protected boolean m_6737_(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.m_20148_();
-        if (!cfg()) {
+        // 【R1120】到点收手：MaidTravelTarget 判到点后留一个一次性标记，这里翻成
+        // "结束（已到达目标点）"，否则下一拍会回落成"跟随主人"重新起飞。
+        if (com.maidsmart.patrol.MaidTravelTarget.consumeArrival(maid)) {
+            ARRIVAL_STOP.add(id);
+            STOP_WHY.put(id, "已到达目标点");
             return false;
         }
-        if (STOP_NOW.contains(id)) {
+        boolean travel = com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null;
+        if (travel) {
+            STOP_NOW.remove(id); // 上一趟的"追不上"标记不能污染这一趟显式命令
+        }
+        // 【R1118】显式「飞过去」不受自动跟随总开关限制：canUse 已经为它放行，旧版这里
+        // 仍按 !cfg() 收手，于是"起飞日志刚打出来就结束"（实测：点了飞过去她原地不动）。
+        if (!cfg() && !travel) {
+            return false;
+        }
+        if (!travel && STOP_NOW.contains(id)) {
+            STOP_WHY.put(id, "5 秒没拉近（判追不上）");
             return false; // 无进展判定判「追不上」：本趟到此（"追不上"日志与起手冷却在 stop 里）
         }
         Aim aim = aimOf(maid, level);
-        if (aim == null) {
-            return false; // 目标没了/跨维度 → 追不上也不该追
-        }
-        if (maid.m_5803_() || maid.m_20159_() || maid.isMaidInSittingPose() || maid.isHomeModeEnable()) {
+        if (com.maidsmart.patrol.MaidTravelTarget.consumeArrival(maid)) {
+            ARRIVAL_STOP.add(id);
+            STOP_WHY.put(id, "已到达目标点");
             return false;
         }
-        if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
+        if (aim == null) {
+            STOP_WHY.put(id, "目标没了或跨维度");
+            return false; // 目标没了/跨维度 → 追不上也不该追
+        }
+        if (!travel && (maid.m_5803_() || maid.m_20159_() || maid.isMaidInSittingPose()
+                || maid.isHomeModeEnable())) {
+            STOP_WHY.put(id, "睡觉/骑乘/坐下/守家");
+            return false;
+        }
+        if (!travel && maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
+            STOP_WHY.put(id, "自保中");
             return false;
         }
         if (!com.maidsmart.combat.GunnerTetherManager.isHanging(maid)
+                && !travel
                 && gameTime - STARTED_AT.getOrDefault(id, gameTime) > MAX_TICKS) {
-            return false; // 超时收手（拴绳悬停不设超时：玩家要她一直悬在那儿）
+            STOP_WHY.put(id, "超时");
+            return false; // 超时收手（拴绳悬停 / 航图目标点不设超时：玩家明确要求飞到那里）
         }
         if (!MaidFlightKit.hasElytra(maid) || !MaidFlightKit.hasFlightPropellant(maid)) {
             // 鞘翅飞坏了 / 能飞的道具没了（烟花烧完、没羽扇、法术书也丢了）→ 落地走
+            STOP_WHY.put(id, "鞘翅或推进剂没了");
             return false;
         }
-        if (threatNearby(level, maid)) {
+        // 【R1118】显式命令同样不让威胁/接敌打断：它只在"还没起飞就结束"里出现，
+        // 玩家看到的现象就是"点了飞过去她不飞"。自动跟随那一档保持原口径不变。
+        if (!travel && threatNearby(level, maid)) {
+            STOP_WHY.put(id, "附近有敌对生物");
             return false; // 威胁出现：交回战斗/自保（**保持动量**自然滑翔，与"进距离解除矢量"相反）
         }
-        if (ownFlightBusy(maid)) {
+        if (!travel && ownFlightBusy(maid)) {
             // 【六百一十二】链飞到一半她接上敌了（脑内有存活攻击目标，或正在起跳/爬升/猛击/
             // 助推那几段出手里）→ 当场把控制权交回她自己的空袭链路。这是"未接敌才由本链路
             // 接管"的另一半：起飞时挡（canUse），飞到一半也要让。让了之后她保持滑翔，
             // 空袭那一套会自己接上（它的 canUse 只看目标，不看谁在飞）。
+            STOP_WHY.put(id, "接敌了（让它自己的空袭链路接管）");
             return false;
         }
         if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
             // 拴绳悬停的"目标点"就是那个定点，到了也不能收手（收手 = 不再驱动 = 她会滑下去）
             return true;
+        }
+        if (com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null) {
+            return true; // 【R1113】航图目标点：飞到自己清掉（4 格）为止，不受"收手半径"截断
         }
         if (aim.dist(maid) > endRadius()) {
             return true; // 还没进到收手半径内 → 本趟继续
@@ -705,16 +809,21 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 【摘的时机：本方法**最后**一步】下面两行日志（解除矢量 / 结束）都要用到"这一趟的瞄准点"，
         // 摘早了它们就只能打「进到主人 ? 格内」——绿轮实测踩到（releaseThrust 里 aimOf 返回 null、
         // isGoto 也变 false，措辞当场退回主人版）。所以先取快照、日志打完再摘。
+        boolean arrived = ARRIVAL_STOP.remove(id);
+        boolean travelMode = com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null;
         Aim aim = aimOf(maid, level);
-        boolean gotoMode = isGoto(maid);
+        boolean gotoMode = isGoto(maid) || travelMode || arrived;
         FOLLOWING.remove(id);
         BOOST_READY.remove(id);
         STARTED_AT.remove(id);
         LAST_LOG.remove(id);
         TETHER_STEER.remove(id);   // 实测六百八十七：本趟结束，操控日志的"一次性"标记跟着清
+        TRAVEL_STALL_SINCE.remove(id); // R1125：下一趟重新开始计水平停滞
+        TRAVEL_LAST_XZ.remove(id);
         // 实测九百六十六：收手记账——起手冷却 3 秒的起点、本趟无进展痕迹清掉（CHASE_BLOCKED
         // **不在这里清**：它是"追不上"封禁，要等距离回到起手距离内由 canUse 解除）。
         boolean noProgress = STOP_NOW.remove(id);
+        String why = STOP_WHY.remove(id);
         LAST_STOP.put(id, gameTime);
         BEST_DIST.remove(id);
         LAST_PROGRESS.remove(id);
@@ -737,16 +846,24 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 所以只在【已经落地】时收翅 + 还胸甲；还在空中就把两样都留着，让原版继续把她安全滑下去，
         // 落地那一 tick 由 checkExtraStartConditions 开头的 settleOnGround 收尾。
         boolean grounded = maid.m_20096_();
+        // v1.3.3 实测一千：本趟有没有"我们换的装"——有记录才承诺"落地后自动还回胸甲"，
+        // 没有（她起飞时就穿着可用鞘翅）就说实话"落地后收翅回背包"（旧版这里一律承诺
+        // 还胸甲，实测 08-16 08:28 那三趟全是没有记录的空档，日志在撒谎）。
+        boolean hadSwap = SWAPPED_CHEST.containsKey(id);
+        String landNote;
         if (grounded) {
             MaidFlightKit.setGliding(maid, false);
-            restoreChest(maid, id);
+            landNote = "她已落地，" + restoreChest(maid, id);
         } else {
             SETTLING.add(id); // 交给 settleOnGround 在她落地那一 tick 收尾
+            landNote = hadSwap ? "她还在滑翔，落地后自动还回胸甲" : "她还在滑翔，落地后收翅回背包";
         }
-        logState(END_LOG, maid, id, gameTime, "结束（" + (gotoMode ? "目标点" : "主人") + " "
-                + fmtDist(maid, aim) + " 格，"
+        String atText = arrived ? "已到达目标点"
+                : ((gotoMode ? "目标点" : "主人") + " " + fmtDist(maid, aim) + " 格");
+        logState(END_LOG, maid, id, gameTime, "结束（" + atText + "，"
+                + (why != null ? "原因=" + why + "；" : "")
                 + (noProgress ? "5 秒没拉近——判「追不上」，收手不再烧推进；" : "")
-                + (grounded ? "她已落地，胸甲还回去" : "她还在滑翔，落地后自动还回胸甲") + "）");
+                + landNote + "）");
         // 日志都打完了，这才摘掉坐标档（见本方法开头那段注释：摘早了上面两行会退回主人版措辞）
         if (gotoMode) {
             clearGotoTarget(maid);
@@ -767,10 +884,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return; // 还在空中，或者她这次又飞起来了（飞行中由行为自己管）
             }
             SETTLING.remove(id);
-            restoreChest(maid, id);
+            String outcome = restoreChest(maid, id);
             MaidFlightKit.setGliding(maid, false);
             com.maidsmart.tool.PromaidLog.log("飞行跟随",
-                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 已落地，把胸甲还回去");
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 已落地，" + outcome);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
@@ -818,11 +935,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 【实测七百一十】自推鞘翅的推力窗同理（它也是"每 tick 都在拉"）——不一起收，
             // 上面那句清零下一 tick 就被它拉回来。
             boolean hadSelfWings = com.maidsmart.combat.MaidSelfPropelledWings.clear(maid);
+            // 【R1083】隐形烟花的推力窗同理（它也是"每 tick 都在拉"）
+            boolean hadVirtual = com.maidsmart.combat.MaidVirtualFirework.clear(maid);
             logState(RELEASE_LOG, maid, id, gameTime, "进到" + (isGoto(maid) ? "目标点" : "主人") + " "
                     + fmtDist(maid, aimOf(maid, level))
                     + " 格内，解除推进矢量（" + (dropped ? "收掉还挂着的烟花，" : "")
                     + (hadRiptide ? "收掉激流推进剂，" : "")
                     + (hadSelfWings ? "收掉自推鞘翅推力，" : "")
+                    + (hadVirtual ? "收掉隐形烟花推力，" : "")
                     + "水平速度 " + String.format("%.2f", speed) + " → 0），改自然滑翔");
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
@@ -873,7 +993,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         ItemStack display;
         boolean haveFirework;
-        if (cfgFirework()) {
+        if (cfgConsume()) {
+            if (com.maidsmart.combat.MaidVirtualFirework.isStalled(maid)) {
+                return; // 【R1083】原地空推的冷却期：这一口先不烧
+            }
             display = MaidFlightKit.takeFirework(maid);
             haveFirework = !display.m_41619_();
             // 【六百一十三：这一支不再就地收手】旧版"背包真空了"直接 return（交给 canContinue
@@ -884,16 +1007,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             haveFirework = MaidFlightKit.hasFirework(maid);
         }
         if (haveFirework) {
-            // 六百一十二：把这枚火箭记下来——进到主人身边要**收掉它**才算"解除推进矢量"
-            // （见 releaseThrust 与 BOOST_ROCKET 的注释：烟花每 tick 都在推，不收掉它清零就白清）
-            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket =
-                    MaidFlightKit.launchBoostRocket(level, maid);
-            if (rocket != null) {
-                BOOST_ROCKET.put(id, rocket);
+            // 【R1042】不再生成挂载火箭实体：推力由 MaidVirtualFirework 每 tick 直接施加
+            //（原版 v←v×0.5+视线×0.85 不变），烟花粒子不再出现。
+            if (com.maidsmart.combat.MaidVirtualFirework.ignite(maid, 1.0)) {
                 FlightFireworkPose.show(maid, display);
                 BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
-                logThrottled(maid, id, gameTime, "补一枚烟花追主人（烟花="
-                        + (cfgFirework() ? "消耗" : "不消耗") + "）");
+                logThrottled(maid, id, gameTime, "补一枚隐形烟花追主人（烟花="
+                        + (cfgConsume() ? "消耗" : "不消耗") + "）");
                 return;
             }
             // 没放成（异常/世界拒绝）——继续往下试法术，别因为一次异常白丢这一口推进
@@ -918,11 +1038,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // （m_6725_ 每 tick 已经把视线钉在主人身上，这里只是再确认一次，幂等）。
             // 耐久开关：flightFollow.trident。
             faceToward(maid, aim, false);
-            if (com.maidsmart.combat.MaidTridentSpinBehavior.boostForFlight(level, maid, cfgTrident())) {
+            if (com.maidsmart.combat.MaidTridentSpinBehavior.boostForFlight(level, maid, cfgConsume())) {
                 MaidFlightKit.setGliding(maid, true); // 滑翔位每 tick 都要站住（同扇子/法术那两条）
                 BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
                 logThrottled(maid, id, gameTime, "挥激流三叉戟追主人（耐久="
-                        + (cfgTrident() ? "照原版扣" : "不消耗") + "）");
+                        + (cfgConsume() ? "照原版扣" : "不消耗") + "）");
             }
         }
         // ⑤ 自推鞘翅（v1.3.0(beta) 实测七百一十）：第五条腿——扇子/烟花/法术/激流都没有时的
@@ -934,9 +1054,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.combat.MaidSelfPropelledWings.hasWings(maid)) {
             faceToward(maid, aim, false);
             MaidFlightKit.setGliding(maid, true); // 滑翔位每 tick 都要站住（同上面那几条腿）
-            if (com.maidsmart.combat.MaidSelfPropelledWings.ignite(maid)) {
+            // 【R1042】统一按普通鞘翅 + 隐形烟花的原版递推，不消耗烟花
+            if (com.maidsmart.combat.MaidVirtualFirework.ignite(maid, 1.0)) {
                 BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
-                logThrottled(maid, id, gameTime, "自推鞘翅追主人（那件鞘翅自己会推，不烧烟花）");
+                logThrottled(maid, id, gameTime, "自推鞘翅追主人（普通鞘翅物理，不烧烟花）");
             }
         }
     }
@@ -976,6 +1097,172 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             return true;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
             return false; // 任何异常都当"这一口没有"（canContinue 的燃料门禁会自己收手）
+        }
+    }
+
+    /** R1125：显式「飞过去」的水平停滞脱困（见 {@link #travelStall}）。 */
+    private static boolean travelStall(ServerLevel level, EntityMaid maid, UUID id,
+                                       long gameTime, Aim aim) {
+        try {
+            // ① 泡在水里：原版 {@code travelInWater} 会整段顶掉滑翔分支，鞘翅推力被水阻尼吃完，
+            //    表现正是"竖直上下动、水平 0.00"。先挪到附近一个干燥落脚点。
+            if (maid.m_20069_()) {
+                if (escapeTravelWater(level, maid)) {
+                    TRAVEL_STALL_SINCE.remove(id);
+                    TRAVEL_LAST_XZ.remove(id);
+                    com.maidsmart.tool.PromaidLog.log("飞过去",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                    + " 泡在水里（鞘翅在水里不产生滑翔位移）→ 先挪到附近干燥落脚点再飞");
+                    return true;
+                }
+            }
+            double hx = maid.m_20185_();
+            double hz = maid.m_20189_();
+            double[] last = TRAVEL_LAST_XZ.get(id);
+            if (last == null) {
+                TRAVEL_LAST_XZ.put(id, new double[]{hx, hz});
+                TRAVEL_STALL_SINCE.put(id, gameTime);
+                return false;
+            }
+            double dx = hx - last[0];
+            double dz = hz - last[1];
+            if (dx * dx + dz * dz > 0.25) {
+                TRAVEL_LAST_XZ.put(id, new double[]{hx, hz});
+                TRAVEL_STALL_SINCE.put(id, gameTime);
+                return false;
+            }
+            if (gameTime - TRAVEL_STALL_SINCE.getOrDefault(id, gameTime) < TRAVEL_STALL_TICKS) {
+                return false;
+            }
+            TRAVEL_STALL_SINCE.put(id, gameTime);
+            TRAVEL_LAST_XZ.put(id, new double[]{hx, hz});
+            // ② 水平 2 秒没动：先朝目标给一记水平跃出（脱离原地/水面/坑边）。
+            double ax = aim.x - hx;
+            double az = aim.z - hz;
+            double len = Math.sqrt(ax * ax + az * az);
+            if (len > 1.0E-4) {
+                ax /= len;
+                az /= len;
+            }
+            Vec3 dm = maid.m_20184_();
+            maid.m_20256_(new Vec3(ax * 0.55, Math.max(dm.f_82480_, 0.35), az * 0.55));
+            MaidFlightKit.setGliding(maid, true);
+            // ③ 若她正踩在地上（"贴地起跳 → 落回 → 再起跳"的循环），把她抬到头顶第一个
+            //    两格空气处；下一次循环就能真正朝目标滑出去。
+            if (maid.m_20096_()) {
+                liftToOpenAir(level, maid);
+            }
+            com.maidsmart.tool.PromaidLog.log("飞过去",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 水平 " + (TRAVEL_STALL_TICKS / 20) + " 秒没有位移（距离="
+                            + String.format(java.util.Locale.ROOT, "%.1f", aim.dist(maid))
+                            + " 格）→ 强制朝目标跃出/抬高脱困");
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
+            return false;
+        }
+    }
+
+    /** R1125：找一个附近的干燥落脚点（水平 ±4、垂直 -2..+4）：本格与上一格空气、脚下非空气。 */
+    private static boolean escapeTravelWater(ServerLevel level, EntityMaid maid) {
+        try {
+            int bx = (int) Math.floor(maid.m_20185_());
+            int by = (int) Math.floor(maid.m_20186_());
+            int bz = (int) Math.floor(maid.m_20189_());
+            net.minecraft.core.BlockPos best = null;
+            double bestD = Double.MAX_VALUE;
+            for (int dx = -4; dx <= 4; dx++) {
+                for (int dz = -4; dz <= 4; dz++) {
+                    for (int dy = -2; dy <= 4; dy++) {
+                        net.minecraft.core.BlockPos c =
+                                new net.minecraft.core.BlockPos(bx + dx, by + dy, bz + dz);
+                        if (!level.m_8055_(c).m_60795_() || !level.m_8055_(new net.minecraft.core.BlockPos(c.m_123341_(), c.m_123342_() + 1, c.m_123343_())).m_60795_()) {
+                            continue;
+                        }
+                        if (level.m_8055_(new net.minecraft.core.BlockPos(c.m_123341_(), c.m_123342_() - 1, c.m_123343_())).m_60795_()) {
+                            continue;
+                        }
+                        double d = (double) dx * dx + (double) dz * dz + (double) dy * dy * 2.0;
+                        if (d < bestD) {
+                            bestD = d;
+                            best = c;
+                        }
+                    }
+                }
+            }
+            if (best == null) {
+                return false;
+            }
+            maid.m_6034_(best.m_123341_() + 0.5, best.m_123342_(), best.m_123343_() + 0.5);
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
+            return false;
+        }
+    }
+
+    /** R1125：向上找第一个"两格空气"的位置并搬过去（打散"贴地反复起跳"的循环）。 */
+    private static void liftToOpenAir(ServerLevel level, EntityMaid maid) {
+        try {
+            int bx = (int) Math.floor(maid.m_20185_());
+            int by = (int) Math.floor(maid.m_20186_());
+            int bz = (int) Math.floor(maid.m_20189_());
+            for (int dy = 1; dy <= 8; dy++) {
+                net.minecraft.core.BlockPos c = new net.minecraft.core.BlockPos(bx, by + dy, bz);
+                if (level.m_8055_(c).m_60795_() && level.m_8055_(new net.minecraft.core.BlockPos(c.m_123341_(), c.m_123342_() + 1, c.m_123343_())).m_60795_()) {
+                    maid.m_6034_(maid.m_20185_(), c.m_123342_(), maid.m_20189_());
+                    return;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
+        }
+    }
+
+    /**
+     * 【R1120】「飞过去」进度：每 20 tick（1 秒）一行，记录到目标点的距离与水平/竖直速度。
+     * 这是排查"到点减速、状态解不掉"的直接证据——看距离是否能在几秒内收进 5 格。
+     */
+    private static void logTravel(EntityMaid maid, UUID id, long gameTime, double dist,
+                                  boolean braking) {
+        try {
+            if (gameTime - TRAVEL_LOG.getOrDefault(id, Long.MIN_VALUE / 2) < 20L) {
+                return;
+            }
+            TRAVEL_LOG.put(id, gameTime);
+            Vec3 v = maid.m_20184_();
+            double h = Math.sqrt(v.f_82479_ * v.f_82479_ + v.f_82481_ * v.f_82481_);
+            com.maidsmart.tool.PromaidLog.log("飞过去",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + String.format(" 飞向目标点 距离=%.1f 格 水平速度=%.2f 竖直速度=%.2f 到点减速=%s",
+                    dist, h, v.f_82480_, braking ? "开" : "关"));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
+        }
+    }
+
+    /**
+     * 【R1122】飞过去的到点减速：只动水平分量，方向仍朝目标点；每拍保留 88% 速度。
+     * 距离还在到点盒外（{@code ARRIVE_HALF + 1}）且速度已降到保底以下时，给
+     * {@link #TRAVEL_CREEP_SPEED} 的温和前进速度——鞘翅失速会掉高，不能直接刹到 0。
+     */
+    private static void brakeForArrival(EntityMaid maid, Aim aim, double dist) {
+        try {
+            Vec3 v = maid.m_20184_();
+            double h = Math.sqrt(v.f_82479_ * v.f_82479_ + v.f_82481_ * v.f_82481_);
+            double dx = aim.x - maid.m_20185_();
+            double dz = aim.z - maid.m_20189_();
+            double flat = Math.sqrt(dx * dx + dz * dz);
+            if (flat <= 1.0E-4) {
+                return;
+            }
+            double want = h * TRAVEL_BRAKE_DRAG;
+            boolean stillFar = dist > com.maidsmart.patrol.MaidTravelTarget.ARRIVE_HALF + 1.0;
+            if (want < h) {
+                maid.m_20256_(new Vec3(dx / flat * want, v.f_82480_, dz / flat * want));
+            } else if (stillFar && h < TRAVEL_CREEP_SPEED) {
+                // 速度已经低于保底：朝目标补到保底速度，避免失速掉高 / 停在盒外
+                maid.m_20256_(new Vec3(dx / flat * TRAVEL_CREEP_SPEED, v.f_82480_,
+                        dz / flat * TRAVEL_CREEP_SPEED));
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
         }
     }
 
@@ -1023,6 +1310,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // LookControl 仍指向**原目标**（下面 applyRotation 传的还是 aim），
         // 只在"这一 tick 往哪看"这一件事上换成让开后的点；盘旋/跟随各自的逻辑一个字没动。
         Vec3 p = MaidFlightHazardGuard.detour(maid, maid.m_20182_(), aim.pos());
+        // 【R1127】鞘翅补上扫帚/载具同款的"前瞻避障"：前方有实心方块就把视线抬到它上方，
+        // 滑翔的操纵杆就是视线，于是她自然爬升越过，而不是一头撞上去卡住。
+        p = terrainLift(maid, p);
         double dx = p.f_82479_ - maid.m_20185_();
         double dz = p.f_82481_ - maid.m_20189_();
         double dh = Math.sqrt(dx * dx + dz * dz);
@@ -1035,6 +1325,65 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             pitch = Math.min(pitch, -TAKEOFF_PITCH); // 起跳那一下先抬头（负 = 抬头）
         }
         applyRotation(maid, yaw, pitch, aim);
+    }
+
+    /** 前瞻最多探几格高（格）：够越过一堵墙/一道山脊，又不会把视线顶到天上。 */
+    private static final int TERRAIN_PROBE_UP = 10;
+
+    /**
+     * 【R1127】鞘翅的"前方有方块就抬视线"——与 {@code MaidMountCompat.vehicleAvoidLift}
+     * 同一个思路（直升机前瞻 8 格抬高期望高度），这里只改她这一拍的**视线落点**：
+     * 沿"她 → 目标"的水平方向按速度探 6~24 格，第一列碰到实心方块就把瞄准点抬到
+     * 方块顶上方 2.2 格。滑翔的俯仰完全由视线决定，所以她会在撞上之前自然爬升。
+     * <p>只影响视角（= 操纵），不写速度、不改存档；探不到方块就原样返回。
+     */
+    private static Vec3 terrainLift(EntityMaid maid, Vec3 aim) {
+        try {
+            net.minecraft.world.level.Level level = maid.m_9236_();
+            if (level == null || aim == null) {
+                return aim;
+            }
+            Vec3 from = maid.m_20182_();
+            double dx = aim.f_82479_ - from.f_82479_;
+            double dz = aim.f_82481_ - from.f_82481_;
+            double horiz = Math.sqrt(dx * dx + dz * dz);
+            if (horiz < 0.5) {
+                return aim;
+            }
+            Vec3 dm = maid.m_20184_();
+            double speed = Math.sqrt(dm.f_82479_ * dm.f_82479_ + dm.f_82481_ * dm.f_82481_);
+            int probe = Math.max(6, Math.min(24, (int) (6 + speed * 12)));
+            int by = net.minecraft.util.Mth.m_14107_(from.f_82480_);
+            double ux = dx / horiz;
+            double uz = dz / horiz;
+            for (int d = 1; d <= probe; d++) {
+                int bx = net.minecraft.util.Mth.m_14107_(from.f_82479_ + ux * d);
+                int bz = net.minecraft.util.Mth.m_14107_(from.f_82481_ + uz * d);
+                int top = Integer.MIN_VALUE;
+                for (int up = 0; up <= TERRAIN_PROBE_UP; up++) {
+                    net.minecraft.core.BlockPos pos =
+                            new net.minecraft.core.BlockPos(bx, by + up, bz);
+                    if (!level.m_8055_(pos).m_60812_(level, pos).m_83281_()) {
+                        top = by + up;
+                    }
+                }
+                if (top != Integer.MIN_VALUE) {
+                    // 往上探到顶还是实心 = 头顶被封死（天花板/隧道）：抬视线只会把她顶进方块，
+                    // 交给 travelStall 的脱困；这里不硬抬。
+                    if (top >= by + TERRAIN_PROBE_UP) {
+                        return aim;
+                    }
+                    double need = top + 2.2 - from.f_82480_;
+                    if (need > 0.5) {
+                        return new Vec3(aim.f_82479_, Math.max(aim.f_82480_,
+                                from.f_82480_ + need), aim.f_82481_);
+                    }
+                    break; // 障碍在脚下/同一高度以下，不用抬
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
+        }
+        return aim;
     }
 
     /**
@@ -1066,10 +1415,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
     /**
      * 背上鞘翅（她自己本来就穿着可用鞘翅时一字不动）。
-     *
-     * 【为什么要"记原物、收手还原"】飞行跟随是**跟着走路的女仆**的观赏玩法——她本来可能穿着
-     * 普通胸甲（甚至钻石胸甲），我们不能飞完就把玩家的护甲弄丢/长期占着胸甲槽。所以换下的那件
-     * 记在 {@link #SWAPPED_CHEST}，收手时原样还回去（鞘翅回背包）。
+     * 【为什么要"记原物、收手还原"】她本来可能穿着普通胸甲，不能飞完就弄丢/长期占着胸甲槽；
+     * 换下的那件记在 {@link #SWAPPED_CHEST}，收手时原样还回去（鞘翅回背包）。
+     * 【v1.3.3 实测一千：记的是"钥匙"】换下的真品当场交回她背包（可见性同旧版），
+     * {@link #SWAPPED_CHEST} 里那份【只当认领钥匙】（收手时认出她身上那件取回，见
+     * {@link #restoreChest}）、**永不回流**——旧版把副本穿回胸甲槽 = 真品在背包 + 副本在身，一趟净多一件（"复制胸甲"根因）。
      */
     private static void wearElytra(EntityMaid maid, UUID id) {
         try {
@@ -1090,25 +1440,49 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 收手归还：只有"胸甲槽还保持着我们给她穿的鞘翅"才动它——玩家中途换过的东西一律不覆盖 */
-    private static void restoreChest(EntityMaid maid, UUID id) {
+    /**
+     * 收手归还（v1.3.3 实测一千：真品换手、绝不复制、不凭空补）。【旧版为什么复制】换下时
+     * 真品还进背包、存的却是副本；收手直接把副本穿回胸甲槽（玩家换过槽那一支还会把副本
+     * give 进背包）——真品+副本同时在手，一趟净多一件。【现在的口径】SWAPPED_CHEST 只当
+     * 【认领钥匙】（签名，永不回流）：用钥匙把真品【取回来】穿上；认不到 / 只找回到一部分
+     * 就【不凭空补】——守恒优先于"看起来还了"；耐久是易变量、不算签名（与 {@code ProMaidExtension.sameIgnoringDurability} 同口径）。
+     * @return 结算结果（调用方拼进日志）；"把胸甲还回去" = 真还了
+     */
+    private static String restoreChest(EntityMaid maid, UUID id) {
         try {
-            ItemStack orig = SWAPPED_CHEST.remove(id);
-            if (orig == null) {
-                return; // 她本来就穿着鞘翅（我们没换过）
+            ItemStack key = SWAPPED_CHEST.remove(id);
+            if (key == null) {
+                return "本趟没有换装"; // 她起飞时就穿着可用鞘翅（我们一字未动）
             }
             ItemStack now = maid.m_6844_(EquipmentSlot.CHEST);
             if (!MaidFlightKit.isElytraLike(now, maid)) {
-                if (!orig.m_41619_()) {
-                    com.maidsmart.tool.MaidGiveBack.give(maid, orig, "飞行跟随结束还回胸甲");
-                }
-                return;
+                // 玩家中途换过胸甲槽：一律不覆盖、也不补件（旧版在此 give 副本 = 每趟多一件）
+                return "胸甲槽已被换过，不覆盖";
             }
-            maid.m_8061_(EquipmentSlot.CHEST, orig);
+            if (key.m_41619_()) {
+                // 记录是"空档"：她本来没穿胸甲 → 只脱鞘翅收回背包（旧版如此，日志现在说实话）
+                maid.m_8061_(EquipmentSlot.CHEST, ItemStack.f_41583_);
+                com.maidsmart.tool.MaidGiveBack.give(maid, now, "飞行跟随结束，还回鞘翅");
+                return "收翅回背包（本趟没穿胸甲）";
+            }
+            int want = key.m_41613_();
+            ItemStack back = MaidFlightKit.takeBackExact(maid, key, want);
+            if (back.m_41619_() || back.m_41613_() < want) {
+                // 认不到 / 只找回一部分：不补件（拿到多少放回多少），如实记
+                if (!back.m_41619_()) {
+                    com.maidsmart.tool.MaidGiveBack.give(maid, back, "飞行跟随收手（原胸甲只找回一部分）");
+                }
+                maid.m_8061_(EquipmentSlot.CHEST, ItemStack.f_41583_);
+                com.maidsmart.tool.MaidGiveBack.give(maid, now, "飞行跟随结束，还回鞘翅");
+                return "收翅回背包（原胸甲已不在她身上，不补件）";
+            }
+            maid.m_8061_(EquipmentSlot.CHEST, back);
             if (!now.m_41619_()) {
                 com.maidsmart.tool.MaidGiveBack.give(maid, now, "飞行跟随结束，还回鞘翅");
             }
+            return "把胸甲还回去";
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightFollowBehavior", ignored);
+            return "归还异常（详见日志）";
         }
     }
 
@@ -1182,6 +1556,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      */
     private static Aim aimOf(EntityMaid maid, net.minecraft.world.level.Level level) {
         try {
+            // 【R1113】巡逻航图「飞过去」：坐标目标优先，连"拴绳悬停"也让位——
+            // 拴着的时候目标点就是她自己现在的位置（旧口径），现在改成玩家点的那个点。
+            Vec3 travel = com.maidsmart.patrol.MaidTravelTarget.aim(maid);
+            if (travel != null) {
+                return Aim.ofPos(travel);
+            }
             // 【实测六百六十九 → 六百七十二】拴绳期间这个"目标点"就是**她自己现在的位置**：
             // 672 起拴绳不再给她定任何高度（tetherHoldPos 整个删了），所以"想去哪"在拴着的时候
             // 只有一个答案——原地不动。它现在只喂给两处：canContinue 的"有没有目标"判空

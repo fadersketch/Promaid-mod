@@ -82,7 +82,64 @@ public final class MaidWorkTags {
         return isWorkTask(maid);
     }
 
-    /** 是否为"站桩工作"任务之一（建筑/烹饪/酿造；v1.5.134 整理任务已删除） */
+    /** 工作站绑定锁（实测一千〇七）：酿造/烧制任务一旦绑定到可用工作方块，就临时
+     *  掐掉原版 TLM 的跟随链路——跟随行为 start 取消 + 跨维/同维自动拉回豁免，直到
+     *  切出该任务或目标方块被破坏。与 WORK_STILL 分开：WORK_STILL 只在走到工作方块
+     *  前才置（走去的路上必须能移动），本锁从"绑定成功"起就生效。 */
+    public static final String STATION_LOCK_TAG = "maid_smart_station_lock";
+
+    /** 置/清"工作站绑定锁"（MaidBrewBehavior / MaidCookBehavior 按方块有效性维护） */
+    public static void setStationLock(EntityMaid maid, boolean on) {
+        try {
+            maid.getPersistentData().m_128379_(STATION_LOCK_TAG, on);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+        }
+    }
+
+    /** 现在是不是"锁在工作站上"（标记 + 当前任务确为酿造/烧制，双保险防残留） */
+    public static boolean isStationLocked(EntityMaid maid) {
+        try {
+            if (!maid.getPersistentData().m_128471_(STATION_LOCK_TAG)) {
+                return false;
+            }
+            if (maid.getTask() == null) {
+                return false;
+            }
+            ResourceLocation uid = maid.getTask().getUid();
+            return uid.equals(ResourceLocation.parse("maid_smart:brew"))
+                    || uid.equals(ResourceLocation.parse("maid_smart:cook"));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+            return false;
+        }
+    }
+
+    /** 工位解绑代数（女仆 UUID → 代数）。魂符收放/区块重载 = 一次"重新入世界"：
+     *  烧制/酿造行为看到代数变了就丢掉旧工位、重新扫台，免得一直抱着收魂前那台炉子。 */
+    private static final java.util.Map<java.util.UUID, Integer> STATION_GEN =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 记一次"重新入世界"（ProMaidExtension 在 EntityJoinLevelEvent 里调）。 */
+    public static void bumpStationGen(EntityMaid maid) {
+        try {
+            STATION_GEN.merge(maid.m_20148_(), 1, Integer::sum);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+        }
+    }
+
+    /** 当前解绑代数（行为每 tick 对比，变化即解绑一次）。 */
+    public static int stationGen(EntityMaid maid) {
+        try {
+            Integer v = STATION_GEN.get(maid.m_20148_());
+            return v == null ? 0 : v;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkTags", ignored);
+            return 0;
+        }
+    }
+
+    /** 是否为"站桩工作"任务之一（建筑/烹饪/酿造；v1.5.134 整理任务已删除）。
+     *  实测一千〇六【指标石同款】：index_build 临时搭建也吃站桩锁——她的行为一直在
+     *  setStill(true)，而这里的白名单不含她 → isStill 恒 false → 移动抑制（源头取消
+     *  MoveToTargetSink + 移动层清水平位移）对她从未生效，就是"搭建过程中乱动"的根因。 */
     public static boolean isWorkTask(EntityMaid maid) {
         if (maid.getTask() == null) {
             return false;
@@ -90,7 +147,8 @@ public final class MaidWorkTags {
         ResourceLocation uid = maid.getTask().getUid();
         return uid.equals(ResourceLocation.parse("maid_smart:build"))
                 || uid.equals(ResourceLocation.parse("maid_smart:cook"))
-                || uid.equals(ResourceLocation.parse("maid_smart:brew"));
+                || uid.equals(ResourceLocation.parse("maid_smart:brew"))
+                || uid.equals(ResourceLocation.parse("maid_smart:index_build"));
     }
 
     /** v1.5.129：战斗任务 UID（后备名单——接口判定不认识的再按 path 兜底）。

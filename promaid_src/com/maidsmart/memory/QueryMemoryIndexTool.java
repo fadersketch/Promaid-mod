@@ -123,7 +123,7 @@ public class QueryMemoryIndexTool implements ITool<QueryMemoryIndexTool.Result> 
                 }
                 AiMemoryModels.Paragraph p = store.paragraphByHash(hash);
                 if (p != null && !p.deleted()) {
-                    events.add("（重要度" + p.salience() + "）" + AiMemoryModels.clip(p.content(), 80));
+                    events.add("（重要度" + p.salience() + "）" + AiMemoryModels.clip(p.content(), 160));
                 }
             }
             if (!events.isEmpty()) {

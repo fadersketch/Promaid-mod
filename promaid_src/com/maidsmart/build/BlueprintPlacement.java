@@ -129,7 +129,16 @@ public final class BlueprintPlacement {
                 || block instanceof net.minecraft.world.level.block.GlowLichenBlock
                 // v1.5.268：可可豆贴丛林木、仙人掌需沙地——同样漏网（缺支撑掉落）
                 || block instanceof net.minecraft.world.level.block.CocoaBlock
-                || block instanceof net.minecraft.world.level.block.CactusBlock;
+                || block instanceof net.minecraft.world.level.block.CactusBlock
+                // v1.3.3 实测一千：脚手架——它的支撑不是"某个方向的一块方块"，而是原版
+                // getDistance(level,pos)<7 的组合判定（下方可支撑面 / 下方脚手架链 /
+                // 水平四邻脚手架）。javap 实证（1.21.1 ScaffoldingBlock）：canSurvive =
+                // getDistance<7；updateShape 每次邻居更新都 scheduleTick 自检，距离 7 →
+                // FallingBlockEntity.fall / destroyBlock——悬空脚手架活不过"下一次邻居
+                // 更新 +1 tick"。这里把它收进名单、下方格作为它的"支撑格"上报：doPlace 的
+                // 脚手架闸门（canSurvive 预判）与延后重试的 waitPlanSupport 分析都吃这一条
+                //（旧版它不在名单里 → 不设防 + "悬空放不上"永久跳过）；无 facing/half/face → DOWN。
+                || block instanceof net.minecraft.world.level.block.ScaffoldingBlock;
         if (!attach) {
             return null;
         }

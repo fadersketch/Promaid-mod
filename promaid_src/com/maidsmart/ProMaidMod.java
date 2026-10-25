@@ -83,6 +83,8 @@ public class ProMaidMod {
         com.maidsmart.combat.GunnerTetherNetworking.register();
         // v1.3.0(beta) 实测七百二十七·点4：悬空鞍位（龙）配对的 S2C 同步（客户端按同一算式同行摆位）
         com.maidsmart.combat.MaidSeatNetworking.register();
+        // 烟花尾迹：通知客户端开一段"在她本帧渲染坐标上发粒子"的窗口（服务端不再自己发粒子）
+        com.maidsmart.combat.FireworkTrailNetworking.register();
         // v1.3.0(beta) 实测七百〇二：仿创造飞行（1.20.1 精简版）——per-maid 开关的 C2S/S2C 两个包
         com.maidsmart.flight.MaidFreeFlightNetworking.register();
         // v1.3.0(beta) 实测七百〇二：仿创造飞行控制器挂在 MaidTickEvent 上（两侧都发，控制器自己挡客户端）
@@ -98,6 +100,8 @@ public class ProMaidMod {
         com.maidsmart.bd.MaidBdNetworking.register();
         // 多人下「配置以服务端为准」网络层（S2C 下发配置快照 + C2S 带 OP 校验改服务端配置）
         com.maidsmart.config.ConfigSyncNetworking.register();
+        // 实测一千〇六：女仆放置方块的金色描边网络层（S2C 位置表：登记/移除增量 + 进服全量）
+        com.maidsmart.task.PlacedMarkNetworking.register();
         // v1.3.0(beta) 实测七百四十五·点1【1.20.1 补】：飞行聚晶（Goety 位移聚晶）非 OP 入口——
         // per-maid 自动档的 C2S/S2C 两个包（主人或 OP 即可开，与仿创造飞行同口径）
         com.maidsmart.goety.MaidGoetyNetworking.register();
@@ -124,6 +128,12 @@ public class ProMaidMod {
         // v1.2.0：指标石中断清理（女仆被收回/死亡 → 结束临时搭建）
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
                 new com.maidsmart.build.IndexStoneInterruptHandler());
+        // 【R1109】叫醒睡着的女仆（本模组物品右击）+ 魂符收回清冷却
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.task.MaidWakeHandler());
+        // 实测一千〇六：空手潜行右键女仆搭的方块 = 立刻强制回收成掉落物
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.task.PlacedMarkInteractHandler());
         // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
         // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
@@ -142,6 +152,10 @@ public class ProMaidMod {
         // 优雅退出后读回仍是 6.0）。改为注册到 MOD 总线。
         net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
                 .addListener((net.minecraftforge.fml.event.config.ModConfigEvent e) -> onConfigLoad(e));
+        // 蛋糕可食用：启动探测其他模组是否已改蛋糕；有冲突则本次运行自动关闭本模组蛋糕功能。
+        net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
+                .addListener((net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent e) ->
+                        e.enqueueWork(com.maidsmart.task.MaidCakeEatHandler::detectExternalCakeModification));
         // v1.5.88：MC 主菜单→模组→promaid→Config 打开自定义配置面板（仅客户端）。
         // v1.1.0【专用服务器崩溃修复】：带 Screen 签名的 lambda 一律放客户端专类
         // （com.maidsmart.client.PromaidClientSetup）——主类内联会让合成方法描述符
@@ -165,6 +179,9 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerSeatSyncClear();
             // v1.5.394 实测八百零五：「大运」BGM 客户端（每刻推进 + 退出世界清表）
             com.maidsmart.client.PromaidClientSetup.registerDaYunMusicHooks();
+            // v1.3.3 实测一千〇二：粉火登记进 cutout 渲染层（修「粉色火焰渲染成黑色方块」——
+            // 渲染层按方块实例查表，继承 FireBlock 不继承表项，详见 PromaidClientSetup）
+            com.maidsmart.client.PromaidClientSetup.registerPinkFireRenderType();
         }
     }
 
@@ -175,6 +192,22 @@ public class ProMaidMod {
     public static boolean runConfigMigration() {
         boolean changed = false;
         try {
+            // R1125：挖矿/伐木自动收集默认关闭 → 开启（玩家定调）。老 toml 里还写着 false 的
+            // 按旧默认迁一次；一次性标记保证之后玩家自己关掉不会再被打开。
+            if (!com.maidsmart.config.MaidSmartConfig.AUTO_COLLECT_ON_MIGRATED.get()) {
+                com.maidsmart.config.MaidSmartConfig.AUTO_COLLECT_ON_MIGRATED.set(true);
+                changed = true;
+                boolean mineOn = com.maidsmart.config.MaidSmartConfig.MINE_AUTO_COLLECT.get();
+                boolean woodOn = com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get();
+                if (!mineOn) {
+                    com.maidsmart.config.MaidSmartConfig.MINE_AUTO_COLLECT.set(true);
+                }
+                if (!woodOn) {
+                    com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.set(true);
+                }
+                com.maidsmart.tool.PromaidLog.log("配置迁移",
+                        "自动收集默认开启：挖矿 " + mineOn + " → true，伐木 " + woodOn + " → true");
+            }
             // 【实测六百八十一】这里原来有一条「22 → 6」的**强制**迁移：声明的默认值那时是
             // 22、迁移一启动就把它改成 6，于是"声明 22"永远看不到。默认值已表态为 22，
             // 这条迁移也跟着撤掉——留着它等于玩家永远拿不到默认值。
@@ -299,16 +332,8 @@ public class ProMaidMod {
                     com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.set(false);
                     repaired++;
                 }
-                if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.get()) {
-                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(true);
-                    repaired++;
-                }
-                if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get()) {
-                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.set(true);
-                    repaired++;
-                }
-                if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.get()) {
-                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.set(true);
+                if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_CONSUME.get()) {
+                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_CONSUME.set(true);
                     repaired++;
                 }
                 com.maidsmart.tool.PromaidLog.log("配置迁移",
@@ -454,7 +479,33 @@ public class ProMaidMod {
                             "滑翔类盘旋加高不需要迁移（现值 " + altBefore + "）");
                 }
             }
+            // R1049：记忆长度默认值整体上调（64→128、3→5、200→600、600→1200）。
+            // 老 toml 里写着旧默认，只改声明对老档无效；一次性标记钉死，只搬还停在旧默认的键。
+            if (!com.maidsmart.config.MaidSmartConfig.MEMORY_LENGTH_MIGRATED.get()) {
+                com.maidsmart.config.MaidSmartConfig.MEMORY_LENGTH_MIGRATED.set(true);
+                changed = true;
+                int moved = 0;
+                if (com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get() == 64) {
+                    com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.set(128);
+                    moved++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.MEMORY_PROMPT_TOP_N.get() == 3) {
+                    com.maidsmart.config.MaidSmartConfig.MEMORY_PROMPT_TOP_N.set(5);
+                    moved++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_MESSAGE_CHARS.get() == 200) {
+                    com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_MESSAGE_CHARS.set(600);
+                    moved++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.MEMORY_PROJECTION_CHARS.get() == 600) {
+                    com.maidsmart.config.MaidSmartConfig.MEMORY_PROJECTION_CHARS.set(1200);
+                    moved++;
+                }
+                com.maidsmart.tool.PromaidLog.log("配置迁移",
+                        "记忆长度默认值上调：本次迁移 " + moved + " 项（段落上限/注入条数/单条字符/投影字符）");
+            }
             changed |= migrateDangerCampfire();
+            changed |= migrateCookCampfire();
             changed |= migrateOreTable();
             changed |= migrateTagLines();
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
@@ -494,6 +545,12 @@ public class ProMaidMod {
         if (inConfigEvent) {
             return;
         }
+        // R1125：一次性迁移标记在 INTERNAL_SPEC 里——它必须跟着落盘，否则下次启动标记又变回
+        // false，"玩家手动关掉自动收集"会被再次迁移打开。
+        try {
+            com.maidsmart.config.MaidSmartConfig.INTERNAL_SPEC.save();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
+        }
         try {
             com.maidsmart.config.MaidSmartConfig.SPEC.save();
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidMod", ignored);
@@ -531,6 +588,25 @@ public class ProMaidMod {
                     "危险方块表补入营火/灵魂营火（营火伤害不点燃，旧表下她会站在火上白挨）");
         }
         return changed;
+    }
+
+    /**
+     * R1130：营火烹饪开关「旧默认关 → 现默认开」的一次性迁移。
+     * <p>声明里的默认只对新档生效；老 toml 里写着旧默认 false，她会一直只走炉子链路
+     * （日志里 "营火开关=关"，明明旁边点着营火也不用）。只搬"还停在旧默认 false"的键——
+     * 玩家升级后确实想关掉，面板里再关一次即可，标记落盘后不再反复打开。
+     */
+    private static boolean migrateCookCampfire() {
+        if (com.maidsmart.config.MaidSmartConfig.COOK_CAMPFIRE_MIGRATED.get()) {
+            return false;
+        }
+        com.maidsmart.config.MaidSmartConfig.COOK_CAMPFIRE_MIGRATED.set(true);
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_CAMPFIRE.get()) {
+            com.maidsmart.config.MaidSmartConfig.MISC_COOK_CAMPFIRE.set(true);
+            com.maidsmart.tool.PromaidLog.log("配置迁移",
+                    "营火烹饪开关的旧默认是关：本次已改为开（可在面板再关掉；标记已落盘，不再反复打开）");
+        }
+        return true; // 标记本身也要落盘
     }
 
     private static boolean migrateOreTable() {

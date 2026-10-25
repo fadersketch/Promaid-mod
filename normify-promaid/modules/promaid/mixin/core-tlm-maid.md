@@ -14,10 +14,15 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidStationaryMixin.java, line: 1, end_line: 44}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java, line: 1, end_line: 110}
   - {path: promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java, line: 1, end_line: 27}
+  - {path: promaid_src_neo/com/maidsmart/mixin/MaidHandExtractGuardMixin.java, line: 1, end_line: 78}
+  - {path: promaid_src_neo/com/maidsmart/mixin/MaidSpearSwingMixin.java, line: 1, end_line: 92}
+  - {path: promaid_src_neo/com/maidsmart/mixin/MaidArmRiseMixin.java, line: 1, end_line: 74}
+  - {path: promaid_src_neo/com/maidsmart/mixin/MaidSpearUsePoseMixin.java, line: 1, end_line: 38}
+  - {path: promaid_src_neo/com/maidsmart/mixin/LivingEntityUseItemAccessor.java, line: 1, end_line: 16}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java, line: 1, end_line: 161}
 revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: 632f4cca034ae0d8ab83619a883c19f407b183b90656e4a2984d3aba19dde15b
+fingerprint: c5dfcab39e99565c2b9017fb5aa28ed13eaf92c01a8a6550d4c75bd2c2a1cfd9
 state: active
 tags: [mixin]
 apis:
@@ -41,4 +46,9 @@ deps:
 - `promaid_src_neo/com/maidsmart/mixin/MaidStationaryMixin.java`:1
 - `promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java`:1
 - `promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/MaidHandExtractGuardMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/MaidSpearSwingMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/MaidArmRiseMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/MaidSpearUsePoseMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/LivingEntityUseItemAccessor.java`:1
 - `promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java`:1

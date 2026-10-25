@@ -23,6 +23,9 @@ import java.util.UUID;
  */
 public final class PatrolMarking {
 
+    /** 标记模式：这个特殊 routeId 表示"每按一次中键，新增一个独立目标点" */
+    public static final String TARGET_MODE = "#target";
+
     /** 玩家 UUID → 正在标记的轨道 id（值是空串 = 标记但没指定轨道，视为"当前选中的那条"） */
     private static final Map<UUID, String> ACTIVE = new HashMap<>();
 

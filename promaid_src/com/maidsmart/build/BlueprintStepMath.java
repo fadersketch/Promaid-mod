@@ -181,7 +181,49 @@ public final class BlueprintStepMath {
         return sz;
     }
 
+    /**
+     * 【R1079】这只蓝图是不是被整合包配置禁用（{@code build.disabledBlueprints}）。
+     * 支持 id、文件名与带后缀的文件名，大小写不敏感；命中后目录不显示、也不能被建造。
+     */
+    public static boolean isDisabled(String idOrFile) {
+        if (idOrFile == null || idOrFile.isEmpty()) {
+            return false;
+        }
+        try {
+            String key = normalizeDisabled(idOrFile);
+            for (String raw : com.maidsmart.config.MaidSmartConfig.BUILD_DISABLED_BLUEPRINTS.get()) {
+                if (raw != null && !raw.isEmpty() && normalizeDisabled(raw).equals(key)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BlueprintStepMath", ignored);
+        }
+        return false;
+    }
+
+    /** 去路径、去后缀、转小写——配置里写 id / 文件名 / 完整文件名都能对上。 */
+    private static String normalizeDisabled(String s) {
+        String x = s.trim().toLowerCase(java.util.Locale.ROOT);
+        // 外部蓝图在目录里的 id 带这个前缀；配置里写文件名/id 即可，不必带前缀
+        if (x.startsWith("maid_smart_ext:")) {
+            x = x.substring("maid_smart_ext:".length());
+        }
+        int slash = Math.max(x.lastIndexOf('/'), x.lastIndexOf('\\'));
+        if (slash >= 0) {
+            x = x.substring(slash + 1);
+        }
+        for (String ext : new String[]{".litematic", ".schematic", ".schem", ".snbt", ".nbt", ".json"}) {
+            if (x.endsWith(ext)) {
+                return x.substring(0, x.length() - ext.length());
+            }
+        }
+        return x;
+    }
+
     public static List<String> getBlueprint(String id) {
+        if (isDisabled(id)) {
+            return null;   // 【R1079】配置禁用：目录、建造、AI 下单全部不认
+        }
         List<String> builtIn = BlueprintCatalog.getBuiltIn(id);
         if (builtIn != null) {
             return builtIn;

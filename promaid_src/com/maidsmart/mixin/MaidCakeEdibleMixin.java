@@ -32,9 +32,10 @@ public abstract class MaidCakeEdibleMixin {
 
     /** 是否为蛋糕物品（1.20.1 无 CakeItem 类，蛋糕就是注册名 minecraft:cake 的 BlockItem）
      *  实测四百四十八：misc.cakeEdible 关掉后本 mixin 完全透明（蛋糕恢复原版不可食）——
-     *  这是与第三方模组冲突时的逃生通道。 */
+     *  这是与第三方模组冲突时的逃生通道。启动探测发现其他模组已改蛋糕时会自动关闭。 */
     private static boolean isCake(Item item) {
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.get()) {
+        if (com.maidsmart.task.MaidCakeEatHandler.isProbing()
+                || !com.maidsmart.task.MaidCakeEatHandler.isEnabled()) {
             return false;
         }
         if (!(item instanceof net.minecraft.world.item.BlockItem)) {

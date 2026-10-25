@@ -36,15 +36,21 @@ public final class FlightTargeting {
     private static final double HOLD_RANGE_SQR = HOLD_RANGE * HOLD_RANGE;
 
     /**
-     * 固定翼（AC-130H 等）的发现半径（格，度量用**水平**距离），圆心取**主人**（取不到才回落到她）。
-     * 为何单列一档：固定翼接敌时稳定在敌上 40+ 格（实测高差 -29~-41），若发现按 3D 距离算，
-     * 水平窗口只剩 {@code sqrt(50²−44²)≈24} 格；且一次通场+掉头就飞出上百格，以自身为圆心
-     * 等于"只在头顶几十格里找"，而这场仗发生在主人身边。故 {@link #keepable}/{@link #scan}
-     * 对固定翼改用 {@link #horizontalDistSqr}、圆心改 {@link #scanCenter}；直升机/飞艇/扫帚/
-     * 地面载具一个字节不变（仍以自身为圆心的 50 格球）。半径仍是 50，与扫帚同一套数字。
+     * 固定翼（AC-130H / A-10 等）的发现半径（格，度量用**水平**距离），圆心取**载具**。
+     * maid-frontline 的空中索敌就是 384 / 维持 576（A-10 900），圆心也是载具：固定翼一次通场
+     * 就飞出上百格，若仍用 50 格、以主人或自身为圆心，等于"只打眼前这几十格"。
+     * 直升机/飞艇/扫帚/地面载具一个字节不变（仍以自身为圆心的 50 格球）。
      */
-    public static final double AIRCRAFT_RANGE = 50.0;
+    public static final double AIRCRAFT_RANGE = 384.0;
     private static final double AIRCRAFT_RANGE_SQR = AIRCRAFT_RANGE * AIRCRAFT_RANGE;
+
+    /** 固定翼的维持锁定半径（格，水平）：发现 384 → 维持 576，与 maid-frontline 同档。 */
+    private static final double AIRCRAFT_HOLD_RANGE = 576.0;
+    private static final double AIRCRAFT_HOLD_RANGE_SQR = AIRCRAFT_HOLD_RANGE * AIRCRAFT_HOLD_RANGE;
+
+    /** A-10 的维持锁定半径单独为 900 格（jar 里它打得更远、也更不该丢锁）。 */
+    private static final double A10_HOLD_RANGE = 900.0;
+    private static final double A10_HOLD_RANGE_SQR = A10_HOLD_RANGE * A10_HOLD_RANGE;
 
     /**
      * 无锁定时的扫描限频（tick）。
@@ -55,6 +61,13 @@ public final class FlightTargeting {
      * 一旦锁定成功，① 会短路，扫描表根本不参与，所以这只影响"找目标"的那一下。
      */
     private static final int SCAN_INTERVAL = 10;
+
+    /**
+     * R1125：主人的"当前目标"有效期（tick，200 = 10 秒）。原版 {@code getLastHurtMob} 一旦写上
+     * 就永不清空，直接读等于"主人十分钟前打过的那只怪"永远优先；因此只认最近这段时间内
+     * 主人打过 / 打过主人的目标（与 {@code LiveThreat} 的时效口径同源）。
+     */
+    private static final int OWNER_THREAT_TICKS = 200;
 
     /**
      * 锁定表：女仆 UUID → 当前目标。
@@ -101,6 +114,19 @@ public final class FlightTargeting {
     }
 
     /**
+     * 载具瞬移后的重对齐：**连同 brain 里的旧目标一起擦掉**。
+     * <p>旧位置锁定的目标在瞬移后可能还在 576 格维持圈里——留着它，飞机就会掉头飞回旧战场；
+     * 擦掉之后下一拍按新位置重新扫描（固定翼圆心=载具、水平 384 格）。
+     */
+    public static void forgetAndErase(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        forget(maid.getUUID());
+        eraseBrain(maid);
+    }
+
+    /**
      * 行为中途停止时的轻量清理——只清每 tick 缓存（{@link #NEXT_SCAN}），**保留 {@link #LOCKED} 锁定**。
      * 空袭一轮里行为本就会短暂停（三件不齐的两拍、canStillUse 与 tick 的边界）；若按 {@link #forget}
      * 连锁定一起清，她得重走"限频扫描 + 视线门"，而她此刻多半在高空、对地面目标常不过视线门，于是
@@ -133,6 +159,24 @@ public final class FlightTargeting {
         }
         try {
             java.util.UUID id = maid.getUUID();
+            // R1125：显式「飞过去」期间索敌整段让位——她会一直飞向目标点，不因为路边有怪
+            // 就拐去接敌（玩家口径：飞过去不应该被锁敌/战斗打断）。
+            if (com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null) {
+                LOCKED.remove(id);
+                NEXT_SCAN.remove(id);
+                RESOLVED_TICK.remove(id);
+                eraseBrain(maid);
+                return null;
+            }
+            // 【R1129】载具接敌闸：任务不是攻击类、或她自己打不了且车里没弹 → 当作周围没有敌人。
+            // 只约束"骑卓越前线载具"这一档（MaidMountCompat 对其他坐骑恒返回 true）。
+            if (!MaidMountCompat.riderEngageAllowed(maid)) {
+                LOCKED.remove(id);
+                NEXT_SCAN.remove(id);
+                RESOLVED_TICK.remove(id);
+                eraseBrain(maid);
+                return null;
+            }
             if (!MaidFlightKit.isFlightTask(maid) && !MaidBroomKit.isBroomTask(maid)
                     && !isFlightMountRider(maid) && !isVehicleMountRider(maid)) {
                 // 只有两个空袭任务、扫帚任务，以及【实测七百三十】被指挥棒绑在**飞行坐骑**
@@ -146,14 +190,28 @@ public final class FlightTargeting {
             }
 
             long now = maid.level().getGameTime();
-            // 【实测七百八十五】固定翼单独一档（飞得高 + 不守在主人身边）——见 {@link #AIRCRAFT_RANGE}：
-            // 发现改"以主人为圆心的水平 50 格"，维持改用水平距离。
+            // 【实测七百八十五 → 一千零五十四】固定翼单独一档（飞得高 + 一次通场上百格）：
+            // 发现/维持改成"以载具为圆心的水平 384 / 576 格（A-10 维持 900）"。
             boolean aircraft = isAircraftRider(maid);
 
             // ⓪ 同 tick 去重：本 tick 已经解析过就直接复用锁定结果（见 RESOLVED_TICK 注释）
             Long done = RESOLVED_TICK.get(id);
             if (done != null && done == now) {
                 return lockedOf(id);
+            }
+
+            // ⓪ R1125：主人正在打 / 正在打主人的目标永远排在最前（飞行载具与扫帚上的她
+            // 先帮主人处理这一个）。锁上之后由 ① 的 HOLD_RANGE 维持——旁边出现更近的怪也不转火，
+            // 除非这一个离开锁敌范围 / 死亡 / 不再可攻击。
+            LivingEntity hot = ownerThreat(maid);
+            if (hot != null && keepable(maid, hot, aircraft)) {
+                if (lockedOf(id) != hot) {
+                    LOCKED.put(id, new java.lang.ref.WeakReference<>(hot));
+                }
+                RESOLVED_TICK.put(id, now);
+                NEXT_SCAN.put(id, now);
+                writeBrain(maid, hot);
+                return hot;
             }
 
             // ① 维持锁定：还活着 / 同维度 / 能攻击 / 在活动范围内 / 仍在 HOLD_RANGE 内 → 继续用它。
@@ -179,12 +237,15 @@ public final class FlightTargeting {
                 return inBrain;
             }
 
-            // ③ 新锁定：限频扫 50 格球（固定翼 = 以主人为圆心的水平 50 格），取最近的合法目标
+            // ③ 新锁定：限频扫发现半径（固定翼 = 以载具为圆心的水平 384 格），取最近的合法目标
             //    （**这一环含视线门**，与 TLM 原版一致）
             Long next = NEXT_SCAN.get(id);
             if (next != null && now < next) {
                 LOCKED.remove(id);
                 RESOLVED_TICK.put(id, now);
+                if (aircraft) {
+                    eraseBrain(maid);
+                }
                 return null; // 扫描冷却中：本轮不扫（最多晚 0.5 秒选到目标）
             }
             NEXT_SCAN.put(id, now + SCAN_INTERVAL);
@@ -195,7 +256,7 @@ public final class FlightTargeting {
                 writeBrain(maid, found);
                 if (aircraft) {
                     net.minecraft.world.entity.Entity c = scanCenter(maid, true);
-                    logAircraft(maid, "锁定（圆心=" + (c == maid ? "自身" : "主人")
+                    logAircraft(maid, "锁定（圆心=" + (c == maid ? "自身" : "载具")
                             + "，水平 " + Math.round(Math.sqrt(horizontalDistSqr(c, found))) + " 格）");
                 }
                 return found;
@@ -204,7 +265,12 @@ public final class FlightTargeting {
             // ④ 确实没有目标了：清锁，让调用方走收尾
             LOCKED.remove(id);
             if (aircraft) {
-                logAircraft(maid, "附近没有活敌人（新锁定以主人为圆心、水平 " + (long) AIRCRAFT_RANGE + " 格）");
+                // 固定翼还要把 brain 里那只**已被本索敌器否掉**的目标擦掉：TLM 的
+                // StartAttacking 可能还在往 ATTACK_TARGET 写另一个远处目标；不擦的话
+                // tickAttack / 引擎自带的 "Mob 乘客自动开火" 仍会拿它开火（实机日志：
+                // 索敌器说"没有活敌人"，炮弹却追着 400+ 格外的 netherite_monstrosity）。
+                eraseBrain(maid);
+                logAircraft(maid, "附近没有活敌人（新锁定以载具为圆心、水平 " + (long) AIRCRAFT_RANGE + " 格）");
             }
             return null;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
@@ -218,7 +284,8 @@ public final class FlightTargeting {
      * 【实测七百三十】她是不是"被骑乘指挥棒绑在一只**飞行坐骑**上"的女仆。
      *
      * <p>
-     * 所以这一档并入本索敌器：**发现 50 格 / 维持 128 格**，与扫帚/空袭同一套数字、同一套判据
+     * 所以这一档并入本索敌器：**发现 50 格 / 维持 128 格**（固定翼另档，见
+     * {@link #AIRCRAFT_RANGE}），与扫帚/空袭同一套判据
      * （红线"口径只有一处"）。判据走载具自己的引擎名（反射拿不到 → false，一个字节都不碰）。
      */
     private static boolean isFlightMountRider(EntityMaid maid) {
@@ -271,20 +338,31 @@ public final class FlightTargeting {
     }
 
     /**
-     * 【实测七百八十五】固定翼新锁定的扫描圆心：**主人**（拿不到主人才回落到她自己）。
-     * 见 {@link #AIRCRAFT_RANGE} 的"圆心换主人"。非固定翼一律回她自己（既有口径不变）。
+     * 【实测七百八十五 → 一千零五十四】固定翼新锁定的扫描圆心：**她乘坐的载具**（取不到才回落到她）。
+     * 与 maid-frontline 同口径：固定翼会带着主人飞出几百格，战斗发生在机头前方，以载具为圆心
+     * 才是"这架飞机能打到的范围"。非固定翼一律回她自己（既有口径不变）。
      */
     private static net.minecraft.world.entity.Entity scanCenter(EntityMaid maid, boolean aircraft) {
         if (aircraft) {
             try {
-                net.minecraft.world.entity.LivingEntity owner = maid.getOwner();
-                if (owner != null && owner.level() == maid.level()) {
-                    return owner;
+                net.minecraft.world.entity.Entity v = maid.getVehicle();
+                if (v != null && v.level() == maid.level()) {
+                    return v;
                 }
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             }
         }
         return maid;
+    }
+
+    /** 固定翼的维持半径平方：A-10 900 格，其余 576 格（见 {@link #AIRCRAFT_HOLD_RANGE}）。 */
+    private static double aircraftHoldRangeSqr(EntityMaid maid) {
+        try {
+            net.minecraft.world.entity.Entity v = maid.getVehicle();
+            return v != null && MaidMountCompat.isA10(v) ? A10_HOLD_RANGE_SQR : AIRCRAFT_HOLD_RANGE_SQR;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
+            return AIRCRAFT_HOLD_RANGE_SQR;
+        }
     }
 
     /** 两个实体的**水平**距离平方（x/z 两轴，忽略 y）——固定翼的度量，见 {@link #AIRCRAFT_RANGE}。 */
@@ -322,14 +400,54 @@ public final class FlightTargeting {
             if (!LiveThreat.live(maid, e)) {
                 return false;
             }
-            if (!maid.isWithinRestriction(e.blockPosition())) {
+            // 【实测一千零五十八】固定翼**不看 home/工作点限制**：它的交战包络已经是
+            // "以载具为圆心、水平 384 发现 / 576 维持（A-10 900）"，外面还有主人 450 格的
+            // 接敌绳；再叠一层通常只有几十格的 home 限制，结果就是"刚锁上、一飞出家门就丢锁"。
+            // 实机日志正是这样：索敌器说"没有活敌人"（限制判 false），brain 里却还留着
+            // 400+ 格外的 boss，旧版又从 brain 捡回来继续开火。其它坐骑/地面载具口径不变。
+            // 【R1083】但 home 模式下**停在原地的载具**仍要能开火：它不再移动，只受武器
+            // 射程约束；此时放行 home 限制（否则家圈外的敌人一律不打，玩家看到的就是"守家
+            // 时载具停止攻击"）。
+            boolean homeVehicle = !aircraft && isVehicleMountRider(maid)
+                    && maid.isHomeModeEnable();
+            if (!aircraft && !homeVehicle && !maid.isWithinRestriction(e.blockPosition())) {
                 return false;
             }
-            // 【实测七百八十五】固定翼按**水平**距离维持（高度差不该算进"还愿不愿意打"的预算）。
-            return aircraft ? horizontalDistSqr(maid, e) <= HOLD_RANGE_SQR
-                    : maid.distanceToSqr(e) <= HOLD_RANGE_SQR;
+            // 【实测七百八十五 → 一千零五十四】固定翼按**水平**距离、以载具为圆心维持，
+            // 半径 576 格（A-10 900）；高度差不该算进"还愿不愿意打"的预算。
+            if (aircraft) {
+                return horizontalDistSqr(scanCenter(maid, true), e) <= aircraftHoldRangeSqr(maid);
+            }
+            return maid.distanceToSqr(e) <= HOLD_RANGE_SQR;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
             return false;
+        }
+    }
+
+    /**
+     * R1125：主人此刻的"仇人"——优先"正在攻击主人"的那一只，其次"主人正在攻击"的那一只；
+     * 都只在最近 {@link #OWNER_THREAT_TICKS} 内有效，且必须同维度、存活。
+     */
+    private static LivingEntity ownerThreat(EntityMaid maid) {
+        try {
+            LivingEntity owner = maid.getOwner();
+            if (owner == null || !owner.isAlive() || owner.level() != maid.level()) {
+                return null;
+            }
+            long now = owner.tickCount;
+            LivingEntity attacker = owner.getLastHurtByMob();
+            if (attacker != null && attacker.isAlive() && attacker.level() == maid.level()
+                    && now - owner.getLastHurtByMobTimestamp() <= OWNER_THREAT_TICKS) {
+                return attacker;
+            }
+            LivingEntity prey = owner.getLastHurtMob();
+            if (prey != null && prey.isAlive() && prey.level() == maid.level()
+                    && now - owner.getLastHurtMobTimestamp() <= OWNER_THREAT_TICKS) {
+                return prey;
+            }
+            return null;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
+            return null;
         }
     }
 
@@ -349,9 +467,9 @@ public final class FlightTargeting {
     /**
      * 扫半径那么多格，取最近的合法目标（新锁定用，**含视线门**）。
      * 两步筛：先 AABB 膨胀粗筛（三轴独立膨胀 = 边长两倍半径的立方盒，比球宽松，斜角会多捞些），
-     * 再用距离平方精筛，实际生效范围正好是"以圆心为圆心、半径 50 格"，粗筛仍是引擎最擅长的 AABB。
-     * 固定翼两处不同（见 {@link #AIRCRAFT_RANGE}）：圆心取主人（{@link #scanCenter}）、精筛用水平
-     * 距离；直升机 / 飞艇 / 扫帚 / 地面载具仍是以她自身为圆心的 50 格球，一个字节不变。
+     * 再用距离平方精筛，非固定翼的实际生效范围正好是"以她为圆心、半径 50 格"。
+     * 固定翼三处不同（见 {@link #AIRCRAFT_RANGE}）：圆心取载具（{@link #scanCenter}）、精筛用水平
+     * 距离、半径 384 格；直升机 / 飞艇 / 扫帚 / 地面载具仍是以她自身为圆心的 50 格球。
      */
     private static LivingEntity scan(EntityMaid maid, boolean aircraft) {
         try {
@@ -372,11 +490,16 @@ public final class FlightTargeting {
                 if (!LiveThreat.live(maid, e)) {
                     continue;
                 }
-                if (!maid.isWithinRestriction(e.blockPosition())) {
+                // 固定翼的 home 限制已由 384/576 交战包络 + 主人 450 格接敌绳替代，
+                // 见 keepable 的说明；其它载具仍按活动范围筛。
+                // 【R1083】home 模式下停住的载具只受武器射程约束，见 keepable。
+                boolean homeVehicle = !aircraft && isVehicleMountRider(maid)
+                        && maid.isHomeModeEnable();
+                if (!aircraft && !homeVehicle && !maid.isWithinRestriction(e.blockPosition())) {
                     continue; // 活动范围
                 }
-                // 【实测七百八十五】固定翼按**水平**距离精筛（她比敌人高 40+ 格，3D 球会把
-                // 水平窗口压到 sqrt(50²−44²)≈24 格——那正是"离得很近才开火"的几何）。
+                // 【实测七百八十五 → 一千零五十四】固定翼按**水平**距离精筛（她比敌人高 40+ 格，
+                // 3D 球会把水平窗口压得很小；且圆心已换成载具、半径 384）。
                 double d = aircraft ? horizontalDistSqr(center, e) : maid.distanceToSqr(e);
                 if (d > rangeSqr) {
                     continue; // 精筛成球（固定翼：水平圆）
@@ -413,6 +536,22 @@ public final class FlightTargeting {
             maid.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, java.util.Optional.of(target));
             maid.getBrain().setMemory(MemoryModuleType.LOOK_TARGET,
                     java.util.Optional.of(new EntityTracker(target, true)));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
+        }
+    }
+
+    /**
+     * 把 brain 里的攻击/注视目标清空（只对固定翼用，见 {@link #resolve} ③/④）。
+     * <p>固定翼的开火目标现在统一走 {@link #resolve}，brain 只作为 TLM 行为与卓越前线
+     * "Mob 乘客自动开火"的兼容出口；索敌器已经判"没有目标"时若还留着旧值，那两路会继续
+     * 用旧目标开火。{@code Optional.empty()} 在 1.20.1/1.21.1 的 {@code Brain.setMemory}
+     * 里都等价于 erase，两树同名写法一致。
+     */
+    private static void eraseBrain(EntityMaid maid) {
+        try {
+            maid.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, java.util.Optional.empty());
+            maid.getBrain().setMemory(MemoryModuleType.LOOK_TARGET, java.util.Optional.empty());
+            maid.setTarget(null);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("FlightTargeting", ignored);
         }
     }

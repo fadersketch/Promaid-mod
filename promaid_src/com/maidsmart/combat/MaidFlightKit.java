@@ -311,7 +311,12 @@ public final class MaidFlightKit {
             // 就掉下来"），空袭那边同理。口径只在 GunCompat 一处，别处不重写。
             // 「打得响吗」（TACZ 的 NO_AMMO 门 = 实测六百六十六；卓越前线的 hasEnoughAmmoToShoot）， canReload 问两家各自的「换得上弹吗」（TACZ 的 AbstractGunItem.canReload = 实测六百九十四； 卓越前线的 GunData.shouldStartReloading——与 TLM 自己的 SBW 换弹链路同一个方法 = 实测六百九十五） ——**不再是"任意远程武器 + 任意弹药"**。 。
             if (GunCompat.isGun(weapon)) {
-                return GunCompat.canFeed(maid, weapon) || GunCompat.canReload(maid, weapon);
+                // v1.3.3 实测一千〇三【额外容器】：口径收成 GunCompat#isGunReady 一处——
+                // "打得响 或 换得上 或 额外容器（精妙背包/旅行者背包）里有"（第三项是只读探针，
+                // 净零）；否则"装了精妙背包、子弹在里面，模式却判缺弹药、连起飞都不给"。
+                // 真正取物由开火链路每 tick 的 GunCompat#fetchAmmoIfNeeded 负责（同一口径，
+                // 与 hasRiptide/fetchRiptide 完全同构）。
+                return GunCompat.isGunReady(maid, weapon);
             }
             // v1.2.0 实测五百零一【御币被误判缺弹药】：御币 **不消耗弹药**（弹幕用武器本体），
             // 但它是 `ProjectileWeaponItem` 的子类（`ItemHakureiGohei extends ProjectileWeaponItem`，
@@ -440,6 +445,12 @@ public final class MaidFlightKit {
                     return true;
                 }
             }
+            // 额外容器（精妙背包/旅行者背包）里能用的也算齐备；真正换手由
+            // ensureUsableRangedWeapon → takeFromBackpack 搬（那里已经 pull）。
+            if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.m_41619_() && filter.test(s) && hasAmmoForWeapon(maid, s))) {
+                return true;
+            }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return false;
@@ -529,12 +540,12 @@ public final class MaidFlightKit {
     }
 
     /**
-     * 背包（含副手）里是否有可用的箭。**与开火路径 `MaidFlightRangedTask#findArrow`
-     * 的三层判据一一对齐**——激活检测与实际能不能打出去必须是同一口径，否则会出现
-     * "判定有弹药但打不出去"或"能打却不起飞"。
-     * ```
-     *   ① 副手是箭
-     *   ② 背包里有武器 supportedProjectiles 认可的弹药（弓弩认箭、模组弹射物认自己的） ③ 背包里有任意箭（与 findArrow 的最后兜底一致） ```
+     * 背包（含副手）里是否有可用的箭——**与开火路径 `MaidFlightRangedTask#findArrow` 的三层判据
+     * 一一对齐**（①副手是箭 ②背包里有武器 supportedProjectiles 认可的弹药 ③背包里有任意箭）：
+     * 激活检测与实际能不能打出去必须是同一口径，否则会出现"判定有弹药但打不出去"或"能打却不起飞"。
+     * v1.3.3 实测一千〇三【额外容器】：她自己背包里没有 → 再问一次"她身上的额外容器"（饰品栏里的
+     * 精妙背包/旅行者背包，见 {@code MaidExtraContainer#contains}，只读探针净零）；判据与取箭同源，
+     * 判定说有就一定能取来（那边会真的 pull）。
      */
     private static boolean hasArrowFor(EntityMaid maid, ItemStack weapon) {
         try {
@@ -564,6 +575,13 @@ public final class MaidFlightKit {
                 if (!s.m_41619_() && s.m_41720_() instanceof net.minecraft.world.item.ArrowItem) {
                     return true;
                 }
+            }
+            // v1.3.3 实测一千〇三：额外容器（精妙背包/旅行者背包）里的箭也算
+            final java.util.function.Predicate<ItemStack> sup = supported;
+            if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.m_41619_() && s.m_41720_() instanceof net.minecraft.world.item.ArrowItem
+                            && (sup == null || sup.test(s)))) {
+                return true;
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
@@ -999,8 +1017,13 @@ public final class MaidFlightKit {
             ensureUsableRangedWeapon(maid);
         }
         if (!isWeaponForTask(maid, maid.m_21205_())) {
-            // 近战才有「重锤优先」这种偏好；远战直接找远程武器（弓/枪）
-            ItemStack weapon = takeFromBackpack(maid, s -> isWeaponForTask(maid, s));
+            // 近战才有「重锤优先」这种偏好；远战直接找远程武器（弓/枪）。
+            // 1.20.1 的重锤来自 Trials 回移植，用注册名识别。
+            ItemStack weapon = isRangedTask(maid) ? ItemStack.f_41583_
+                    : takeFromBackpack(maid, s -> MaidMaceSmashBehavior.isMace(s));
+            if (weapon.m_41619_()) {
+                weapon = takeFromBackpack(maid, s -> isWeaponForTask(maid, s));
+            }
             if (!weapon.m_41619_()) {
                 ItemStack old = hands.getStackInSlot(0);
                 hands.setStackInSlot(0, weapon);
@@ -1274,7 +1297,29 @@ public final class MaidFlightKit {
                 + " 副手=" + describeElytraCandidate(maid.m_21206_(), maid, owner)
                 // v1.3.0(beta) 实测六百八十：饰品栏（Curios）那一路——"我把鞘翅放她饰品栏了，
                 // 她怎么还说缺鞘翅"这类现场，日志里这一行就能直接对上（没装 Curios 会写"未装 Curios"）
-                + " 饰品栏=" + CuriosElytraCompat.describe(maid, s -> isElytraLike(s, maid));
+                + " 饰品栏=" + CuriosElytraCompat.describe(maid, s -> isElytraLike(s, maid))
+                + " " + curiosDump(maid, owner);
+    }
+
+    /**
+     * R1115 诊断：把饰品栏里的东西逐件列出来（槽位=物品id + 两处 canElytraFly 结果）。
+     * 旧版只报"有 1 件/空"，槽里明明放着鞘翅、却因对女仆不能滑翔被拒时，日志里看着和空槽一模一样。
+     */
+    private static String curiosDump(EntityMaid maid, net.minecraft.world.entity.player.Player owner) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            CuriosElytraCompat.collectAll(maid, (slot, stack) -> {
+                if (stack == null || stack.m_41619_()) {
+                    return;
+                }
+                if (sb.length() > 0) {
+                    sb.append(',');
+                }
+                sb.append(slot).append('=').append(describeElytraCandidate(stack, maid, owner));
+            });
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
+        }
+        return sb.length() == 0 ? "明细=空" : "明细=" + sb;
     }
 
     private static String describeElytraCandidate(ItemStack stack, net.minecraft.world.entity.LivingEntity entity,
@@ -1527,6 +1572,54 @@ public final class MaidFlightKit {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
         }
         return ItemStack.f_41583_;
+    }
+
+    /**
+     * v1.3.3 实测一千【飞行跟随收手取回原物】：按"认领钥匙"把换下来的那件从她身上取回来
+     * ——与 {@link #takeFromBackpack} 同口径（先让额外容器搬进来、再整叠取出），匹配用
+     * "同物品 + 除耐久外 NBT 全等"（与 {@code ProMaidExtension.sameIgnoringDurability} 同源；
+     * 耐久是易变量，不参与认领）。取不到返回空栈或不足数的部分——调用方【绝不】凭空补件。
+     * @param want  记录的那一件（只作匹配钥匙，绝不复用其实例）
+     * @param count 记录的数量（只取到这么多；多出来的留在她身上）
+     */
+    public static ItemStack takeBackExact(EntityMaid maid, ItemStack want, int count) {
+        if (maid == null || want == null || want.m_41619_() || count <= 0) {
+            return ItemStack.f_41583_;
+        }
+        try {
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> sigMatch(s, want), -1);
+            IItemHandler inv = maid.getAvailableBackpackInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (sigMatch(s, want)) {
+                    return inv.extractItem(i, Math.min(count, s.m_41613_()), false);
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** "是不是记录的那一件"：同物品 + "除耐久外"全等（对齐 ProMaidExtension.sameIgnoringDurability） */
+    private static boolean sigMatch(ItemStack s, ItemStack want) {
+        if (s == null || s.m_41619_() || s.m_41720_() != want.m_41720_()) {
+            return false;
+        }
+        try {
+            if (s.m_41773_() == want.m_41773_()) {
+                return net.minecraftforge.items.ItemHandlerHelper.canItemStacksStack(s, want);
+            }
+            if (!s.m_41763_() || !want.m_41763_()) {
+                return false; // 不可损坏却"耐久"不同 → 不是同一件
+            }
+            ItemStack a = s.m_41777_();
+            ItemStack b = want.m_41777_();
+            a.m_41721_(0); // 只把耐久对齐，别的 NBT 不动
+            b.m_41721_(0);
+            return net.minecraftforge.items.ItemHandlerHelper.canItemStacksStack(a, b);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFlightKit", ignored);
+            return false;
+        }
     }
 
     /** 从背包只抽走 1 个（烟花消耗专用） */

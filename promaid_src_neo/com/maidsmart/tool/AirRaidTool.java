@@ -158,6 +158,8 @@ public class AirRaidTool implements ITool<AirRaidTool.Result> {
         StringBuilder sb = new StringBuilder();
         try {
             // 硬清本轮空袭状态（含空袭专用索敌的锁定）——forget 的既有用途就是"换任务"
+            com.maidsmart.combat.SpearCoreCompat.stopCharge(maid);
+            com.maidsmart.combat.SpearAttackBehavior.forget(maid.getUUID());
             com.maidsmart.combat.MaidFlightCombatBehavior.forget(maid.getUUID());
             sb.append("已停止空袭");
         } catch (Throwable t) {

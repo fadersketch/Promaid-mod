@@ -26,6 +26,9 @@ public abstract class MealTaskGatingMixin {
     @Inject(method = "checkExtraStartConditions(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z", at = @At("HEAD"), cancellable = true)
     private void maidsmart$deferMealWhileWorking(ServerLevel level, EntityMaid maid,
                                                  CallbackInfoReturnable<Boolean> cir) {
+        // 【实测一千〇二十五】长矛冲锋不再拦工作餐：冲锋是并行链路，吃饭优先占用 useItem，
+        // 吃完后的下一 tick 由 SpearAttackBehavior 自动续满蓄力（SpearCoreCompat#claimCharge
+        // 绝不再 stopUsingItem 抢饭碗）。
         if (com.maidsmart.config.MaidSmartConfig.MISC_WORK_UNINTERRUPTED.get()
                 && MaidWorkTags.isNonCombatWork(maid)) {
             cir.setReturnValue(false);

@@ -14,10 +14,12 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/mixin/ChunkMapTrackRemoteMixin.java, line: 1, end_line: 168}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidContainerRemoteOpenMixin.java, line: 1, end_line: 84}
+  - {path: promaid_src_neo/com/maidsmart/mixin/MaidGuiPacketRemoteMixin.java, line: 1, end_line: 45}
   - {path: promaid_src_neo/com/maidsmart/mixin/ChunkMapRemotePumpMixin.java, line: 1, end_line: 70}
+  - {path: promaid_src_neo/com/maidsmart/mixin/EquipmentPacketCopyMixin.java, line: 1, end_line: 47}
 revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: 55fa9cfb5e2be0b5b69f8de8935e7759bca34940a76e8746cb9c7bedfed50b85
+fingerprint: 070bce9b6348bce05c5a41757accc04968a091e90e6b56442dcd5691a23355df
 state: active
 tags: [mixin, net]
 deps:
@@ -33,4 +35,6 @@ deps:
 
 - `promaid_src_neo/com/maidsmart/mixin/ChunkMapTrackRemoteMixin.java`:1
 - `promaid_src_neo/com/maidsmart/mixin/MaidContainerRemoteOpenMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/MaidGuiPacketRemoteMixin.java`:1
 - `promaid_src_neo/com/maidsmart/mixin/ChunkMapRemotePumpMixin.java`:1
+- `promaid_src_neo/com/maidsmart/mixin/EquipmentPacketCopyMixin.java`:1

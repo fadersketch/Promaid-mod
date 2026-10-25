@@ -864,18 +864,22 @@ public class BlueprintBookScreen extends Screen {
         int bh = Math.max(12, rowH - 3);
         int gap = rowH - bh;
         int y0 = Math.max(52, Math.min(64, h - rowH * HOME_ENTRIES - 44));
+        // 【R1079】手册 / 配置拆分：bookConfigAccess=false 时只保留指南/建造/女仆/记忆，
+        // 配置与 DIY 入口整行不出现（生存玩家不会误入配置页）。行号动态排列，不留空洞。
+        boolean configAccess = com.maidsmart.config.MaidSmartConfig.MISC_BOOK_CONFIG_ACCESS.get();
+        int row = 0;
         // v1.5.252h：详细介绍放目录【最上面】（反馈"放最下面怪怪的"）
         this.addRenderableWidget(Button.builder(
                         Component.literal("\u00a76\u25c6 详细介绍"),
                         b -> com.maidsmart.guide.GuideScreen.open(this))
-                .bounds(cx - bw / 2, y0, bw, bh).build());
+                .bounds(cx - bw / 2, y0 + rowH * row++, bw, bh).build());
         this.addRenderableWidget(Button.builder(
                         Component.literal("\u00a7e\u26f0 建造（" + buildCount + " 个建筑）"),
                         b -> {
                             this.view = VIEW_BUILD;
                             this.rebuildButtons();
                         })
-                .bounds(cx - bw / 2, y0 + rowH, bw, bh).build());
+                .bounds(cx - bw / 2, y0 + rowH * row++, bw, bh).build());
         this.addRenderableWidget(Button.builder(
                         Component.literal("\u00a7b\u2640 女仆管理（" + maidCount + " 只）"),
                         b -> {
@@ -883,13 +887,15 @@ public class BlueprintBookScreen extends Screen {
                             this.maidPage = 0;
                             this.rebuildButtons();
                         })
-                .bounds(cx - bw / 2, y0 + rowH * 2, bw, bh).build());
+                .bounds(cx - bw / 2, y0 + rowH * row++, bw, bh).build());
         // v1.5.88：模组详细配置（打开 Promaid 配置面板，返回时回到手册）
-        this.addRenderableWidget(Button.builder(
-                        Component.literal("\u00a7d\u2699 模组详细配置"),
-                        b -> Minecraft.getInstance().setScreen(
-                                new com.maidsmart.config.PromaidConfigScreen(this)))
-                .bounds(cx - bw / 2, y0 + rowH * 3, bw, bh).build());
+        if (configAccess) {
+            this.addRenderableWidget(Button.builder(
+                            Component.literal("\u00a7d\u2699 模组详细配置"),
+                            b -> Minecraft.getInstance().setScreen(
+                                    new com.maidsmart.config.PromaidConfigScreen(this)))
+                    .bounds(cx - bw / 2, y0 + rowH * row++, bw, bh).build());
+        }
         // v1.5.95：女仆记忆查看（看女仆记得什么）
         this.addRenderableWidget(Button.builder(
                         Component.literal("\u00a7a\u2661 女仆记忆"),
@@ -898,15 +904,17 @@ public class BlueprintBookScreen extends Screen {
                             this.memoryLines = null;
                             this.rebuildButtons();
                         })
-                .bounds(cx - bw / 2, y0 + rowH * 4, bw, bh).build());
+                .bounds(cx - bw / 2, y0 + rowH * row++, bw, bh).build());
         // v1.5.396 实测八百三十五：DIY / 默认模式（DIY ↔ 默认；改的是全模组配置）
-        this.addRenderableWidget(Button.builder(
-                        Component.literal("\u00a7c\u2691 DIY / 默认模式"),
-                        b -> {
-                            this.view = VIEW_PRESET;
-                            this.rebuildButtons();
-                        })
-                .bounds(cx - bw / 2, y0 + rowH * 5, bw, bh).build());
+        if (configAccess) {
+            this.addRenderableWidget(Button.builder(
+                            Component.literal("\u00a7c\u2691 DIY / 默认模式"),
+                            b -> {
+                                this.view = VIEW_PRESET;
+                                this.rebuildButtons();
+                            })
+                    .bounds(cx - bw / 2, y0 + rowH * row++, bw, bh).build());
+        }
     }
 
     // ================= v1.5.396 实测八百三十五：DIY / 默认模式页 =================

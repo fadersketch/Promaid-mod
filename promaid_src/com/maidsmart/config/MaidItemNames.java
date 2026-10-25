@@ -47,4 +47,51 @@ public final class MaidItemNames {
             return "";
         }
     }
+
+    /**
+     * 注册名 → 当前语言显示名。配置里存的是 {@code stripped_warped_hyphae} /
+     * {@code minecraft:stripped_warped_hyphae} / {@code id=value} / {@code !id} 这类字符串；
+     * 这里按原版物品栏同一套名字解析（就是玩家背包里看到的那个名字），拿不到再回退手写词表。
+     */
+    public static String name(String id) {
+        if (id == null || id.isEmpty()) {
+            return "";
+        }
+        String raw = id.trim();
+        if (raw.startsWith("!")) {
+            raw = raw.substring(1).trim();
+        }
+        int eq = raw.indexOf('=');
+        if (eq > 0) {
+            raw = raw.substring(0, eq).trim();
+        }
+        if (raw.startsWith("#")) {
+            return raw; // 标签行不猜名字，原样显示
+        }
+        if (raw.startsWith("tag:")) {
+            return "#" + raw.substring(4);
+        }
+        if (!raw.isEmpty() && !raw.contains(":")) {
+            raw = "minecraft:" + raw;
+        }
+        try {
+            ResourceLocation rl = new ResourceLocation(raw);
+            net.minecraft.world.item.Item item = ForgeRegistries.ITEMS.getValue(rl);
+            if (item != null) {
+                String n = name(new ItemStack(item));
+                if (!n.isEmpty()) {
+                    return n;
+                }
+            }
+            net.minecraft.world.level.block.Block block = ForgeRegistries.BLOCKS.getValue(rl);
+            if (block != null && block != net.minecraft.world.level.block.Blocks.f_50016_) {
+                String n = block.m_49954_().getString();
+                if (n != null && !n.isEmpty()) {
+                    return n;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidItemNames", ignored);
+        }
+        return com.maidsmart.build.BlueprintLib.cnName(id);
+    }
 }

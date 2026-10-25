@@ -106,7 +106,7 @@ public final class DaYunBreaker {
                             float maxHardness, boolean skipContainers,
                             boolean dropItems, boolean breakParticles, int maxBlocksPerTick) {
         return sweep(level, entity, maxHardness, skipContainers, dropItems, breakParticles,
-                maxBlocksPerTick, null, RANGE_DEFAULT);
+                maxBlocksPerTick, null, RANGE_DEFAULT, false);
     }
 
     /**
@@ -122,7 +122,22 @@ public final class DaYunBreaker {
                                  boolean dropItems, boolean breakParticles, int maxBlocksPerTick,
                                  net.minecraft.world.phys.Vec3 motion, int side) {
         return sweep(level, entity, maxHardness, skipContainers, dropItems, breakParticles,
-                maxBlocksPerTick, motion, side);
+                maxBlocksPerTick, motion, side, false);
+    }
+
+    /**
+     * 【R1126】空袭状态专用：本轮空袭里她可能主动收翅（猛击/激流/贴地那几拍），
+     * 此时滑翔位为假，但玩家看到的仍然是「空袭途中」——大运不该整段失效。
+     * 调用方只在 `!onGround() && isFlightAirborne()` 时传 true，落地后照旧不吃。
+     */
+    public static int sweepAheadAirRaid(ServerLevel level, LivingEntity entity,
+                                        float maxHardness, boolean skipContainers,
+                                        boolean dropItems, boolean breakParticles,
+                                        int maxBlocksPerTick,
+                                        net.minecraft.world.phys.Vec3 motion, int side,
+                                        boolean allowNonGliding) {
+        return sweep(level, entity, maxHardness, skipContainers, dropItems, breakParticles,
+                maxBlocksPerTick, motion, side, allowNonGliding);
     }
 
     /**
@@ -193,16 +208,21 @@ public final class DaYunBreaker {
     private static int sweep(ServerLevel level, LivingEntity entity,
                              float maxHardness, boolean skipContainers,
                              boolean dropItems, boolean breakParticles, int maxBlocksPerTick,
-                             net.minecraft.world.phys.Vec3 motion, int side) {
+                             net.minecraft.world.phys.Vec3 motion, int side,
+                             boolean allowNonGliding) {
         if (level == null || entity == null || !entity.m_6084_()) {
             return 0;
         }
         // 【必须先判滑翔】需求原文："使用鞘翅飞行的过程中"——只有真在滑翔才动手
-        if (!entity.m_21255_()) {
+        if (!entity.m_21255_() && !allowNonGliding) {
             return 0;
         }
         final int half = halfOf(side);
         int cleared = 0;
+        // 【R1105】每 tick 破坏粒子/音效配额：只给前 N 格发 levelEvent（方块照破、掉落照给）。
+        // 用一个单元素数组在"多个中心段"之间共享，避免每段都重新起算。
+        final boolean fxOn = breakParticles && com.maidsmart.config.MaidSmartConfig.DAYUN_PARTICLE_LIMIT.get();
+        final int[] fxLeft = {fxOn ? com.maidsmart.config.MaidSmartConfig.DAYUN_PARTICLE_CAP.get() : Integer.MAX_VALUE};
         List<BlockPos> removed = new ArrayList<>();
         List<BlockState> removedStates = new ArrayList<>();
 
@@ -214,7 +234,7 @@ public final class DaYunBreaker {
                 break;
             }
             cleared += clearAround(level, entity, center, maxHardness, skipContainers,
-                    breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
+                    breakParticles, half, maxBlocksPerTick - cleared, fxLeft, removed, removedStates);
         }
 
         if (dropItems) {
@@ -233,7 +253,7 @@ public final class DaYunBreaker {
      */
     private static int clearAround(ServerLevel level, LivingEntity entity, BlockPos center,
                                    float maxHardness, boolean skipContainers, boolean breakParticles,
-                                   int half, int budget,
+                                   int half, int budget, int[] fxLeft,
                                    List<BlockPos> removed, List<BlockState> removedStates) {
         int cleared = 0;
         for (int dx = -half; dx <= half && cleared < budget; dx++) {
@@ -275,7 +295,8 @@ public final class DaYunBreaker {
                         // 挖矿/伐木/种植/搭桥全部用这一条（MaidMineBehavior / MaidWoodBehavior /
                         // MaidPlanting / BridgeUpBehavior），所以这里也照它走，手感与原版手挖一致。
                         // 实测八百一十起由配置项 breakParticles 控制（默认开，关掉则静静消失）。
-                        if (breakParticles) {
+                        if (breakParticles && fxLeft[0] > 0) {
+                            fxLeft[0]--; // 【R1105】每 tick 粒子/音效配额，超出的只破坏不喷
                             level.m_46796_(BLOCK_BREAK_EVENT, pos, Block.m_49956_(state));
                         }
                     }

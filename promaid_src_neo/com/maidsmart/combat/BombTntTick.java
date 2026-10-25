@@ -53,15 +53,22 @@ public final class BombTntTick {
 
     public static void tickRangedTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         try {
-            if (level == null || maid == null || target == null || (!BombConfig.cfgTnt() && !BombConfig.cfgMelee())) {
+            if (level == null || maid == null || target == null
+                    || !com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_ENABLE.get()
+                    || (!BombConfig.cfgTnt() && !BombConfig.cfgAnyPlacement())) {
                 return;
             }
             if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
                 return; // 傀儡模式（第三方玩法）期间不介入
             }
+            // 【实测一千〇六十】重锤 + 风弹档：整条轰炸链路等这一记猛击真的落地命中后再走，
+            // 避免炸弹先把目标掀飞。空袭 / 非重锤档不受影响（见 bombingAllowed）。
+            if (!MaidMaceSmashBehavior.bombingAllowed(maid)) {
+                return;
+            }
             // v1.2.2 实测五百九十【改挂攻击链路】：本方法由空袭远程链路在 fireRanged
             // **之后**调用 = 「这一次开火打完」，所以直接走链路收尾（最短间隔只当下限）
-            if (BombConfig.cfgMelee() && MaidBombing.tryStartMelee(level, maid, target)) {
+            if (BombConfig.cfgAnyPlacement() && MaidBombing.tryStartMelee(level, maid, target)) {
                 return; // 起手成功：TNT 归相位收尾（与猛击那条路一致）
             }
             onAttackChainEnd(level, maid, target);
@@ -74,7 +81,9 @@ public final class BombTntTick {
         try {
             // v1.2.2 实测五百九十二：这条扫描现在同时负责【轰炸起手】与【TNT 投放】，所以只要
             // 两个开关里有一个开着就得跑（各自的部分再各自判开关）
-            if (level == null || maid == null || (!BombConfig.cfgTnt() && !BombConfig.cfgMelee())) {
+            if (level == null || maid == null
+                    || !com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_ENABLE.get()
+                    || (!BombConfig.cfgTnt() && !BombConfig.cfgAnyPlacement())) {
                 return;
             }
             // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间不介入
@@ -88,6 +97,12 @@ public final class BombTntTick {
             }
             if (!com.maidsmart.task.MaidWorkTags.isCombatTask(maid)) {
                 return; // 非战斗任务不扔（干活/待机/跟随都不打扰）
+            }
+            // 【实测一千〇六十】重锤档：起跳途中 / 还没砸中之前不挂弹、不投弹。
+            // 清掉 ARMED，落地命中后下一次扫描重新挂上，紧接着才走 flushTnt。
+            if (!MaidMaceSmashBehavior.bombingAllowed(maid)) {
+                MaidBombing.TNT_ARMED.remove(maid.getUUID());
+                return;
             }
             if (!maid.isAlive() || maid.isRemoved()) {
                 return;
@@ -119,7 +134,7 @@ public final class BombTntTick {
                 //    v1.2.2 实测六百〇三：远程空袭那道闸**删掉**（需求："将重生锚之类的放置
                 //    也加入到远程空袭"）——她飞在天上也照放，落点是目标脚边 / 她正下方 /
                 //    悬空 / 最后走 tryPlaceAirDrop 的后门。
-                if (BombConfig.cfgMelee() && MaidBombing.tryStartMelee(level, maid, target)) {
+                if (BombConfig.cfgAnyPlacement() && MaidBombing.tryStartMelee(level, maid, target)) {
                     return;
                 }
             }
@@ -167,6 +182,11 @@ public final class BombTntTick {
                 return;
             }
             if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+                return;
+            }
+            // 【实测一千〇六十】重锤档：这一发等"猛击真的命中"之后再出手。
+            if (!MaidMaceSmashBehavior.bombingAllowed(maid)) {
+                MaidBombing.TNT_ARMED.remove(id);
                 return;
             }
             if (!BombThrow.legalThrowTarget(maid, target)) {

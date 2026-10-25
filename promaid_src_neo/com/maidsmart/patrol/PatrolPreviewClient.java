@@ -61,6 +61,39 @@ public final class PatrolPreviewClient {
     private static boolean marking = false;
     private static String markingRouteId = "";
 
+    /**
+     * 【R1135】帧内预算——"拿航图就爆内存"的闸：渲染每帧跑，旧版把全部轨道的全部标记都画
+     * （每颗约 140 个 {@code Vec3} + 1 个 {@code float[]} + 2 条标签），1024 颗 ≈ 每秒几百万短期对象。
+     * 现在选中/标记中那条不受限，其余只画 {@link #MARKER_DIST} 格内、每帧最多
+     * {@link #MARKER_BUDGET} 颗；标签跟着"画出来的"走，字符串数量也随之有界。
+     */
+    private static final double MARKER_DIST = 64.0;
+    private static final int MARKER_BUDGET = 96;
+    /** 【R1135】标记配色（静态常量，不再每颗 new 一个 float[]） */
+    private static final float[] C_FIRST = {0.22f, 0.94f, 0.85f};
+    private static final float[] C_LAST = {1.00f, 0.37f, 0.66f};
+    private static final float[] C_MID = {0.80f, 0.74f, 1.00f};
+    private static final float[] C_MID_DIM = {0.52f, 0.48f, 0.68f};
+
+    /** 【R1135】上一帧解析过的书——物品与其数据组件都没换就复用（原先每帧重新解析整本 NBT） */
+    private static net.minecraft.world.item.ItemStack cachedStack;
+    private static net.minecraft.world.item.component.CustomData cachedData;
+    private static PatrolBook cachedBook;
+
+    private static PatrolBook bookFor(net.minecraft.world.item.ItemStack stack) {
+        net.minecraft.world.item.component.CustomData data = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                net.minecraft.world.item.component.CustomData.EMPTY);
+        if (cachedBook != null && cachedStack == stack && cachedData == data) {
+            return cachedBook;
+        }
+        PatrolBook book = PatrolChartData.readBook(stack);
+        cachedStack = stack;
+        cachedData = data;
+        cachedBook = book;
+        return book;
+    }
+
     private PatrolPreviewClient() {
     }
 
@@ -89,12 +122,18 @@ public final class PatrolPreviewClient {
         // 不再持有状态：可见性每帧由"手上拿没拿航图"决定，这里只清缓存（**不**清标记态——
         // 「开始标记」正是先设标记态再关界面，关界面会走到这里）
         CACHE.clear();
+        cachedStack = null;
+        cachedData = null;
+        cachedBook = null;
     }
 
     @net.neoforged.bus.api.SubscribeEvent
     public static void onLoggingOut(
             net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
         CACHE.clear();
+        cachedStack = null;
+        cachedData = null;
+        cachedBook = null;
         marking = false;
         markingRouteId = "";
     }
@@ -118,8 +157,8 @@ public final class PatrolPreviewClient {
             return;
         }
         net.minecraft.world.item.ItemStack stack = PatrolChartKit.isChart(main) ? main : off;
-        PatrolBook book = PatrolChartData.readBook(stack);
-        if (book.isEmpty()) {
+        PatrolBook book = bookFor(stack);
+        if (book.emptyAll()) {
             return;
         }
         try {
@@ -144,6 +183,7 @@ public final class PatrolPreviewClient {
                 Matrix4f mat = pose.last().pose();
                 String selId = book.selectedId();
                 int routeNo = 0;
+                int drawnOther = 0; // 【R1135】非选中轨道的标记预算（见 MARKER_BUDGET）
                 for (PatrolRoute r : book.routes()) {
                     routeNo++;
                     boolean sel = r.id().equals(selId);
@@ -169,30 +209,41 @@ public final class PatrolPreviewClient {
                     }
                     // 【v1.3.9.2 标记渲染】菱形核 + 地面光环 + 竖针；线是 ribbon（真宽度）。
                     // 首点§b青绿、末点§d品红、中间§7淡紫（亮）/灰紫（暗），随时间轻微呼吸。
+                    // 【R1135】非选中/非标记中的轨道只画近处、且每帧有总预算（见 MARKER_DIST 注释）
                     int n = r.size();
                     long gt = mc.level.getGameTime();
                     for (int i = 0; i < n; i++) {
                         Vec3 p = r.points().get(i);
+                        double d2 = p.distanceToSqr(cam);
+                        if (!bright) {
+                            if (d2 > MARKER_DIST * MARKER_DIST || drawnOther >= MARKER_BUDGET) {
+                                continue;
+                            }
+                            drawnOther++;
+                        }
                         boolean first = i == 0;
                         boolean last = i == n - 1;
                         float[] c;
                         if (first) {
-                            c = new float[]{0.22f, 0.94f, 0.85f};   // 首点：青绿
+                            c = C_FIRST;   // 首点：青绿
                         } else if (last) {
-                            c = new float[]{1.00f, 0.37f, 0.66f};   // 末点：品红
+                            c = C_LAST;    // 末点：品红
                         } else if (bright) {
-                            c = new float[]{0.80f, 0.74f, 1.00f};   // 中间（选中）：淡紫
+                            c = C_MID;     // 中间（选中）：淡紫
                         } else {
-                            c = new float[]{0.52f, 0.48f, 0.68f};   // 中间（其它轨道）：灰紫
+                            c = C_MID_DIM; // 中间（其它轨道）：灰紫
                         }
                         float a = bright ? 1.0f : 0.72f;
                         float pulse = 0.86f + 0.14f * (float) Math.sin((gt + i * 7L) * 0.18);
                         // 尺寸：v1.3.9.2 起明显放大（原来 0.24~0.30 太小，）
                         double h = (first || last ? 0.58 : 0.48) * pulse;
                         marker(vc, quad, mat, cam, p, h, c[0], c[1], c[2], a, bright, first, last, gt, i);
+                        // 【R1127】减速点：把 8×8×8 的影响范围画出来（琥珀色淡框）
+                        if (r.isSlow(i)) {
+                            slowZone(quad, mat, cam, p);
+                        }
                         // 【v1.3.9.7】文字标签：「轨道N · 第M点」+ 坐标——只收近处的，最后统一画。
                         // 文本口径完全按玩家这句来：「自己属于哪号轨道的第几个节点」。
-                        double d2 = p.distanceToSqr(cam);
                         if (d2 <= LABEL_MAX_DIST * LABEL_MAX_DIST) {
                             labels.add(new Object[]{p.x, p.y + h + LABEL_LINE1_UP, p.z, d2,
                                     labelTitle(routeNo, r, i, first, last),
@@ -206,6 +257,40 @@ public final class PatrolPreviewClient {
                         line(vc, mat, lastPt, me, 0.45f, 0.90f, 1.00f, 0.7f);
                         ribbon(quad, mat, cam, lastPt, me, 0.06f, 0.45f, 0.90f, 1.00f, 0.75f);
                         diamond(quad, mat, cam, me, 0.26, 0.06f, 0.45f, 0.90f, 1.00f, 0.95f);
+                    }
+                }
+                // 【v1.3.9.8 目标点：红色菱形】与轨道点同一套画法，只换颜色，便于一眼区分。
+                // 只画当前维度里的——别的维度的目标点在这里不可见（界面里会标明）。
+                String dim = "";
+                try {
+                    dim = mc.level.dimension().location().toString();
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolPreviewClient", ignored);
+                }
+                long tgt = mc.level.getGameTime();
+                int targetNo = 0;
+                for (PatrolTarget t : book.targets()) {
+                    targetNo++;
+                    if (!t.dimension().isEmpty() && !t.dimension().equals(dim)) {
+                        continue;
+                    }
+                    Vec3 p = t.pos();
+                    float pulse = 0.86f + 0.14f * (float) Math.sin((tgt + targetNo * 11L) * 0.18);
+                    double h = 0.62 * pulse;
+                    marker(vc, quad, mat, cam, p, h, 1.00f, 0.24f, 0.24f, 1.0f, true,
+                            false, false, tgt, targetNo);
+                    // 【R1116·点6】目标点所在方块刷一层红色实心——菱形是半空的，远看/夜里
+                    // 不容易判断落点；整格泛红后"要飞到哪一块"一眼可见。画在菱形之后（见 targetBlock）。
+                    targetBlock(quad, mat, p, 1.00f, 0.24f, 0.24f, 0.30f);
+                    // 【R1127】信标同款红色光束：从目标点方块往上 64 格，远处也能一眼看到落点。
+                    beaconBeam(quad, mat, p, 0.65, 64.0);
+                    double d2 = p.distanceToSqr(cam);
+                    if (d2 <= LABEL_MAX_DIST * LABEL_MAX_DIST) {
+                        labels.add(new Object[]{p.x, p.y + h + LABEL_LINE1_UP, p.z, d2,
+                                "§c目标点" + targetNo + " §f" + (t.displayName().isEmpty()
+                                        ? "" : t.displayName()),
+                                "§7" + (int) Math.floor(p.x) + ", "
+                                        + (int) Math.floor(p.y) + ", "
+                                        + (int) Math.floor(p.z)});
                     }
                 }
                 // 立刻把这批面片刷出去（不留给这一帧的批次时机去猜）
@@ -256,6 +341,9 @@ public final class PatrolPreviewClient {
      */
     private static String labelTitle(int routeNo, PatrolRoute r, int i, boolean first, boolean last) {
         String tag = first ? " §a首" : (last ? " §6末" : "");
+        if (r.isSlow(i)) {
+            tag += " §6减速";
+        }
         return "§b轨道" + routeNo + " §f第" + (i + 1) + "点" + tag;
     }
 
@@ -375,6 +463,106 @@ public final class PatrolPreviewClient {
         for (int i = 1; i < poly.size(); i++) {
             ribbon(vc, mat, cam, poly.get(i - 1), poly.get(i), width, r, g, b, alpha);
         }
+    }
+
+    /**
+     * 【R1116·点6】目标点所在方块的一层红色实心渲染（顶/底/四侧，共 6 个面）。
+     *
+     * <p>方块取 {@code floor(y - 0.02)}：目标点是玩家按中键时的脚底坐标（站在方块顶面上），
+     * 直接 {@code floor(y)} 会落到头顶那格空气；内缩 0.004 格避免 z-fighting。
+     * <p>画在菱形**之后**——{@code debugQuads} 会写深度，先画会把菱形下半截挡掉。
+     */
+    private static void targetBlock(VertexConsumer vc, Matrix4f mat, Vec3 p,
+                                    float r, float g, float b, float alpha) {
+        double x0 = Math.floor(p.x) + 0.004;
+        double y0 = Math.floor(p.y - 0.02) + 0.004;
+        double z0 = Math.floor(p.z) + 0.004;
+        double x1 = x0 + 0.992;
+        double y1 = y0 + 0.992;
+        double z1 = z0 + 0.992;
+        face(vc, mat, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, r, g, b, alpha); // 顶
+        face(vc, mat, x0, y0, z1, x0, y0, z0, x1, y0, z0, x1, y0, z1, r, g, b, alpha); // 底
+        face(vc, mat, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0, r, g, b, alpha); // 北
+        face(vc, mat, x1, y0, z1, x1, y1, z1, x0, y1, z1, x0, y0, z1, r, g, b, alpha); // 南
+        face(vc, mat, x0, y0, z1, x0, y1, z1, x0, y1, z0, x0, y0, z0, r, g, b, alpha); // 西
+        face(vc, mat, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1, r, g, b, alpha); // 东
+    }
+
+    /**
+     * 【R1127】减速点的 8×8×8 影响范围：12 条琥珀色棱 + 6 个很淡的面。
+     *
+     * <p>以标记点为中心、三轴各 ±4 格（{@link PatrolFlight#SLOW_HALF}）。面上的 alpha 压得很低
+     * （0.07），只用来"看出这是一块区域"，不挡住航线与方块；棱用 ribbon 画，远近都看得见。
+     */
+    private static void slowZone(VertexConsumer vc, Matrix4f mat, Vec3 cam, Vec3 p) {
+        double h = PatrolFlight.SLOW_HALF;
+        double x0 = p.x - h, x1 = p.x + h;
+        double y0 = p.y - h, y1 = p.y + h;
+        double z0 = p.z - h, z1 = p.z + h;
+        float r = 1.00f, g = 0.58f, b = 0.12f;
+        double[][] e = {
+                {x0, y0, z0, x1, y0, z0}, {x1, y0, z0, x1, y0, z1},
+                {x1, y0, z1, x0, y0, z1}, {x0, y0, z1, x0, y0, z0},
+                {x0, y1, z0, x1, y1, z0}, {x1, y1, z0, x1, y1, z1},
+                {x1, y1, z1, x0, y1, z1}, {x0, y1, z1, x0, y1, z0},
+                {x0, y0, z0, x0, y1, z0}, {x1, y0, z0, x1, y1, z0},
+                {x1, y0, z1, x1, y1, z1}, {x0, y0, z1, x0, y1, z1}
+        };
+        for (double[] s : e) {
+            ribbon(vc, mat, cam, new Vec3(s[0], s[1], s[2]), new Vec3(s[3], s[4], s[5]),
+                    0.055f, r, g, b, 0.55f);
+        }
+        float a = 0.07f;
+        face(vc, mat, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0, r, g, b, a);
+        face(vc, mat, x0, y0, z1, x0, y0, z0, x1, y0, z0, x1, y0, z1, r, g, b, a);
+        face(vc, mat, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0, r, g, b, a);
+        face(vc, mat, x1, y0, z1, x1, y1, z1, x0, y1, z1, x0, y0, z1, r, g, b, a);
+        face(vc, mat, x0, y0, z1, x0, y1, z1, x0, y1, z0, x0, y0, z0, r, g, b, a);
+        face(vc, mat, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1, r, g, b, a);
+    }
+
+    /**
+     * 【R1127】目标点的"信标同款"红色光束：从目标方块顶面往上一根细柱。
+     *
+     * <p>只画四个侧面（不封顶），半透明红，越往上越淡——与信标光束的观感一致。
+     * 高度固定 64 格：足够远距离定位，又不至于在洞穴/室内把整屏染红。
+     */
+    private static void beaconBeam(VertexConsumer vc, Matrix4f mat, Vec3 p,
+                                   double halfWidth, double height) {
+        double cx = Math.floor(p.x) + 0.5;
+        double cz = Math.floor(p.z) + 0.5;
+        double y0 = Math.floor(p.y - 0.02) + 1.0;
+        double y1 = y0 + height;
+        double x0 = cx - halfWidth, x1 = cx + halfWidth;
+        double z0 = cz - halfWidth, z1 = cz + halfWidth;
+        float r = 1.00f, g = 0.12f, b = 0.12f;
+        float aLow = 0.34f, aHigh = 0.06f;
+        double midY = y0 + height * 0.55;
+        for (int seg = 0; seg < 2; seg++) {
+            double ya = seg == 0 ? y0 : midY;
+            double yb = seg == 0 ? midY : y1;
+            float aa = seg == 0 ? aLow : (aLow + aHigh) * 0.5f;
+            float ab = seg == 0 ? (aLow + aHigh) * 0.5f : aHigh;
+            float av = (aa + ab) * 0.5f;
+            // 只画四个侧面（不封顶/底），像信标光束一样是一根通天的柱子
+            face(vc, mat, x0, ya, z0, x0, yb, z0, x0, yb, z1, x0, ya, z1, r, g, b, av);
+            face(vc, mat, x1, ya, z0, x1, yb, z0, x1, yb, z1, x1, ya, z1, r, g, b, av);
+            face(vc, mat, x0, ya, z0, x0, yb, z0, x1, yb, z0, x1, ya, z0, r, g, b, av);
+            face(vc, mat, x0, ya, z1, x0, yb, z1, x1, yb, z1, x1, ya, z1, r, g, b, av);
+        }
+    }
+
+    /** 一个四边形；QUADS 的 4 个顶点必须共面、按环绕顺序给。 */
+    private static void face(VertexConsumer vc, Matrix4f mat,
+                             double ax, double ay, double az,
+                             double bx, double by, double bz,
+                             double cx, double cy, double cz,
+                             double dx, double dy, double dz,
+                             float r, float g, float b, float alpha) {
+        vtx(vc, mat, new Vec3(ax, ay, az), r, g, b, alpha);
+        vtx(vc, mat, new Vec3(bx, by, bz), r, g, b, alpha);
+        vtx(vc, mat, new Vec3(cx, cy, cz), r, g, b, alpha);
+        vtx(vc, mat, new Vec3(dx, dy, dz), r, g, b, alpha);
     }
 
     /**

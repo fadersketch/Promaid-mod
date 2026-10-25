@@ -109,11 +109,20 @@ public final class MaidToolAutoEquip {
                             long base = weaponScore(stack);
                             // v1.3.0 实测六百六十六：改成**按这把枪**判"喂得上弹吗"（旧版是
                             // "背包里有任意弹药就算"——于是对得上弹的那把和对不上的那把同分，
-                            // 甚至装了打不响的那把，见 GunCompat.canFeed 的类注释；
+                            // 甚至装了打不响的那把，见 GunCompat.isGunReady 的类注释；
                             // 能量武器的免检由枪械 mod 自己的判定回答，不再这里另写一份）
-                            boolean ready = com.maidsmart.combat.GunCompat.canFeed(gunMaid, stack);
+                            // v1.3.3 实测一千〇三：判据升为 isGunReady——弹药只在精妙背包里
+                            // （可从额外容器补给）的那把枪也享受加成，保证"补得上弹的那把"
+                            // 被换到主手（她拿的就是我们供得上的那把）。
+                            boolean ready = com.maidsmart.combat.GunCompat.isGunReady(gunMaid, stack);
                             return base + (ready ? 1_000_000L : 0L);
                         };
+                        // v1.3.3 实测一千〇三【精妙背包弹药桥】：枪任务期间持续盯着——哪把枪
+                        // 喂不上也换不上、而弹药在她的额外容器（饰品栏里的精妙背包/旅行者背包）
+                        // 里时，请 TLM 搬一组进她自己的背包（TACZ/SBW 的换弹只扫她自己背包那一份，
+                        // javap 实证）。本行为是 core 行为、任何 activity 每 tick 都跑
+                        // （见 MaidToolAutoEquipBehavior），枪打空后很快补上。
+                        ensureGunAmmoFromExtra(maid);
                     }
                     case "shears" -> {
                         // v1.1.0 实测一百八十四（反馈："剪刀模式下，女仆不会尝试拿起
@@ -161,6 +170,18 @@ public final class MaidToolAutoEquip {
             return equipIfMismatched(maid, need, scorer);
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidToolAutoEquip", ignored);
             return false;
+        }
+    }
+
+    /** v1.3.3 实测一千〇三【精妙背包弹药桥】：枪械任务每 tick 的补弹入口——把"额外容器
+     *  （饰品栏里的精妙背包/旅行者背包）里的弹药"搬进她自己的背包。唯一实现在
+     *  {@code GunCompat#fetchAmmoIfNeeded}（与飞行/扫帚的枪械状态机共用，不各写一份）；
+     *  没装枪械 mod / 没额外容器 / 弹药本来就够时不产生任何行为。 */
+    private static void ensureGunAmmoFromExtra(EntityMaid maid) {
+        for (ItemStack gun : com.maidsmart.combat.GunCompat.gunsOf(maid)) {
+            if (com.maidsmart.combat.GunCompat.fetchAmmoIfNeeded(maid, gun)) {
+                return; // 搬来一组就够；剩下的交给枪械 mod 自己的换弹链路
+            }
         }
     }
 
@@ -368,6 +389,11 @@ public final class MaidToolAutoEquip {
             if (isAxe(cur) && canHarvest(cur, target)) {
                 return true;
             }
+            // R1125：副手也算"手上有斧"——玩家手动把斧放到副手时，不能还说她没有斧头
+            ItemStack off = maid.m_21206_();
+            if (isAxe(off) && canHarvest(off, target)) {
+                return true;
+            }
             IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
@@ -409,6 +435,14 @@ public final class MaidToolAutoEquip {
         IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
         ItemStack cur = hands.getStackInSlot(0);
         if (isAxe(cur) && !isNearlyBroken(cur)) {
+            return true;
+        }
+        // R1125：主手不是斧、但副手挂着斧（玩家手动换到副手的）→ 换回主手直接用，
+        // 不再对着副手那把斧报"我没有斧头"。
+        ItemStack off = maid.m_21206_();
+        if (isAxe(off) && !isNearlyBroken(off) && !brokeByDurability(maid, off)) {
+            hands.setStackInSlot(0, off);
+            maid.m_8061_(EquipmentSlot.OFFHAND, cur);
             return true;
         }
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：换斧前先问一次精妙背包
@@ -789,6 +823,10 @@ public final class MaidToolAutoEquip {
                 || item instanceof CrossbowItem
                 || com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei.isGohei(stack)) {
             return false; // 镐/弓/弩/御币不是近战武器
+        }
+        // Trials 回移植的重锤可能不带 ATTACK_DAMAGE 修饰符：按注册名兜底，保证空袭/自动装备认得出
+        if (com.maidsmart.combat.MaidMaceSmashBehavior.isMace(stack)) {
+            return true;
         }
         return stack.m_41638_(EquipmentSlot.MAINHAND).containsKey(Attributes.f_22281_);
     }

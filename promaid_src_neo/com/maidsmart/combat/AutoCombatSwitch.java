@@ -690,26 +690,17 @@ if (++this.restoreThrottle < 20) {
                     continue;
                 }
                 boolean restored = false;
-                // v1.1.0 实测一百一十四：仍在任意攻击任务（含 retune 换战术/同步抖动后
-                // 与 ASSIGNED 不一致的战斗任务）都算"本系统战斗"，还原到战斗前任务——
-                // 旧版只认 ASSIGNED 完全一致，换过战术/任务被第三方改过的战斗女仆
-                // 永不还原（"威胁解除后回不了原任务"）。
+                // v1.1.0 实测一百一十四：换过战术的战斗女仆也要能还原（旧版只认
+                // ASSIGNED 完全一致，换过战术的会永久卡在战斗任务）。当时用的是
+                // "任意攻击任务都算本系统战斗"的宽口径——但那条口径把玩家在战斗中
+                // 亲手换成的模式（枪械/飞行作战等）也当成了我们的安排。
+                // 实测 R1084：retune 每次换战术都同步 ASSIGNED（AutoCombatPools），
+                // 所以 ASSIGNED 就是本系统指派的模式；当前战斗任务与之不符 =
+                // 玩家/第三方接管，还原链绝不动她的任务，只清战斗簿记。
                 boolean stillOnCombat = maid.getTask() != null
-                        && (maid.getTask().getUid().toString().equals(assignedUid)
-                        || MaidWorkTags.isCombatTask(maid));
-                // v1.2.0：飞行作战【绝不被还原链切走】——它是玩家手动指定的模式
-                // （需三件齐备）。若女仆曾被自动参战过（残留 COMBAT_ACTIVE 标记）后又
-                // 被玩家切到飞行作战，还原链会因 isCombatTask(flight)=true 把她当成
-                // "本系统的战斗任务"还原回战斗前任务 = 顶掉玩家选择。这里按
-                // "玩家已接管"处理：不动她的任务，只清我们的战斗簿记（走下面
-                // !stillOnCombat 分支：clearMarkers + restorePrevMode）。
-                if (stillOnCombat && maid.getTask() != null
-                        && com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(
-                                maid.getTask().getUid())) {
-                    stillOnCombat = false;
-                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                            + " 当前为飞行作战（玩家手动指定），还原链不动任务，仅清战斗标记");
-                }
+                        && !com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(
+                                maid.getTask().getUid())
+                        && maid.getTask().getUid().toString().equals(assignedUid);
                 if (stillOnCombat
                         && com.maidsmart.schedule.ScheduleData.isOn(maid)
                         && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {

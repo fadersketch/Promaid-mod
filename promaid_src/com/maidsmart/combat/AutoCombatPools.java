@@ -146,18 +146,21 @@ public final class AutoCombatPools {
                 }
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
             }
-            // 背包/主手有该任务认的武器才算候选（isWeapon 是 IAttackTask 的默认方法：
-            // 原版任务按武器类型判；模组任务自定义判定——法书/史诗武器等）
-            if (!hasWeaponForTask(maid, attack)) {
-                continue;
-            }
             // v1.2.0 实测五百五十九【法术任务进池收紧】：万法皆通的法术任务 isWeapon 恒 true
             // （javap 实证），旧版只要求"背包里有任意一件非原版物品"就让它们进池
             //（实测三百七十九的兜底）——那等于"带个模组食物也算会用魔法"。现在要求她
             // **真的带着法术装备**（法术书/法器在主手、副手、背包或饰品栏，或者附属数据里
             // 已经有她的法术书）才允许进池；不满足 → 这个任务不进任何池。
-            if (com.maidsmart.combat.MaidSpellCompat.isSpellTask(attack)
-                    && !com.maidsmart.combat.MaidSpellCompat.maidHasSpells(maid)) {
+            boolean spellTask = com.maidsmart.combat.MaidSpellCompat.isSpellTask(attack);
+            if (spellTask) {
+                // 法术任务的 isWeapon 恒 true，"主手/背包里有东西"没有信息量；直接问
+                // maidHasSpells。它的口径包含副手与饰品栏，所以法术袋只放饰品栏也能进池。
+                if (!com.maidsmart.combat.MaidSpellCompat.maidHasSpells(maid)) {
+                    continue;
+                }
+            } else if (!hasWeaponForTask(maid, attack)) {
+                // 主手 / 背包（含压缩盒延伸格）/ 额外容器（精妙背包、旅行者背包）
+                // 有该任务认的武器才算候选
                 continue;
             }
             // v1.2.0：飞行作战【不参与自主切换】——入战选任务时永远不进池，
@@ -178,7 +181,9 @@ public final class AutoCombatPools {
                 if (!MaidSmartConfig.COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS.get()) {
                     continue;
                 }
-                if (!hasNonVanillaWeaponForTask(maid, attack)) {
+                // 法术任务已由 maidHasSpells 证明持有模组法术装备（可能在副手/饰品栏/
+                // 附属数据里），不必再过"主手/背包有非原版物品"这一道。
+                if (!spellTask && !hasNonVanillaWeaponForTask(maid, attack)) {
                     continue;
                 }
             }
@@ -303,6 +308,13 @@ public final class AutoCombatPools {
     static void retuneCombatTactics(EntityMaid maid) {
         IMaidTask cur = maid.getTask();
         if (cur == null) {
+            return;
+        }
+        // 实测 R1084：骑在载具上【战中不换战术】——载具自己按距离索敌开火
+        // （MaidMountCompat.tickAttack），任务只是玩家选的"手持武器模式"。
+        // 旧行为：监守者一贴近 5 格，枪械模式就被 retune 换成近战 attack，
+        // 玩家刚手选的模式凭空消失（"她老是自作主张换成攻击"）。
+        if (isRidingVehicle(maid)) {
             return;
         }
         // 实测九百九十二：让位名单里的模式在场（拔刀剑/战斗模式）——本模组不换战术：
@@ -467,22 +479,7 @@ public final class AutoCombatPools {
         // 方法 return true，该任务无凭无据进候选池（三叉戟任务就是这样混进去的，
         // 没三叉戟的女仆切过去根本无法攻击，怪杀不掉威胁不消失也永远不还原）。
         // 改为【逐物品】安全判定：单件物品判定异常只跳过该件，绝不放行整个任务。
-        try {
-            ItemStack main = maid.m_21205_();
-            if (!main.m_41619_() && isWeaponSafe(task, maid, main)) {
-                return true;
-            }
-            IItemHandler inv = maid.getAvailableBackpackInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                ItemStack s = inv.getStackInSlot(i);
-                if (!s.m_41619_() && isWeaponSafe(task, maid, s)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
-            return false; // 背包遍历本身异常 → 视为无武器（与「空手不参战」同口径）
-        }
+        return hasUsableItem(maid, s -> isWeaponSafe(task, maid, s));
     }
 
     private static boolean isWeaponSafe(IMaidTask task, EntityMaid maid, ItemStack s) {
@@ -490,22 +487,32 @@ public final class AutoCombatPools {
     }
 
     private static boolean hasNonVanillaWeaponForTask(EntityMaid maid, IMaidTask task) {
+        return hasUsableItem(maid,
+                s -> isWeaponSafe(task, maid, s) && !isVanillaItem(s));
+    }
+
+    /**
+     * 她"拿得到"的东西里有没有匹配项：主手 → 背包（压缩盒延伸格）→ TLM 额外容器
+     * （精妙背包/旅行者背包，只读探针）。副手与饰品栏不算：它们不会被自动换到主手，
+     * 计进"能打"只会让她被切到打不出伤害的任务；法术装备另有口径（见 MaidSpellCompat）。
+     */
+    private static boolean hasUsableItem(EntityMaid maid,
+                                         java.util.function.Predicate<ItemStack> filter) {
         try {
             ItemStack main = maid.m_21205_();
-            if (!main.m_41619_() && isWeaponSafe(task, maid, main) && !isVanillaItem(main)) {
+            if (!main.m_41619_() && filter.test(main)) {
                 return true;
             }
             IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
-                if (!s.m_41619_() && isWeaponSafe(task, maid, s) && !isVanillaItem(s)) {
+                if (!s.m_41619_() && filter.test(s)) {
                     return true;
                 }
             }
-            return false;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
-            return false;
         }
+        return com.maidsmart.tool.MaidExtraContainer.contains(maid, filter);
     }
 
     private static boolean isVanillaItem(ItemStack s) {
@@ -528,6 +535,23 @@ public final class AutoCombatPools {
 
     public static boolean isAutoCombatActive(EntityMaid maid) {
         return maid.getPersistentData().m_128471_(AutoCombatSwitch.COMBAT_ACTIVE_TAG);
+    }
+
+    /**
+     * 实测 R1084：是否正骑在卓越前线载具上。载具索敌/开火由 RideBindManager +
+     * MaidMountCompat.tickAttack 每 tick 独立跑（FlightTargeting），与任务无关。
+     * 旧行为把骑乘女仆当步行管：威胁进 5 格 retune 就把玩家手选的枪械模式换成
+     * 近战 attack，枪任务缺枪时参战入口还会再选一次——玩家看到的就是"坐在载具上
+     * 自作主张换模式"。骑乘期间任务只认玩家手选。
+     */
+    public static boolean isRidingVehicle(EntityMaid maid) {
+        try {
+            net.minecraft.world.entity.Entity vehicle = maid.m_20202_();
+            return vehicle != null
+                    && MaidMountCompat.kindOf(vehicle) == MaidMountCompat.Kind.VEHICLE;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("AutoCombatPools", ignored);
+            return false;
+        }
     }
 
     public static boolean isTaskAutoAssigned(EntityMaid maid) {

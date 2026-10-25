@@ -104,6 +104,8 @@ public final class GunnerTetherManager {
     private static final int LAND_DETECT_TICKS = 40;
     /** 解除后的摔伤豁免：player UUID → 到期 game tick */
     private static final Map<UUID, Long> DISMOUNT_GRACE = new HashMap<>();
+    /** 【R1118】刚挂上后的"防误判离鞍"窗口：maid UUID → 到期 game tick（40 = 2 秒） */
+    private static final Map<UUID, Long> HANG_GRACE = new HashMap<>();
     /**
      * 【实测六百八十二】"她换模式了"这个判定的去抖计数：maid UUID → 连续不符的 tick 数
      * （{@link #tick} 每 2 tick 调一次，所以每次 +2）。够久才真的松手，见 {@link #KIND_SWITCH_TICKS}。
@@ -295,6 +297,29 @@ public final class GunnerTetherManager {
             Link link = LINKS.get(maid.m_20148_());
             if (link == null || link.leash) {
                 return null;   // 没链路，或还在"牵绳档"（玩家根本没骑在她身上）
+            }
+            net.minecraft.server.level.ServerPlayer p = link.player.get();
+            return p != null && p.m_6084_() ? p : null;
+        } catch (Throwable t) {
+             com.maidsmart.diag.Diag.swallow("GunnerTetherManager", t); return null;
+        }
+    }
+
+    /**
+     * 【R1116·点5】被这条拴绳绑着的那位玩家——**牵绳档也算**（与 {@link #hangingPlayer} 只差这一点）。
+     *
+     * <p>空袭女仆还在地面（没起飞、{@code link.leash == true}）时玩家已经"绑住了她"，
+     * 巡逻航图的「飞过去」就该出现：目标点一写，飞行链路会自己起飞把人拖走。旧版只用
+     * {@code hangingPlayer}，于是"绑了但没起飞"这一档整块没有入口。
+     */
+    public static net.minecraft.server.level.ServerPlayer tetheredPlayer(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            Link link = LINKS.get(maid.m_20148_());
+            if (link == null) {
+                return null;
             }
             net.minecraft.server.level.ServerPlayer p = link.player.get();
             return p != null && p.m_6084_() ? p : null;
@@ -603,7 +628,7 @@ public final class GunnerTetherManager {
             maid.m_146915_(true);
             maid.getPersistentData().m_128359_(TAG_LEASH_MARK, "1");
             com.maidsmart.tool.PromaidLog.log("武装拴绳", "标记：女仆="
-                    + com.maidsmart.tool.PromaidLog.nameOf(maid) + "（金色描边，她正式起飞时解除）");
+                    + com.maidsmart.tool.PromaidLog.nameOf(maid) + "（金色描边，解绑时解除）");
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
         }
     }
@@ -641,6 +666,12 @@ public final class GunnerTetherManager {
             deny(maid, "已经有人挂在我身上了～");
             return;
         }
+        // 【R1118】守家（home）的女仆不能绑：航图「飞过去」对 home 只读，拴绳也不该把她
+        // 从岗位上拽走。放在 releaseOtherLinks 之前——被拒时不许把玩家已有的链路拆掉。
+        if (maid.isHomeModeEnable()) {
+            denyTo(player, maid, "守家的女仆不抓绳子～先让她跟着你走");
+            return;
+        }
         // 【实测六百七十五：一只绳子只牵一只女仆】
         //
         //  为什么真的能"同时绑两只"：牵绳档（空袭的女仆还没起飞）玩家**不是**乘客，所以既不占
@@ -667,8 +698,9 @@ public final class GunnerTetherManager {
         boolean ridingBroom = com.maidsmart.combat.MaidBroomKit.isRidingBroom(maid);
         // 【v1.3.9.4】她骑着载具时**不**进牵绳档：那一档是"她还没起飞、你牵着走"，
         //   而骑着一台载具的她已经在动了——直接挂到二号位才对（与扫帚档同一个待遇）。
-        boolean leash = !broomMode && !ridingBroom && mountOf(maid) == null
-                && com.maidsmart.combat.MaidFlightKit.isFlightTask(maid) && !flyingNow(maid);
+        // 【R1118】不再要求"任务=空袭/扫帚/骑载具"：任何任务模式的落地女仆都能先绑成
+        //   牵绳档（她要靠飞行跟随/航图「飞过去」起飞，而不是只有空袭链路才会飞）。
+        boolean leash = !broomMode && !ridingBroom && mountOf(maid) == null && !flyingNow(maid);
         // 牵绳档不挂人，所以"玩家自己骑着别的坐骑"这道门对它不适用（"不影响自己的活动"）
         // 【v1.3.9.4】玩家**自己也骑着那台载具**时放行：她骑直升机、你坐在机舱里右击她 →
         //  等价于"换到二号位"（先从载具下来，再吊到她下面）。这正是"拴到骑乘的载具上"的用法。
@@ -693,12 +725,9 @@ public final class GunnerTetherManager {
         // 【v1.3.9.4：骑乘的载具也算一档】
         //
         //  二号位开火这件事照样成立，而且**不占载具的座位**。所以这一档直接放行。
+        //  【R1118】任务模式不再是门禁：玩家要求"任何任务模式都能被绑定"。
+        //   落地且没骑东西的女仆走上面的牵绳档；骑着载具的走挂载档。
         boolean onMount = ridesMount(maid);
-        if (!onMount && !broomMode && !ridingBroom
-                && !com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
-            deny(maid, "扫帚、空袭或骑着载具时再抓绳子吧～");
-            return;
-        }
         if (!leash && onHerBroom) {
             // 从扫帚驾驶位下来（扫帚留给她）→ 下面 startRiding(女仆) 才挂得上（实测六百七十二）
             player.m_8127_();
@@ -729,12 +758,9 @@ public final class GunnerTetherManager {
                 + (leash ? "（她还没起飞：你自由活动、她跟着走；她一起飞就挂到二号位）"
                           : "（悬挂 " + hangFor(maid) + " 格，二号位开火）"));
 
-        // 【实测六百七十四】牵绳档 = 还没正式起飞 → 打金色标记；已经悬挂档 → 清掉上一轮的残留
-        if (leash) {
-            markLeash(maid);
-        } else {
-            unmarkLeash(maid);
-        }
+        // 【实测六百七十四 / R1108】绑定即描边：牵绳档与悬挂档都算"被绑着"，
+        // 描边一直保留到她被解绑（金边由客户端 MaidGlowGoldMixin 统一上色）。
+        markLeash(maid);
     }
 
     /** 解除（natural=true 是自动解除而不是右击） */
@@ -755,6 +781,7 @@ public final class GunnerTetherManager {
         unmarkLeash(maid);
         GROUND_TICKS.remove(maid.m_20148_());
         MODE_TICKS.remove(maid.m_20148_());
+        HANG_GRACE.remove(maid.m_20148_());
         KIND_TICKS.remove(maid.m_20148_()); // 【实测六百八十二】换模式去抖计数跟着解绑一起清
         PULL_LOGGED.remove(maid.m_20148_()); // 【实测六百七十七】拉力日志节流跟着解绑一起清
         try {
@@ -997,10 +1024,15 @@ public final class GunnerTetherManager {
             return;
         }
         link.leash = false;
-        // 【实测六百七十四】她正式起飞了：撤掉金色标记，并且**把新相位重发一遍**——
-        //  没有这一发，客户端仍以为「这对挂载不存在」（attach 时 riderId 记的是 -1），
-        //  悬挂定位 mixin 就不生效，玩家会被原版摆在**她头顶**。
-        unmarkLeash(maid);
+        // 【R1118】挂上后的 2 秒内，若乘客关系被外部（传送 unRide / 客户端重同步）抖掉，
+        // 先原地重挂，不急着判"玩家离鞍"把整条链路解除。
+        try {
+            HANG_GRACE.put(maid.m_20148_(), maid.m_9236_().m_46467_() + 40L);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
+        }
+        // 【实测六百七十四 / R1108】她正式起飞了：相位重发（没有这一发，客户端仍以为
+        //  「这对挂载不存在」，悬挂定位 mixin 就不生效，玩家会被原版摆在她头顶）。
+        //  描边不撤——绑定期内一直亮，只有解绑才解除。
         sync(maid);
         GROUND_TICKS.remove(maid.m_20148_());
         bubble(maid, "起飞啦！抓好绳子～");
@@ -1067,6 +1099,12 @@ public final class GunnerTetherManager {
                     }
                     continue;
                 }
+                // 【R1121】绑定之后被调成守家（home）：立即松绳（玩家口径，与"home 绑不上"同源）。
+                // 放在模式去抖之前——home 是显式状态，不需要等 1 秒确认。
+                if (maid.isHomeModeEnable()) {
+                    deferredDetach.put(maid, "转为守家");
+                    continue;
+                }
                 // 【实测六百八十二】绑定期间她换了模式 → 自动松开（连带金色标记、绳子、相位的清理）
                 //
                 //
@@ -1076,13 +1114,20 @@ public final class GunnerTetherManager {
                 //    绑定本来就是几十秒以上的事，晚一秒松开感觉不到。
                 String kindNow = modeKind(maid);
                 if (!kindNow.equals(link.kind)) {
-                    int n = KIND_TICKS.merge(maid.m_20148_(), 2, Integer::sum);
-                    if (n >= KIND_SWITCH_TICKS) {
-                        deferredDetach.put(maid, "切模式");
+                    // 【R1118】「飞过去」期间她换任务不算断链：这一趟是玩家显式命令，
+                    // 换任务（战斗⇄空袭等）不该把绳子松掉。直接接受新模式继续飞。
+                    if (com.maidsmart.patrol.MaidTravelTarget.active(maid)) {
+                        link.kind = kindNow;
                         KIND_TICKS.remove(maid.m_20148_());
+                    } else {
+                        int n = KIND_TICKS.merge(maid.m_20148_(), 2, Integer::sum);
+                        if (n >= KIND_SWITCH_TICKS) {
+                            deferredDetach.put(maid, "切模式");
+                            KIND_TICKS.remove(maid.m_20148_());
+                        }
+                        // 去抖期间**不做别的**：这一拍她的模式正在变，翻档/放人都没有意义
+                        continue;
                     }
-                    // 去抖期间**不做别的**：这一拍她的模式正在变，翻档/放人都没有意义
-                    continue;
                 }
                 KIND_TICKS.remove(maid.m_20148_());
                 // 【实测六百七十三：两档分开走】牵绳档（link.leash）玩家**根本没骑在她身上**
@@ -1102,8 +1147,19 @@ public final class GunnerTetherManager {
                 }
                 // ② 玩家自己潜跳下鞍 / 被别的模组拽下去 → 解除 + 空中给摔伤豁免
                 if (!maid.m_20363_(player)) {
+                    // 【R1118】刚挂上 2 秒内、玩家此刻又不在别的载具上：先原地重挂一次。
+                    // 传送的 unRide()/客户端重同步会把乘客关系抖掉，直接解链就是"一起飞就断"。
+                    Long grace = HANG_GRACE.get(maid.m_20148_());
+                    if (grace != null && maid.m_9236_().m_46467_() <= grace
+                            && player.m_20202_() == null && player.m_7998_(maid, true)) {
+                        com.maidsmart.tool.PromaidLog.log("武装拴绳", "重新挂载：女仆="
+                                + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + "（挂载关系被外部抖掉，已在防误判窗口内重挂）");
+                        continue;
+                    }
                     it.remove();
                     forgetHang(player); // 【实测六百七十一】玩家离鞍：滑变状态一起清
+                    HANG_GRACE.remove(maid.m_20148_());
                     try {
                         maid.getPersistentData().m_128473_(TAG_GUNNER);
                     } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("GunnerTetherManager", ignored);
@@ -1115,7 +1171,9 @@ public final class GunnerTetherManager {
                     MODE_TICKS.remove(maid.m_20148_());
                     sync(maid);
                     com.maidsmart.tool.PromaidLog.log("武装拴绳", "解除(玩家离鞍)：女仆="
-                            + com.maidsmart.tool.PromaidLog.nameOf(maid));
+                            + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 玩家坐骑=" + (player.m_20202_() == null ? "无"
+                                    : player.m_20202_().m_20078_()));
                     continue;
                 }
                 // ③【实测六百七十一：绳子不会自己断】**地面那一档删掉了**——
@@ -1214,9 +1272,7 @@ public final class GunnerTetherManager {
                 LINKS.put(maid.m_20148_(), new Link(maid, p));
                 MODE_TICKS.remove(maid.m_20148_());
                 GROUND_TICKS.remove(maid.m_20148_());
-                if (hadMark) {
-                    unmarkLeash(maid); // 重建出来的是悬挂档，本来就不该亮
-                }
+                markLeash(maid); // 【R1108】重建出来的链路也算绑定期 → 描边在
                 sync(maid);
                 com.maidsmart.tool.PromaidLog.log("武装拴绳", "入世界重建：女仆="
                         + com.maidsmart.tool.PromaidLog.nameOf(maid) + "（他仍挂在她身上）");
@@ -1268,6 +1324,7 @@ public final class GunnerTetherManager {
                 }
                 if (maid.m_20363_(p)) {
                     LINKS.put(maid.m_20148_(), new Link(maid, p));
+                    markLeash(maid); // 【R1108】存档重载后链路还在 = 仍在绑定期，描边补回来
                     sync(maid);
                     com.maidsmart.tool.PromaidLog.log("武装拴绳", "存档重载恢复：女仆="
                             + com.maidsmart.tool.PromaidLog.nameOf(maid));
@@ -1354,6 +1411,11 @@ public final class GunnerTetherManager {
             //  守家回圈（SchedulePos.tick）在拉她回家，绳子在拉她去主人，实机观感就是"一直被拉"。
             //  所以这一档只停"受力"：挂载状态/金色标记/悬挂渲染全部保留，只是不再写 deltaMovement。
             if (maid.isHomeModeEnable()) {
+                return;
+            }
+            // 【R1118】航图「飞过去」是一趟显式飞行任务：绳子不再把她往主人那边拽，
+            // 否则拴绳的拉力与飞行链路每 tick 写进去的速度互相打架（她看起来原地抖）。
+            if (com.maidsmart.patrol.MaidTravelTarget.aim(maid) != null) {
                 return;
             }
             pullTick(maid, player);
@@ -1473,8 +1535,8 @@ public final class GunnerTetherManager {
      */
     @SubscribeEvent
     public static void onUseItem(PlayerInteractEvent.RightClickItem event) {
-        if (!isEnabled()) {
-            return;
+        if (event.isCanceled() || !isEnabled()) {
+            return; // 【R1110】叫醒等更高优先级处理已经吃掉这次右击
         }
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
@@ -1492,6 +1554,15 @@ public final class GunnerTetherManager {
             if (maid != null) {
                 com.maidsmart.tool.PromaidLog.log("武装拴绳", "右击（悬挂档，射线没打到她）：按「骑着的女仆」"
                         + "解析 → 走同一个切换：女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid));
+            }
+        }
+        if (maid == null) {
+            // 【R1108】512 格长射线：远处右击不会触发 EntityInteract，准星里是谁就挂谁
+            maid = com.maidsmart.tool.MaidFarPick.pick(player);
+            if (maid != null) {
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "长射线选中（超出交互距离）：女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 距离="
+                        + String.format("%.1f", player.m_20270_(maid)) + " 格");
             }
         }
         if (maid == null) {
@@ -1609,6 +1680,25 @@ public final class GunnerTetherManager {
     }
 
     /* ==================== 提示 ==================== */
+
+    /**
+     * 【R1126】守家这条拒绝改成玩家系统消息：它说的是"任务不能绑"这件系统规则，
+     * 不是女仆本人的情绪回应，走气泡会被当成她在拒绝主人。其余拒绝仍走 {@link #deny}。
+     */
+    private static void denyTo(ServerPlayer player, EntityMaid maid, String msg) {
+        long now = System.currentTimeMillis();
+        Long last = DENY_LOG.get(maid.m_20148_());
+        if (last != null && now - last < DENY_INTERVAL_MS) {
+            return;
+        }
+        DENY_LOG.put(maid.m_20148_(), now);
+        com.maidsmart.tool.PromaidLog.log("武装拴绳", "拒绝(系统消息)：" + msg + "（女仆="
+                + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
+        if (player != null) {
+            player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                    "§c" + com.maidsmart.tool.PromaidLog.nameOf(maid) + "：" + msg));
+        }
+    }
 
     private static void deny(EntityMaid maid, String msg) {
         long now = System.currentTimeMillis();

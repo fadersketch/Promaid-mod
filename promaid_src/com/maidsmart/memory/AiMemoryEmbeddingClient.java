@@ -170,6 +170,14 @@ public final class AiMemoryEmbeddingClient {
             if (out.isEmpty()) {
                 return Result.fail("empty embeddings");
             }
+            if (this.expectedDim > 0) {
+                for (float[] v : out) {
+                    if (v.length != this.expectedDim) {
+                        return Result.fail("dimension mismatch: expected " + this.expectedDim
+                                + " got " + v.length);
+                    }
+                }
+            }
             return new Result(true, out, "");
         } catch (Exception e) {
              com.maidsmart.diag.Diag.swallow("AiMemoryEmbeddingClient", e); return Result.fail(e.toString());

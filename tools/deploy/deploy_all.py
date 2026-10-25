@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """Deploy the fixed jars to all local instances.
 
-1.21.1 NeoForge 21.1.250     : patched/promaid-1.3.2-neoforge-1.21.1.jar
-1.20.1 Forge 47.4.10（测试）  : patched/promaid-1.3.2-forge-1.20.1.jar
-1.20.1 主整合包（龙之冒险）    : patched/promaid-1.3.2-forge-1.20.1.jar
-1.20.1 server pack1201        : patched/promaid-1.3.2-forge-1.20.1.jar
+1.21.1 NeoForge 21.1.250     : patched/promaid-1.3.3-neoforge-1.21.1.jar
+1.20.1 Forge 47.4.10（测试）  : patched/promaid-1.3.3-forge-1.20.1.jar
+1.20.1 主整合包（龙之冒险）    : patched/promaid-1.3.3-forge-1.20.1.jar
+1.20.1 server pack1201        : patched/promaid-1.3.3-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
 实测七百九十六（v1.3.0，同名覆盖，未发版）：**"女仆手特别欠"——拿雪球也会主动参战的根因修复（两树镜像）** ——
@@ -943,14 +943,14 @@ sys.stdout.reconfigure(encoding='utf-8')
 BASE = _find_repo_root(__file__)
 
 JOBS = [
-    (os.path.join(BASE, 'patched', 'promaid-1.3.2-neoforge-1.21.1.jar'),
-     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.3.2-neoforge-1.21.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.3.2-forge-1.20.1.jar'),
-     r'D:\.minecraft\versions\1.20.1-Forge_47.4.10\mods\promaid-1.3.2-forge-1.20.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.3.2-forge-1.20.1.jar'),
-     r'D:\.minecraft\versions\龙之冒险：新征程v2.4a\mods\promaid-1.3.2-forge-1.20.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.3.2-forge-1.20.1.jar'),
-     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.3.2-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.3-neoforge-1.21.1.jar'),
+     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.3.3-neoforge-1.21.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.3-forge-1.20.1.jar'),
+     r'D:\.minecraft\versions\1.20.1-Forge_47.4.10\mods\promaid-1.3.3-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.3-forge-1.20.1.jar'),
+     r'D:\.minecraft\versions\龙之冒险：新征程v2.4a\mods\promaid-1.3.3-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.3-forge-1.20.1.jar'),
+     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.3.3-forge-1.20.1.jar'),
 ]
 
 # refuse while any java/javaw runs (game or server open)

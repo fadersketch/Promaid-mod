@@ -6,7 +6,7 @@
     {
       "name": "promaid",
       "root": "promaid",
-      "modules": 119
+      "modules": 120
     },
     {
       "name": "promaid-forge",
@@ -150,7 +150,7 @@
       "tags": [
         "mixin"
       ],
-      "fingerprint": "632f4cca034ae0d8ab83619a883c19f407b183b90656e4a2984d3aba19dde15b",
+      "fingerprint": "c5dfcab39e99565c2b9017fb5aa28ed13eaf92c01a8a6550d4c75bd2c2a1cfd9",
       "apis": 2,
       "deps": 2
     },
@@ -223,7 +223,7 @@
         "mixin",
         "client"
       ],
-      "fingerprint": "e510d7821d03488309df1ad3f90fd1b01598542db520883050078b448ee93bbf",
+      "fingerprint": "242a57b0e5325ac3d8232bcef4d23ff462720052a237966a4032d0b2bdbbf810",
       "apis": 0,
       "deps": 2
     },
@@ -260,7 +260,7 @@
         "mixin",
         "net"
       ],
-      "fingerprint": "55fa9cfb5e2be0b5b69f8de8935e7759bca34940a76e8746cb9c7bedfed50b85",
+      "fingerprint": "070bce9b6348bce05c5a41757accc04968a091e90e6b56442dcd5691a23355df",
       "apis": 0,
       "deps": 2
     },
@@ -278,7 +278,7 @@
       "tags": [
         "mixin"
       ],
-      "fingerprint": "eaabbd2b5b2905321b299ecea49df7998e515962515b44280e04b7b572c927bf",
+      "fingerprint": "3c6d7e07a6bc63becb6b24d5dad01b9615bfe0bc95b9ee2c268acb8df97cc880",
       "apis": 0,
       "deps": 2
     },
@@ -423,7 +423,7 @@
         "combat",
         "flight"
       ],
-      "fingerprint": "424dce7a0820ee4d447eecfff2779aa540e1fd1ca637c5f02d41164b600b0b29",
+      "fingerprint": "f99099c3642d29a2586f1b7ef85d8570900076ce1c3ebdc51609920805830cea",
       "apis": 0,
       "deps": 3
     },
@@ -996,7 +996,7 @@
         "work",
         "shared"
       ],
-      "fingerprint": "9afa3e6e315e2c910f71406982f2a3c4ea1bbb1ff6eb22e78e415fadc27d161e",
+      "fingerprint": "c5533b11ac4c446cfebc3b35f582ae69b172ce03fd1b66d27c65677ebce760af",
       "apis": 2,
       "deps": 0
     },
@@ -1847,6 +1847,24 @@
       "apis": 0,
       "deps": 0
     },
+    "promaid.system.wake": {
+      "uid": "78db93cf",
+      "id": "promaid.system.wake",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "叫醒与找床断路",
+        "en": "Waking & Sleep Block"
+      },
+      "path": "modules/promaid/system/wake.md",
+      "leaf": true,
+      "tags": [
+        "system"
+      ],
+      "fingerprint": "f0ef8a3d4ac4c18eea989b9f2f85e070bf82696cee63589a2fb756c5d9473ae4",
+      "apis": 0,
+      "deps": 1
+    },
     "promaid.system.schedule": {
       "uid": "10eb05e7",
       "id": "promaid.system.schedule",
@@ -2087,7 +2105,7 @@
         "core",
         "ai"
       ],
-      "fingerprint": "2a0dc1c6a2da5f09333716aeda6ea9f10fff2a9f4d4ef194f7e240d253c68cd6",
+      "fingerprint": "30964d883f3c3978e15a3ea759ebb4890b13480cd63c114ce1411bb135672ee9",
       "apis": 0,
       "deps": 0
     },
@@ -2106,7 +2124,7 @@
         "core",
         "shared"
       ],
-      "fingerprint": "19f3a282f600f9c245fe5f568354416493fb51a88b4d70fddf3f69c8c59cf1bf",
+      "fingerprint": "c0a8ec20968a68abee8fac5059420b0d2b1c724d4b8b18c407d644470d6f9632",
       "apis": 0,
       "deps": 0
     },
@@ -2936,6 +2954,15 @@
       }
     },
     {
+      "from": "promaid.system.wake",
+      "to": "promaid.social.voice",
+      "kind": "call",
+      "label": {
+        "zh": "抱怨语音",
+        "en": "Complaint voice"
+      }
+    },
+    {
       "from": "promaid.system.schedule",
       "to": "promaid.combat.auto-switch",
       "kind": "call",
@@ -2973,17 +3000,24 @@
     }
   ],
   "stats": {
-    "modules": 120,
-    "leaves": 102,
+    "modules": 121,
+    "leaves": 103,
     "containers": 18,
     "apis": 61,
-    "edges": 76,
+    "edges": 77,
     "depth": 3
   },
   "diagnostics": {
     "errors": 0,
-    "warnings": 71,
+    "warnings": 73,
     "warning_list": [
+      {
+        "severity": "warning",
+        "code": "desc/en-long",
+        "subject": "promaid.combat.flight-raid",
+        "message": "英文描述 1541 字",
+        "evidence": ""
+      },
       {
         "severity": "warning",
         "code": "structure/leaf-too-coarse",
@@ -3394,6 +3428,13 @@
         "severity": "warning",
         "code": "structure/leaf-too-coarse",
         "subject": "promaid.system.home",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.system.wake",
         "message": "叶子未声明 API（建议 3–5 条）",
         "evidence": ""
       },

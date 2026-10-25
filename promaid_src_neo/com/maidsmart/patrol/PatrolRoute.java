@@ -6,7 +6,10 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * <p>── 这是什么 ──
@@ -56,6 +59,12 @@ public final class PatrolRoute {
      * 用 {@code name} 当键不行——玩家会改名、也可能重名；所以创建时生成一个短随机串。
      */
     private String id = "";
+    /**
+     * 【R1127】减速点：标记下标集合。玩家在「标记管理」里把某个标记设成减速点后，
+     * 绑定这条轨道、正在巡逻的女仆（扫帚/飞行载具）进入该标记 **8×8×8** 范围就会大幅减速。
+     * 下标跟着 {@link #points} 走——删标记时由 {@link #removeAt(int)} 同步平移。
+     */
+    private final Set<Integer> slow = new TreeSet<>();
 
     public PatrolRoute() {
     }
@@ -181,6 +190,17 @@ public final class PatrolRoute {
         points.remove(i);
         closed = false;
         lift = new double[0];
+        // 减速点下标跟着平移：删掉的那个丢掉，后面的整体前移一位
+        Set<Integer> shifted = new TreeSet<>();
+        for (int k : slow) {
+            if (k < i) {
+                shifted.add(k);
+            } else if (k > i) {
+                shifted.add(k - 1);
+            }
+        }
+        slow.clear();
+        slow.addAll(shifted);
         return true;
     }
 
@@ -188,11 +208,44 @@ public final class PatrolRoute {
         points.clear();
         closed = false;
         lift = new double[0];
+        slow.clear();
     }
 
     /** 够不够围出一个环（≥ {@link #MIN_POINTS} 个点） */
     public boolean viable() {
         return points.size() >= MIN_POINTS;
+    }
+
+    /* ==================== R1127：减速点 ==================== */
+
+    /** 第 {@code i} 个标记是不是减速点 */
+    public boolean isSlow(int i) {
+        return slow.contains(i);
+    }
+
+    /** 切换第 {@code i} 个标记的减速点状态；返回切换后是否为减速点（越界返回 false）。 */
+    public boolean toggleSlow(int i) {
+        if (i < 0 || i >= points.size()) {
+            return false;
+        }
+        if (slow.remove(i)) {
+            return false;
+        }
+        slow.add(i);
+        return true;
+    }
+
+    /** 【R1128】直接设置第 {@code i} 个标记的减速状态；返回是否真的改了。 */
+    public boolean setSlow(int i, boolean on) {
+        if (i < 0 || i >= points.size()) {
+            return false;
+        }
+        return on ? slow.add(i) : slow.remove(i);
+    }
+
+    /** 全部减速点下标（只读，按升序）。 */
+    public Set<Integer> slowIndexes() {
+        return Collections.unmodifiableSet(slow);
     }
 
     /* ==================== v1.3.9.3：连接时烘的"避让线" ==================== */
@@ -285,6 +338,7 @@ public final class PatrolRoute {
         r.name = this.name;
         r.id = this.id;
         r.lift = this.lift.clone();
+        r.slow.addAll(this.slow);
         return r;
     }
 
@@ -313,6 +367,17 @@ public final class PatrolRoute {
                 ls.add(net.minecraft.nbt.DoubleTag.valueOf(v));
             }
             root.put("lift", ls);
+        }
+        // 【R1127】减速点：逗号分隔的下标（字符串，避免 ListTag/IntTag 的映射差异）
+        if (!slow.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (int i : slow) {
+                if (sb.length() > 0) {
+                    sb.append(',');
+                }
+                sb.append(i);
+            }
+            root.putString("slow", sb.toString());
         }
         return root;
     }
@@ -349,6 +414,19 @@ public final class PatrolRoute {
                 }
                 if (h.length == r.points.size() * 3) {
                     r.lift = h;
+                }
+            }
+            // 【R1127】减速点：坏字符串/越界下标一律忽略（绝不因存档坏了抛异常）
+            Tag rawSlow = root.get("slow");
+            if (rawSlow instanceof net.minecraft.nbt.StringTag st) {
+                for (String seg : st.getAsString().split(",")) {
+                    try {
+                        int idx = Integer.parseInt(seg.trim());
+                        if (idx >= 0 && idx < r.points.size()) {
+                            r.slow.add(idx);
+                        }
+                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRoute", ignored);
+                    }
                 }
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolRoute", ignored);

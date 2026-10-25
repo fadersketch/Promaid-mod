@@ -79,6 +79,10 @@ public final class MaidBroomRecall {
             if (com.maidsmart.patrol.PatrolFlight.effective(maid) != null) {
                 return false;
             }
+            // 【R1118】航图「飞过去」是一趟远行：牵引绳静默（旧版飞出 100 格就拽回来）。
+            if (com.maidsmart.patrol.MaidTravelTarget.active(maid)) {
+                return false;
+            }
             // 【实测六百九十二：守家的时候拉回的是「她的工作区」，不是主人】
             //
             //  实测日志实证（2026-09-27 01:32:22）：她正「home=true 沿工作范围盘旋」，主人跑出 100 格

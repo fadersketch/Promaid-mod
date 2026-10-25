@@ -182,30 +182,15 @@ public final class BombItems {
         if (maid == null) {
             return false;
         }
-        try {
-            IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
-            for (int i = 0; i < hands.getSlots(); i++) {
-                if (matchAny(hands.getStackInSlot(i), ids)) {
-                    return true;
-                }
-            }
-            IItemHandler inv = maid.getAvailableBackpackInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                if (matchAny(inv.getStackInSlot(i), ids)) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombItems", ignored);
-        }
-        return false;
+        return com.maidsmart.tool.MaidExtraContainer.any(maid, s -> matchAny(s, ids));
     }
 
     static boolean hasBed(EntityMaid maid) {
-        return maid != null && !takeFirstMatch(maid, BombItems::isBed, true).m_41619_();
+        return maid != null && com.maidsmart.tool.MaidExtraContainer.any(maid, BombItems::isBed);
     }
 
     static boolean hasTnt(EntityMaid maid) {
-        return !takeFirstMatch(maid, BombItems::isTnt, true).m_41619_();
+        return maid != null && com.maidsmart.tool.MaidExtraContainer.any(maid, BombItems::isTnt);
     }
 
     static ItemStack takeOne(EntityMaid maid, String... ids) {
@@ -228,6 +213,11 @@ public final class BombItems {
                                             java.util.function.Predicate<ItemStack> match, boolean dryRun) {
         if (maid == null) {
             return ItemStack.f_41583_;
+        }
+        // 真取物：先请 TLM 从额外容器（精妙背包/旅行者背包）搬一件进来，下面的
+        // 手/背包扫描才拿得到。dryRun 是纯判定，不搬（判定侧用 MaidExtraContainer.any）。
+        if (!dryRun) {
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, match, 1);
         }
         try {
             IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
@@ -348,7 +338,7 @@ public final class BombItems {
     }
 
     static boolean hasIgniter(EntityMaid maid) {
-        return !takeFirstMatch(maid, BombItems::isIgniter, true).m_41619_();
+        return maid != null && com.maidsmart.tool.MaidExtraContainer.any(maid, BombItems::isIgniter);
     }
 
     static ItemStack useIgniter(EntityMaid maid) {

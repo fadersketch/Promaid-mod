@@ -18,7 +18,7 @@ STAGING = os.path.join(BASE, 'staging_promaid')
 OUT = os.path.join(BASE, 'out_promaid')
 SRC = os.path.join(BASE, 'promaid_src')
 # 命名规范（v1.2.4 起）：promaid-<版本>-<加载器>-<游戏版本>.jar
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.2-forge-1.20.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.3-forge-1.20.1.jar')
 
 # 实测九百一十六 / v1.5.400：mixin 注入点审计闸门（只读，硬闸门）——javac 只保证注解字符串是
 # 合法 Java，**不保证目标类真有这个方法、更不保证签名对得上**；没有 refmap 的手工编译里名字

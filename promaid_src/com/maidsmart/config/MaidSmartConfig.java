@@ -54,6 +54,8 @@ public static final ForgeConfigSpec.BooleanValue BROOM_CLIMB_MIGRATED;
     public static final ForgeConfigSpec.BooleanValue TNT_TRACK_20_MIGRATED;
 /** v1.3.0(beta) 实测六百八十一：默认值修复迁移标记（把 679 误当默认的 12 项搬回真默认；内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
+    /** R1125：自动收集默认关闭 → 开启的迁移标记（内部，一次性） */
+    public static final ForgeConfigSpec.BooleanValue AUTO_COLLECT_ON_MIGRATED;
     public static final ForgeConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_FORCE_CHUNKS;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_BLOCKS;
@@ -118,6 +120,10 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue DAYUN_DROP_ITEMS;
     /** 破坏时是否播放原版「方块被破坏」粒子+音效（实测八百一十，默认开） */
     public static final ForgeConfigSpec.BooleanValue DAYUN_BREAK_PARTICLES;
+    /** 【R1105】破坏粒子/音效每 tick 上限开关（默认开） */
+    public static final ForgeConfigSpec.BooleanValue DAYUN_PARTICLE_LIMIT;
+    /** 【R1105】每 tick 最多触发多少次破坏粒子/音效（默认 16） */
+    public static final ForgeConfigSpec.IntValue DAYUN_PARTICLE_CAP;
     /** 单 tick 破坏上限（性能闸） */
     public static final ForgeConfigSpec.IntValue DAYUN_MAX_PER_TICK;
     /** v1.5.398 实测八百一十三：破坏范围（立方体边长，格）——5 = 5×5×5，偶数自动进一位 */
@@ -134,9 +140,9 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     // ---- v1.3.2 实测九百〇六：撞击（伤害 + 击飞按速度） ----
     /** 撞击伤害开关（默认开，随 DIY 关） */
     public static final ForgeConfigSpec.BooleanValue DAYUN_SMASH;
-    /** 撞击伤害·每格速度（伤害 = 速度 × 此值，上限 40） */
+    /** 撞击伤害·每格速度（与鞘翅同款速度伤害取较高者，上限 40） */
     public static final ForgeConfigSpec.DoubleValue DAYUN_SMASH_DAMAGE;
-    /** 撞击击飞·每格速度（击飞 = 速度 × 此值，上限 10） */
+    /** 撞击击飞·每格速度（以佩戴者为圆心的 TNT 式径向击飞，上限 16） */
     public static final ForgeConfigSpec.DoubleValue DAYUN_SMASH_KNOCKBACK;
 
     // ================= 挖矿 =================
@@ -167,15 +173,18 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.IntValue MINE_SKIP_REPORT_INTERVAL;
     /** 实测九百七十七：挖矿/伐木确认无目标后的静默闲逛时长（秒）——见 MaidWorkBehavior.startIdlePause */
     public static final ForgeConfigSpec.IntValue MINE_NO_TARGET_PAUSE;
-    // v1.5.161：进阶挖矿——连锁采集 / 自动收集（默认关闭）
+    // v1.5.161：进阶挖矿——连锁采集 / 自动收集（自动收集默认开启）
     public static final ForgeConfigSpec.BooleanValue MINE_CHAIN_MINING;
     public static final ForgeConfigSpec.BooleanValue MINE_AUTO_COLLECT;
+    public static final ForgeConfigSpec.IntValue MINE_HARD_TIMEOUT;
     // v1.5.163：连锁采集数量上限
     public static final ForgeConfigSpec.IntValue MINE_CHAIN_LIMIT;
     /** v1.3.0(beta) 实测七百一十七【issue #29】：连锁采集每块都消耗耐久（默认关=整串只扣 1 点） */
     public static final ForgeConfigSpec.BooleanValue MINE_CHAIN_FULL_DURABILITY;
     // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
     public static final ForgeConfigSpec.BooleanValue MINE_RIDE_NO_PILLAR;
+    /** R1115：挖矿/伐木搭方块总开关（默认开）——见 {@code MaidWorkBehavior#takeBuildBlock} */
+    public static final ForgeConfigSpec.BooleanValue MINE_PILLAR_ENABLED;
     /** 实测八百六十九【没镐不启动，对齐参考 mod 官方流程图】：手+背包一把镐都没有时挖矿任务不启动 */
     public static final ForgeConfigSpec.BooleanValue MINE_REQUIRE_PICK;
 
@@ -201,6 +210,8 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.IntValue WOOD_SKIP_REPORT_INTERVAL;
     public static final ForgeConfigSpec.BooleanValue WOOD_CHAIN_MINING;
     public static final ForgeConfigSpec.BooleanValue WOOD_AUTO_COLLECT;
+    public static final ForgeConfigSpec.BooleanValue WOOD_NO_PICKUP;
+    public static final ForgeConfigSpec.IntValue WOOD_HARD_TIMEOUT;
     public static final ForgeConfigSpec.IntValue WOOD_CHAIN_LIMIT;
     public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     /** v1.1.0 实测二百二十八/二百二十九：随手种树总开关（伐木面板可调，默认开） */
@@ -208,12 +219,18 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** v1.1.0 实测二百二十八：随手种树冷却（伐木面板可调，默认 100 tick = 5 秒） */
     public static final ForgeConfigSpec.IntValue WOOD_PLANT_SAPLING_COOLDOWN;
 
+    // ================= Promaid AI 总开关 =================
+    /** Promaid 全部 AI 功能的总开关（TLM 自带 AI 与其他模组不受影响） */
+    public static final ForgeConfigSpec.BooleanValue AI_ENABLE;
+
     // ================= AI 记忆 =================
     public static final ForgeConfigSpec.BooleanValue MEMORY_ENABLE;
     public static final ForgeConfigSpec.IntValue MEMORY_EXTRACT_THRESHOLD;
     public static final ForgeConfigSpec.IntValue MEMORY_MAX_ENTRIES;
     public static final ForgeConfigSpec.IntValue MEMORY_PROMPT_TOP_N;
     public static final ForgeConfigSpec.IntValue MEMORY_MAX_MESSAGE_CHARS;
+    /** R1049：记忆长度默认值整体上调的一次性迁移标记（内部） */
+    public static final ForgeConfigSpec.BooleanValue MEMORY_LENGTH_MIGRATED;
     // v1.5.95：记忆子功能精准开关（接更强 agent 时可单独关闭让位）
     public static final ForgeConfigSpec.BooleanValue MEMORY_RELATION_INJECT;
     public static final ForgeConfigSpec.BooleanValue MEMORY_CONFLICT_OVERRIDE;
@@ -283,6 +300,7 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.IntValue MEMORY_EMBED_BATCH;
 
     // ================= 对话与提示 =================
+    public static final ForgeConfigSpec.BooleanValue DIALOGUE_ENABLE;
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_STATUS_REPORTER;
     public static final ForgeConfigSpec.IntValue DIALOGUE_REPORT_INTERVAL;
     public static final ForgeConfigSpec.IntValue DIALOGUE_REPORT_RADIUS;
@@ -307,7 +325,6 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     // v1.5.191：主动对话 7 阶段状态机配置
     public static final ForgeConfigSpec.IntValue DIALOGUE_PROACTIVE_MAX_REPLIES;
     public static final ForgeConfigSpec.IntValue DIALOGUE_PROACTIVE_IDLE_MIN;
-    public static final ForgeConfigSpec.IntValue DIALOGUE_LONG_SILENCE_MAX;
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_REPLY_FEEDBACK;
     public static final ForgeConfigSpec.IntValue DIALOGUE_TOPIC_BACKOFF_MIN;
     // v1.5.198：对话输出语言强制（留空 = 强制中文，v1.5.228）
@@ -336,6 +353,7 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     // v1.5.102：情绪静默恢复间隔
     public static final ForgeConfigSpec.IntValue AFFECT_RECOVER_INTERVAL;
     // v1.5.95：AI 工具
+    public static final ForgeConfigSpec.BooleanValue AITOOLS_ENABLE;
     public static final ForgeConfigSpec.BooleanValue TOOL_REMEMBER;
     public static final ForgeConfigSpec.BooleanValue TOOL_WORKING_NOTE;
     // v1.5.190：新 AI 工具（帮主人做事）
@@ -354,7 +372,20 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue TOOL_READINESS;
 
     // ================= 战斗与自保 =================
+    /** 环境自保总闸（旧字段名沿用：TOML 键 selfPreserve 兼容旧配置） */
     public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE;
+    /** 低血自保总闸（默认关） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_LOW_HP;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_LOW_HP_HEAL;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_LOW_HP_PILLAR;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_LOW_HP_FLEE;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_LOW_HP_TELEPORT;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_LAVA;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_FIRE_RESCUE;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_FIRE_PANIC;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_DROWN;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_SUFFOCATE;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_DAMAGE_CELL;
     public static final ForgeConfigSpec.DoubleValue COMBAT_ENTER_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_EXIT_RATIO;
     public static final ForgeConfigSpec.IntValue COMBAT_THREAT_DISTANCE;
@@ -371,8 +402,19 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue COMBAT_SWEEP_ALWAYS;
     // 实测八百四十：类型闸对"正在打我方"的生物让位（给类型判不出威胁的模组生物用）
     public static final ForgeConfigSpec.BooleanValue COMBAT_ATTACK_THOSE_ATTACKING_US;
+    // v1.3.3：重锤猛击——从 1.21.1 版移植，物品走「试炼密室」回移植的 trials:mace / trials:wind_charge
+    public static final ForgeConfigSpec.BooleanValue COMBAT_MACE_SMASH;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_MACE_WIND_CHARGE;
+    public static final ForgeConfigSpec.IntValue COMBAT_MACE_COOLDOWN;
+    public static final ForgeConfigSpec.IntValue COMBAT_MACE_TRIGGER_RANGE;
     // v1.2.0：飞行作战模式（鞘翅 + 任意近战武器 + 烟花；1.20.1 无重锤 → 收翅下落命中结算暴击）
     public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_MODE;
+    /**
+     * 长矛空袭独立链路（像重锤猛击一样单开）：主手长矛 + 近战空袭时，
+     * 先借用通用空袭的起飞方式，0.5 秒后由 {@link com.maidsmart.combat.SpearAirRaidBehavior}
+     * 切换成幻翼的攻击方式与状态机（环绕 → 俯冲 → 长矛冲锋 → 惯性平飞 → 循环）。默认开。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SPEAR_AIR_RAID;
     /** v1.2.0 实测四百六十九：飞行作战时免疫"鞘翅撞墙伤害"（默认开，属生存与复活分区） */
     public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_NO_WALL_DAMAGE;
     /**
@@ -547,10 +589,24 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_SMASH_RANGE;
     /** 猛击命中判定距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_SMASH_HIT_RANGE;
+    /** 猛击下落加成门槛（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_SMASH_MIN_FALL;
     /** 范围强制命中半径（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_FORCED_HIT_RADIUS;
     /** 猛击段最长（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.IntValue AIR_RAID_SMASH_MAX_TICKS;
+    /** 长矛空袭·幻翼态：起飞后多久接管（tick，默认 10 = 0.5 秒） */
+    public static final ForgeConfigSpec.IntValue AIR_RAID_SPEAR_RECOVER_TICKS;
+    /** 长矛空袭·幻翼态：单次俯冲最长 tick */
+    public static final ForgeConfigSpec.IntValue AIR_RAID_SPEAR_MAX_TICKS;
+    /** 长矛空袭·幻翼态：进入冲锋前补一记烟花加速的距离（格） */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_SPEAR_PASS_RANGE;
+    /** 长矛空袭·幻翼态：命中后惯性平飞时长（tick，默认 20 = 1 秒） */
+    public static final ForgeConfigSpec.IntValue AIR_RAID_SPEAR_BOOST_INTERVAL;
+    /** 长矛空袭·幻翼态：速度每 tick 衰减比例（历史键，R1083 起不再生效） */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_SPEAR_DECAY_PER_TICK;
+    /** 长矛空袭·幻翼态：累计最大衰减比例（历史键，R1083 起不再生效） */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_SPEAR_MAX_DECAY;
     /** 地面近战触及距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_MELEE_REACH;
     /** 俯仰限幅·抬头（度）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -632,9 +688,12 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue AIR_RAID_RANGED_BOOST_RIPTIDE;
 
     // ================= 空袭轰炸（v1.2.2 实测五百八十七：近战空袭打完放炸弹 + 远程空袭投掷 TNT。
-    //   配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸；口径与反编译实证见 com.maidsmart.combat.MaidBombing） =================
+    //   配置面板：战斗与自保 → 空袭数值 → ⑦ 轰炸；口径与反编译实证见 com.maidsmart.combat.MaidBombing） =================
     /** 近战空袭轰炸总开关（默认开） */
-    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_MELEE;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_ENABLE;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_END_CRYSTAL;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_RESPAWN_ANCHOR;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_BED;
     /** 远程空袭投掷 TNT（默认开） */
     public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_TNT;
     /** 起爆延迟（tick，默认 10 = 0.5 秒） */
@@ -962,7 +1021,7 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      */
     public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_FIXEDWING_ALT_BONUS;
     /**
-     * 【实测九百九十八】拟真降落（固定翼，含汤姆6，默认关）——开 = 跑道条带选址 + 对准进近 +
+     * 【实测九百九十八】拟真降落（固定翼，含汤姆6，R1071 起默认开）——开 = 跑道条带选址 + 对准进近 +
      * 下滑道 + 复飞的拟真链路；关 = 上一个版本的降落方式（"最平点"那条链路，见
      * {@code MaidMountCompat.aircraftHomeLandingLegacy}）。两种方式共有的部分：电量见底
      * 照常安全降落、接地后清 crash 标记并停住。
@@ -1063,12 +1122,8 @@ public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_ENABLED;
 public static final ForgeConfigSpec.DoubleValue FLIGHT_FOLLOW_DIST;
 /** 飞行跟随收手距离（格，默认 5；v1.2.2 实测六百一十五 新增）：主人进到这么近就中断本趟并解除推进矢量——与起手半径是两个不同的球（默认 25 进 / 5 出，中间 20 格迟滞） */
 public static final ForgeConfigSpec.DoubleValue FLIGHT_FOLLOW_END_DIST;
-/** 飞行跟随是否消耗烟花（默认关）：关 = 照旧要求背包里有能飞的道具（烟花/羽扇/能上天的位移法术任一），但每次补推不扣那一枚（纯观赏档；位移法术本来就不消耗物资，不受这条管） */
-public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_FIREWORK;
-/** 飞行跟随是否消耗鞘翅耐久（默认关 = 不啃）：开 = 照原版每 20 tick 扣 1 点，只对她飞行跟随期间的鞘翅生效 */
-public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_ELYTRA;
-/** 飞行跟随是否消耗激流三叉戟耐久（默认关 = 不扣；v1.2.4 实测六百四十 新增）：开 = 用激流三叉戟追主人时照原版扣 1 点（只管这一条链路，空袭那边的起飞/抬升/俯冲照旧扣） */
-public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_TRIDENT;
+/** 飞行跟随是否消耗飞行物（默认开）：统一控制烟花火箭数量、激流三叉戟耐久、鞘翅耐久；关 = 这一趟只要求背包里有可飞道具，不产生任何损耗 */
+public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_CONSUME;
 /** 压缩盒·放进女仆背包时是否算她背包的延伸（默认开；关 = 只当普通方块用，她的取物代码看不见盒子里的东西） */
 public static final ForgeConfigSpec.BooleanValue COMPRESSION_BOX_MAID_EXTENSION;
 /** 压缩盒每格上限（默认 114514 = 用户点名的那个数；范围 64~1000000——低于 64 会让「一格顶一叠」这件事失去意义，故下限锁 64） */
@@ -1210,6 +1265,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue MISC_CAKE_EDIBLE;
     // v1.1.0 实测一百五十八：兼容高炉与烟熏炉（烟熏炉按烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
+    // 【R1101】熔炉等价族：方块不是熔炉类、方块实体却继承原版熔炉的模组炉
+    public static final ForgeConfigSpec.BooleanValue MISC_COOK_FURNACE_FAMILY;
+    // 【R1101】营火/灵魂营火烹饪（摆食材→烧好捡回，绝不站火格）
+    public static final ForgeConfigSpec.BooleanValue MISC_COOK_CAMPFIRE;
     // v1.1.0 实测三百：烧木材开关（默认关——木材类默认黑名单不烧，勾选后才烧）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_BURN_WOOD;
     // v1.2.5 实测六百五十二：烧制清单——四张面板可编辑的名单（默认全空 = 行为与旧版一字不变）
@@ -1222,6 +1281,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.1.0 实测三百一十八：宰杀扫描半径（默认 16，旧版硬编码 5×5 扫不到远处牲畜）
     public static final ForgeConfigSpec.IntValue MISC_SLAUGHTER_RADIUS;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
+    /** 【R1109】本模组加入的气泡与系统消息总开关（关 = 全部静默，不含原版/别的模组） */
+    public static final ForgeConfigSpec.BooleanValue MISC_PROMAID_HINTS;
     public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_BUBBLE_ENABLED;
     public static final ForgeConfigSpec.DoubleValue MISC_SCHEDULE_BUBBLE_RADIUS;
     public static final ForgeConfigSpec.BooleanValue MISC_PICKUP_PRIORITY;
@@ -1292,6 +1353,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.BooleanValue MISC_DANGER_ESCAPE;
     /** v1.5.395 实测八百二十一：营火/灵魂营火补进默认危险表的一次性迁移标记（内部） */
     public static final ForgeConfigSpec.BooleanValue DANGER_CAMPFIRE_MIGRATED;
+    /** R1130：营火烹饪开关"旧默认关 → 现默认开"的一次性迁移标记（内部） */
+    public static final ForgeConfigSpec.BooleanValue COOK_CAMPFIRE_MIGRATED;
     // v1.1.0 实测九十四：运行日志总开关（游戏目录/logs/promaid.log）
     public static final ForgeConfigSpec.BooleanValue MISC_LOG_ENABLED;
     /**
@@ -1362,6 +1425,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.BooleanValue MISC_WORK_TELEPORT_HOLD;
     public static final ForgeConfigSpec.BooleanValue MISC_HOME_MOVEMENT;
     public static final ForgeConfigSpec.BooleanValue MISC_STATIONARY_LOCK;
+    /** 实测一千〇六【女仆放置方块的金色描边】：描边 + 空手潜行右键强制回收共用一条（默认开 · 纯客户端渲染 + 服务端交互闸） */
+    public static final ForgeConfigSpec.BooleanValue MISC_PLACED_GOLD_MARK;
     public static final ForgeConfigSpec.BooleanValue MISC_FISHING_CHAIR;
     /** 实测九百九十三【接管总闸】：钓鱼 / 农场两个玩法的魔改总闸（默认开 · 随 DIY 关）——关 = 该玩法完全按 TLM 原版 */
     public static final ForgeConfigSpec.BooleanValue MISC_TAKE_OVER_FISHING;
@@ -1369,6 +1434,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.BooleanValue MISC_DRIVEN_NO_STROLL;
     public static final ForgeConfigSpec.BooleanValue BUILD_AREA_PROTECTION;
     public static final ForgeConfigSpec.BooleanValue BUILD_FORCE_WORK_ACTIVITY;
+    /** 【R1079】整合包作者用：按 id / 文件名禁用的蓝图（内置 + 外部）。 */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_DISABLED_BLUEPRINTS;
+    /** 【R1079】进入存档时是否发开局手册（首次发放）。 */
+    public static final ForgeConfigSpec.BooleanValue MISC_GIVE_STARTER_BOOKS;
+    /** 【R1079】手册是否显示配置入口（指南/配置拆分）。 */
+    public static final ForgeConfigSpec.BooleanValue MISC_BOOK_CONFIG_ACCESS;
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_PROMPT_SITTING_WORK;
     public static final ForgeConfigSpec SPEC;
     public static final ForgeConfigSpec INTERNAL_SPEC;
@@ -1404,6 +1475,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 只搬"值恰好还停在 679 那批值上"的键（玩家自己调成别的值的一律不动），标记落盘后永不再碰。
         DEFAULT_REPAIR_MIGRATED = INTERNAL.comment("内部标记：默认值修复迁移（把误当默认的 12 项搬回真默认）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.misc.defaultRepairMigrated").define("defaultRepairMigrated", false);
+        // R1125：挖矿/伐木自动收集默认关闭 → 开启。老 toml 里写着 false 的按旧默认迁一次；
+        // 标记落盘后玩家再手动关掉不会被重新打开（与前面几次默认迁移同一套一次性口径）。
+        AUTO_COLLECT_ON_MIGRATED = INTERNAL.comment("内部标记：自动收集默认开启迁移（挖矿/伐木 autoCollect false→true）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.mine.autoCollectMigrated").define("autoCollectMigrated", false);
         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
                 .translation("config.promaid.build.globalQuota")
                 .defineInRange("globalQuota", 350, 50, 1500);
@@ -1516,6 +1591,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.build.areaProtection").define("areaProtection", true);
         BUILD_FORCE_WORK_ACTIVITY = BUILDER.comment("建造任务强制工作时段（默认开）：她的任务是本模组建造时，把大脑活动钉在 WORK（休息/睡觉时段也照建——否则建造行为根本不被评估，她会站着不动）。关闭 = 完全按作息表切活动（休息时段不再建造）")
                 .translation("config.promaid.build.forceWorkActivity").define("forceWorkActivity", true);
+        // 【R1079】整合包作者用：按 id / 文件名禁用不符合主题的预置蓝图。
+        BUILD_DISABLED_BLUEPRINTS = BUILDER.comment("禁用的蓝图（默认空）：按 id 或文件名填写，逗号分隔、大小写不敏感，可带 .nbt/.snbt/.litematic/.schem 后缀。命中的蓝图不会出现在手册目录，也不能被建造（含 AI 下单）；内置与外部蓝图都适用。整合包作者可用它移除不符合主题的预置内容。手动删除 blueprints 目录里的文件同样有效（见手册说明）")
+                .translation("config.promaid.build.disabledBlueprints")
+                .defineList("disabledBlueprints", List.of(), o -> o instanceof String s && !s.isEmpty());
         BUILDER.pop();
 
         // ---- 饰品「大运」（v1.5.393 实测八百零四） ----
@@ -1533,6 +1612,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.accessory.daYun.dropItems").define("daYunDropItems", true);
         DAYUN_BREAK_PARTICLES = BUILDER.comment("「大运」破坏粒子（默认开）：破坏方块时喷该方块自己的碎屑并播破坏音（与原版挖掘完全一致）。关 = 方块静静消失，没有粒子也没有声音——嫌一路飞过去碎屑太多、或想省一点客户端开销时关掉")
                 .translation("config.promaid.accessory.daYun.breakParticles").define("daYunBreakParticles", true);
+        DAYUN_PARTICLE_LIMIT = BUILDER.comment("「大运」粒子量限制（默认开）：每 tick 只给前 N 格发破坏粒子+音效（N 见下一条，默认 16），超出的格子照常破坏、照常掉落，只是不再喷碎屑——高速成片犁地时最省客户端开销。关 = 每破一格都喷，不做任何上限")
+                .translation("config.promaid.accessory.daYun.particleLimit").define("daYunParticleLimit", true);
+        DAYUN_PARTICLE_CAP = BUILDER.comment("「大运」每 tick 粒子格数（默认 16，范围 1~256）：配合上一条生效——每 tick 最多让多少格喷破坏粒子+播破坏音。方块照样全破、战利品照样全掉，只是视觉/听觉上取前 N 格。调到 64+ 基本等于不限制")
+                .translation("config.promaid.accessory.daYun.particleCap")
+                .defineInRange("daYunParticleCap", 16, 1, 256);
         DAYUN_MAX_PER_TICK = BUILDER.comment("「大运」单 tick 破坏上限（默认 64）：每 tick 最多清多少格，超出的下一 tick 继续。飞行速度很快时可调大，但服务器负担随之上升")
                 .translation("config.promaid.accessory.daYun.maxPerTick")
                 .defineInRange("daYunMaxPerTick", 64, 1, 512);
@@ -1549,14 +1633,14 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.accessory.daYun.noWallDamage")
                 .define("daYunNoWallDamage", true);
         // ---- v1.3.2 实测九百〇六：撞击（破坏范围内的非友方单位，按这一刻的速度吃伤害 + 被击飞） ----
-        DAYUN_SMASH = BUILDER.comment("「大运」撞击伤害（默认开）：佩戴者鞘翅滑翔中，**破坏范围内**（与开路同一片地方、同一段前瞻）的非友方单位会被撞到——伤害与击飞都按**这一刻的速度**结算：飞得越快、打得越狠、飞得越远。速度低于 0.4 格/tick（几乎悬停）不结算。主人 / 同主女仆 / 自己的宠物 / 友军一律不撞")
+        DAYUN_SMASH = BUILDER.comment("「大运」撞击伤害（默认开）：佩戴者鞘翅滑翔中，**破坏范围内**（与开路同一片地方、同一段前瞻）的非友方单位会被撞到——伤害按**这一刻的速度**结算（取「速度 × 每格伤害」与「鞘翅同款 (速度×10−3)」两者较高者，飞得越快打得越狠），击飞则像 TNT 一样**以佩戴者为圆心向外炸开**。速度低于 0.4 格/tick（几乎悬停）不结算。主人 / 同主女仆 / 自己的宠物 / 友军一律不撞")
                 .translation("config.promaid.accessory.daYun.smash").define("daYunSmash", true);
-        DAYUN_SMASH_DAMAGE = BUILDER.comment("「大运」撞击伤害·每格速度（默认 5.0）：伤害 = 速度(格/tick) × 此值，上限 40。平飞约 0.6~1.2 格/tick → 3~6 点；带烟花/俯冲能到 2 以上 → 10 点以上。设 0 = 只击飞、不掉血")
+        DAYUN_SMASH_DAMAGE = BUILDER.comment("「大运」撞击伤害·每格速度（默认 5.0）：实际伤害 = max(速度(格/tick) × 此值, 鞘翅同款速度伤害 max(0, 速度×10−3))，上限 40。平飞约 0.6~1.2 格/tick → 6~9 点；带烟花/俯冲到 2 以上 → 17 点以上。设 0 = 只吃鞘翅那一档速度伤害（仍随速度增长）")
                 .translation("config.promaid.accessory.daYun.smashDamage")
                 .defineInRange("daYunSmashDamage", 5.0d, 0.0d, 40.0d);
-        DAYUN_SMASH_KNOCKBACK = BUILDER.comment("「大运」撞击击飞·每格速度（默认 2.0）：击飞强度 = 速度(格/tick) × 此值，上限 10（原版普攻击退约 0.5 作参照）；**方向顺着佩戴者这一刻的运动方向**（含上下——平飞就顺着飞出去、俯冲往下砸、爬升往上抛，不再固定向上）。设 0 = 只掉血、不击飞")
+        DAYUN_SMASH_KNOCKBACK = BUILDER.comment("「大运」撞击击飞·每格速度（默认 4.0）：击飞强度 = 速度(格/tick) × 此值，上限 16（原版普攻击退约 0.5 作参照）；**方向 = 以佩戴者（玩家/女仆）为圆心、从圆心指向目标的径向**，越近推得越狠并带一点向上分量——像 TNT 爆炸那样把人四散炸开，不再顺着飞行方向单推。设 0 = 只掉血、不击飞")
                 .translation("config.promaid.accessory.daYun.smashKnockback")
-                .defineInRange("daYunSmashKnockback", 2.0d, 0.0d, 10.0d);
+                .defineInRange("daYunSmashKnockback", 4.0d, 0.0d, 16.0d);
         BUILDER.pop();
 
         // ---- 挖矿 ----
@@ -1632,6 +1716,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
         MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘/坐下中禁止搭方块（默认开；对**所有**搭方块行为生效）：女仆骑乘中（扫帚等载具、TLM 的椅子）**或坐下**时，挖矿垫脚 / 伐木垫脚 / 搭路 / 自保搭高全部不再放方块——这两种形态下她根本挪不动，垫方块只会留一堆残渣；关闭 = 骑乘/坐下也照常搭。蓝图建造与指标石建造不受影响（她本来就是坐着施工的）")
                 .translation("config.promaid.mine.rideNoPillar").define("rideNoPillar", true);
+        MINE_PILLAR_ENABLED = BUILDER.comment("挖矿/伐木搭方块（默认开）：关掉后挖矿与伐木都不再垫脚/搭桥/垫台阶去够高处的矿或树，只走已有的路、够不着就换目标；搭路与自保搭高不受影响。适合不想让女仆在世界里留下任何临时方块的存档")
+                .translation("config.promaid.mine.pillarEnabled").define("pillarEnabled", true);
         MINE_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.mine.junkCheckInterval")
                 .defineInRange("junkCheckInterval", 100, 20, 400);
@@ -1646,12 +1732,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_NO_TARGET_PAUSE = BUILDER.comment("无目标静默闲逛时长（秒，挖矿与伐木共用）：确认这片区域没有目标时，她先按空闲走路逛这么久（期间不扫描、不播报），到时自动恢复并重新检索一次；0 = 关闭该静默")
                 .translation("config.promaid.mine.noTargetPause")
                 .defineInRange("noTargetPause", 10, 0, 120);
-        // v1.5.161：进阶挖矿——连锁采集 / 自动收集（自动收集默认关闭；连锁采集
+        // v1.5.161：进阶挖矿——连锁采集 / 自动收集（自动收集默认开启；连锁采集
         // 二百零六 按玩家当前配置同步为默认开）
         MINE_CHAIN_MINING = BUILDER.comment("连锁采集（默认开）：挖矿时自动连锁挖掘相连的同族矿石——矿脉一次挖完")
                 .translation("config.promaid.mine.chainMining").define("chainMining", true);
         MINE_AUTO_COLLECT = BUILDER.comment("自动收集（挖掘掉落物直接进女仆背包，不进世界；背包放不下才落地）")
-                .translation("config.promaid.mine.autoCollect").define("autoCollect", false);
+                .translation("config.promaid.mine.autoCollect").define("autoCollect", true);
+        MINE_HARD_TIMEOUT = BUILDER.comment("单块矿石硬超时（秒，默认 60）：同一个目标连续这么久还没挖掉——哪怕她一直在走位、一直在挖——也放弃它，效果与播报同「这块我够不到」；0 = 关闭")
+                .translation("config.promaid.mine.hardTimeout")
+                .defineInRange("hardTimeout", 60, 0, 600);
         // v1.5.163：连锁采集数量上限可自定义
         MINE_CHAIN_LIMIT = BUILDER.comment("连锁采集上限（块）：一次连锁挖掘的最大方块数（默认 16）")
                 .translation("config.promaid.mine.chainLimit").defineInRange("chainLimit", 16, 4, 64);
@@ -1746,11 +1835,22 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     WOOD_CHAIN_MINING = BUILDER.comment("连锁砍伐（同一棵树的相连木材一次砍完——树干天然相连，默认开启）")
             .translation("config.promaid.wood.chainMining").define("chainMining", true);
         WOOD_AUTO_COLLECT = BUILDER.comment("自动收集（砍伐掉落物直接进女仆背包，不进世界）")
-                .translation("config.promaid.wood.autoCollect").define("autoCollect", false);
+                .translation("config.promaid.wood.autoCollect").define("autoCollect", true);
+        WOOD_NO_PICKUP = BUILDER.comment("伐木中禁止拾取掉落物（默认开）：砍树期间不掉头去捡地上的东西（掉落物由伐木流程即时回收）；关闭 = 干活时也照常去捡")
+                .translation("config.promaid.wood.noPickup").define("noPickup", true);
+        WOOD_HARD_TIMEOUT = BUILDER.comment("单棵树木硬超时（秒，默认 60）：同一棵树连续这么久还没砍倒——哪怕她一直在走位、一直在砍——也放弃它，效果与播报同「这块我够不到」；0 = 关闭")
+                .translation("config.promaid.wood.hardTimeout")
+                .defineInRange("hardTimeout", 60, 0, 600);
         WOOD_CHAIN_LIMIT = BUILDER.comment("连锁砍伐上限（块）：一次连锁砍伐的最大方块数")
                 .translation("config.promaid.wood.chainLimit").defineInRange("chainLimit", 16, 4, 64);
         WOOD_LEAVES_CLEAR = BUILDER.comment("树冠清理（默认开）：砍掉一段树干时，顺手清掉那一段周围（水平 3 格、向上 6 格内）连着的树叶——跟着砍树逐层推进，不会一次性把整棵树冠清掉；她走路被树冠卡住时，也会清掉身边 3×3×3 的树叶。掉落物/树苗直接进背包（树叶不清会挂着挡视线还慢慢掉东西）。关闭则只砍树干、树叶靠自然衰减")
                 .translation("config.promaid.wood.leavesClear").define("leavesClear", true);
+        BUILDER.pop();
+
+        // ---- Promaid AI 总开关 ----
+        BUILDER.comment("Promaid AI 设置").translation("config.promaid.ai").push("ai");
+        AI_ENABLE = BUILDER.comment("Promaid AI 总开关（默认开）：关闭 = 本模组自己的主动对话、自主决策、AI 记忆提取/注入/检索、AI 工具、语言翻译等全部停手；不影响 TLM 自带 AI 对话、TTS 或其他模组。下方各分项设置保留。")
+                .translation("config.promaid.ai.enable").define("enable", true);
         BUILDER.pop();
 
         // ---- AI 记忆 ----
@@ -1762,12 +1862,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 // v1.5.131：12 → 8——旧默认偏高，日常短聊（几句寒暄）永远攒不满 → "记忆没反应"感
                 .defineInRange("extractThreshold", 8, 4, 64);
         MEMORY_MAX_ENTRIES = BUILDER.comment("记忆段落上限（超出淘汰低重要度）")
-                .translation("config.promaid.memory.maxEntries").defineInRange("maxEntries", 64, 16, 256);
+                .translation("config.promaid.memory.maxEntries").defineInRange("maxEntries", 128, 16, 512);
         MEMORY_PROMPT_TOP_N = BUILDER.comment("注入对话的相关记忆条数")
-                .translation("config.promaid.memory.promptTopN").defineInRange("promptTopN", 3, 1, 10);
+                .translation("config.promaid.memory.promptTopN").defineInRange("promptTopN", 5, 1, 10);
         MEMORY_MAX_MESSAGE_CHARS = BUILDER.comment("提取时每条对话消息最大字符数")
                 .translation("config.promaid.memory.maxMessageChars")
-                .defineInRange("maxMessageChars", 200, 50, 500);
+                .defineInRange("maxMessageChars", 600, 50, 2000);
         // v1.5.95：记忆子功能精准开关（接更强 agent 时可单独关闭让位）
         MEMORY_RELATION_INJECT = BUILDER.comment("关系三元组注入对话（主人-喜欢-红茶）")
                 .translation("config.promaid.memory.relationInject").define("relationInject", true);
@@ -1785,7 +1885,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("scanInterval", 20, 5, 120);
         MEMORY_PROJECTION_CHARS = BUILDER.comment("注入对话的记忆投影字符上限")
                 .translation("config.promaid.memory.projectionChars")
-                .defineInRange("projectionChars", 600, 100, 2000);
+                .defineInRange("projectionChars", 1200, 200, 4000);
         MEMORY_EXTRACT_TIMEOUT_MIN = BUILDER.comment("LLM 提取超时（分钟，超时允许重试）")
                 .translation("config.promaid.memory.extractTimeoutMin")
                 .defineInRange("extractTimeoutMin", 5, 1, 30);
@@ -1814,7 +1914,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 全部留空 = 跟随 TLM 女仆当前 LLM 站点；任一填写则该项用自定义值，其余仍跟随 TLM
         MEMORY_API_URL = BUILDER.comment("记忆 API 地址（OpenAI 兼容 chat/completions 端点，留空 = 跟随 TLM）")
                 .translation("config.promaid.memory.apiUrl").define("apiUrl", "");
-        MEMORY_API_KEY = BUILDER.comment("记忆 API 密钥（留空 = 跟随 TLM；明文存 config/promaid-common.toml，与 TLM sites/llm.json 一致）")
+        MEMORY_API_KEY = BUILDER.comment("记忆 API 密钥（填了自定义地址时只认这里，留空 = 不发送密钥；地址留空时才跟随 TLM；明文存 config/promaid-common.toml，与 TLM sites/llm.json 一致）")
                 .translation("config.promaid.memory.apiKey").define("apiKey", "");
         MEMORY_API_MODEL = BUILDER.comment("记忆 API 模型（留空 = 跟随 TLM 女仆当前模型）")
                 .translation("config.promaid.memory.apiModel").define("apiModel", "");
@@ -1864,7 +1964,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.memory.temporalEnable").define("temporalEnable", true);
         MEMORY_PROFILE_ITEMS = BUILDER.comment("结构化画像条目（移植自 UserProfile$ProfileItem）：主人画像拆成 category|key|置信度 的可去重条目并注入")
                 .translation("config.promaid.memory.profileItems").define("profileItems", true);
-        MEMORY_SNAPSHOT_ENABLE = BUILDER.comment("记忆快照（移植自 MemorySnapshotStore）：女仆第一人称'心里话'（≤200字），常驻注入提供情绪连续性")
+        MEMORY_SNAPSHOT_ENABLE = BUILDER.comment("记忆快照（移植自 MemorySnapshotStore）：女仆第一人称'心里话'（≤400字），常驻注入提供情绪连续性")
                 .translation("config.promaid.memory.snapshotEnable").define("snapshotEnable", true);
         MEMORY_SNAPSHOT_EVERY_N = BUILDER.comment("每 N 次摘要刷新/生成一次记忆快照")
                 .translation("config.promaid.memory.snapshotEveryN").defineInRange("snapshotEveryN", 3, 1, 50);
@@ -1944,6 +2044,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // ---- AI 工具（v1.5.95 新段：LLM 工具精准开关）----
         BUILDER.comment("AI 工具设置（LLM 对话中可调用的增强工具）")
                 .translation("config.promaid.aitools").push("aitools");
+        AITOOLS_ENABLE = BUILDER.comment("Promaid AI 工具总开关（默认开）：只影响本模组登记的 AI 工具，不影响 TLM 自带 AI 对话、TTS 或其他模组；关闭 = 模型不再调用本模组工具（记忆、笔记、任务等），下方各工具勾选保留。")
+                .translation("config.promaid.aitools.enable").define("enable", true);
         TOOL_REMEMBER = BUILDER.comment("remember 工具（LLM 主动写记忆，\"记住…\"）")
                 .translation("config.promaid.aitools.remember").define("remember", true);
         TOOL_WORKING_NOTE = BUILDER.comment("working_note 工具（跨对话任务笔记）")
@@ -1975,6 +2077,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- 对话与提示 ----
         BUILDER.comment("对话与提示设置").translation("config.promaid.dialogue").push("dialogue");
+        DIALOGUE_ENABLE = BUILDER.comment("对话与播报总开关（默认开）：关闭 = 工作状态播报、主动搭话等对话行为整体停手；下方各分项设置保留。")
+                .translation("config.promaid.dialogue.enable").define("enable", true);
         DIALOGUE_STATUS_REPORTER = BUILDER.comment("工作状态播报（女仆卡住时气泡解释原因）")
                 .translation("config.promaid.dialogue.statusReporter").define("statusReporter", true);
         DIALOGUE_REPORT_INTERVAL = BUILDER.comment("工作播报间隔（秒，默认 10）：女仆卡住时气泡播报的最短间隔，防刷屏")
@@ -1996,7 +2100,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.dialogue.autonomousCooldown").defineInRange("autonomousCooldown", 10, 1, 120);
         DIALOGUE_AUTONOMOUS_DAILY = BUILDER.comment("自主决策日上限（次）")
                 .translation("config.promaid.dialogue.autonomousDaily").defineInRange("autonomousDaily", 10, 0, 50);
-        DIALOGUE_API_DAILY_LIMIT = BUILDER.comment("所有女仆每日主动 LLM 调用总量上限（token 成本；10 → 40，0 = 不限）")
+        DIALOGUE_API_DAILY_LIMIT = BUILDER.comment("所有女仆每日主动 LLM 调用总量上限（token 成本；主动对话 / 自主决策 / 记忆提取 / 记忆归档，0 = 不限）")
                 .translation("config.promaid.dialogue.apiDailyLimit").defineInRange("apiDailyLimit", 40, 0, 400);
         DIALOGUE_REPORT_CHECK = BUILDER.comment("工作播报检查间隔（tick）")
                 .translation("config.promaid.dialogue.reportCheck")
@@ -2029,9 +2133,6 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         DIALOGUE_PROACTIVE_IDLE_MIN = BUILDER.comment("主动对话空闲重启（分钟，一轮跑完/被打断后主人 N 分钟没互动才重启新周期）")
                 .translation("config.promaid.dialogue.proactiveIdleMin")
                 .defineInRange("proactiveIdleMin", 60, 5, 600);
-        DIALOGUE_LONG_SILENCE_MAX = BUILDER.comment("长沉默确认每日上限（次，\"主人还在吗\"这类确认一天最多几次，防烦人）")
-                .translation("config.promaid.dialogue.longSilenceMax")
-                .defineInRange("longSilenceMax", 2, 0, 10);
         DIALOGUE_REPLY_FEEDBACK = BUILDER.comment("回复反馈学习（主人说'别说了/好烦'→ 记 error_mark 停止该话题；说'谢谢/说得对'→ 记忆强化；真沉默计时也靠它）")
                 .translation("config.promaid.dialogue.replyFeedback").define("replyFeedback", true);
         DIALOGUE_TOPIC_BACKOFF_MIN = BUILDER.comment("话题冷却（分钟，被主人否定的主动话题 N 分钟内不再提起）")
@@ -2054,8 +2155,30 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- 战斗与自保 ----
         BUILDER.comment("战斗与自保设置").translation("config.promaid.combat").push("combat");
-        COMBAT_SELF_PRESERVE = BUILDER.comment("自保行为（低血逃跑/搭高/治疗）")
+        COMBAT_SELF_PRESERVE = BUILDER.comment("环境自保（岩浆/着火/溺水/窒息/伤害方块）：遇到这些环境危险时插保命动作；细项见下方「环境·」。关闭 = 环境危险不再触发自保，低血自保仍按自己的开关工作。")
                 .translation("config.promaid.combat.selfPreserve").define("selfPreserve", true);
+        COMBAT_SELF_PRESERVE_ENV_LAVA = BUILDER.comment("环境·岩浆逃生：泡进岩浆时依次尝试走出/垫高/放水/末影珍珠/抗火；关闭 = 岩浆不再触发这套逃生（飞行中的「烫伤脱困」仍按自己的开关工作）。")
+                .translation("config.promaid.combat.selfPreserveEnvLava").define("selfPreserveEnvLava", true);
+        COMBAT_SELF_PRESERVE_ENV_FIRE_RESCUE = BUILDER.comment("环境·着火自救（默认开）：着火时用灭火器、水桶浇水或末影珍珠脱离；这些是瞬时动作，不改变她正在做的事。关闭 = 着火只保留抗火/火焰保护饰品的被动免疫。")
+                .translation("config.promaid.combat.selfPreserveEnvFireRescue").define("selfPreserveEnvFireRescue", true);
+        COMBAT_SELF_PRESERVE_ENV_FIRE_PANIC = BUILDER.comment("环境·火焰惊慌（默认关）：着火时进入自保会话，停下工作、跑向水源或主人。关闭 = 女仆行为不变，只执行上面的瞬时着火自救。")
+                .translation("config.promaid.combat.selfPreserveEnvFirePanic").define("selfPreserveEnvFirePanic", false);
+        COMBAT_SELF_PRESERVE_ENV_DROWN = BUILDER.comment("环境·溺水自救：氧气不足时上浮、找空气格、喝水肺；关闭 = 不再主动上浮（溺水保护饰品仍有效）。")
+                .translation("config.promaid.combat.selfPreserveEnvDrown").define("selfPreserveEnvDrown", true);
+        COMBAT_SELF_PRESERVE_ENV_SUFFOCATE = BUILDER.comment("环境·窒息脱困：头卡进方块时找最近空气格并挪过去；关闭 = 不再主动找空气（硬性防卡墙位移仍保留）。")
+                .translation("config.promaid.combat.selfPreserveEnvSuffocate").define("selfPreserveEnvSuffocate", true);
+        COMBAT_SELF_PRESERVE_ENV_DAMAGE_CELL = BUILDER.comment("环境·伤害方块脱离：站在营火/岩浆块等伤害方块上时走开或短距传送；关闭 = 不再主动离开（伤害照常结算）。")
+                .translation("config.promaid.combat.selfPreserveEnvDamageCell").define("selfPreserveEnvDamageCell", true);
+        COMBAT_SELF_PRESERVE_LOW_HP = BUILDER.comment("低血自保（默认开）：血量低于「触发血量」时插保命动作；细项见下方「低血·」。关闭 = 低血不主动自保，环境自保仍按自己的开关工作。")
+                .translation("config.promaid.combat.selfPreserveLowHp").define("selfPreserveLowHp", true);
+        COMBAT_SELF_PRESERVE_LOW_HP_HEAL = BUILDER.comment("低血·喝药/进食（默认开）：治疗药水、再生/增益药水、金苹果、食物回血；关闭 = 低血时不主动使用回血物品。")
+                .translation("config.promaid.combat.selfPreserveLowHpHeal").define("selfPreserveLowHpHeal", true);
+        COMBAT_SELF_PRESERVE_LOW_HP_PILLAR = BUILDER.comment("低血·垫高（默认关）：被近身或远程打断时垫方块到安全高度；关闭 = 低血时不搭高，仍可走位/传送。")
+                .translation("config.promaid.combat.selfPreserveLowHpPillar").define("selfPreserveLowHpPillar", false);
+        COMBAT_SELF_PRESERVE_LOW_HP_FLEE = BUILDER.comment("低血·逃跑/周旋（默认关）：走位拉开身位、卡住时垫台阶翻越，并保留贴脸反击；关闭 = 低血时不主动走位，站定战斗。")
+                .translation("config.promaid.combat.selfPreserveLowHpFlee").define("selfPreserveLowHpFlee", false);
+        COMBAT_SELF_PRESERVE_LOW_HP_TELEPORT = BUILDER.comment("低血·传送（默认关）：末影珍珠逃生、危急传送、解除自保后的归位传送；关闭 = 低血时不用珍珠/不自动传回主人。")
+                .translation("config.promaid.combat.selfPreserveLowHpTeleport").define("selfPreserveLowHpTeleport", false);
         COMBAT_ENTER_RATIO = BUILDER.comment("自保触发血量（0-1）")
                 .translation("config.promaid.combat.enterRatio").defineInRange("enterRatio", 0.3, 0.05, 1.0);
         // v1.5.153：默认 0.60→0.70——血量恢复到 70% 及以上无条件解除自保
@@ -2355,11 +2478,22 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 都立即切战斗（枪械优先，其余按背包武器随机），威胁消失后自动还原原任务
         COMBAT_AUTO_SWITCH = BUILDER.comment("主动切换战斗模式（主人被敌对生物攻击时，附近女仆无论什么任务都立即切战斗保护主人；默认开启）")
                 .translation("config.promaid.combat.autoSwitch").define("autoSwitch", true);
+        // v1.3.3（1.20.1 移植）：重锤猛击——物品与音效来自「试炼密室」回移植（trials:mace / trials:wind_charge）
+        COMBAT_MACE_SMASH = BUILDER.comment("重锤猛击（默认开，需安装带重锤的模组，如「试炼密室」回移植）：女仆主手持有重锤【且背包有风弹】时，贴近目标后朝其起跳、在下落中猛砸——落得越高伤害越高（1.21.1 原版三段加成：4 / 12+2×(f-3) / 22+(f-8)）；贴地命中后清零坠落距离（不会摔伤）。关闭 = 重锤只当普通近战武器平砍")
+                .translation("config.promaid.combat.maceSmash").define("maceSmash", true);
+        COMBAT_MACE_WIND_CHARGE = BUILDER.comment("重锤·必须消耗风弹（默认开）：只有同时持有重锤与风弹、并消耗 1 枚风弹时才起跳猛击（起跳初速 1.7）；没有风弹就按原版正常持锤平砍、不起飞。关闭本项 = 不消耗风弹也能自由起跳（不推荐）")
+                .translation("config.promaid.combat.maceWindCharge").define("maceWindCharge", true);
+        COMBAT_MACE_COOLDOWN = BUILDER.comment("重锤猛击冷却（tick，默认 60 = 3 秒）：两次猛击之间的最短间隔")
+                .translation("config.promaid.combat.maceCooldown").defineInRange("maceCooldown", 60, 20, 400);
+        COMBAT_MACE_TRIGGER_RANGE = BUILDER.comment("重锤猛击触发距离（格，默认 2，范围 1~2）：只有敌人贴到 2 格内才用风弹起跳砸落；2 格外她手够得着，一律用重锤平A，不再反复起跳。旧配置里的 3 会被压到 2。")
+                .translation("config.promaid.combat.maceTriggerRange").defineInRange("maceTriggerRange", 2, 1, 2);
         // v1.2.0：飞行作战（1.20.1 版，武器无关）——任务表里的"飞行作战"模式总开关
         // v1.5.397 实测八百五十四：改名为「空袭·总开关」并挪到面板「空袭数值」页第一条（原来叫
         // 「飞行作战」、藏在「主动参战」页；DIY 玩家按"空袭"找不到它，而扫帚页第一条就是总开关）
-        COMBAT_FLIGHT_MODE = BUILDER.comment("空袭·总开关（飞行作战）——鞘翅 + 任意近战武器 + 烟花火箭：遇到敌人先放烟花给初速，1.5 秒后朝敌人飞，进入 3.5 格取消滑翔自由落体、触底前近战命中结算暴击，命中后切回滑翔再放烟花循环；默认开启。关掉 = 近战空袭与远程空袭两个任务完全不工作（她能切过去，但飞行行为不启动）；DIY 模式会关掉它，想只把空袭开回来就打开这一条")
+        COMBAT_FLIGHT_MODE = BUILDER.comment("空袭·总开关（飞行作战）——鞘翅 + 近战武器 + 烟花火箭：遇到敌人先放烟花给初速，1.5 秒后朝敌人飞，进入 3.5 格取消滑翔自由落体、触底前打出这一击，命中后切回滑翔再放烟花循环。近战武器优先取背包里的 Trials 重锤（trials:mace）：按本轮最高点结算 1.21.1 重锤下落加成；没有重锤则用任意近战武器、按原版暴击 ×1.5。默认开启。关掉 = 近战空袭与远程空袭两个任务完全不工作（她能切过去，但飞行行为不启动）；DIY 模式会关掉它，想只把空袭开回来就打开这一条")
                 .translation("config.promaid.combat.flightMode").define("flightMode", true);
+        COMBAT_SPEAR_AIR_RAID = BUILDER.comment("长矛核心·空袭独立链路（默认开）：近战空袭主手持长矛时，先按通用近战空袭的方式起飞（烟花/羽扇/激流/自推鞘翅，消耗照旧），0.5 秒后整体切换成幻翼的攻击方式与状态机——环绕目标上方，随后俯冲；把幻翼的平A换成长矛冲锋（存在烟花时在冲锋前再消耗 1 枚加速），命中后解除幻翼态，保持水平惯性冲锋 1 秒（撞到敌人仍按长矛结算），随后解除飞行；有敌人则回到链路开头重新起飞。壮丽鞘翅/孔雀羽扇等可飞行物只作启用条件。全程保持长矛蓄力，伤害由长矛自己的 onUseTick 结算。关闭 = 长矛按普通近战武器走通用空袭链路")
+                .translation("config.promaid.combat.spearAirRaid").define("spearAirRaid", true);
         // v1.2.0 实测四百六十九：飞行作战免疫"鞘翅撞击伤害"（用户指定"开个后门"，默认开）
         COMBAT_FLIGHT_NO_WALL_DAMAGE = BUILDER.comment("飞行作战免疫鞘翅撞击伤害（默认开）：女仆在飞行作战滑翔中撞到方块不再受到 fly_into_wall 伤害——高速滑翔撞墙在飞行链路里很容易发生，一撞就掉血会打断连招；关闭则恢复原版撞击伤害")
                 .translation("config.promaid.combat.flightNoWallDamage").define("flightNoWallDamage", true);
@@ -2564,9 +2698,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_ATTACK_THOSE_ATTACKING_US = BUILDER.comment("反击类型判不出的攻击者（默认开）：正在打她/主人、或刚打过我们这一边的生物，即使它的类型在 TLM 的闸门里算「中立/友方」也当敌人打（给 ALEX 的生物这类「扑上来咬人、类型却判不出威胁」的模组生物用；只在它真的在攻击我们的 5 秒窗口内成立，主人/同主女仆/友军照旧不碰）。关闭 = 回 TLM 原版类型闸")
                 .translation("config.promaid.combat.attackThoseAttackingUs").define("attackThoseAttackingUs", true);
         // v1.3.2 实测八百五十九：免伤总闸 / 宠物免伤 / 建造护盾 / 锄头择物——随 DIY 关
-        COMBAT_FRIENDLY_FIRE_GUARD = BUILDER.comment("主人/友军免伤总闸（默认开）：女仆绝不对主人、同主女仆、友军造成任何伤害（近战/横扫/箭矢/法术/她扔的炸弹全覆盖，三层伤害事件都取消并每 2 秒清掉这类仇恨）。关闭 = 完全回原版伤害关系（主人/友军照常可能被她打到）")
+        COMBAT_FRIENDLY_FIRE_GUARD = BUILDER.comment("主人/友军/玩家免伤总闸（默认开）：女仆绝不对主人、同主女仆、友军造成任何伤害（近战/横扫/箭矢/法术/她扔的炸弹/枪械弹丸全覆盖，三层伤害事件都取消并每 2 秒清掉这类仇恨）。其他玩家的伤害跟随「玩家间伤害」(PvP) 游戏规则同步开关：PvP 关着 = 女仆也不能打任何玩家（流弹/爆炸命中队友一并取消）；PvP 开着 = 与主人同队的队友仍免伤。关闭 = 完全回原版伤害关系（主人/友军/玩家照常可能被她打到）")
                 .translation("config.promaid.combat.friendlyFireGuard").define("friendlyFireGuard", true);
-        COMBAT_PET_IMMUNITY = BUILDER.comment("玩家宠物免伤（默认开）：名字含「玩家宠物」「主人的宠物」或以「MaidNoAttack」开头、以及主人自己的可驯服宠物，女仆不对其造成任何伤害并清除这类仇恨。关闭 = 完全回原版（她照常攻击宠物）")
+        COMBAT_PET_IMMUNITY = BUILDER.comment("玩家宠物 / 友方单位免伤（默认开）：名字含「玩家宠物」「主人的宠物」或以「MaidNoAttack」开头、以及任何玩家名下的可驯服宠物 / 模组召唤物 / 女仆（OwnableEntity 有 owner），女仆不对其造成任何伤害并清除这类仇恨。自己与同队队友的单位一律免伤；PvP 关闭时其他玩家的单位也免伤；PvP 开启且不同队按原版可交战。关闭 = 完全回原版（她照常攻击宠物）")
                 .translation("config.promaid.combat.petImmunity").define("petImmunity", true);
         COMBAT_BUILD_SHIELD = BUILDER.comment("建造护盾（默认开）：本模组建造任务进行中的女仆获得无限时长抗性提升 V、任何伤害来源被取消、任何生物不能把她选为目标。关闭 = 完全回原版（建造中的她照常被怪打、会被锁定）")
                 .translation("config.promaid.combat.buildShield").define("buildShield", true);
@@ -2650,6 +2784,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 不迁的话"默认 60"对老档不生效。只搬**还停在 30** 的档，自己调过的不碰。
         FIXEDWING_ALT_60_MIGRATED = INTERNAL.comment("内部标记：滑翔类盘旋加高默认迁移（30→60）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.ride.fixedWingAlt60Migrated").define("fixedWingAlt60Migrated", false);
+        // R1049：记忆长度默认值整体上调（段落上限 64→128、注入条数 3→5、单条消息 200→600、
+        // 投影上限 600→1200）。老 toml 里写着旧默认，只改声明对老档无效，故用一次性标记迁一次；
+        // 只搬**还停在旧默认**的键，玩家自己调过的一律不碰。
+        MEMORY_LENGTH_MIGRATED = INTERNAL.comment("内部标记：记忆长度默认值上调（64→128、3→5、200→600、600→1200）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.memory.lengthMigrated").define("memoryLengthMigrated", false);
         BUILDER.pop();
 
         // ---- v1.3.0(beta) 实测七百〇三「接敌机动」（配置面板：战斗与自保 → 接敌机动）----
@@ -2790,10 +2929,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_RIDE_FIXEDWING_ALT_BONUS = BUILDER.comment("固定翼（滑翔式）额外加高（格，默认 60，0~80）：滑翔类载具（A-10 / AC-130H / Ju-87 / KV-16 / 汤姆6）的盘旋高度 = 参照物高度 + 本项。\n\n【参照物是谁】跟随（没敌人）= 主人脚下 + 「悬停高度」；接敌 = 敌人脚下 + 「接敌高度」。本项是**再往上抬**的那一档，所以实际高度 = 二者之和 + 本项。\n\n【地形净空也一起抬】固定翼巡航有一条“前方地形净空线”（前瞻约 160 拍的路，按最高地形 + 14 格算），本项**同时**加在这条线上——否则超平坦地形上真正管着她的是这条线，只抬目标点等于没抬。\n\n调小 = 飞得低、看得清地面（但山头/建筑一抬头就要拉起来）；调大 = 更安全、轰炸更省心；0 = 只按「悬停高度 / 接敌高度」飞。")
                 .translation("config.promaid.ride.fixedWingAltBonus")
                 .defineInRange("fixedWingAltBonus", 60.0, 0.0, 80.0);
-        // v1.3.2【拟真降落：默认关】——固定翼降落在这一版换成了"跑道条带 + 对准进近 + 下滑道 +
-        // 复飞"的拟真链路；上一个版本是"选一块平地 → 朝它压高度 → 近地接地"。两个都留、由这一项选。
-        COMBAT_RIDE_REALISTIC_LANDING = BUILDER.comment("拟真降落（默认关）：开 = 固定翼（含汤姆6）降落走**拟真**那条链路——先在跑道圈里规划一条能落下去的跑道（八向条带选落差最小的，挑不出就原地盘旋等下一轮），再「对准进近 → 沿下滑道下降 → 触地前压平轻接地」，一条航道两分钟都进不了场才拉黑换一条。关 = **上一个版本的降落方式**（选一块够平的地面当落点，朝它压高度，进到近地高度就压平机翼、轻接地）。两种方式共有的部分：电量见底照常安全降落、接地后清 crash 标记并停住。")
-                .translation("config.promaid.ride.realisticLanding").define("realisticLanding", false);
+        // v1.3.2【拟真降落：R1071 起默认开】——固定翼降落走"跑道条带 + 进场航线 + 下滑道"；
+        // 上一个版本是"选一块平地 → 朝它压高度 → 近地接地"。两个都留、由这一项选。
+        COMBAT_RIDE_REALISTIC_LANDING = BUILDER.comment("拟真降落（默认开）：开 = 固定翼（含汤姆6）降落走**拟真**那条链路——先在跑道圈里规划一条能落下去的跑道（八向条带选落差最小的，挑不出就原地盘旋等下一轮），再「对准进近 → 沿下滑道下降 → 触地前压平轻接地」，一条航道两分钟都进不了场才拉黑换一条。关 = **上一个版本的降落方式**（选一块够平的地面当落点，朝它压高度，进到近地高度就压平机翼、轻接地）。两种方式共有的部分：电量见底照常安全降落、接地后清 crash 标记并停住。")
+                .translation("config.promaid.ride.realisticLanding").define("realisticLanding", true);
         // 实测九百八十五【骑乘指挥棒：光标渲染开关】——「被绑定以后会出现光标」是原生需求，
         // 但金色描边有人不想要（挂机时满屏发光、与别的模组描边叠加），所以把它交成一个总闸。
         COMBAT_RIDE_BATON_MARK = BUILDER.comment("骑乘指挥棒·光标（默认开）：绑定成功、或“待选中”选中时，在**女仆与坐骑身上**打一道**原版发光标记**——同光灵箭那条渲染（金色描边），隔老远也能看出这一对是哪一对。\n\n【关掉会怎样】① 之后**不再点亮**任何新光标；② **已经亮着的**会在 5 秒内被清扫链自动熄掉；③ 链路本身、绑定留痕、选中与配对流程**一概不受影响**（那三样与“发光”是分开记的），解绑与收魂符照旧会熄灯。\n\n【为什么有人要关】挂机时满屏金色描边晃眼，或与别的模组的发光/描边叠加；关掉只影响“看不看得见”，不影响任何骑乘行为。")
@@ -2877,12 +3016,33 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_SMASH_HIT_RANGE = BUILDER.comment("猛击命中判定距离（格，默认 4.0）：按「点到本 tick 位移线段」算距离，俯冲 1~2 格/tick 也不会整段穿过去")
                 .translation("config.promaid.airRaid.smashHitRange")
                 .defineInRange("smashHitRange", 4.0, 0.5, 32.0);
+        AIR_RAID_SMASH_MIN_FALL = BUILDER.comment("猛击下落加成门槛（格，默认 1.5）：重锤下落加成要求严格大于此值，写回时取比它略大一点；不装 Trials 重锤时本项无效果")
+                .translation("config.promaid.airRaid.smashMinFall")
+                .defineInRange("smashMinFall", 1.5, 0.0, 20.0);
         AIR_RAID_FORCED_HIT_RADIUS = BUILDER.comment("范围强制命中半径（格，默认 2.5）：身边这个范围内的其他合法敌对目标也会被结算一次猛击（俯冲时判定框经常判不到贴身怪）")
                 .translation("config.promaid.airRaid.forcedHitRadius")
                 .defineInRange("forcedHitRadius", 2.5, 0.0, 16.0);
         AIR_RAID_SMASH_MAX_TICKS = BUILDER.comment("猛击段最长（tick，默认 20 = 1 秒）：超时按打空收尾（不摔伤、切回滑翔）")
                 .translation("config.promaid.airRaid.smashMaxTicks")
                 .defineInRange("smashMaxTicks", 20, 1, 200);
+        AIR_RAID_SPEAR_RECOVER_TICKS = BUILDER.comment("长矛空袭·幻翼态接管延迟（tick，默认 10 = 0.5 秒）：先用通用近战空袭的起飞方式（烟花/羽扇/激流/自推鞘翅，消耗照旧）起飞，0.5 秒后整体切换到幻翼的攻击方式与状态机。0 = 起飞当拍就切换")
+                .translation("config.promaid.airRaid.spearRecoverTicks")
+                .defineInRange("spearRecoverTicks", 10, 0, 100);
+        AIR_RAID_SPEAR_MAX_TICKS = BUILDER.comment("长矛空袭·单次俯冲最长（tick，默认 100 = 5 秒）：幻翼态一次俯冲超过这个时长仍未撞上，就中止本次俯冲、退回环绕重新找角度，避免绕着目标无限追")
+                .translation("config.promaid.airRaid.spearMaxTicks")
+                .defineInRange("spearMaxTicks", 100, 20, 400);
+        AIR_RAID_SPEAR_PASS_RANGE = BUILDER.comment("长矛空袭·冲锋前加速距离（格，默认 20，6~48）：幻翼俯冲进入这个距离时，如果身上还有烟花火箭，消耗 1 枚再补一次加速（没有烟花/只有羽扇或自推鞘翅时不补）。")
+                .translation("config.promaid.airRaid.spearPassRange")
+                .defineInRange("spearPassRange", 20.0, 6.0, 48.0);
+        AIR_RAID_SPEAR_BOOST_INTERVAL = BUILDER.comment("长矛空袭·惯性平飞时长（tick，默认 20 = 1 秒）：长矛命中后解除幻翼态、顺着惯性保持水平冲锋继续飞；撞到敌人仍按长矛结算，1 秒后解除飞行（有敌人则回到链路开头重新起飞）。")
+                .translation("config.promaid.airRaid.spearBoostInterval")
+                .defineInRange("spearBoostInterval", 20, 5, 60);
+        AIR_RAID_SPEAR_DECAY_PER_TICK = BUILDER.comment("长矛空袭·幻翼态速度衰减（历史键，R1083 起已取消：整轮保持进入幻翼态时的速度，本键不再生效，仅保留以兼容旧配置文件）")
+                .translation("config.promaid.airRaid.spearDecayPerTick")
+                .defineInRange("spearDecayPerTick", 0.0, 0.0, 0.1);
+        AIR_RAID_SPEAR_MAX_DECAY = BUILDER.comment("长矛空袭·幻翼态最大衰减（历史键，R1083 起已取消：速度全程不衰减，本键不再生效，仅保留以兼容旧配置文件）")
+                .translation("config.promaid.airRaid.spearMaxDecay")
+                .defineInRange("spearMaxDecay", 0.0, 0.0, 0.9);
         AIR_RAID_MELEE_REACH = BUILDER.comment("地面近战触及距离（格，默认 3.0）：模式未激活 / 目标贴身 / 太远先跑近时用的地面近战，距离超过此值先走位靠过去")
                 .translation("config.promaid.airRaid.meleeReach")
                 .defineInRange("meleeReach", 3.0, 0.5, 16.0);
@@ -3000,13 +3160,19 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 以及击飞，同时不破坏方块。但都可以在手册内部调试。"
         // 反编译实证：重生锚那一炸是写死的 5.0F，与萤石充能等级无关（充能只决定"炸不炸"），
         // 所以重生锚链路只要 1 颗萤石；末地水晶 6.0F、床 5.0F、TNT 4.0F，详见 MaidBombing。
-        BUILDER.comment("空袭轰炸（配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸）")
+        BUILDER.comment("空袭轰炸（配置面板：战斗与自保 → 空袭数值 → ⑦ 轰炸）")
                 .translation("config.promaid.bombing").push("bombing");
-        COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 远程空袭（盘旋期间每次开火之后）/ 第三方战斗任务都会放（远程空袭也算在内，她飞在天上也照放）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
-                .translation("config.promaid.bombing.melee").define("melee", true);
-        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——TNT 的判据 放宽为**注册名里带 tnt 的都算，方块继承 TntBlock 的也算**（原版那一件与各模组自加的 TNT 通吃）；而且认出来的那一件是**它自己那一枚就放它自己**——模组自己写的 TNT 方块走它自己的点火钩子（放出来的是模组自己的 TNT 实体，威力/带火归它自己；**「破不破方块」跟着「轰炸破坏方块」开关走**：关着时那一炸也一个方块都不拆、伤害照旧），原版那一件才由本模组按『不破坏方块』的口径整段接管；点火料 = 类打火石（打火石及其子类，优先，每发掉 1 点耐久）或类火焰弹（火焰弹及其子类，没有打火石时消耗 1 个），走哪条看这一件**有没有耐久**（有耐久＝道具扣耐久、没耐久＝消耗品整件消耗），两种都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，本模组自己的炸弹伤害与击飞对主人/友军/她自己都不生效")
+        COMBAT_BOMBING_ENABLE = BUILDER.comment("轰炸总开关（默认开）：关闭 = 末地水晶 / 重生锚 / 床 / TNT 四条链路全部停手；下方各子开关的勾选保留。")
+                .translation("config.promaid.bombing.enable").define("enable", true);
+        COMBAT_BOMBING_END_CRYSTAL = BUILDER.comment("末地水晶炸弹（默认开）：打完一记之后，背包有末地水晶与黑曜石/基岩时，在目标脚边放底座并挂水晶；关闭 = 不再放水晶。")
+                .translation("config.promaid.bombing.endCrystal").define("endCrystal", true);
+        COMBAT_BOMBING_RESPAWN_ANCHOR = BUILDER.comment("重生锚炸弹（默认开）：背包有重生锚时放下并充能 1 级（需要萤石、且当前维度重生锚会爆炸）；关闭 = 不再放重生锚。")
+                .translation("config.promaid.bombing.respawnAnchor").define("respawnAnchor", true);
+        COMBAT_BOMBING_BED = BUILDER.comment("床炸弹（默认开）：背包有床、且当前维度床会爆炸时，朝目标放下；关闭 = 不再放床。")
+                .translation("config.promaid.bombing.bed").define("bed", true);
+        COMBAT_BOMBING_TNT = BUILDER.comment("TNT 投掷（默认开）：所有战斗任务（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 飞行战斗 / 第三方战斗任务）在打完一记之后，朝最近的敌人扔 TNT；需要 TNT 与点火料（类打火石优先，其次类火焰弹）。注册名带 tnt 或方块继承 TntBlock 的都算 TNT，认出来哪一件就放它自己那一枚。防误伤：主人与友军绝不作为目标，本模组炸弹的伤害与击飞对主人/友军/她自己都不生效。")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
-        COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害与击飞）")
+        COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响；这半秒留作动作间隔（她自己免疫自己炸弹的伤害与击飞）。")
                 .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
         COMBAT_BOMBING_TNT_FUSE = BUILDER.comment("投掷 TNT 的引信（tick，默认 40 = 2 秒）：扔出去到爆炸的时间，调小 = 落地即炸更准、调大 = 更容易被躲开")
                 .translation("config.promaid.bombing.tntFuse").defineInRange("tntFuse", 40, 10, 200);
@@ -3042,10 +3208,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("bombInterval", 200, 10, 2400);
         COMBAT_BOMBING_POSE = BUILDER.comment("副手动作表现（默认开）：放置黑曜石/重生锚/床、给重生锚充能、投掷 TNT 时，副手短暂举起她正在用的那一件（方块 / 萤石 / 打火石）——『好像真的打了一下』就是靠它，起爆那一刻还会再举一次。关掉 = 副手全程不被换，只剩挥臂 / 音效 / 爆炸（挥臂是打斗反馈，不归这个开关管）。半路关掉也不会把她的盾牌 / 食物留在手上：还原逻辑独立于开关")
                 .translation("config.promaid.bombing.pose").define("pose", true);
-        COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中强制放置（默认开）：空袭时她一直在飞、脚边常常没有地面——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
+        COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中放置（默认开）：她在飞行中战斗时脚边常常没有可站的方块——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
                 .translation("config.promaid.bombing.airPlace")
                 .define("airPlace", true);
-        COMBAT_BOMBING_AIR_DROP = BUILDER.comment("空中悬空投弹（走后门，默认开）：落点的最后一级。远程空袭她一直在天上盘旋，而目标常常自己就悬空（蝙蝠 / 恶魂 / 被击飞到半空中的怪 / 站在水里的怪）——它脚边那四格全是空气、原版又会以『那一格站着实体』为由拒绝，前几级落点因此全部落空。开启后最后再试一手：直接把落点取在**目标头顶那一格 → 目标自己那一格**上，不要求支撑面、也不要求那一格没站着目标自己（原版拒绝之后就强制放下），于是底座可以**悬在空中**、正好贴在目标身上，0.5 秒后原地开花。唯一保留的避让是那一格若站着除目标以外的别人的活物就跳过（免得把路过的埋进黑曜石）。关 = 只按原版规则落点，悬空的目标基本放不下")
+        COMBAT_BOMBING_AIR_DROP = BUILDER.comment("空中悬空放置（走后门，默认开）：落点的最后一级。她在飞行中战斗时，目标常常自己就悬空（蝙蝠 / 恶魂 / 被击飞到半空中的怪 / 站在水里的怪）——它脚边那四格全是空气、原版又会以『那一格站着实体』为由拒绝，前几级落点因此全部落空。开启后最后再试一手：直接把落点取在**目标头顶那一格 → 目标自己那一格**上，不要求支撑面、也不要求那一格没站着目标自己（原版拒绝之后就强制放下），于是底座可以**悬在空中**、正好贴在目标身上，0.5 秒后原地开花。唯一保留的避让是那一格若站着除目标以外的别人的活物就跳过（免得把路过的埋进黑曜石）。关 = 只按原版规则落点，悬空的目标基本放不下")
                 .translation("config.promaid.bombing.airDrop")
                 .define("airDrop", true);
         COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
@@ -3101,13 +3267,13 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的垫脚方块不掉落地面，同维度内无论女仆离得多远都直接塞回【搭它的那只女仆】的背包——只有她死亡、或她已在另一个维度、或她背包满了才落地；关闭则一律恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
         // ---- v1.3.0(beta) 实测六百八十【搭方块禁用名单】
-        // 单一口径在 com.maidsmart.tool.MaidBuildBlockFilter#isBlacklistedBuildBlock（四个消费方
+        // 单一口径在 com.maidsmart.tool.MaidBuildBlockFilter#isBlacklistedBuildBlock（五个消费方
         // 全走 MaidBuildBlockFilter.isUsableBuildBlock，所以这条规则天然覆盖
         // 自保搭高 / 挖矿 / 伐木 / 搭路）；"什么算原版天然"那张表在 com.maidsmart.tool.NaturalBlocks。
         // BRIDGE_BUILD_ALLOWED），重启配置后照旧生效。
-        BRIDGE_BUILD_ONLY_NATURAL = BUILDER.comment("搭方块只用原版天然方块（默认开）：开 = 女仆垫脚/搭高/搭桥只能用【原版天然方块】（石头/圆石/泥土/沙砾/原木/矿石/下界岩这类从地形里挖得到的；表见 NaturalBlocks，共一百多项）——合成品（木板/玻璃/石砖/羊毛/混凝土…）与【全部模组方块】默认都不许用，防她把你的建材和模组方块当垫脚石糟蹋；关 = 除下面「禁用名单」外都放行。无论开关如何，沙子/沙砾这类下落方块、仙人掌/岩浆块这类伤害方块本来就一直不许搭（那是另外几条判定，不受本开关影响）")
+        BRIDGE_BUILD_ONLY_NATURAL = BUILDER.comment("搭方块只用原版天然方块（默认开）：开 = 女仆垫脚/搭高/搭桥只能用【原版天然方块】（石头/圆石/泥土/沙砾/原木/矿石/下界岩这类从地形里挖得到的；表见 NaturalBlocks，共一百多项）——合成品（木板/玻璃/石砖/羊毛/混凝土…）与【全部模组方块】默认都不许用，防她把你的建材和模组方块当垫脚石糟蹋；关 = 除下面「禁用名单」外都放行。无论开关如何，沙子/沙砾这类下落方块、仙人掌/岩浆块这类伤害方块、床/门/高植物这类两格方块本来就一直不许搭（那是另外几条判定，不受本开关影响）")
                 .translation("config.promaid.bridge.buildOnlyNatural").define("buildOnlyNatural", true);
-        BRIDGE_BUILD_FORBIDDEN = BUILDER.comment("搭方块禁用名单（完整注册名，逗号分隔；默认空）：面板「移动与行为 → 搭路 → 搭方块禁用名单」里点成【红框✖】的方块都记在这里——被记下的方块女仆绝不拿来垫脚/搭高/搭桥（自保搭高/挖矿/伐木/搭路四个链路同时生效）。这是「显式禁用」，优先级最高：即使它本来在天然方块表里也会被禁（例如把 minecraft:cobblestone 写进来 = 连圆石都不许搭）。带不带 minecraft: 前缀都认；留空 = 没有额外禁用")
+        BRIDGE_BUILD_FORBIDDEN = BUILDER.comment("搭方块禁用名单（完整注册名，逗号分隔；默认空）：面板「移动与行为 → 搭路 → 搭方块禁用名单」里点成【红框✖】的方块都记在这里——被记下的方块女仆绝不拿来垫脚/搭高/搭桥（自保搭高/挖矿/伐木/搭路/指标石五个链路同时生效）。这是「显式禁用」，优先级最高：即使它本来在天然方块表里也会被禁（例如把 minecraft:cobblestone 写进来 = 连圆石都不许搭）。带不带 minecraft: 前缀都认；留空 = 没有额外禁用")
                 .translation("config.promaid.bridge.buildBlacklist")
                 .defineList("buildBlacklist", java.util.List.of(), o -> o instanceof String s && !s.isEmpty());
         BRIDGE_BUILD_ALLOWED = BUILDER.comment("搭方块放宽名单（完整注册名，逗号分隔；默认空）：面板里被【取消勾选（绿框✔ = 允许）】的方块记在这里，是「默认禁止」的例外——最典型的用法就是在面板里把想让她用的模组方块点成允许。优先级高于「禁用名单」，也高于「只用原版天然方块」那条默认规则；带不带 minecraft: 前缀都认")
@@ -3131,19 +3297,14 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // **不再生效**（Forge 不会替你把值搬过来）——要沿用旧设置请手动搬进 [flightFollow]；
         // 面板上它也从「移动与行为 → 搭路」搬到了平级的「移动与行为 → 飞行跟随」。
         BUILDER.comment("飞行跟随设置").translation("config.promaid.flightFollow").push("flightFollow");
-        FLIGHT_FOLLOW_ENABLED = BUILDER.comment("飞行跟随（默认关）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条【起手距离】、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、威胁半径内也没有敌对生物，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到【收手距离】（见下面那条，默认 5 格）内就收手交回普通跟随——进半径时**解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），之后自然滑翔、落地还回胸甲，与空袭打完一波同款；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）。**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。属于观赏玩法（会烧烟花、磨鞘翅耐久），想玩再开。【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
-                .translation("config.promaid.flightFollow.enabled").define("enabled", false);
+        FLIGHT_FOLLOW_ENABLED = BUILDER.comment("飞行跟随（默认开）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条【起手距离】、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、威胁半径内也没有敌对生物，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到【收手距离】（见下面那条，默认 5 格）内就收手交回普通跟随——进半径时**解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），之后自然滑翔、落地还回胸甲，与空袭打完一波同款；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）。**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。属于观赏玩法（会烧烟花、磨鞘翅耐久），不想要可在面板关掉；关掉后她恢复「搭路追人」。【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
+                .translation("config.promaid.flightFollow.enabled").define("enabled", true);
         FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随·起手距离（格，默认 25）：你离她超过这个 3D 距离才起飞追——**更近的距离走路/搭路本来就够得着**，犯不上烧烟花（值太小会太灵敏：她稍微走出去一点就起飞）。范围 3~128。\n\n【起手与收手是两个不同的球】起手 = 这一条（默认 25），收手 = 下面那条（默认 5），默认档留 20 格迟滞——两个门槛分开，避免只有一个球时在边界上来回起降。\n\n注意：老存档的配置文件里若已写着 dist = 5，Forge 不会替你改大，想用新默认请删掉那一行或手动改成 25")
                 .translation("config.promaid.flightFollow.dist").defineInRange("dist", 25.0, 3.0, 128.0);
         FLIGHT_FOLLOW_END_DIST = BUILDER.comment("飞行跟随·收手距离（格，默认 5）：你进到这么近（3D 距离）就中断本趟、交回普通跟随，并**解除烟花给的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。范围 1~64。\n\n【必须比起手距离小】写成大于等于起手距离时，她会「一起飞就已经在收手半径内」= 起飞即刻收手、一次都飞不起来。所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值；默认 25 / 5 用不到这条兜底）")
                 .translation("config.promaid.flightFollow.endDist").defineInRange("endDist", 5.0, 1.0, 64.0);
-        FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有能飞的道具**（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是她能飞的凭证），但补推不再扣那一枚——纯观赏档，适合只想看她跟着飞的存档。(背包里同时有羽扇时走扇子那条：挥扇推进、按扇子自己的口径扣耐久；这条开关只管烟花——位移法术不消耗物资，开与关都一样，它按自己的冷却放)")
-                .translation("config.promaid.flightFollow.firework").define("firework", true);
-        FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
-                .translation("config.promaid.flightFollow.elytra").define("elytra", true);
-        // v1.2.4 实测六百四十：第三个省料开关（需求原文"飞行跟随没有不消耗三叉戟耐久的开关"）
-        FLIGHT_FOLLOW_TRIDENT = BUILDER.comment("飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点）：关 = 这一趟里用激流三叉戟推进不再扣它的耐久——与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。\n\n【只管飞行跟随】空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久（那边没有、也不该有这个开关）。\n\n【顺序不变】她背包里有烟花时依旧先烧烟花（有羽扇先挥扇），所以这个开关对「有烟花可烧」的存档没有任何影响——它只在真轮到激流三叉戟推进时才起作用（见 MaidRiptideBoost 与 MaidFlightFollowBehavior.boost 的取用顺序）")
-                .translation("config.promaid.flightFollow.trident").define("trident", true);
+        FLIGHT_FOLLOW_CONSUME = BUILDER.comment("飞行跟随·是否消耗飞行物（默认开）：一个开关同时管三样——烟花火箭每次补推扣 1 枚、激流三叉戟每次推进扣 1 点耐久、鞘翅每 20 tick 扣 1 点耐久。关 = **照旧要求背包里有能飞的道具**（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是她能飞的凭证），但这一趟飞行不再产生任何损耗（纯观赏档）。\n\n【边界】只管飞行跟随这一条链路：空袭的起飞/抬升/俯冲是战斗动作，照旧消耗；位移法术本来就不消耗物资，开与关都一样（按自己的冷却放）；背包里有烟花时依旧先烧烟花（有羽扇先挥扇），顺序不变。")
+                .translation("config.promaid.flightFollow.consume").define("consume", true);
         BUILDER.pop();
 
         // ---- v1.2.2 实测六百一十六【压缩盒：一格 114514 个，放进女仆背包算她背包的延伸】----
@@ -3207,11 +3368,17 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.noPlaceOnOwner").define("noPlaceOnOwner", true);
         // 实测四百四十八：蛋糕可食用开关（反馈建议的兜底逃生通道——把蛋糕变可食是
         // 全局改动，第三方模组的食物阈值判定会因此把蛋糕纳入，冲突时可直接关掉）
-        MISC_CAKE_EDIBLE = BUILDER.comment("蛋糕可食用（默认开）：让女仆把蛋糕当食物（女仆爱吃蛋糕的设定；女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂）。关闭后蛋糕恢复原版行为（只能放置、不能被女仆当食物），「女仆吃蛋糕」相关功能全部停用——这是与第三方模组冲突时的逃生通道（某些模组会把「可食用物品」判定为投喂目标，从而抢走野生女仆的驯服交互）")
+        MISC_CAKE_EDIBLE = BUILDER.comment("蛋糕可食用（默认开）：让女仆把蛋糕当食物（女仆爱吃蛋糕的设定；女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂）。关闭后蛋糕恢复原版行为（只能放置、不能被女仆当食物），「女仆吃蛋糕」相关功能全部停用——这是与第三方模组冲突时的逃生通道（某些模组会把「可食用物品」判定为投喂目标，从而抢走野生女仆的驯服交互）\n\n【R1102】启动自动关闭的探测已扩到「喂食抢答型」附属（如 生活调味料：酒狐萝贝）：它们不改蛋糕本身、却会把可食用物品直接喂给任意女仆（含野生）并抢走交互——检测到这类模组在场、或运行时发现蛋糕驯服被抢，同样自动关闭本功能让出蛋糕驯服")
                 .translation("config.promaid.misc.cakeEdible").define("cakeEdible", true);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
+        // 【R1101】熔炉等价族：实体挂在原版熔炉族（AbstractFurnaceBlockEntity）的模组炉
+        MISC_COOK_FURNACE_FAMILY = BUILDER.comment("熔炉等价族（默认关）：烧制任务额外接受「方块实体挂在原版熔炉族（AbstractFurnaceBlockEntity）」的模组熔炉——即方块本身不是熔炉类、方块实体却继承原版熔炉的那一类。这类炉子槽位语义与原版一致（0 进料/1 燃料/2 成品），收成品/补燃料/喂料逻辑全部照旧。注意：完全自定义容器的炉子（如「更好的熔炉」系列）不在此族内——它们的槽位是自己的一套，不适用本开关")
+                .translation("config.promaid.misc.cookFurnaceFamily").define("cookFurnaceFamily", false);
+        // 【R1101】营火/灵魂营火烹饪：摆食材、烧好收回，绝不站到火上
+        MISC_COOK_CAMPFIRE = BUILDER.comment("营火烹饪（默认开）：背包里有营火可烤的食材（生肉/鱼等有营火配方的东西）且工作区内有点着的营火/灵魂营火时，优先到营火边把食材摆上去；成品由营火弹出后她自动捡回背包，不耗燃料。她只站营火旁边的邻格、绝不站到火格上（营火上方有伤害）。附近没有营火则照旧走熔炉链路；不想用营火可在面板关掉")
+                .translation("config.promaid.misc.cookCampfire").define("cookCampfire", true);
         // v1.1.0 实测三百：木材黑名单开关
         MISC_COOK_BURN_WOOD = BUILDER.comment("烧木材（默认关）：木材类（原木/木板/树苗/竹等）默认进黑名单不烧——女仆不会拿木材当原料烧（避免「用木头烧木头」）；勾选后木材类照常可烧（仍受「烧任何可烧制物」开关约束）")
                 .translation("config.promaid.misc.cookBurnWood").define("cookBurnWood", false);
@@ -3240,6 +3407,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.slaughterRadius").defineInRange("slaughterRadius", 16, 4, 48);
         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
                 .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 5000, 500, 60000);
+        MISC_PROMAID_HINTS = BUILDER.comment("气泡与系统消息（默认开）：开 = 保留本模组加入的聊天气泡、同步到聊天框的台词、与各功能的操作提示；关 = 这些提示全部静默（只管本模组，原版与别的模组的消息不受影响）")
+                .translation("config.promaid.misc.promaidHints").define("promaidHints", true);
         // v1.1.0 实测四百一十：排班女仆贴身情绪气泡（30 条文本池，触发 CD 30 秒）
         MISC_SCHEDULE_BUBBLE_ENABLED = BUILDER.comment("排班贴身气泡（默认开）：靠近排班中的女仆（3.5 格内）时，她随机冒出一条贴身气泡对话（30 条文本池，每只女仆 30 秒最多一条）——情绪价值小彩蛋；战斗/自保/睡觉中不打扰")
                 .translation("config.promaid.misc.scheduleBubbleEnabled").define("scheduleBubbleEnabled", true);
@@ -3339,6 +3508,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 营火时把两条追加进去（按注册名去重，玩家自己删/改过的表不覆盖），标记落盘后不再碰。
         DANGER_CAMPFIRE_MIGRATED = INTERNAL.comment("内部标记：营火/灵魂营火补入默认危险表是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.misc.dangerCampfireMigrated").define("dangerCampfireMigrated", false);
+        // R1130：营火烹饪开关的旧默认是"关"，现在声明里改成"开"——声明只对新档生效，
+        // 老 toml 里仍写着 false。一次性标记落盘后，下次启动不再动它（玩家关掉就是关掉）。
+        COOK_CAMPFIRE_MIGRATED = INTERNAL.comment("内部标记：营火烹饪开关的默认值迁移是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.misc.cookCampfireMigrated").define("cookCampfireMigrated", false);
         // v1.1.0 实测七十九：受困救援——死亡瞬间的坏落点（下界基岩顶等）已被
         // "主人非存活不追"挡住，这里兜底捞回历史上已经受困的女仆
         MISC_MAID_RESCUE = BUILDER.comment("受困救援（默认开）：女仆被困在下界基岩顶层（高度≥126）或掉出世界底部时，自动安全传送到存活的主人身边（跨维度通用；在家模式的女仆也救——基岩顶不是家）；已在主人身边 8 格内不触发")
@@ -3442,6 +3615,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.homeMovement").define("homeMovement", true);
     MISC_STATIONARY_LOCK = BUILDER.comment("站桩锁位（默认开）：站桩/建造坐姿的女仆从实体移动层锁死水平位移（防被各种直连通道推着走）。关闭 = 回原版（坐姿/站桩的她可能被移动源推走）")
             .translation("config.promaid.misc.stationaryLock").define("stationaryLock", true);
+    MISC_PLACED_GOLD_MARK = BUILDER.comment("女仆放置方块的金色描边（默认开，纯客户端渲染 + 潜行右键）：她搭路/垫脚/垫塔放的方块套一层金色描边（蓝图建造与指标石临时搭建不在内）；潜行右键描边方块 = 立刻强制回收成掉落物（优先级最低：手里拿着方块、或方块/手里的东西另有交互时一律让位；不用等它到期、或收回她背包）。关闭 = 回原版（无描边、右键不接管）")
+            .translation("config.promaid.misc.placedGoldMark").define("placedGoldMark", true);
     MISC_FISHING_CHAIR = BUILDER.comment("钓鱼自动坐垫（默认开）：钓鱼女仆自动生成坐垫并维持坐垫走位。关闭 = 回原版（不生成坐垫）")
             .translation("config.promaid.misc.fishingChair").define("fishingChair", true);
     // 实测九百九十三【接管总闸】钓鱼 / 农场（默认开 · 随 DIY 关）：面板「钓鱼」「农场与宰杀」
@@ -3454,6 +3629,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.drivenNoStroll").define("drivenNoStroll", true);
     MISC_SERVER_FORCED_CONFIG = BUILDER.comment("多人服务器：配置以服务端为准（默认关）。\n\n【作用】关着 = 各人改各人自己那份配置，互不干扰。打开后全服以服务端这一份为准：服务端把配置推给每个客户端，非 OP 只能看、不能改，OP 在面板里的改动写回服务端并同步全服。\n\n【显示条件】只在专用服务器、或局域网里已有多人在线时，且只对本机是 OP 的玩家显示这一行；单机不显示。\n\n【撤销】关掉它，或直接改服务端的 config/promaid-common.toml，即可恢复各人自配。")
             .translation("config.promaid.misc.serverForcedConfig").define("serverForcedConfig", false);
+    // 【R1079】整合包/生存服：开局手册的发放与配置入口拆分。
+    MISC_GIVE_STARTER_BOOKS = BUILDER.comment("进入存档时发书（默认开）：首次进入存档时把《Promaid 手册》与《排班表》放进背包。关闭 = 一件都不发（整合包作者可让玩家自行获取）。只影响首次发放，已领过的存档不受影响")
+            .translation("config.promaid.misc.giveStarterBooks").define("giveStarterBooks", true);
+    MISC_BOOK_CONFIG_ACCESS = BUILDER.comment("手册显示配置入口（默认开）：手册首页的「模组详细配置」与「DIY / 默认模式」两个按钮。关闭 = 手册只保留指南/建造/女仆/记忆，生存玩家看不到配置页；整合包作者可先 DIY 好默认配置再关掉它（配置本身仍可从模组列表的 Config 进入）")
+            .translation("config.promaid.misc.bookConfigAccess").define("bookConfigAccess", true);
     BUILDER.pop();
 
         // ---- 语音（v1.5.198：TTS 音量倍率 / 系统消息朗读 / 系统语音包 / 语音缓存）----

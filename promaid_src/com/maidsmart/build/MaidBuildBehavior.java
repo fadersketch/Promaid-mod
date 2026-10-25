@@ -591,13 +591,15 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 continue;
             }
             // 背包取料（支持等价族：要求橡木木板时任何木板都行），放置实际消耗的方块
-            net.minecraft.world.item.Item used = BlueprintLib.consumeBlock(maid, blockId);
-            if (used == null) {
+            // v1.3.3 实测一千：consumeOne 带回"真扣到的那一件"——放置未成时原样退回（退料见下）
+            BlueprintMaterials.Consumed consumedMain = BlueprintLib.consumeOne(maid, blockId);
+            if (consumedMain.item == null) {
                 // v1.5.24 材料以主人背包为准：缺料时自动取一组（补料后自动续建）
                 if (tryTakeFromOwner(maid, blockId)) {
-                    used = BlueprintLib.consumeBlock(maid, blockId);
+                    consumedMain = BlueprintLib.consumeOne(maid, blockId);
                 }
             }
+            net.minecraft.world.item.Item used = consumedMain.item;
             // v1.2.2 实测五百九十七【副手举一下手里那一块】：她马上要放的就是它。
             // 连续建造时每次放置都续期 → 整段建造期间副手一直举着这个方块，停下来 0.5 秒后收回
             //（关掉"动作表现"总开关则完全不举）。
@@ -662,6 +664,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
                     prog.plannedPositions(plan), false, planMainBlock(ps, plan), machineLive)) {
                 // v1.5.45：支撑缺失（火把/按钮/拉杆等，支撑块未建）→ 延后，支撑建好后自动补建
+                // v1.3.3 实测一千【退料】：放不成 → 把刚扣的那件原样退回（旧版在此吞料：
+                // 扣了却没进世界，延后重试再扣一件 = 材料随重试次数蒸发）
+                BlueprintMaterials.refundConsumed(maid, consumedMain, "建造放置未成退回");
                 prog.deferred.putIfAbsent(i, 0);
                 lookaheadLeft--;
                 continue;
@@ -823,10 +828,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     reorder.add(idx);
                     continue;
                 }
-                net.minecraft.world.item.Item used = BlueprintLib.consumeBlock(maid, blockId);
-                if (used == null && tryTakeFromOwner(maid, blockId)) {
-                    used = BlueprintLib.consumeBlock(maid, blockId);
+                // v1.3.3 实测一千：同主循环——consumeOne 带回真扣的那一件，放置未成时退料
+                BlueprintMaterials.Consumed consumedDef = BlueprintLib.consumeOne(maid, blockId);
+                if (consumedDef.item == null && tryTakeFromOwner(maid, blockId)) {
+                    consumedDef = BlueprintLib.consumeOne(maid, blockId);
                 }
+                net.minecraft.world.item.Item used = consumedDef.item;
                 if (used != null) {
                     // v1.2.2 实测五百九十七：副手举一下这一块（延后补建这条路同样算"她要放的东西"）
                     com.maidsmart.combat.BombPose.showGated(maid,
@@ -907,6 +914,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 teleportToWorkSite(level, maid, target);
                 if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
                         prog.plannedPositions(plan), fails >= 3, planMainBlock(ps, plan), machineLive)) {
+                    // v1.3.3 实测一千【退料】：放不成 → 把刚扣的那件原样退回（旧版在此吞料：
+                    // 每次失败重试都再扣一件，材料随重试次数蒸发——轨道炮主炮场 place-fail
+                    // 54 条即至少 54 件被吞）
+                    BlueprintMaterials.refundConsumed(maid, consumedDef, "放置未成退回（延后重建）");
                     // v1.5.46：支撑缺失——连续失败 ≥3 次视为"蓝图本身悬空"（作者画图
                     // 失误，永无支撑），永久跳过不阻塞完成；顺序问题（支撑后建）期间
                     // 1 分钟内会成功，计数随成功清零
@@ -1216,6 +1227,42 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.45：支撑检查——火把/按钮/拉杆/梯子/地毯/花等附着方块若支撑面缺失
         // （支撑块在计划中排在后面/未建），先延后，等支撑建好后自动补建（防悬空掉落）
         net.minecraft.core.Direction sup = BlueprintLib.supportDirection(placeState);
+        // v1.3.3 实测一千【蓝图脚手架：放上就能活，才准放】合法性 = 原版 getDistance(level,pos)<7
+        // 的组合判定（下方可支撑面 / 下方脚手架链 / 水平四邻；javap 实证 1.21.1 ScaffoldingBlock：
+        // canSurvive=getDistance<7；updateShape 每次邻居更新都 scheduleTick 自检，距离 7 →
+        // fall/destroyBlock）。旧版它不在 supportDirection 名单 → 支撑闸不设防、无条件
+        // setBlock"放上去了"：同 tick 放置后检查看到它 → 记账=已建，随后邻居更新把它打落 →
+        // 留洞、日志无痕（竣工 scanGaps 的 [scaffolding×2]）；支撑未建则"放→掉→40t 重试"死循环
+        //（用户实证：先放脚手架 但是放不上 然后一直放）。处理：能活照常放；不能活与下方格同口径——
+        // 蓝图有计划（支撑后建）→ 延后等它建成；没有 → 扣料补下方支撑再放（补料失败不凭空放）。
+        if (placeState.m_60734_() instanceof net.minecraft.world.level.block.ScaffoldingBlock) {
+            if (!placeState.m_60796_(level, target)) {
+                net.minecraft.core.BlockPos belowSc = target.m_7918_(0, -1, 0);
+                boolean plannedBelow = plannedPos != null && plannedPos.contains(posKey(belowSc, origin));
+                if (plannedBelow && !force) {
+                    return false; // 蓝图有计划（下方块后建）→ 延后，等它建成
+                }
+                if (!level.m_46749_(belowSc)) {
+                    logPlaceFail(level, target, placed, "脚手架支撑格区块未加载");
+                    return false;
+                }
+                if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, belowSc)) {
+                    logPlaceFail(level, target, placed, "脚手架支撑格被主人占着");
+                    return false;
+                }
+                net.minecraft.world.level.block.Block supportSc = supportBlockFor(placed, fallbackBlock);
+                if (supportSc == null || !consumeExtraBlock(maid, supportSc)) {
+                    logPlaceFail(level, target, placed, "补脚手架支撑无材料");
+                    return false;
+                }
+                level.m_7731_(belowSc, supportSc.m_49966_(), 3);
+                if (!placeState.m_60796_(level, target)) {
+                    logPlaceFail(level, target, placed, "补脚手架支撑后仍放不住");
+                    return false;
+                }
+            }
+            sup = null; // 已由上面的原版闸门处理（含"侧邻脚手架"这一档）→ 通用分支不再补支撑
+        }
         boolean fluidSupport = false;
         if (sup != null) {
             BlockPos supPos = target.m_121945_(sup); // relative(Direction)
@@ -1526,7 +1573,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 || placed instanceof net.minecraft.world.level.block.TripWireHookBlock
                 || placed instanceof net.minecraft.world.level.block.LeverBlock
                 || placed instanceof net.minecraft.world.level.block.ButtonBlock
-                || placed instanceof net.minecraft.world.level.block.TorchBlock) {
+                || placed instanceof net.minecraft.world.level.block.TorchBlock
+                // v1.3.3 实测一千：脚手架的下方支撑必须是"上表面结实"的方块——fallback
+                //（蓝图主建材）可能是玻璃/半砖这类非支撑面建材，补上去原版 getDistance
+                // 照样 7（打落）；统一用石头
+                || placed instanceof net.minecraft.world.level.block.ScaffoldingBlock) {
             net.minecraft.world.level.block.Block b = ForgeRegistries.BLOCKS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:stone"));
             if (b != null) {

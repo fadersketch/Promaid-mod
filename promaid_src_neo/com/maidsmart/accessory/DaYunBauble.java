@@ -47,16 +47,21 @@ public class DaYunBauble implements IMaidBauble {
             // 实测八百一十一：与玩家侧同款——走 sweepAhead 并带上速度，沿前进方向**提前**清。
             // 旧版是"移动之后才清自己周围"，撞上墙的那一 tick 她已经被挡住了，下一 tick 墙才消失，
             // 观感就是"女仆飞起来一顿一顿的、不如玩家畅通"。见 DaYunBreaker#sweepAhead 的说明。
-            DaYunBreaker.sweepAhead(level, maid,
+            // 【R1126】空袭途中会主动收翅（猛击/激流），那几拍滑翔位为假——只要还在本轮
+            // 空袭里（且在空、没落地），大运继续开路/撞击；落地或本轮结束立刻恢复严格判据。
+            boolean airRaidAirborne = !maid.onGround()
+                    && com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid);
+            DaYunBreaker.sweepAheadAirRaid(level, maid,
                     MaidSmartConfig.DAYUN_MAX_HARDNESS.get().floatValue(),
                     MaidSmartConfig.DAYUN_SKIP_CONTAINERS.get(),
                     MaidSmartConfig.DAYUN_DROP_ITEMS.get(),
                     MaidSmartConfig.DAYUN_BREAK_PARTICLES.get(),
                     MaidSmartConfig.DAYUN_MAX_PER_TICK.get(),
                     maid.getDeltaMovement(),
-                    MaidSmartConfig.DAYUN_RANGE.get());
+                    MaidSmartConfig.DAYUN_RANGE.get(), airRaidAirborne);
             // 实测九百〇六：同一片「破坏范围内」的非友方单位，按这一刻的速度吃伤害 + 被击飞
-            DaYunSmash.impact(level, maid, maid.getDeltaMovement(), MaidSmartConfig.DAYUN_RANGE.get());
+            DaYunSmash.impactAirRaid(level, maid, maid.getDeltaMovement(),
+                    MaidSmartConfig.DAYUN_RANGE.get(), airRaidAirborne);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBauble", ignored);
             // 饰品 tick 跑在女仆主 tick 里，任何异常都不能抛穿（最坏也只是这一拍不破坏）
         }
@@ -91,10 +96,17 @@ public class DaYunBauble implements IMaidBauble {
         }
     }
 
-    /** 她当前是不是空袭（飞行作战）任务。 */
+    /**
+     * 她当前是不是「空袭状态」。
+     * <p>【R1126】旧版只认任务 UID（flight_combat / flight_ranged）。但空袭是一轮轮的状态机，
+     * 任务在轮内被自动战斗/恢复链短暂改写过、或本轮已经起飞但任务刚切回来时，UID 会为假，
+     * 于是大运整段失效。现在把「本轮空袭正在进行」（{@code isEngaged}）也算进来——它只在
+     * 起跳/爬升/猛击/等再点火这些相位为真，扫帚/仿创造飞行/单纯跟随都不在其中。
+     */
     public static boolean isAirRaidTask(EntityMaid maid) {
         try {
-            return com.maidsmart.combat.MaidFlightKit.isFlightTask(maid);
+            return com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)
+                    || com.maidsmart.combat.MaidFlightCombatBehavior.isEngaged(maid);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DaYunBauble", ignored);
             return false;
         }

@@ -1,6 +1,7 @@
 package com.maidsmart.accessory;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.maidsmart.config.MaidSmartConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
@@ -106,7 +107,7 @@ public final class DaYunBreaker {
                             float maxHardness, boolean skipContainers,
                             boolean dropItems, boolean breakParticles, int maxBlocksPerTick) {
         return sweep(level, entity, maxHardness, skipContainers, dropItems, breakParticles,
-                maxBlocksPerTick, null, RANGE_DEFAULT);
+                maxBlocksPerTick, null, RANGE_DEFAULT, false);
     }
 
     /**
@@ -122,7 +123,22 @@ public final class DaYunBreaker {
                                  boolean dropItems, boolean breakParticles, int maxBlocksPerTick,
                                  net.minecraft.world.phys.Vec3 motion, int side) {
         return sweep(level, entity, maxHardness, skipContainers, dropItems, breakParticles,
-                maxBlocksPerTick, motion, side);
+                maxBlocksPerTick, motion, side, false);
+    }
+
+    /**
+     * 【R1126】空袭状态专用：本轮空袭里她可能主动收翅（猛击/激流/贴地那几拍），
+     * 此时滑翔位为假，但玩家看到的仍然是「空袭途中」——大运不该整段失效。
+     * 调用方只在 `!onGround() && isFlightAirborne()` 时传 true，落地后照旧不吃。
+     */
+    public static int sweepAheadAirRaid(ServerLevel level, LivingEntity entity,
+                                        float maxHardness, boolean skipContainers,
+                                        boolean dropItems, boolean breakParticles,
+                                        int maxBlocksPerTick,
+                                        net.minecraft.world.phys.Vec3 motion, int side,
+                                        boolean allowNonGliding) {
+        return sweep(level, entity, maxHardness, skipContainers, dropItems, breakParticles,
+                maxBlocksPerTick, motion, side, allowNonGliding);
     }
 
     /**
@@ -193,16 +209,21 @@ public final class DaYunBreaker {
     private static int sweep(ServerLevel level, LivingEntity entity,
                              float maxHardness, boolean skipContainers,
                              boolean dropItems, boolean breakParticles, int maxBlocksPerTick,
-                             net.minecraft.world.phys.Vec3 motion, int side) {
+                             net.minecraft.world.phys.Vec3 motion, int side,
+                             boolean allowNonGliding) {
         if (level == null || entity == null || !entity.isAlive()) {
             return 0;
         }
         // 【必须先判滑翔】需求原文："使用鞘翅飞行的过程中"——只有真在滑翔才动手
-        if (!entity.isFallFlying()) {
+        if (!entity.isFallFlying() && !allowNonGliding) {
             return 0;
         }
         final int half = halfOf(side);
         int cleared = 0;
+        // 【R1105】每 tick 破坏粒子/音效配额：只给前 N 格发 levelEvent（方块照破、掉落照给）。
+        // 用一个单元素数组在"多个中心段"之间共享，避免每段都重新起算。
+        final boolean fxOn = breakParticles && MaidSmartConfig.DAYUN_PARTICLE_LIMIT.get();
+        final int[] fxLeft = {fxOn ? MaidSmartConfig.DAYUN_PARTICLE_CAP.get() : Integer.MAX_VALUE};
         List<BlockPos> removed = new ArrayList<>();
         List<BlockState> removedStates = new ArrayList<>();
 
@@ -214,7 +235,7 @@ public final class DaYunBreaker {
                 break;
             }
             cleared += clearAround(level, entity, center, maxHardness, skipContainers,
-                    breakParticles, half, maxBlocksPerTick - cleared, removed, removedStates);
+                    breakParticles, half, maxBlocksPerTick - cleared, fxLeft, removed, removedStates);
         }
 
         if (dropItems) {
@@ -233,7 +254,7 @@ public final class DaYunBreaker {
      */
     private static int clearAround(ServerLevel level, LivingEntity entity, BlockPos center,
                                    float maxHardness, boolean skipContainers, boolean breakParticles,
-                                   int half, int budget,
+                                   int half, int budget, int[] fxLeft,
                                    List<BlockPos> removed, List<BlockState> removedStates) {
         int cleared = 0;
         for (int dx = -half; dx <= half && cleared < budget; dx++) {
@@ -271,7 +292,8 @@ public final class DaYunBreaker {
                         // 【v1.5.395 实测八百零九：破坏要有挖掘同款粒子，不能凭空消失】
                         // levelEvent 2001 = 原版「方块被破坏」的粒子+音效事件；实测八百一十
                         // 起由配置项 breakParticles 控制（默认开，关掉则静静消失）。
-                        if (breakParticles) {
+                        if (breakParticles && fxLeft[0] > 0) {
+                            fxLeft[0]--; // 【R1105】每 tick 粒子/音效配额，超出的只破坏不喷
                             level.levelEvent(BLOCK_BREAK_EVENT, pos, Block.getId(state));
                         }
                     }

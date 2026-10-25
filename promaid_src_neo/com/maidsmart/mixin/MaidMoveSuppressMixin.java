@@ -47,6 +47,11 @@ public abstract class MaidMoveSuppressMixin {
             // 自保逃跑：防止 WALK_TARGET 覆盖逃跑路径（不碰导航本身）
             maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             ci.cancel();
+        } else if (com.maidsmart.combat.SpearAttackBehavior.takesOverMovement(maid)) {
+            // 实测一千〇一十八：长矛冲锋期间追击/后撤全部走直连导航，TLM 写的 WALK_TARGET
+            // 不能把它拽回普通接敌路线（蓄力中断就续也依赖这条独占）。
+            maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            ci.cancel();
         } else if (com.maidsmart.combat.MaidCombatTacticsBehavior.isActive(maid)) {
             // v1.5.134：单兵战术接管移动——清 WALK_TARGET + 取消本 tick，
             // 战术行为直连导航独占（TLM 战斗走位写的 WALK_TARGET 不执行）

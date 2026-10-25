@@ -56,7 +56,43 @@ public class QueryMemoryTool implements ITool<QueryMemoryTool.Result> {
         if (result.query() == null || result.query().isBlank()) {
             return callback.addToolResult("查询词不能为空，请用简短的词或短语描述想回忆的内容", toolId);
         }
+        return respond(callback.getMaid(), result.query(), toolId, callback, null);
+    }
+
+    /** 异步路径：先在后台算查询向量（开向量时），再回服务端线程检索；失败自动回退普通 RRF。 */
+    @Override
+    public java.util.concurrent.CompletableFuture<LLMCallback> onCallAsync(
+            String toolId, Result result, LLMCallback callback,
+            com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMClient client) {
+        if (result.query() == null || result.query().isBlank()) {
+            return java.util.concurrent.CompletableFuture.completedFuture(
+                    callback.addToolResult("查询词不能为空，请用简短的词或短语描述想回忆的内容", toolId));
+        }
         EntityMaid maid = callback.getMaid();
+        if (!(maid.level() instanceof net.minecraft.server.level.ServerLevel level)
+                || level.getServer() == null) {
+            return java.util.concurrent.CompletableFuture.completedFuture(
+                    callback.addToolResult("记忆检索需要在服务端进行", toolId));
+        }
+        MinecraftServer server = level.getServer();
+        java.util.concurrent.CompletableFuture<LLMCallback> future =
+                new java.util.concurrent.CompletableFuture<>();
+        AiMemoryManager.embedQueryAsync(result.query()).whenComplete((vec, err) ->
+                server.execute(() -> {
+                    try {
+                        future.complete(respond(maid, result.query(), toolId, callback,
+                                err == null ? vec : null));
+                    } catch (Exception e) {
+                        com.maidsmart.diag.Diag.swallow("QueryMemoryTool", e);
+                        future.complete(callback.addToolResult("记忆检索失败，请稍后再试。", toolId));
+                    }
+                }));
+        return future;
+    }
+
+    /** 同步/异步共用的检索与回包逻辑（必须在服务端线程执行）。 */
+    private LLMCallback respond(EntityMaid maid, String query, String toolId,
+                                LLMCallback callback, float[] queryVector) {
         // v1.5.190：与 remember 工具一致——记忆功能关闭时拒绝检索（旧版关了仍能读旧记忆）
         if (!AiMemoryManager.isEnabled(maid)) {
             return callback.addToolResult("记忆功能已关闭（女仆配置界面可开启）。", toolId);
@@ -68,7 +104,8 @@ public class QueryMemoryTool implements ITool<QueryMemoryTool.Result> {
         AiMemoryStore store = maid.level() instanceof net.minecraft.server.level.ServerLevel sl
                 ? com.maidsmart.soul.SoulBindingService.storeFor(maid, sl)
                 : AiMemoryStore.of(maid.getUUID(), AiMemoryExtractor.memoryRoot(server));
-        List<AiMemorySearch.Hit> hits = AiMemorySearch.search(store, result.query(), 6);
+        List<AiMemorySearch.Hit> hits = AiMemorySearch.search(
+                store, query, 6, queryVector, level.getGameTime());
         if (hits.isEmpty()) {
             return callback.addToolResult("未找到相关记忆。", toolId);
         }

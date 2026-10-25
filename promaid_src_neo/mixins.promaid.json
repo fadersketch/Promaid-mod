@@ -47,6 +47,8 @@
     "BuildActivityForceMixin",
     "BuildHomeInertMixin",
     "MaidChatLanguageMixin",
+    "MaidLangCheckMixin",
+    "MaidInternalHistoryMixin",
     "MaidPlayerDamageMixin",
     "TaskAttackWeaponMixin",
     "MaidCanAttackDefenseMixin",
@@ -56,9 +58,14 @@
     "MaidBedBlockInteropMixin",
     "MaidTombstoneClickMixin",
     "EntityFlagInvoker",
+    "LivingEntityUseItemAccessor",
     "LivingEntitySpinAccessor",
     "MaidSpinAttackTouchMixin",
     "MaidMeleeRiptideMixin",
+    "MaidSpearSwingMixin",
+    "MaidArmRiseMixin",
+    "MaidSpearUsePoseMixin",
+    "MaidHandExtractGuardMixin",
     "MaidSwimGlideMixin",
     "EntityTickBlameMixin",
     "FreeFlightWalkGuardMixin",
@@ -77,11 +84,15 @@
     "PlayerMaceRideFallMixin",
     "MaidGlowGoldMixin",
     "MaidContainerRemoteOpenMixin",
+    "MaidGuiPacketRemoteMixin",
     "ChunkMapTrackRemoteMixin",
     "ChunkMapRemotePumpMixin",
     "EntityMoveToMarkMixin",
     "ServerEntityRebuildMixin",
-    "MaidGoetyMoveSuppressMixin"
+    "EquipmentPacketCopyMixin",
+    "MaidGoetyMoveSuppressMixin",
+    "MaidBedWakeBlockMixin",
+    "PromaidMessageGateMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",
@@ -103,7 +114,8 @@
     "MaidModelPackSortMixin",
     "GuiGraphicsI18nMixin",
     "FontI18nMixin",
-    "ChatComponentI18nMixin"
+    "ChatComponentI18nMixin",
+    "MaidAimGlowMixin"
   ],
   "injectors": {
     "defaultRequire": 1

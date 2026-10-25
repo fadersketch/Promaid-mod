@@ -86,9 +86,10 @@ public abstract class MaidFollowOwnerTickMixin {
             return;
         }
         try {
-            if (com.maidsmart.task.MaidWorkTags.isChainDrive(maid)) {
+            if (com.maidsmart.task.MaidWorkTags.isChainDrive(maid)
+                    || com.maidsmart.task.MaidWorkTags.isStationLocked(maid)) {
                 com.maidsmart.combat.CombatStallProbe.note(maid, "follow-cut"); // 滞留探针（诊断）
-                ci.cancel(); // 干活/接战中：本行为的走位与传送整段不生效
+                ci.cancel(); // 干活/接战/锁在酿造台上：本行为的走位与传送整段不生效
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidFollowOwnerTickMixin", ignored);
         }

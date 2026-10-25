@@ -16,9 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 【激活口径（武器无关）】鞘翅 + **任意近战武器** + 烟花火箭，三件齐备才激活；
- * 缺任意一件 → 行为与普通攻击模式一致（地面近战）。1.20.1 原版没有重锤，
- * 所以武器位放宽为任意近战武器（判据复用自动装备同一口径），收翅下落命中时
+ * 【激活口径】鞘翅 + 近战武器 + 烟花火箭，三件齐备才激活；缺任意一件 → 行为
+ * 与普通攻击模式一致（地面近战）。武器位：背包里有 Trials 重锤（trials:mace）
+ * 时优先重锤，按本轮最高点结算下落加成；没有则任意近战武器，收翅下落命中时
  * 按原版规则结算【暴击 ×1.5】。
  * 【本任务的 brain 只有"索敌 + 飞行行为"三件】
  * 刻意不注册 TLM 的 MaidMeleeAttack 与 SetWalkTargetFromAttackTarget：
@@ -62,9 +62,9 @@ public class MaidFlightCombatTask implements IAttackTask {
     }
 
     /**
-     * 本模式的武器位 = 任意近战武器（与自动装备同一判据：镐/弓/弩/御币排除）。
-     * 必须覆写：IAttackTask.isWeapon 默认恒 false，会让自主切换认为"这个战斗任务
-     * 没有可用武器"从而把她切去原版 attack。
+     * 本模式的武器位 = 近战武器（与自动装备同一判据：镐/弓/弩/御币排除；
+     * Trials 重锤按注册名额外放行）。必须覆写：IAttackTask.isWeapon 默认恒 false，
+     * 会让自主切换认为"这个战斗任务没有可用武器"从而把她切去原版 attack。
      */
     @Override
     public boolean isWeapon(EntityMaid maid, ItemStack stack) {

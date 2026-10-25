@@ -41,14 +41,30 @@ TREES = [('promaid_src', 'Forge'), ('promaid_src_neo', 'Neo')]
 # 实测九百九十三：combat.engageChain 改名为 combat.takeOverMovement（语义改为「是否接管走位」，
 # 默认开、随 DIY 关，条数不变）+ 新增 misc.takeOverFishing / misc.takeOverFarm（钓鱼 / 农场接管
 # 总闸，默认开、随 DIY 关）→ 106/109 → 108/111。
-BASELINE_FLIP = {'promaid_src': 108, 'promaid_src_neo': 111}
+# v1.3.3：1.20.1 移植 1.21.1 的重锤猛击（combat.maceSmash / maceWindCharge 两条默认开、
+# 随 DIY 关；Neo 树本来就有这两条，基线不变）→ Forge 108 → 110。
+# R1018（Neo 专属）：新增 combat.spearCharge（长矛核心攻击模式冲锋，默认开、随 DIY 关）
+# → Neo 111 → 112；Forge 尚未镜像，基线不动。
+# R1022（Neo 专属）：新增 combat.spearAirRaid（长矛空袭独立链路，默认开、随 DIY 关）
+# → Neo 112 → 113；Forge 尚未镜像，基线不动。
+# R1048：低血自保默认开（+1）；轰炸拆成水晶/重生锚/床/TNT（melee -1、三个新子项 +3）；
+# 任务是玩家主动选择的模式，建造/挖矿/伐木/烧制/酿造不设总闸；DIY 基线回到 119 / 122。
+# R1059：飞行跟随的「消耗烟花 / 消耗鞘翅 / 消耗三叉戟」三条合并成「是否消耗飞行物」一条，
+# 原三条都随 DIY 关闭、新一条同样随 DIY 关闭 → 119/122 减 2 = 117/120。
+# R1083：鞘翅长矛链路镜像到 Forge——combat.spearAirRaid（默认开、随 DIY 关）
+# → Forge 117 → 118；Neo 早在 R1022 计过，基线不动。
+# R1105：营火烹饪与飞行跟随改为默认开（玩家定调）→ 两项从 OFF_ACK 移出、计入 DIY 关闭基线。
+BASELINE_FLIP = {'promaid_src': 120, 'promaid_src_neo': 122}
 # 默认 false 的布尔白名单：默认就已经"没介入"，DIY 不必再关（新增项不在此表 → 会 WARN 提醒复核）
 OFF_ACK = set("""
 accessory.daYunWallPhase airRaid.diveBoostFan bombing.breakBlocks bombing.hurtFriendly build.turbo
-combat.crossbowPlainFirework dialogue.proactiveKill flightFollow.enabled memory.vectorEnable
+combat.crossbowPlainFirework dialogue.proactiveKill memory.vectorEnable
 mine.autoCollect mine.chainFullDurability mine.seekThroughWalls misc.autoCollect misc.bdStorage
 misc.cookBurnWood voice.freeFlight voice.glideElytraAnimation misc.freeFlight misc.glideElytraAnimation
 wood.autoCollect misc.pickupPriority misc.serverForcedConfig
+combat.selfPreserveLowHpPillar combat.selfPreserveLowHpFlee combat.selfPreserveLowHpTeleport
+combat.selfPreserveEnvFirePanic
+misc.cookFurnaceFamily
 """.split())
 # 三道闸：配置字段名 → 必须引用它的 mixin 文件
 GATES = {

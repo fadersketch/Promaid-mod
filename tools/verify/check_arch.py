@@ -35,7 +35,11 @@ ARCH = os.path.join(ROOT, 'normify-promaid')
 # 顺序与 gen_arch.py 一致（它取"最后一次改动这些路径的提交"）
 TREES = ['promaid_src_neo', 'promaid_src']
 # 未被任何模块 source 覆盖的 .java 条数基线（只减不增）
-BASELINE_UNCOVERED = {'promaid_src_neo': 181, 'promaid_src': 0}
+# 实测一千〇一十五：装备消失定位用的四个临时诊断文件已随验收删除 → 185 回到 181。
+# R1113：巡逻航图目标点新增 PatrolTarget / MaidTravelTarget 两个同包文件（patrol 包本身
+# 未在图上登记为模块，按"代表文件"口径属存量次要文件）→ 181 → 183。
+# R1114：新增 /set goal 的 PatrolGoalCommand（command 包同为存量次要文件）→ 183 → 184。
+BASELINE_UNCOVERED = {'promaid_src_neo': 184, 'promaid_src': 0}
 REV_RE = re.compile(rb'\b[0-9a-f]{40}\b')
 MAXSHOW = 8
 

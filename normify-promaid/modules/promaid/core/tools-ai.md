@@ -13,10 +13,11 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/tool/SwitchTaskTool.java, line: 1, end_line: 355}
   - {path: promaid_src_neo/com/maidsmart/tool/SmartCraftTool.java, line: 1, end_line: 224}
+  - {path: promaid_src_neo/com/maidsmart/tool/GatedTool.java, line: 1, end_line: 70}
   - {path: promaid_src_neo/com/maidsmart/tool/AirRaidTool.java, line: 1, end_line: 214}
 revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: 2a0dc1c6a2da5f09333716aeda6ea9f10fff2a9f4d4ef194f7e240d253c68cd6
+fingerprint: 30964d883f3c3978e15a3ea759ebb4890b13480cd63c114ce1411bb135672ee9
 state: active
 tags: [core, ai]
 ---
@@ -29,4 +30,5 @@ tags: [core, ai]
 
 - `promaid_src_neo/com/maidsmart/tool/SwitchTaskTool.java`:1
 - `promaid_src_neo/com/maidsmart/tool/SmartCraftTool.java`:1
+- `promaid_src_neo/com/maidsmart/tool/GatedTool.java`:1
 - `promaid_src_neo/com/maidsmart/tool/AirRaidTool.java`:1

@@ -12,8 +12,11 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.neoforged.neoforge.items.IItemHandler;
 import net.neoforged.neoforge.items.ItemHandlerHelper;
 
@@ -252,6 +255,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     private static final java.util.Map<java.util.UUID, Long> SUFFOCATE_DIAG_SINCE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 实测一千〇八：横移脱出日志节流（每女仆 5 秒一条） */
+    private static final java.util.Map<java.util.UUID, Long> SHIFT_LOG_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /** 原版 in_wall 的 message_id（跨版本一致）；顺手兼容 snake_case 写法 */
@@ -515,6 +522,14 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  findThreat 按三维距离 &lt; threatDistance 判威胁，她垫高超过该距离后威胁会
      *  "消失"；用开搭时记住的敌方高度继续算目标高度，才能一直爬到"高于敌人 30 格"。 */
     private int pillarThreatY = Integer.MIN_VALUE;
+    /** 实测一千〇二十七：受伤后的威胁记忆——被监守者声波这类**远程攻击**打中时，
+     *  三维距离可能已经超过威胁扫描圈，findThreat 会判"无威胁"；但只要还在挨打，
+     *  搭高就必须继续。这个计数按 tick 衰减（200 = 10 秒），期间用最后攻击者的
+     *  高度继续算搭高目标，并允许重启已经中断的强制搭高。 */
+    private int hurtMemoryTicks = 0;
+    /** 强制搭高的连续放块失败计数：放块失败往往只是"还在被顶起/头顶一时被堵"，
+     *  不该一次失败就退出；只有真的没方块或连续失败太久才结束。 */
+    private int pillarFailTicks = 0;
     /** v1.5.21：珍珠逃生冷却计数 */
     private int pearlCooldown = 0;
     /** v1.5.21：上次传送时间（游戏 tick，冷却防循环） */
@@ -715,6 +730,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  的上升沿进入，血 ≥70% 且环境安全后结束）——会话进出由 tick 维护，
      *  行为本身常驻（canUse 只查开关） */
     private boolean sessionActive = false;
+    /** 本场自保是否由低血触发（false = 环境触发）——退出归位传送归「低血·传送」管 */
+    private boolean sessionFromLowHp = false;
+    /** 火焰瞬时自救重试间隔（tick） */
+    private long fireRescueCd = 0L;
+    private long lastFireRescueLog = -100000L;
     /** v1.5.245：会话退出稳定窗口（tick）——满足退出条件后先观察 20 tick（1 秒），
      *  防 danger 短暂消失（浅岩浆接触/移动卡墙抖动）就退出、下一 tick 又进入的
      *  频繁进出（日志实证 07:22 两次 self preserve start 间隔仅 0.5 秒） */
@@ -755,6 +775,58 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         return maid.getHealth() / Math.max(1.0f, maid.getMaxHealth());
     }
 
+    /* ---------------- 自保分闸（环境 / 低血 / 各动作） ---------------- */
+
+    /** 环境自保总闸（TOML 键 selfPreserve，兼容旧配置） */
+    private static boolean envEnabled() {
+        return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE.get();
+    }
+
+    /** 低血自保总闸（默认关） */
+    private static boolean lowHpEnabled() {
+        return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_LOW_HP.get();
+    }
+
+    private static boolean envLava() {
+        return envEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_LAVA.get();
+    }
+
+    private static boolean envFireRescue() {
+        return envEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_FIRE_RESCUE.get();
+    }
+
+    private static boolean envFirePanic() {
+        return envEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_FIRE_PANIC.get();
+    }
+
+    private static boolean envDrown() {
+        return envEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_DROWN.get();
+    }
+
+    private static boolean envSuffocate() {
+        return envEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_SUFFOCATE.get();
+    }
+
+    private static boolean envDamageCellEnabled() {
+        return envEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_DAMAGE_CELL.get();
+    }
+
+    private static boolean lowHpHeal() {
+        return lowHpEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_LOW_HP_HEAL.get();
+    }
+
+    private static boolean lowHpPillar() {
+        return lowHpEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_LOW_HP_PILLAR.get();
+    }
+
+    private static boolean lowHpFlee() {
+        return lowHpEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_LOW_HP_FLEE.get();
+    }
+
+    private static boolean lowHpTeleport() {
+        return lowHpEnabled() && com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_LOW_HP_TELEPORT.get();
+    }
+
     @Override
     protected boolean checkExtraStartConditions(ServerLevel level, EntityMaid maid) {
         // v1.5.202（轻量级自保，落地水格式）：常驻检查器——canUse 只查开关，
@@ -764,7 +836,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 启动（setTask→refreshBrain 后新实例永不 tick），那样 tick 里的
         // PRESERVE_TAG 残留清理就永远跑不到。豁免统一放 tick（行为常驻、每 tick
         // 都能清理）。
-        return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE.get();
+        return envEnabled() || lowHpEnabled();
     }
 
     /** v1.5.135：致命环境危险（岩浆）——任何血量立即逃生
@@ -773,7 +845,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测一百五十三：TLM 火焰保护饰品同豁免——饰品在受伤时给抗火+灭火剂，
      *  泡岩浆不该惊慌 */
     private boolean envDangerCritical(EntityMaid maid) {
-        return maid.isInLava() && !fireProof(maid); // isInLava 且无抗火且无火焰保护饰品
+        return envLava() && maid.isInLava() && !fireProof(maid); // 岩浆开关 + isInLava 且无抗火且无火焰保护饰品
     }
 
     /** v1.5.135：软环境危险（着火 / 溺水 / 卡墙窒息）——85% 血量以下才逃。
@@ -787,10 +859,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private boolean envDangerSoft(EntityMaid maid) {
         boolean drownProtected = com.maidsmart.config.MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get()
                 && hasDrownProtectBauble(maid);
-        return (maid.isOnFire() && !fireProof(maid))   // isOnFire 且无抗火且无火焰保护饰品
-                || (maid.isInWater() && maid.getAirSupply() < 60 && !drownProtected) // isInWater 且氧气不足 1/5 且无溺水保护饰品
-                || this.headInSolid(maid)                             // 头部卡进实心方块（真窒息）
-                || this.envDamageCell(maid);                          // v1.5.395：站在伤害方块上（营火/岩浆块等，见下）
+        // 着火默认只走「瞬时自救」，不进入自保会话；只有「火焰惊慌」打开才把着火算作环境危险。
+        return (envFirePanic() && maid.isOnFire() && !fireProof(maid))
+                || (envDrown() && maid.isInWater() && maid.getAirSupply() < 60 && !drownProtected)
+                || (envSuffocate() && this.headInSolid(maid))
+                || (envDamageCellEnabled() && this.envDamageCell(maid));
     }
 
     /** v1.5.395 实测八百二十一：她是否【正站在伤害方块上】——配置危险表里、且不属于
@@ -933,7 +1006,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (threat != null) {
                 enemyY = (int) Math.floor(threat.getY());
                 this.pillarThreatY = enemyY; // 见时刷新记忆（敌人也可能移动/上坡）
-            } else if (this.pillarBaseY >= 0 && this.pillarThreatY != Integer.MIN_VALUE) {
+            } else if (this.pillarThreatY != Integer.MIN_VALUE
+                    && (this.pillarBaseY >= 0 || this.hurtMemoryTicks > 0)) {
                 enemyY = this.pillarThreatY; // 搭高中威胁因高度差掉出扫描圈 → 用记忆继续爬
             } else {
                 return base; // 真无威胁（无记忆）→ 旧口径兜底
@@ -974,6 +1048,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.pillarBaseY = -1;
         this.forcedPillar = false;
         this.pillarThreatY = Integer.MIN_VALUE; // 实测八百二十：新会话清敌方高度记忆
+        this.hurtMemoryTicks = 0;
+        this.pillarFailTicks = 0;
         this.grappleTicks = 0;
         this.suffocateBudget = 3; // v1.5.194：每场自保会话 3 次窒息封头尝试
         this.announceCooldown = 0;
@@ -1164,8 +1240,23 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 从背包取 1 根箭（普通/药水/光灵）；没有返回空栈 */
+    /** 从背包取 1 根箭（普通/药水/光灵）；没有返回空栈。
+     *  v1.3.3 实测一千〇三【额外容器】：她自己背包没有箭时，请 TLM 把 1 支箭从精妙背包/
+     *  旅行者背包搬进她自己的背包，再取一遍（先判背包、再判额外容器，与空袭取箭同口径）。 */
     private ItemStack takeArrow(EntityMaid maid) {
+        ItemStack own = this.takeArrowOwn(maid);
+        if (!own.isEmpty()) {
+            return own;
+        }
+        if (com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && s.getItem() instanceof net.minecraft.world.item.ArrowItem, 1)) {
+            return this.takeArrowOwn(maid);
+        }
+        return ItemStack.EMPTY;
+    }
+
+    /** 她自己背包里取 1 根箭——{@link #takeArrow} 的"额外容器搬进来后再扫一遍"复用这一份 */
+    private ItemStack takeArrowOwn(EntityMaid maid) {
         IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack s = inv.getStackInSlot(i);
@@ -1195,7 +1286,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 空中不需要岩浆避让，顺带省掉方块扫描。
         // 只拦"自保会话"，不放宽真实伤害：飞行中照样掉血/被击落，只是不再由自保接管。 而本行为整条链路都是为"两条腿站在地上"的她写的（垫高/逃跑/瞬移到主人身边/ setPos 微调 23 处）。乘客的位置由扫帚每 tick 覆写（Entity.rideTick 里 "先 tick 她自己、再 positionRider 按回鞍位"），于是自保把她往东挪、扫帚把她 拉回来，每 tick 重演一次——玩家看到的「乘坐扫帚时反复被拉回」有它一份； 更糟的是 teleportTo(...) 会直接 unRide() 把她从扫帚上踹下来。 判定与飞行那一条同源（MaidBroomKit.isBroomAirborne = 扫帚任务 + 正骑着）。
         boolean airborne = com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)
-                || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid);
+                || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)
+                // 【R1143】长矛空袭不是"飞行任务"（挂在攻击任务下），单独认一次：
+                // 否则自保会在她俯冲时接管移动（搭高/逃跑/传送），把空袭整趟拽散。
+                || com.maidsmart.combat.SpearAirRaidBehavior.isActive(maid);
         if (airborne) {
             // 无条件清标记：飞行/骑扫帚时 PRESERVE_TAG 永远不该为 true——
             // 既覆盖"刚切进来还带着会话"的上升沿，也覆盖"重载后 sessionActive
@@ -1221,19 +1315,30 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             // 会话外的常驻轻量逻辑照常保留：负面效果自清（喝蜂蜜/牛奶解毒）
             this.tickCureNegativeEffects(maid);
+            // 【R1143】空中只做"入口即生效"的自用药：治疗药水 / 金苹果 / 增益药水。
+            // 不碰移动、搭高、传送与逃跑——那会把滑翔和空袭从空中拽下来。
+            this.tickAirborneSelfMedication(maid);
             // 【实测七百六十二·issue #30 收尾】这条早退原来排在 checkSuffocateAnnounce 之前，
             // 于是"飞行/骑扫帚中"她即使真被闷住也一个字不说。窒息播报与自保会话本来就无关
             // （判据只有"近 5 秒累计吃到的 in_wall 伤害过没过 4 点"），这里一并常驻。
             this.checkSuffocateAnnounce(maid);
             return;
         }
+        // 火焰瞬时自救（火焰惊慌关掉时的保护）：只灭火/放水/珍珠，不改变她正在做的事。
+        this.tickFireRescue(maid);
         // v1.5.204：附近岩浆感知（bug 3）——半径 3 内任何岩浆（含流动）即视为
         // 危险，提前绕开；10 tick 节流防每 tick 全量方块扫描
-        if (this.lavaScanCooldown-- <= 0) {
-            this.lavaScanCooldown = 10;
-            this.cachedNearLava = this.findNearbyLava(maid);
-            this.cachedFleeSpot = this.cachedNearLava == null ? null
-                    : this.fleeLavaSpot(maid, this.cachedNearLava);
+        if (envLava()) {
+            if (this.lavaScanCooldown-- <= 0) {
+                this.lavaScanCooldown = 10;
+                this.cachedNearLava = this.findNearbyLava(maid);
+                this.cachedFleeSpot = this.cachedNearLava == null ? null
+                        : this.fleeLavaSpot(maid, this.cachedNearLava);
+            }
+        } else {
+            this.cachedNearLava = null;
+            this.cachedFleeSpot = null;
+            this.lavaScanCooldown = 0;
         }
         // v1.5.209：岩浆接触计时——连续在岩浆内的 tick 累计，脱离即归零。
         // walk-out 分支据此判定"1.5 秒没走出去"→ 转主分支 2（不把时间耗在
@@ -1250,6 +1355,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // （envDangerCritical）或着火/溺水/卡墙（envDangerSoft）才进自保会话。
         boolean danger = this.envDangerCritical(maid) || this.envDangerSoft(maid);
         float ratio = this.hpRatio(maid);
+        // 「低血·垫高」关掉时先清搭高状态，避免塔位/锁移动残留到本 tick 的后续分支。
+        if (!lowHpPillar()) {
+            this.forcedPillar = false;
+            this.pillarBaseY = -1;
+            this.pillarLocked = false;
+            this.walkOnTicks = 0;
+        }
         // v1.5.212：坐下锁移动——"坐下但仍然在移动"的来源是 promaid 自己的
         // 行为不检查坐下姿势（战术 230 走位/后撤、避让 150 逃离——TLM 自己的
         // 跟随/逃跑/游泳都检查 isMaidInSittingPose）。每 tick 判定：坐下且无环境
@@ -1280,8 +1392,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // in_wall 伤害到门槛就开口，不再受"会话是否激活/是否轮到卡墙档/让位窗口"摆布。
         this.checkSuffocateAnnounce(maid);
         if (!this.sessionActive) {
-            if (danger || ratio < enterRatio()) {
+            boolean lowHpCrisis = lowHpEnabled() && ratio < enterRatio()
+                    && (lowHpHeal() || lowHpPillar() || lowHpFlee() || lowHpTeleport());
+            if (danger || lowHpCrisis) {
                 this.sessionActive = true;
+                this.sessionFromLowHp = !danger;
                 this.sessionEnter(maid); // 上升沿：重置会话字段/图腾/日志
             }
         }
@@ -1306,13 +1421,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             MOVING_SURVIVE.remove(maid.getUUID());
             // v1.5.232：会话外岩浆避让——仅移动层修正（正走向岩浆才改道），
             // 零其他干预（不碰目标/移动/任何行为，战术/任务照常）
-            this.avoidLavaMovement(maid);
+            if (envLava()) {
+                this.avoidLavaMovement(maid);
+            }
             return;
         }
         // v1.5.241：会话内也做移动层避让——被僵尸追着走位/移动时方向可能踩
         // 岩浆，同样改道离岩浆最远安全点；环境危险（泡岩浆/着火）
         // 由下方 environmentalEscape 接管，avoidLavaMovement 内部已排除岩浆中
-        this.avoidLavaMovement(maid);
+        if (envLava()) {
+            this.avoidLavaMovement(maid);
+        }
         // 冷却递减 + 威胁扫描提前——退出条件要用威胁状态（实测三百六十二）
         if (this.healCooldown > 0) {
             this.healCooldown--;
@@ -1331,6 +1450,22 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             this.cachedThreat = this.findThreat(maid);
         }
         LivingEntity threat = this.cachedThreat;
+        // 实测一千〇二十七：远程攻击（监守者声波、弓箭、法术）会在扫描圈外命中她。
+        // 只看 findThreat 时，她一垫高（竖直距离 > 12）就会判"无威胁"，塔修到一半就停；
+        // 再挨打也不会重新触发。这里在受伤时记住攻击者，10 秒内把他继续当威胁用。
+        if (this.hurtMemoryTicks > 0) {
+            this.hurtMemoryTicks--;
+        }
+        LivingEntity hurtBy = maid.getLastHurtByMob();
+        if (maid.hurtTime > 0 && hurtBy != null && hurtBy != maid
+                && hurtBy.isAlive() && hurtBy.level() == maid.level()
+                && com.maidsmart.dialogue.PerceptionManager.isThreat(hurtBy, maid)) {
+            this.pillarThreatY = (int) Math.floor(hurtBy.getY());
+            this.hurtMemoryTicks = 200;
+            if (threat == null && maid.distanceTo(hurtBy) <= 48.0) {
+                threat = hurtBy;
+            }
+        }
         // 实测五百五十一【决策快照】：本场第一次锁定威胁时记一行——把"为什么没搭高"
         // 一次说清（距威胁 / 回血资源 / 可搭方块 / 血量），运行日志搜「自保诊断」。
         // 起因：实测五百五十那轮只能看到"她没搭"，看不出卡在哪一道门槛上。
@@ -1371,15 +1506,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 实测五百五十二：这里保持原样（实测三百九十停用围困传送后就是"只清计数"）。
             // 五百五十一 曾让它真的下塔，已回退——塔位状态由会话退出线统一处理。
         }
-        // 实测三百六十三【会话退出线】（三百六十四调整默认值）：
-        // ① 血 ≥ 安全回归线（safeReturnRatio，默认 0.7）+ 无环境危险 → 解除。
-        //   【威胁还在也退】——恢复即支援：战斗交还战术 230 继续打，工作交还
-        //   任务继续干。滞回带 30~70：重新进场要跌回 30% 以下，不会抖动；
-        // ② 完全安全（无威胁+无环境危险）持续 threatGoneExit（默认 20 秒）→
-        //   解除【无论血量】——安全这么久危机就算结束，带伤回归工作，再被打
-        //   回 30% 以下会重新进入（回血资源耗尽也不会永久滞留）。
-        // 两线都需过 20 tick（1 秒）稳定窗口（防威胁/危险瞬时抖动）。
-        boolean exitCrisis = (ratio >= safeReturnRatio() && !danger)
+        // 实测三百六十三【会话退出线】：① 血 ≥ 70% 且无环境危险 → 解除（恢复即支援）；
+        // ② 完全安全持续 threatGoneExit（默认 20 秒）→ 解除；两线都过 20 tick 稳定窗口。
+        // 实测一千〇二十七：只要最近还在挨打（hurtMemoryTicks > 0），即使血已回到 70%
+        // 也先不退出——否则远程 Boss 每次把她打回 70% 以上就会踢出会话，塔再也接不上。
+        boolean exitCrisis = (ratio >= safeReturnRatio() && !danger && this.hurtMemoryTicks == 0)
                 || (this.noThreatTicks >= threatGoneExit() && !danger);
         if (exitCrisis) {
             if (this.exitStableTicks < 20) {
@@ -1399,7 +1530,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 //（不再要求威胁已散——恢复即支援，交火中也撤出战场回到主人身边；
                 // 绕过传送冷却闸，安全护栏全保留：主人活着/不在看家模式/主人身边
                 // 有合法落点/已在 5 格内则不传）
-                this.teleportHomeOnExit(maid, true);
+                // 低血触发时归位传送受「低血·传送」控制；环境触发保持原有的退出归位。
+                if (!this.sessionFromLowHp || lowHpTeleport()) {
+                    this.teleportHomeOnExit(maid, true);
+                }
+                this.sessionFromLowHp = false;
                 return;
             }
         } else {
@@ -1467,7 +1602,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 没珍珠还被围殴）三种情况才传；恢复中（30%~45%）不提前接走——原地
         // 回血，回到安全回归线由退出线收场（威胁已散时顺带触发归位传送）。
         // 搭高进行中/走位承诺期不传（危急/岩浆除外）。
-        this.tryTeleportFallback(maid, threat, ratio, danger);
+        if (lowHpTeleport()) {
+            this.tryTeleportFallback(maid, threat, ratio, danger);
+        }
         // v1.5.140：搭方块边缘保护——搭高进行中每 tick 钳制位置（照搬玩家潜行
         // 防掉落效果，移速不变）：防止女仆移速过快时冲出垫方块边缘飞出去
         //（挖矿 v1.5.87 pillarGuard 同款机制；环境逃生分支内显式调用）
@@ -1512,7 +1649,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 继续垫到安全高度（safePillarHeight，v1.5.203 起配置化）再停。
             // 地下怪贴墙/绕墙时 hasSight 视线判定让威胁 5 tick 级抖动，
             // "搭两块就停→被围殴打下来"（搭方块积极性下降的直接原因之一）
-            if (this.pillarBaseY >= 0) {
+            if (lowHpPillar() && this.pillarBaseY >= 0) {
                 int icy = maid.blockPosition().getY();
                 if (icy <= this.pillarBaseY) {
                     this.pillarBaseY = -1;
@@ -1520,12 +1657,21 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 int ih = this.pillarBaseY >= 0 ? icy - this.pillarBaseY : 0;
                 // 实测八百二十：目标高度改用 pillarTargetHeight（无威胁时回落兜底安全高度）
                 if (ih < pillarTargetHeight(maid, null)) {
-                    if (this.buildCooldown <= 0 && this.buildUp(maid)) {
-                        this.buildCooldown = buildCooldown();
-                        return;
-                    }
                     if (this.buildCooldown <= 0) {
-                        this.forcedPillar = false; // 没材料/头顶被堵 → 结束强制搭高
+                        if (this.buildUp(maid)) {
+                            this.pillarFailTicks = 0;
+                            this.buildCooldown = buildCooldown();
+                            return;
+                        }
+                        if (!this.hasBuildBlock(maid)) {
+                            this.forcedPillar = false; // 真没方块 → 结束强制搭高
+                            this.pillarBaseY = -1;
+                        } else {
+                            // 放块瞬态失败（还在被顶起/头顶一时被堵）→ 等半拍重试，
+                            // 不要一次失败就把塔丢下。
+                            this.pillarFailTicks++;
+                            this.buildCooldown = Math.max(1, buildCooldown() / 2);
+                        }
                     }
                 } else {
                     this.forcedPillar = false; // 已到安全高度，安心回血
@@ -1536,20 +1682,41 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 无威胁：安心回血（v1.5.24：进食只在无威胁/安全距离，不再被围殴还一直吃）
             // v1.5.234：回血资源阶梯（前一档失败才下一档，缺物品各档内部提示）：
             // 增益药水(再生省瓶) → 治疗药水(瞬间) → 金苹果(珍贵最后) → 食物(饱食)
-            this.tryHealLadder(maid);
+            if (lowHpHeal()) {
+                this.tryHealLadder(maid);
+            }
             // v1.5.153：传送已在 tick 开头实时判定（自保取消只有血≥70% / 传送成功两种）
             return; // 原地进食回血
         }
         double dist = maid.distanceTo(threat);
+        // 「低血·垫高」关掉时清掉搭高状态，避免沿用上一场/上一 tick 的塔位继续锁移动。
+        if (!lowHpPillar()) {
+            this.forcedPillar = false;
+            this.pillarBaseY = -1;
+            this.pillarLocked = false;
+            this.walkOnTicks = 0;
+        }
         // v1.5.202（轻量级自保）：非濒死（血≥30%）→ 只做瞬时保命动作——喝药/
         // 金苹果 + 搭高惯性补完，移动与战斗交给战术（230）并行处理：
         // "边打边保命"，自保不再长期霸占移动/逃跑（与落地水同构：需要时插一个
         // 动作，不需要时零干预）。濒死（血<30%）才进入下方全套保命移动分支。
         if (this.hpRatio(maid) >= 0.3f) {
             // v1.5.234：威胁中即时回血阶梯（治疗药水 → 金苹果，不打断战斗/搭高）
-            this.tryInstantHeal(maid);
+            if (lowHpHeal()) {
+                this.tryInstantHeal(maid);
+            }
+            // 实测一千〇二十七：受到攻击就把中断的塔接上——远程攻击往往不在贴身线内，
+            // 旧逻辑只有"连续两次被近身"才会 triggerPillarBurst，于是垫到一半被声波
+            // 打断后就再也不动了。
+            if (lowHpPillar() && this.hurtMemoryTicks > 0 && threat != null && !this.forcedPillar) {
+                if (this.pillarBaseY < 0) {
+                    this.pillarBaseY = maid.blockPosition().getY();
+                }
+                this.forcedPillar = true;
+                this.pillarFailTicks = 0;
+            }
             // 搭高惯性：已搭到一半 → 补到安全高度（safePillarHeight），防"搭一半丢下"
-            if (this.pillarBaseY >= 0) {
+            if (lowHpPillar() && this.pillarBaseY >= 0) {
                 int pcy = maid.blockPosition().getY();
                 if (pcy <= this.pillarBaseY) {
                     this.pillarBaseY = -1;
@@ -1557,6 +1724,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 int ph = this.pillarBaseY >= 0 ? pcy - this.pillarBaseY : 0;
                 if (ph < pillarTargetHeight(maid, threat) && this.buildCooldown <= 0 && this.buildUp(maid)) {
                     this.buildCooldown = buildCooldown();
+                } else if (ph < pillarTargetHeight(maid, threat) && this.buildCooldown <= 0
+                        && !this.hasBuildBlock(maid)) {
+                    this.forcedPillar = false; // 真没方块了，停手
                 }
             }
             return; // 其余交给战术（230 同 tick 并行战斗）
@@ -1565,14 +1735,16 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 不打断搭方块/反击）。原逻辑回血只在无威胁/8 格外，贴脸被尸壳群殴时
         // 永远轮不到喝药（"饿死/被围殴血量见底也不喝治疗药水"的自保断点）
         // v1.5.234：统一走即时回血阶梯（治疗药水 → 金苹果）
-        this.tryInstantHeal(maid);
+        if (lowHpHeal()) {
+            this.tryInstantHeal(maid);
+        }
         // v1.5.143：近身回击——敌人贴脸（<2.5 格）时直接还手，任何策略
         // （逃跑/搭高/珍珠/围壁）之前优先处理：直接调 doHurtTarget（doHurtTarget，
         // 含横扫），不写 brain 目标（自保每 tick 清 ATTACK_TARGET 的机制不变，
         // 反击完继续原策略——纯逃跑永远脱不了困，边跑边打才能拉开身位）
         // v1.5.145：远程武器（弓/弩）贴脸时不再用武器敲（敲一下几乎没伤害），
         // 改为直接放箭（消耗背包箭矢，无箭不射）；近战/三叉戟维持挥砍
-        if (dist < 2.5 && this.meleeCooldown <= 0) {
+        if (lowHpFlee() && dist < 2.5 && this.meleeCooldown <= 0) {
             if (this.counterAttack(maid, threat)) {
                 this.meleeCooldown = 12; // ≈ 玩家平A节奏（攻击完 0.6 秒再还手）
             }
@@ -1593,7 +1765,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 1. 珍珠逃生（脱身 > 拖延：血 30% 以下且威胁贴身，立即瞬移）
         // v1.5.157：已搭高（pillarBaseY/forcedPillar——高处已安全）不再扔珍珠
         //（日志实证：搭高到安全位置后仍扔珍珠，反馈）
-        if (this.hpRatio(maid) < pearlThreshold() && dist < pearlThreatDist()
+        if (lowHpTeleport() && this.hpRatio(maid) < pearlThreshold() && dist < pearlThreatDist()
                 && !this.forcedPillar && this.pillarBaseY < 0) {
             if (this.pearlEscape(maid, threat)) {
                 return; // 已瞬移走，下 tick 重新评估
@@ -1610,9 +1782,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.grappleTicks++;
                 if (this.grappleTicks >= 2) {
                     this.grappleTicks = 0;
-                    if (this.hasHealResource(maid)) {
+                    if (this.hasHealResource(maid) && lowHpPillar()) {
                         this.triggerPillarBurst(maid);
-                    } else if (!this.standingOnOwnTower(maid)) {
+                    } else if (lowHpFlee() && !this.standingOnOwnTower(maid)) {
                         // 实测三百六十七：塔顶不爆发走位（同 branch 4 守卫）
                         this.strafeDisengage(maid, threat);
                     }
@@ -1621,8 +1793,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         } else {
             this.grappleTicks = 0;
         }
+        // 实测一千〇二十七：远程攻击打断搭高后，只要还在挨打就重新接上强制搭高
+        //（不再依赖"连续两次被近身"——监守者/远程 Boss 永远不会走到贴身线里）。
+        if (lowHpPillar() && !this.forcedPillar && this.hurtMemoryTicks > 0 && threat != null) {
+            if (this.pillarBaseY < 0) {
+                this.pillarBaseY = maid.blockPosition().getY();
+            }
+            this.forcedPillar = true;
+            this.pillarFailTicks = 0;
+        }
         // 3. 强制搭高模式：持续往上垫，期间【不逃跑】（防"搭高了又自己掉下去"）
-        if (this.forcedPillar) {
+        if (this.forcedPillar && lowHpPillar()) {
             int fy = maid.blockPosition().getY();
             if (this.pillarBaseY >= 0 && fy <= this.pillarBaseY) {
                 this.pillarBaseY = -1;
@@ -1634,11 +1815,21 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.buildCooldown = buildCd;
             } else if (this.buildCooldown <= 0) {
                 if (this.buildUp(maid)) {
+                    this.pillarFailTicks = 0;
                     this.buildCooldown = buildCd;
                     // v1.5.194：搭方块中途的额外判定——威胁还贴在脚下时顺手窒息封头
                     this.trySuffocateDuringBuild(maid, threat);
+                } else if (!this.hasBuildBlock(maid)) {
+                    this.forcedPillar = false; // 真没方块 → 结束强制
                 } else {
-                    this.forcedPillar = false; // 头顶被堵/无材料 → 结束强制
+                    // 放块失败往往只是"还在被顶起/头顶一时被堵"：给几次重试机会，
+                    // 一次失败就退出正是"垫 5 格就站住不动"的来源。
+                    this.pillarFailTicks++;
+                    this.buildCooldown = Math.max(1, buildCd / 2);
+                    if (this.pillarFailTicks > 40) {
+                        this.forcedPillar = false;
+                        this.pillarFailTicks = 0;
+                    }
                 }
             }
             return; // 强制搭高期间不做其他动作
@@ -1666,12 +1857,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 // 实测三百六十七：人站在自己塔顶（脚下方块是登记的战斗方块）
                 // 时不走位——走位会把人从塔边拽下去摔伤；塔顶是安全点，原地
                 // 站桩（贴脸反击在上方已跑，战术并行），没资源也等下塔机制
-                if (!this.standingOnOwnTower(maid)) {
+                if (lowHpFlee() && !this.standingOnOwnTower(maid)) {
                     this.strafeDisengage(maid, threat);
                 }
                 return;
             }
-            if (pillarHeight < safePillar) {
+            if (lowHpPillar() && pillarHeight < safePillar) {
                 if (this.buildCooldown <= 0) {
                     if (this.buildUp(maid)) {
                         if (this.pillarBaseY < 0) {
@@ -1699,25 +1890,33 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // v1.5.25：通用增益药水（不再硬编码隐身/迅捷两种；再生/力量/抗火等都能喝）
             // v1.5.252g7：CD 按药水种类内部自管（= 药水时长）——CD 内同种不喝、
             // 其他种照喝；瞬间效果短 CD
-            this.useBeneficialPotion(maid, MaidSupportPolicy.Ctx.BUFF);
-            if (this.buildCooldown <= 0 && this.bridgeStep(maid, threat)) {
+            if (lowHpHeal()) {
+                this.useBeneficialPotion(maid, MaidSupportPolicy.Ctx.BUFF);
+            }
+            if (lowHpPillar() && this.buildCooldown <= 0 && this.bridgeStep(maid, threat)) {
                 this.buildCooldown = buildCd;
             }
             // 实测三百六十三：逃跑删除——小幅走位（不拉开距离临阵脱逃，
             // 攻击目标不清、战术 230 继续并行战斗）
-            this.strafeDisengage(maid, threat);
+            if (lowHpFlee()) {
+                this.strafeDisengage(maid, threat);
+            }
             // 6. 威胁在 8 格外（相对安全）：顺带回血（贴身时不"一直吃"）
             if (dist > 8.0) {
                 // v1.5.234：相对安全距离 → 完整回血阶梯（增益→治疗→金苹果→食物）
-                this.tryHealLadder(maid);
+                if (lowHpHeal()) {
+                    this.tryHealLadder(maid);
+                }
             }
             return;
         }
         // 7. 卡住兜底：走位中长时间没位移 → 垫路铺台阶
-        this.trackStuck(maid);
-        if (this.stuckTicks >= stuckWindow()) {
-            if (this.bridgeStep(maid, threat)) {
-                this.stuckTicks = 0;
+        if (lowHpPillar()) {
+            this.trackStuck(maid);
+            if (this.stuckTicks >= stuckWindow()) {
+                if (this.bridgeStep(maid, threat)) {
+                    this.stuckTicks = 0;
+                }
             }
         }
     }
@@ -1898,8 +2097,27 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     protected boolean canStillUse(ServerLevel level, EntityMaid maid, long gameTime) {
         // v1.5.202（轻量级自保，落地水格式）：常驻检查器永不停止——会话进出
         // 由 tick 内部维护（sessionActive + PRESERVE_TAG），非会话 tick 零干预
-        // TD-10：总开关也在 canStillUse 里问——关掉开关即刻停（默认开，行为不变）。
-        return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE.get();
+        // TD-10：总开关也在 canStillUse 里问——关掉开关即刻停（环境/低血两个总闸都关才停）。
+        return envEnabled() || lowHpEnabled();
+    }
+
+    /** 两个总闸都关掉时行为被停用：把会话标记与搭高状态一起清掉，避免永久让位排班/参战。 */
+    @Override
+    protected void stop(ServerLevel level, EntityMaid maid, long gameTime) {
+        try {
+            this.sessionActive = false;
+            this.sessionFromLowHp = false;
+            ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData()
+                    .putBoolean(PRESERVE_TAG, false);
+            MOVING_SURVIVE.remove(maid.getUUID());
+            this.pillarBaseY = -1;
+            this.forcedPillar = false;
+            this.pillarThreatY = Integer.MIN_VALUE;
+            this.pillarLocked = false;
+            this.walkOnTicks = 0;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
+        }
+        super.stop(level, maid, gameTime);
     }
 
     /**
@@ -1910,6 +2128,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private void teleportHomeOnExit(EntityMaid maid, boolean ignoreCooldown) {
         try {
+            // 【R1118】航图「飞过去」期间不归位：传送会打断这一趟，也可能 unRide 甩下绳子上的玩家
+            if (com.maidsmart.patrol.MaidTravelTarget.active(maid)) {
+                return;
+            }
             LivingEntity owner = maid.getOwner();
             if (owner == null) {
                 return;
@@ -2065,6 +2287,35 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!this.useHealingPotion(maid)) {
                 this.useGoldenApple(maid);
             }
+        }
+    }
+
+    /**
+     * 【R1143】飞行 / 空袭中的自用药：只做"入口即生效"的动作——治疗药水 / 金苹果
+     * （血 &lt; 50%），以及有攻击目标时的增益药水（再生 / 迅捷 / 力量等）。
+     * <p>飞行分支不能走整套自保（搭高/逃跑/传送会把滑翔与空袭拽散），但"喝药"本身
+     * 不碰移动，可以安全地留下。药水 CD 与支援表门禁都在各方法内部，不会刷瓶。
+     * @param maid 她的血量与攻击目标决定这一拍喝哪一类
+     */
+    private void tickAirborneSelfMedication(EntityMaid maid) {
+        if (!lowHpHeal()) {
+            return;
+        }
+        float hp = this.hpRatio(maid);
+        if (hp < 0.5f) {
+            if (!this.useHealingPotion(maid)) {
+                this.useGoldenApple(maid);
+            }
+            return; // 先补血，下一拍再考虑增益
+        }
+        LivingEntity target = maid.getTarget();
+        if (target == null) {
+            // 空袭/飞行链路把目标写在 brain 的 ATTACK_TARGET，实体层 target 不一定有
+            target = maid.getBrain().getMemory(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET).orElse(null);
+        }
+        if (target != null && target.isAlive()) {
+            this.useBeneficialPotion(maid, MaidSupportPolicy.Ctx.BUFF);
         }
     }
 
@@ -2313,7 +2564,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.135：身体中心是否卡进实心满块（窒息判定，antiSuffocate / envDangerSoft 共用） */
-    private boolean bodyInSolid(EntityMaid maid) {
+    private static boolean bodyInSolid(EntityMaid maid) {
         net.minecraft.world.phys.AABB box = maid.getBoundingBox();
         double cy = box.minY + (box.maxY - box.minY) * 0.5; // 身体中心高度（半身）
         BlockPos mid = new BlockPos((int) Math.floor(maid.getX()),
@@ -2325,7 +2576,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.199：头部中心是否卡进实心满块（真正窒息判定——envDangerSoft 用）。
      *  与 bodyInSolid 的区别：只卡下半身（被推挤进墙/半身在方块里）不算窒息，
      *  不会误触发整场自保；antiSuffocate 兜底仍用 bodyInSolid（挪位置无害） */
-    private boolean headInSolid(EntityMaid maid) {
+    private static boolean headInSolid(EntityMaid maid) {
         net.minecraft.world.phys.AABB box = maid.getBoundingBox();
         double hy = box.minY + (box.maxY - box.minY) * 0.9; // 头部高度
         BlockPos head = new BlockPos((int) Math.floor(maid.getX()),
@@ -2341,19 +2592,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  （疑似 getValue 偶发返回 null 导致"主手 water_bucket 却说没招了"）；
      *  getKey 从 Item 实例直接映射注册名，已注册物品必非 null，更可靠 */
     private boolean hasWaterBucket(EntityMaid maid) {
-        if (isWaterBucketItem(maid.getMainHandItem())) {
-            return true;
-        }
-        if (isWaterBucketItem(maid.getOffhandItem())) {
-            return true;
-        }
-        IItemHandler inv = maid.getAvailableBackpackInv();
-        for (int i = 0; i < inv.getSlots(); i++) {
-            if (isWaterBucketItem(inv.getStackInSlot(i))) {
-                return true;
-            }
-        }
-        return false;
+        // 双手 / 背包（含压缩盒）/ 额外容器（精妙背包、旅行者背包）一起看。
+        return com.maidsmart.tool.MaidExtraContainer.any(maid,
+                SelfPreservationBehavior::isWaterBucketItem);
     }
 
     /** v1.5.240：是否为水桶（注册名比较，不查 getValue） */
@@ -2490,23 +2731,114 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.25 防窒息兜底：每 tick 检测女仆"身体中心"（半身位置）所在格是否为实心
-     * 满块——是则说明她卡进了方块（搭方块后位移滞后 / 放偏 / 被推挤），
-     * 直接 setPos 把位置强制移到该方块顶面之上。头顶检查拦不住横向卡入，
-     * 这是最后一道保险：宁可瞬移半步也不让她被自己搭的方块闷住。
+     * v1.5.25 防窒息兜底（实测一千〇八 起头也管）：每 tick 检测"身体中心"或
+     * "头部中心"所在格是否为实心满块——是则说明她卡进了方块（搭方块后位移滞后 /
+     * 放偏 / 被推挤 / 活塞把方块推到头格），直接改位置把人挪出去。
+     * {@link #escapeSuffocation} 是共享实现：自保、挖矿、伐木、搭路四条链路都调它。
      */
     private void antiSuffocate(EntityMaid maid) {
-        if (!this.bodyInSolid(maid)) {
-            return; // 身体中心在空气 / 非实心满块（楼梯台阶不算卡住）
+        escapeSuffocation(maid);
+    }
+
+    /** 实测一千〇八（issue #41）：头/身卡进方块时的脱出动作。
+     *  旧版只看身体中心——头格被方块压住时身体中心仍在空气，一点反应都没有，
+     *  只能一直吃 in_wall 伤害（反馈："头部所在格被方块压窒息后没能触发窒息保护"）。
+     *  现在：① 头/身任一格命中就出手；② 只有脚下格实心、头顶空着时先抬到方块顶面
+     *  （实测一千〇一十，见 {@code liftOntoFeetBlock}）；③ 其余情况横移一格到能放下
+     *  整只碰撞箱的列（头顶被压时继续往上顶只会顶进那个方块）；④ 横移无路、且身体
+     *  中心确实在实心块里，才退回旧版"顶到方块顶面"。 */
+    public static void escapeSuffocation(EntityMaid maid) {
+        try {
+            if (maid == null || maid.level().isClientSide()) {
+                return;
+            }
+            boolean body = bodyInSolid(maid);
+            boolean head = headInSolid(maid);
+            if (!body && !head) {
+                return; // 半身/头都不在实心块里（楼梯台阶不算卡住）
+            }
+            if (body && !head && liftOntoFeetBlock(maid)) {
+                return;
+            }
+            if (shiftOutOfSolid(maid)) {
+                long now = maid.level().getGameTime();
+                Long last = SHIFT_LOG_AT.get(maid.getUUID());
+                if (last == null || now - last >= 100L) {
+                    SHIFT_LOG_AT.put(maid.getUUID(), now);
+                    com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 头部/身体卡进方块，已横移一格脱出");
+                }
+                return;
+            }
+            if (body) {
+                net.minecraft.world.phys.AABB box = maid.getBoundingBox();
+                double cy = box.minY + (box.maxY - box.minY) * 0.5;
+                BlockPos mid = new BlockPos((int) Math.floor(maid.getX()),
+                        (int) Math.floor(cy), (int) Math.floor(maid.getZ()));
+                double top = mid.getY() + 1.0;
+                if (top > box.minY + 0.01) {
+                    maid.setPos(maid.getX(), top + 0.02, maid.getZ());
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
         }
-        net.minecraft.world.phys.AABB box = maid.getBoundingBox();
-        double cy = box.minY + (box.maxY - box.minY) * 0.5;
-        BlockPos mid = new BlockPos((int) Math.floor(maid.getX()),
-                (int) Math.floor(cy), (int) Math.floor(maid.getZ()));
-        double top = mid.getY() + 1.0;
-        if (top > box.minY + 0.01) {
-            maid.setPos(maid.getX(), top + 0.02, maid.getZ());
+    }
+
+    /** 实测一千〇一十：脚下格实心、头格是空气——先抬到脚下那块方块顶面，不要横移。
+     *  <p>这是"垫方块把自己垫起来"的中间态：{@code pillarUpStep} 把方块放进她脚下那一格，
+     *  原版顶起生效前（或被本兜底抢先看到）她的身体中心就在实心块里。旧版一律先横移，
+     *  于是每一行"朝挡路块搭高"后 1 秒内必跟一条"已横移一格脱出"，人从柱子上被挪开、
+     *  永远升不上去，4 分钟净高度零变化 = 实机里定住不动的观感。抬升本来就是
+     *  垫块要的效果，且一次抬升（脚格变空气）就脱出。
+     *  <p>头格或脚上方第二格实心、或有岩浆 → false，交回横移/顶面兜底（低矮洞里的
+     *  垫高本来就该失败，横移是唯一出路）。 */
+    private static boolean liftOntoFeetBlock(EntityMaid maid) {
+        net.minecraft.world.level.Level level = maid.level();
+        BlockPos feet = maid.blockPosition();
+        BlockPos above = feet.offset(0, 1, 0);
+        BlockPos above2 = feet.offset(0, 2, 0);
+        if (suffocates(level, above) || suffocates(level, above2)
+                || lavaAt(level, above) || lavaAt(level, above2)) {
+            return false;
         }
+        maid.setPos(maid.getX(), feet.getY() + 1.0, maid.getZ());
+        return true;
+    }
+
+    /** 实测一千〇八：找同高度相邻的一列，整只碰撞箱放得下就挪过去（先找有落脚点的）。 */
+    private static boolean shiftOutOfSolid(EntityMaid maid) {
+        net.minecraft.world.level.Level level = maid.level();
+        BlockPos feet = maid.blockPosition();
+        int headDy = Math.max(1, (int) Math.floor(
+                maid.getBoundingBox().maxY - maid.getBoundingBox().minY));
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int pass = 0; pass < 2; pass++) {
+            for (int[] d : dirs) {
+                BlockPos nf = new BlockPos(feet.getX() + d[0], feet.getY(), feet.getZ() + d[1]);
+                if (suffocates(level, nf) || suffocates(level, nf.offset(0, headDy, 0))
+                        || lavaAt(level, nf) || lavaAt(level, nf.offset(0, headDy, 0))) {
+                    continue;
+                }
+                if (pass == 0 && !suffocates(level, nf.offset(0, -1, 0))) {
+                    continue; // 优先挑脚下有实心落脚点的，避免挪出去就掉
+                }
+                maid.setPos(nf.getX() + 0.5, maid.getY(), nf.getZ() + 0.5);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 实测一千〇八：该格是否会闷住她（isSuffocating 的实心满块；空气/水/火把/树叶不算） */
+    private static boolean suffocates(net.minecraft.world.level.Level level, BlockPos pos) {
+        net.minecraft.world.level.block.state.BlockState st = level.getBlockState(pos);
+        return !st.isAir() && st.isSuffocating(level, pos);
+    }
+
+    /** 实测一千〇八：该格是否岩浆（横移脱出时不能把人挪进岩浆） */
+    private static boolean lavaAt(net.minecraft.world.level.Level level, BlockPos pos) {
+        return level.getBlockState(pos).getFluidState()
+                .is(net.minecraft.tags.FluidTags.LAVA);
     }
 
     /* ============ v1.5.135：环境逃生（自然伤害 / 无来源伤害） ============ */
@@ -2555,6 +2887,47 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /**
+     * 火焰瞬时自救（「火焰惊慌」关掉时的保护层）：
+     * 只做灭火器 → 水桶 → 末影珍珠这三类瞬时动作，不导航、不停任务、不进自保会话。
+     * 火焰惊慌打开时由 {@link #environmentalEscape} 接管，这里不重复执行。
+     */
+    private void tickFireRescue(EntityMaid maid) {
+        try {
+            if (!envFireRescue() || envFirePanic()) {
+                return;
+            }
+            if (!maid.isOnFire() || fireProof(maid) || maid.isInWater()) {
+                return;
+            }
+            long now = maid.level().getGameTime();
+            if (now < this.fireRescueCd) {
+                return;
+            }
+            this.fireRescueCd = now + 20L; // 1 秒重试；放水/珍珠各自还有自己的冷却
+            String what = null;
+            if (this.extinguishSelf(maid)) {
+                what = "灭火器";
+            } else if (!isNether(maid)
+                    && com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
+                    && this.hasWaterBucket(maid)) {
+                this.placeClutchWater(maid);
+                if (this.waterPos != null) {
+                    what = "水桶";
+                }
+            }
+            if (what == null && this.pearlEscapeFromLava(maid)) {
+                what = "末影珍珠";
+            }
+            if (what != null && now - this.lastFireRescueLog >= 100L) {
+                this.lastFireRescueLog = now;
+                com.maidsmart.tool.PromaidLog.log("自保",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 火焰自救（" + what + "）");
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
+        }
+    }
+
     /** 环境逃生主流程（tick 调用；v1.5.202 起任何威胁状态下都先执行）。
      *  v1.5.234 环境逃生阶梯（前级判定有结果后才轮到后级）：
      *    300 岩浆 → 280 着火 → 270 溺水 → 260 卡墙 → 避让（移动层）
@@ -2569,7 +2942,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //    职责分离：本链路只管"脱离岩浆"；身上的火交给下方着火分支处理。
         //（v1.5.137：改用 isInLava = isInLava——旧 isInWaterOrRain 是 isInWaterOrLava，
         //  站水里也会误进岩浆逃生）
-        if (maid.isInLava()) {
+        if (envLava() && maid.isInLava()) {
             // v1.5.232：抗火 / 火焰保护饰品随时断开——免疫时岩浆无害，链路否定恢复正常
             if (fireProof(maid)) {
                 return;
@@ -2677,7 +3050,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //  留给无水解救（岩浆深陷）的场合；地狱放水瞬间蒸发 → 跳过水桶/自然水，
         //  直接抗火或逃跑；
         //  抗火→金苹果；全失败交回自保； （"着火后跳入水坑和用末影珍珠都没有了"：珍珠此前只在岩浆链路））
-        if (maid.isOnFire()) {
+        if (envFirePanic() && maid.isOnFire()) {
             // v1.5.232：抗火 / 火焰保护饰品随时断开——火不伤人，等自然灭即可（isOnFire 仍 true）
             // v1.1.0 实测一百五十三：火焰保护饰品——火焰伤害由饰品扛（受伤时给
             // 15 秒抗火 + 喷灭火剂），不需要惊慌灭火/找水/往主人身边跑。实测九百三十九：
@@ -2685,13 +3058,15 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (fireProof(maid)) {
                 return;
             }
-            if (this.extinguishSelf(maid)) {
+            // 「着火自救」只管瞬时资源动作；关掉后只保留惊慌走位/反击。
+            boolean fireRescue = envFireRescue();
+            if (fireRescue && this.extinguishSelf(maid)) {
                 return;
             }
             // 水桶优先（非地狱）：头顶放水灭火，不用跑去找河
             // v1.1.0 实测一百四十六：下界跳过水桶步（水瞬间蒸发，灭火无效；玩家
             // 反馈"女仆在下界还会使用落地水"）——流转抗火/末影珍珠/逃跑
-            boolean fireBucketStep = !isNether(maid)
+            boolean fireBucketStep = fireRescue && !isNether(maid)
                     && com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
                     && this.hasWaterBucket(maid);
             if (fireBucketStep) {
@@ -2713,7 +3088,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         this.hasWaterBucket(maid));
             }
             // v1.5.210：找自然水（半径 12，0 成本立即灭火）→ 导航过去跳进水里
-            if (!isNether(maid)) {
+            if (fireRescue && !isNether(maid)) {
                 BlockPos water = this.findWater(maid);
                 if (water != null) {
                     this.resourceUsed = true; // v1.5.232：找到水源 = 自救资源
@@ -2741,12 +3116,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // v1.5.243：末影珍珠逃生——灭火/找水失败后瞬移脱离火源区域
             //（pearlEscapeFromLava 找半径 12 安全落点，落点排除岩浆/火等危险方块；
             //  成功设 resourceUsed，不触发"我没招了"）
-            if (this.pearlEscapeFromLava(maid)) {
+            if (fireRescue && this.pearlEscapeFromLava(maid)) {
                 return;
             }
             // v1.5.208：抗火药水（饮用直接喝、喷溅/滞留扔自己脚下）——8 分钟免疫
             // v1.5.209：已有抗火效果（岩浆分支喝过/刚扔过）→ 跳过，不重复浪费
-            if (!hasFireResist(maid)) {
+            if (fireRescue && !hasFireResist(maid)) {
                 if (this.drinkFireResistPotion(maid)) {
                     return;
                 }
@@ -2757,7 +3132,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // v1.5.232：金苹果/附魔金苹果兜底（珍贵资源，仅自保模式吃）——附魔
             // 金苹果自带 5 分钟抗火（+吸收/再生/抗性），是着火最后的免疫手段；
             // 普通金苹果（吸收+再生）撑血等火自然灭
-            if (!hasFireResist(maid)) {
+            if (fireRescue && !hasFireResist(maid)) {
                 if (this.eatGoldenAppleForFire(maid)) {
                     return;
                 }
@@ -2768,7 +3143,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // v1.5.245：高血量(≥60%)着火时灭火失败【不喊救命也不设让位窗口】——
             // 火约 15 秒自然灭顶多掉 15 血，100% 血不会死；安静朝主人走/反击即可，
             // 不惊动主人（日志实证 hp=95%/75% 掉岩浆爬出后 0.1 秒喊"我没招了"）
-            if (!this.resourceUsed && this.hpRatio(maid) < 0.6f) {
+            if (fireRescue && !this.resourceUsed && this.hpRatio(maid) < 0.6f) {
                 this.announceNoResource(maid);
                 this.envGiveUpTick = maid.level().getGameTime();
                 // v1.5.240：灭火链路全失败诊断（每场一次，对齐 lava escape resources）
@@ -2820,7 +3195,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // v1.5.234（环境逃生阶梯）：300 岩浆 > 280 着火 > 270 溺水 > 260 卡墙 >
         // 避让（仅移动层，最不紧急）——溺水掉血比卡墙急，排前；避让只是预防性
         // 绕行，放在所有"正在掉血"的逃生之后（前级有结果才轮到后级）
-        if (maid.isInWater() && maid.getAirSupply() < 60) {
+        if (envDrown() && maid.isInWater() && maid.getAirSupply() < 60) {
             // v1.1.0 实测一百五十四：溺水保护饰品——溺水伤害由饰品免疫 + 空气
             // 自动补满，不需要上浮/喝水肺（反馈："女仆装备溺水保护时仍然会表示
             // 自己溺水向上浮"；饰品每次溺水伤害触发时把空气回满）
@@ -2858,11 +3233,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 提到常驻轻量检查（{@code checkSuffocateAnnounce}）——它长在这里时会被"会话是否激活 /
         // 是否走到第 4 档 / 让位窗口"三件与"卡住"无关的事摆布，真被闷住也可能一个字都不说。
         // 这里只保留【挪位置/顶出】这个保命动作，下方 findAirSpot / antiSuffocate 一字未改。
-        BlockPos air = this.findAirSpot(maid);
-        if (air != null) {
-            maid.getNavigation().moveTo(air.getX() + 0.5, air.getY(), air.getZ() + 0.5, 1.0f);
-        } else {
-            this.antiSuffocate(maid);
+        if (envSuffocate()) {
+            BlockPos air = this.findAirSpot(maid);
+            if (air != null) {
+                maid.getNavigation().moveTo(air.getX() + 0.5, air.getY(), air.getZ() + 0.5, 1.0f);
+            } else {
+                this.antiSuffocate(maid);
+            }
         }
         // 5. 岩浆避让（v1.5.204，bug 3）：没陷进去但附近有岩浆（含流动）→ 提前
         //    绕开（"面前一格岩浆也有逃跑的迹象"）。v1.5.234 移到最后——避让只是
@@ -2870,7 +3247,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //    判定有结果后才轮到它。
         //    v1.5.229：有抗火 / 火焰保护饰品时跳过避让——岩浆无害，绕行是浪费
         //    （地狱常驻岩浆，免疫时就该正常行走而不是永远绕路）
-        if (this.cachedNearLava != null && !fireProof(maid)) {
+        if (envLava() && this.cachedNearLava != null && !fireProof(maid)) {
             // v1.5.204：避让提示（每场一次；自动走系统消息 TTS 朗读）
             if (!this.announcedEnv) {
                 this.announcedEnv = true;
@@ -2886,7 +3263,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //    这类"每 tick 直接造成伤害、却不点燃她"的格子，上面的岩浆/着火/溺水/卡墙四条
         //    链路都不认；必须排在最后、且放在本方法**内**——因为 danger=true 时调用方
         //    environmentalEscape 后会直接 return，写在调用方那句之后永远跑不到。见方法注释。
-        if (this.envDamageCell(maid)) {
+        if (envDamageCellEnabled() && this.envDamageCell(maid)) {
             this.escapeDamageCell(maid);
         }
     }
@@ -3418,9 +3795,34 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         return key != null && "minecraft:lava".equals(key.toString());
     }
 
-    /** 着火逃生：最近水源（半径 12，覆盖静态/流动水） */
+    /** 着火逃生：最近水源（半径 12，覆盖静态/流动水；要求视线无遮挡、上方有身位空间） */
     private BlockPos findWater(EntityMaid maid) {
-        return this.findBlockBy(maid, 12, (level, p) -> isWaterBlock(level.getBlockState(p).getBlock()));
+        return this.findBlockBy(maid, 12, (level, p) ->
+                isWaterBlock(level.getBlockState(p).getBlock()) && waterAccessible(maid, level, p));
+    }
+
+    /**
+     * 这格水是不是真的能去：从眼睛到水面中心不能被实心方块挡住。
+     *
+     * <p>旧版只按距离找水，选中隔墙的水后，2.5 格内会直接 {@code moveTo} 传送进水——
+     * 实机就是"着火后穿墙进水里卡死"。视线判定把隔墙/隔地板的水排除；同时要求
+     * 水上方一格不是实心方块，避免传进 1 格高的水窝后头顶被堵住。
+     */
+    private static boolean waterAccessible(EntityMaid maid, net.minecraft.world.level.Level level, BlockPos p) {
+        try {
+            if (!level.getBlockState(p.above()).getCollisionShape(level, p.above()).isEmpty()) {
+                return false;
+            }
+            net.minecraft.world.phys.Vec3 eye = maid.getEyePosition();
+            net.minecraft.world.phys.Vec3 target =
+                    new net.minecraft.world.phys.Vec3(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5);
+            BlockHitResult hit = level.clip(new ClipContext(eye, target,
+                    ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, maid));
+            return hit.getType() == HitResult.Type.MISS;
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("SelfPreservationBehavior", ignored);
+            return false;
+        }
     }
 
     /** v1.5.232：会话外岩浆避让（仅影响移动方向及速度，不影响其他行为）——
@@ -3606,30 +4008,34 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return true;
         }
         BlockPos pos = maid.blockPosition();
-        // v1.5.25b：选择放置格——脚下悬空 → 垫所在格 pos（站上去升高）；
-        // 脚下实心（平地）→ 垫身体格 pos+1（方块放置的实体挤压机制把她顶起一格，
-        // 不碰地面方块）。旧版（v1.5.25）要求"所在格必须空气"，女仆站在平地上
-        // 脚部格是地面方块 → 搭高永远失败 → "只会平搭/搭高成功率低"的根因。
-        BlockPos place;
-        boolean posAir = maid.level().getBlockState(pos).isAir();
-        if (posAir) {
-            place = pos; // 悬空：垫所在格，站上去升高
-        } else {
-            place = pos.offset(0, 1, 0); // 平地：垫身体格顶起
-        }
-        // 防窒息：放置格 + 上方 2 格必须空气（顶起后的身体空间 + 头顶空间）
-        if (!maid.level().getBlockState(place).isAir()
-                || !maid.level().getBlockState(place.offset(0, 1, 0)).isAir()
-                || !maid.level().getBlockState(place.offset(0, 2, 0)).isAir()) {
-            logBuildRefused(maid, "放置格/头顶 2 格不是空气（防窒息拦下）");
+        // 实测一千〇八（issue #41）：放置格一律取脚下那一格（实测九百五十八 挖矿/伐木同款）。
+        // 旧版"脚下不是空气就垫 pos+1"在红石粉/雪层/水里会把方块直接放进她的上半身甚至
+        // 头格——顶起稍有滞后就是自己把自己闷住（反馈："头部所在格被方块压窒息"）。
+        // 脚下格有不可覆盖的方块（非空气非流体）时不垫：不拆红石/火把，也绝不往身上放。
+        BlockPos place = pos;
+        net.minecraft.world.level.block.state.BlockState feet =
+                maid.level().getBlockState(pos);
+        if (!feet.isAir() && feet.getFluidState().isEmpty()) {
+            logBuildRefused(maid, "脚下格有不可覆盖的方块");
             return false;
         }
-        // v1.5.24：女仆实际头顶（bounding box 顶面）上方必须空旷——
+        if (feet.getFluidState().is(net.minecraft.tags.FluidTags.LAVA)) {
+            logBuildRefused(maid, "脚下格是岩浆");
+            return false;
+        }
+        // 防窒息：只拦会真正闷住她的实心满块（isSuffocating）——水/火把/树叶等
+        // 可穿过的格子不再误拦（旧版严格 isAir 在红石/装饰上方永远搭不上去）
+        if (suffocates(maid.level(), place.offset(0, 1, 0))
+                || suffocates(maid.level(), place.offset(0, 2, 0))) {
+            logBuildRefused(maid, "放置格/头顶 2 格有实心方块（防窒息拦下）");
+            return false;
+        }
+        // v1.5.24：女仆实际头顶（bounding box 顶面）上方必须无实心块——
         // 快速连续搭高时实体位移滞后，blockPosition 检查不够，必须按真实位置判定
         double headY = maid.getBoundingBox().max(net.minecraft.core.Direction.Axis.Y);
         BlockPos headPos = new BlockPos((int) maid.getX(), (int) (headY + 0.05), (int) maid.getZ());
-        if (!maid.level().getBlockState(headPos).isAir()
-                || !maid.level().getBlockState(headPos.offset(0, 1, 0)).isAir()) {
+        if (suffocates(maid.level(), headPos)
+                || suffocates(maid.level(), headPos.offset(0, 1, 0))) {
             logBuildRefused(maid, "实际头顶被堵（正在被顶起/贴天花板）");
             return false; // 实际头顶被堵（正在被顶起中）→ 等站稳再垫，防窒息
         }
@@ -4064,6 +4470,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     private void teleportHome(EntityMaid maid) {
+        // 【R1118】航图「飞过去」期间不归位：传送会打断这一趟，也可能 unRide 甩下绳子上的玩家
+        if (com.maidsmart.patrol.MaidTravelTarget.active(maid)) {
+            return;
+        }
         // 实测三百九十（反馈：自保模式禁止传送，玩家日程表手动传送除外）：
         // 自保会话期间一切自保逃生传送停用（岩浆/血量危急/弹尽粮绝兜底也
         // 不传）——本地逃生（珍珠/药水/走位/搭高/反击）接管；玩家日程表

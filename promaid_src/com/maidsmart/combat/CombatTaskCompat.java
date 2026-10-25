@@ -61,6 +61,13 @@ public final class CombatTaskCompat {
         if (task == null) {
             return FunctionCallSwitchResult.MISSING_REQUIRED_ITEM;
         }
+        // 候选池认武器时已经把额外容器（精妙背包/旅行者背包）算进来，这里必须同口径
+        // 把那件搬进她自己的背包——TLM 的换装只扫背包，不搬就会"池里认了、预检装不上"。
+        // 法术任务除外：它的 isWeapon 恒 true，搬进来只会是无关物品。
+        if (!com.maidsmart.combat.MaidSpellCompat.isSpellTask(task)) {
+            com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                    s -> isWeapon(maid, task, s), -1);
+        }
         if (isEpicFightTask(task)) {
             if (isWeapon(maid, task, maid.m_21205_())) {
                 return FunctionCallSwitchResult.NO_CHANGE;

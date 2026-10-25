@@ -233,6 +233,11 @@ public final class AutoCombatTargeting {
                 && CombatModeTable.modeOf("maid_smart:build") == null) {
             return 0;
         }
+        // 实测一千〇六【指标石·最高优先级】：指标石临时搭建是隐藏任务、不在战斗分类表里，
+        // 同样不自动参战（"先放下手上的一切"把这次搭建做完；任务真被改走由服务层抓回）
+        if (com.maidsmart.build.IndexStoneService.isIndexBuilding(maid)) {
+            return 0;
+        }
         // 自保中让位（自保优先，血量恢复后自然退出再正常参与）
         if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
             return 0;
@@ -244,6 +249,13 @@ public final class AutoCombatTargeting {
         // 本判据在"已在战斗中(return 2)""玩家接管"之下，不会覆盖它们。
         if (com.maidsmart.combat.MaidSpawnerTorchBehavior.isBreakingSpawner(maid)) {
             return 0;
+        }
+        // 实测 R1084：骑在载具上时【任务只认玩家手选】。载具的索敌/开火由
+        // RideBindManager + MaidMountCompat.tickAttack 独立完成，不需要也不应该
+        // 改她的任务：旧行为下枪械模式没枪/威胁贴近都会让她被重选成 attack，
+        // 玩家刚选的模式当场被顶掉。当前已是战斗任务 → 保持；不是 → 不自动参战。
+        if (AutoCombatPools.isRidingVehicle(maid)) {
+            return MaidWorkTags.isCombatTask(maid) ? 2 : 0;
         }
         // 已被本系统切过：还在指派的战斗任务上 → 只刷新威胁计时；任务已被
         // 玩家/排班/LLM 换走 → 玩家接管，清标记后按"当前任务"重新评估参战

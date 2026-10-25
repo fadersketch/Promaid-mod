@@ -42,6 +42,8 @@ public final class IndexStoneService {
     public static final String TAG_INDEX_PREV_HOME = "maid_smart_index_build_prev_home";
     public static final String TAG_INDEX_PREV_SCHEDULE = "maid_smart_index_build_prev_schedule";
     public static final String TAG_INDEX_TOTAL = "maid_smart_index_build_total";
+    /** 【R1108】绑定期间描边的留痕（只在"我们真的打了发光标记"时写） */
+    public static final String TAG_INDEX_GLOW = "maid_smart_index_glow";
 
     /**
      * TLM 存女仆任务用的 NBT 键字面值（EntityMaid 私有常量 TASK_TAG）。
@@ -101,6 +103,9 @@ public final class IndexStoneService {
 
     /** 女仆 UUID → 执行本次临时建造的玩家 UUID（反向索引） */
     private static final Map<UUID, UUID> MAID_TO_PLAYER = new ConcurrentHashMap<>();
+
+    /** 任务抓回的事件戳（实测一千〇六；每 40 tick 至多纠一次，防与别的 setTask 拉锯） */
+    private static final Map<UUID, Long> PIN_LAST = new ConcurrentHashMap<>();
 
     /** persistentData 访问（NeoForge 需转 IEntityExtension，1.21.1 约定） */
     private static net.minecraft.nbt.CompoundTag data(EntityMaid maid) {
@@ -197,6 +202,15 @@ public final class IndexStoneService {
             msg(player, "\u00a7c指标石：要先用它锁定一个方块（右键方块，绿→红），再来绑定我。");
             return;
         }
+        // 【R1100】启动条件 = 三处来源里至少有一件能用的方块：主人的包、她的双手/背包、
+        // 她的全部附属容器（精妙背包/旅行者背包）；"能用"走建造黑名单口径。一件都没有就直接
+        // 拒绝——旧版会先切进临时建造、再站着干等"主人给我一些方块吧"，玩家看到的
+        // "启动前提是背包里有方块"正是那一段。
+        if (!IndexStoneBuildBehavior.hasAnyBuildMaterial(maid, player, s.level, maid.blockPosition())) {
+            msg(player, "\u00a7c指标石：没有可用的搭建方块——你的背包、她的背包和她的附加容器里都没有"
+                    + "（沙子/沙砾/火把这类放不住的、以及被「搭方块禁用名单」拦住的都不算）。");
+            return;
+        }
         if (s.maidId != null) {
             EntityMaid old = findMaid(player, s.maidId);
             if (old != null) {
@@ -213,9 +227,10 @@ public final class IndexStoneService {
         }
         s.maidId = maid.getUUID();
         MAID_TO_PLAYER.put(maid.getUUID(), player.getUUID());
+        markOutline(maid); // 【R1108】绑定 = 光灵箭同款描边，解绑时解除
         forceBuildTask(player, maid, s);
         msg(player, "\u00a7a指标石：绑定成功！" + name(maid) + " 开始搭建 " + s.cells.size()
-                + " 个方块（材料从她背包取，不够从你背包取）。");
+                + " 个方块（材料从她背包/附加容器取，不够从你背包取）。");
     }
 
     /** 解绑（不改变女仆任务；仅清会话绑定） */
@@ -226,12 +241,40 @@ public final class IndexStoneService {
         MAID_TO_PLAYER.remove(s.maidId);
         EntityMaid maid = findMaid(player, s.maidId);
         if (maid != null) {
+            unmarkOutline(maid); // 【R1108】解绑 = 描边解除
             releaseMaid(player, maid, false);
         }
         s.maidId = null;
         s.cells = new ArrayList<>();
         s.done = false;
         releaseTickets(s); // 解绑 → 释放强制加载票（锁定框保留也不该继续挂票）
+    }
+
+    /**
+     * 【R1108】绑定期间给女仆打原版发光标记：渲染管线与光灵箭完全同一条
+     * （穿墙描边），客户端金边由 MaidGlowGoldMixin 统一上色。
+     */
+    private static void markOutline(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return;
+            }
+            maid.setGlowingTag(true);
+            data(maid).putString(TAG_INDEX_GLOW, "1");
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
+        }
+    }
+
+    /** 【R1108】撤掉描边；只动我们自己打的标记（她中了光灵箭时这一下不会把效果清掉） */
+    private static void unmarkOutline(EntityMaid maid) {
+        try {
+            if (maid == null || !data(maid).contains(TAG_INDEX_GLOW)) {
+                return;
+            }
+            maid.setGlowingTag(false);
+            data(maid).remove(TAG_INDEX_GLOW);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
+        }
     }
 
     // ==================== 蓝图展开 ====================
@@ -346,6 +389,7 @@ public final class IndexStoneService {
         }
         int total = (int) nbt.getLong(TAG_INDEX_TOTAL);
         String prevUid = nbt.getString(TAG_INDEX_PREV_TASK);
+        unmarkOutline(maid); // 【R1108】收尾 = 描边解除（完成 / 取消 / 失败 / 自愈都走这里）
         // 先快照再清标记——否则还原 home/作息时读到的是已删除的默认值
         boolean prevHome = nbt.getBoolean(TAG_INDEX_PREV_HOME);
         String prevSchedule = nbt.getString(TAG_INDEX_PREV_SCHEDULE);
@@ -356,6 +400,7 @@ public final class IndexStoneService {
         nbt.remove(TAG_INDEX_PREV_SCHEDULE);
         nbt.remove(TAG_INDEX_TOTAL);
         MAID_TO_PLAYER.remove(maid.getUUID());
+        PIN_LAST.remove(maid.getUUID());
         try {
             var prev = com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager
                     .findTask(ResourceLocation.parse(prevUid)).orElse(null);
@@ -390,6 +435,62 @@ public final class IndexStoneService {
         }
         com.maidsmart.tool.PromaidLog.log("指标石", name(maid)
                 + (completed ? " 临时建造完成，还原为 " : " 临时建造取消，还原为 ") + prevUid);
+    }
+
+    /**
+     * 实测一千〇六【真·最高优先级】：临时搭建期间，每 tick 由常驻 core 行为调用——
+     * ① 移动钉死（与建造任务同款）：站桩标记 + home 让位 + 清移动目标 / 停导航 / 清水平速度；
+     * ② 任务钉死：任务被任何来源（排班 / 玩家 / 第三方）改走 → 抓回 index_build。
+     * 只有我们自己的收尾 / 取消路径会先清标记再还原，绝不与之打架；抓回限频 40 tick。
+     */
+    public static void tickPriority(EntityMaid maid, long gameTime) {
+        try {
+            if (!isEnabled() || !isIndexBuilding(maid)) {
+                return;
+            }
+            com.maidsmart.task.MaidWorkTags.setStill(maid, true);
+            maid.setHomeModeEnable(true);
+            maid.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+            maid.getNavigation().stop();
+            net.minecraft.world.phys.Vec3 v = maid.getDeltaMovement();
+            if (v.x != 0.0 || v.z != 0.0) {
+                maid.setDeltaMovement(new net.minecraft.world.phys.Vec3(0.0, v.y, 0.0));
+            }
+            var task = maid.getTask();
+            if (task != null && TASK_UID.equals(task.getUid())) {
+                return; // 任务仍在临时建造上：只维护移动，无动作
+            }
+            Long last = PIN_LAST.get(maid.getUUID());
+            if (last != null && gameTime - last < 40L) {
+                return;
+            }
+            PIN_LAST.put(maid.getUUID(), gameTime);
+            if (!(maid.level() instanceof ServerLevel sl) || sl.getServer() == null) {
+                return;
+            }
+            sl.getServer().execute(() -> {
+                try {
+                    if (!isIndexBuilding(maid)) {
+                        return;
+                    }
+                    var cur = maid.getTask();
+                    if (cur != null && TASK_UID.equals(cur.getUid())) {
+                        return;
+                    }
+                    var back = com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager
+                            .findTask(TASK_UID).orElse(null);
+                    if (back == null) {
+                        return;
+                    }
+                    com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
+                            maid.getUUID(), TASK_UID, () -> maid.setTask(back));
+                    com.maidsmart.tool.PromaidLog.log("指标石", name(maid)
+                            + " 任务被外部改走 → 抓回临时建造（最高优先级）");
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
+                }
+            });
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
+        }
     }
 
     /** 女仆完成本次临时建造（由行为在最后一格放完后调用） */
@@ -510,6 +611,7 @@ public final class IndexStoneService {
     /** 只清标记（不碰任务）——女仆已被永久移除/收进魂符时用 */
     private static void clearMaidTags(EntityMaid maid) {
         try {
+            unmarkOutline(maid); // 【R1108】先撤发光位，再清留痕键
             var nbt = data(maid);
             nbt.remove(TAG_INDEX_ACTIVE);
             nbt.remove(TAG_INDEX_OWNER);
@@ -518,6 +620,7 @@ public final class IndexStoneService {
             nbt.remove(TAG_INDEX_PREV_SCHEDULE);
             nbt.remove(TAG_INDEX_TOTAL);
             MAID_TO_PLAYER.remove(maid.getUUID());
+            PIN_LAST.remove(maid.getUUID());
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStoneService", ignored);
         }
     }
@@ -624,6 +727,11 @@ public final class IndexStoneService {
                 pd.remove(TAG_INDEX_PREV_SCHEDULE);
                 pd.remove(TAG_INDEX_TOTAL);
                 pd.remove("maid_smart_work_still"); // 站桩标记（会冻住移动/播报）
+                if (pd.contains(TAG_INDEX_GLOW)) {
+                    // 【R1108】发光位会随 NBT 进魂符；放出来不该带着上一轮的描边
+                    pd.remove(TAG_INDEX_GLOW);
+                    snapshot.remove("Glowing");
+                }
                 snapshot.put(FORGE_DATA_TAG, pd);
             }
             com.maidsmart.tool.PromaidLog.log("指标石", name(maid)

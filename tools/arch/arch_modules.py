@@ -57,9 +57,9 @@ MODULES = [
 
 # ============================================================== 2. mixin
 ("promaid.mixin", "注入层（Mixin）", "Mixin Layer",
- "96 个 Mixin（mixins.promaid.json 里 76 个 common 加 20 个 client），逐一核对无孤儿。这是本模组唯一能"
+ "103 个 Mixin（mixins.promaid.json 里 83 个 common 加 20 个 client），逐一核对无孤儿。这是本模组唯一能"
  "与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。",
- "96 mixins (76 common plus 20 client in mixins.promaid.json), verified 1:1 with no orphans. This layer is "
+ "103 mixins (83 common plus 20 client in mixins.promaid.json), verified 1:1 with no orphans. This layer is "
  "the mod's only legitimate channel for deep coupling into TLM/vanilla, and the reason it can change "
  "behavior without forking TLM.",
  [("promaid_src_neo/mixins.promaid.json", 1, None)], [], [], []),
@@ -72,6 +72,11 @@ MODULES = [
  [("promaid_src_neo/com/maidsmart/mixin/MaidStationaryMixin.java", 1, 44),
   ("promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java", 1, 110),
   ("promaid_src_neo/com/maidsmart/mixin/WorkRangeExpandMixin.java", 1, 27),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidHandExtractGuardMixin.java", 1, 78),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidSpearSwingMixin.java", 1, 92),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidArmRiseMixin.java", 1, 74),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidSpearUsePoseMixin.java", 1, 38),
+  ("promaid_src_neo/com/maidsmart/mixin/LivingEntityUseItemAccessor.java", 1, 16),
   ("promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java", 1, 161)], ["mixin"], [],
  [("call", "promaid.work.tags", "站桩标记", "Work-still tags"),
   ("call", "promaid.core.safety", "无主降级", "Ownerless downgrade")]),
@@ -109,13 +114,16 @@ MODULES = [
   ("call", "promaid.work.build-exec", "区块冻结", "Chunk freeze")]),
 
 ("promaid.mixin.render-client", "客户端渲染注入", "Client Render & Gecko Patches",
- "鞘翅层、旋转/俯冲倾角、幽灵渲染、扫帚/拴绳虚影、Gecko 动画去重、模型包排序、金色描边、自由飞行动画注册、"
- "情绪姿势覆盖。",
+ "鞘翅层、旋转/俯冲倾角、幽灵渲染、扫帚/拴绳虚影、Gecko 动画去重、模型包排序、金色描边（绑定期与准星指向）、"
+ "自由飞行动画注册、情绪姿势覆盖。",
  "Elytra layer, spin/dive tilt, ghost rendering, broom/tether ghosting, Gecko animation dedup, model-pack "
- "sorting, gold outline, free-flight animation registration and emotion pose override.",
+ "sorting, gold outline (while bound and while aimed at), free-flight animation registration and emotion pose "
+ "override.",
  [("promaid_src_neo/com/maidsmart/mixin/EmotionPoseMixin.java", 1, 282),
   ("promaid_src_neo/com/maidsmart/mixin/MaidModelPackSortMixin.java", 1, 91),
-  ("promaid_src_neo/com/maidsmart/mixin/MaidGhostTetherMixin.java", 1, 60)], ["mixin", "client"], [],
+  ("promaid_src_neo/com/maidsmart/mixin/MaidGhostTetherMixin.java", 1, 60),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidAimGlowMixin.java", 1, 33),
+  ("promaid_src_neo/com/maidsmart/client/MaidAimGlowClient.java", 1, 93)], ["mixin", "client"], [],
  [("call", "promaid.social.emotion", "情绪姿势", "Emotion pose"),
   ("call", "promaid.combat.tether", "拴绳虚影", "Tether ghost")]),
 
@@ -135,17 +143,22 @@ MODULES = [
  "and pumps remote GUI sync — by rewriting vanilla ChunkMap pairing/seenBy. Fragile and deeply reflective.",
  [("promaid_src_neo/com/maidsmart/mixin/ChunkMapTrackRemoteMixin.java", 1, 168),
   ("promaid_src_neo/com/maidsmart/mixin/MaidContainerRemoteOpenMixin.java", 1, 84),
-  ("promaid_src_neo/com/maidsmart/mixin/ChunkMapRemotePumpMixin.java", 1, 70)], ["mixin", "net"], [],
+  ("promaid_src_neo/com/maidsmart/mixin/MaidGuiPacketRemoteMixin.java", 1, 45),
+  ("promaid_src_neo/com/maidsmart/mixin/ChunkMapRemotePumpMixin.java", 1, 70),
+  ("promaid_src_neo/com/maidsmart/mixin/EquipmentPacketCopyMixin.java", 1, 47)], ["mixin", "net"], [],
  [("call", "promaid.system.remote-gui", "远程界面", "Remote GUI"),
   ("call", "promaid.system.visibility", "可见性自愈", "Visibility self-heal")]),
 
 ("promaid.mixin.dialogue-llm", "对话与 LLM 注入", "Chat & LLM Patches",
- "语言/回调修复、LLM 调用闸门、system prompt 追加、傀儡模式让位、TTS 音量、气泡限流。",
- "Language/callback fixes, LLM call gating, system-prompt appending, puppet-mode concession, TTS volume and "
- "chat-bubble rate limiting.",
- [("promaid_src_neo/com/maidsmart/mixin/MaidChatLanguageMixin.java", 1, 162),
+ "语言/回调修复、LLM 调用闸门、system prompt 追加、傀儡模式让位、TTS 音量、气泡限流、本模组系统消息静默。",
+ "Language/callback fixes, LLM call gating, system-prompt appending, puppet-mode concession, TTS volume, "
+ "chat-bubble rate limiting and silencing this mod's system messages.",
+ [("promaid_src_neo/com/maidsmart/mixin/MaidChatLanguageMixin.java", 1, 88),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidLangCheckMixin.java", 1, 107),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidInternalHistoryMixin.java", 1, 26),
   ("promaid_src_neo/com/maidsmart/mixin/ChatBubbleLimitMixin.java", 1, 134),
-  ("promaid_src_neo/com/maidsmart/mixin/MaidChatLlmGateMixin.java", 1, 43)], ["mixin"], [],
+  ("promaid_src_neo/com/maidsmart/mixin/MaidChatLlmGateMixin.java", 1, 43),
+  ("promaid_src_neo/com/maidsmart/mixin/PromaidMessageGateMixin.java", 1, 39)], ["mixin"], [],
  [("call", "promaid.social.dialogue", "对话层", "Dialogue layer"),
   ("call", "promaid.core.prompt", "提示词追加", "Prompt appender")]),
 
@@ -218,10 +231,20 @@ MODULES = [
   ("call", "promaid.core.command", "combat check", "combat check")]),
 
 ("promaid.combat.flight-raid", "空袭（近战/远程）", "Air Raid (Melee / Ranged)",
- "鞘翅加武器加飞行道具的模式：遇敌起跳滑翔、放烟花推进、爬升/环绕/收翅俯冲、近战一记或远程持续开火，循环。",
+ "鞘翅加武器加飞行道具的模式：遇敌起跳滑翔、放烟花推进、爬升/环绕/收翅俯冲、近战一记或远程持续开火，循环。主手长矛时按附近敌人数分流：>3 只由独立的 SpearAirRaidBehavior 接管（35° 爬升、浅角俯冲、贴地保护、接近后长矛水平点火贯穿、命中后水平保持再点火）；≤3 只（尤其是 boss）继续走通用空袭，只在出手那一下换成 0.5 秒直线冲锋（速度随 MOVEMENT_SPEED 加成，起手要求离地与起飞窗口都已结束）。长矛进场在爬升结束收掉自推鞘翅/激流的持续推力，并把水平速度按当前高度差压回下降曲线可行的区间，不用烟花起飞也能瞄到；飞行路径及周边 3×3×3 格内的合法目标会强制补一次长矛结算，落地那一拍也会对身边 3×3×3 内的目标补一次。",
  "Elytra plus weapon plus flight item: on spotting an enemy she launches, boosts with fireworks, "
- "climbs/orbits/folds her wings to dive, lands one melee hit or keeps firing at range, then loops.",
- [("promaid_src_neo/com/maidsmart/combat/MaidFlightCombatBehavior.java", 1, 3493),
+ "climbs/orbits/folds her wings to dive, lands one melee hit or keeps firing at range, then loops. "
+ "With a spear, routing depends on nearby threat count: above three, the dedicated "
+ "SpearAirRaidBehavior takes over (35-degree climb, shallow dive, ground-skim guard, then a level "
+ "spear ignition pass, hit-triggered horizontal hold, relaunch); at "
+ "three or fewer (bosses especially) the generic chain stays in charge, with the spear strike replaced by "
+ "a 0.5-second straight charge scaled by MOVEMENT_SPEED once she has cleared the ground and the launch window has ended. "
+ "The spear approach drops self-propelled/riptide thrust at the end of the climb and trims horizontal speed to what the dive curve can still achieve, so takeoffs without fireworks can aim too. Valid targets within a 3×3×3 box around the flight path are force-hit once per pass; touching down forces one more 3×3×3 sweep in both the dedicated and the generic spear chain, so a landing beside a mob still deals damage before she relaunches. Firework thrust is applied directly by MaidVirtualFirework (vanilla v←v×0.5+look×0.85, no rocket entity; the trail is one vanilla-style particle per tick emitted client-side at her interpolated render position via FireworkTrailNetworking); self-propelled wings use the same plain-elytra thrust without consuming fireworks. Spear forced hits add the spearcore speed-based damage bonus. Group routing counts valid threats within a 100-block radius.",
+  [("promaid_src_neo/com/maidsmart/combat/MaidFlightCombatBehavior.java", 1, 3693),
+  ("promaid_src_neo/com/maidsmart/combat/SpearAirRaidBehavior.java", 1, 1201),
+  ("promaid_src_neo/com/maidsmart/combat/MaidVirtualFirework.java", 1, 159),
+  ("promaid_src_neo/com/maidsmart/combat/FireworkTrailNetworking.java", 1, 88),
+  ("promaid_src_neo/com/maidsmart/client/FireworkTrailClient.java", 1, 128),
   ("promaid_src_neo/com/maidsmart/combat/MaidFlightKit.java", 1, 1748),
   ("promaid_src_neo/com/maidsmart/combat/MaidFlightRangedTask.java", 1, 707)], ["combat", "flight"], [],
  [("call", "promaid.combat.targeting", "索敌", "Targeting"),
@@ -232,7 +255,7 @@ MODULES = [
  "主人自己飞走时，女仆背上鞘翅追上来跟随，而不是在地面垫方块。",
  "When the owner flies off, she puts on elytra and follows through the air instead of pillaring up on the "
  "ground.",
- [("promaid_src_neo/com/maidsmart/combat/MaidFlightFollowBehavior.java", 1, 1680)], ["combat", "flight"], [],
+ [("promaid_src_neo/com/maidsmart/combat/MaidFlightFollowBehavior.java", 1, 1369)], ["combat", "flight"], [],
  [("call", "promaid.combat.flight-raid", "飞行套件", "Flight kit"),
   ("call", "promaid.combat.tether", "拴绳", "Tether")]),
 
@@ -240,7 +263,7 @@ MODULES = [
  "半径 N 格（默认 100）内找不到主人就立刻把她传送回你身边，空中也能传——防「飞太高把目标打死后自己回不来」。",
  "If she cannot find the owner within N blocks (100 by default) she is teleported straight back, mid-air if "
  "needed, so she never strands herself after a kill.",
- [("promaid_src_neo/com/maidsmart/combat/MaidFlightRecall.java", 1, 158)], ["combat"], [],
+  [("promaid_src_neo/com/maidsmart/combat/MaidFlightRecall.java", 1, 143)], ["combat"], [],
  [("call", "promaid.system.follow", "传送", "Teleport")]),
 
 ("promaid.combat.flight-raid.air-combat", "空中交战姿态", "Air Combat Posture",
@@ -315,12 +338,12 @@ MODULES = [
 
 ("promaid.combat.ride", "骑乘指挥棒", "Ride Baton",
  "把「已上鞍的坐骑」（原版生物 / 卓越前线载具 / 冰火传说飞龙）与女仆绑定，让她骑着它跟主人走、可攻击可飞行。"
- "顺序固定：先右击坐骑、再右击女仆；左键换座。",
+ "顺序固定：先右击坐骑、再右击女仆；左键换座。战斗中地面寻路失败时退回 MoveControl 直推，避免目标在围栏/窄缝里时坐骑原地不动；平时跟随不启用。",
  "Binds an already-saddled mount (vanilla mob / Superb Warfare vehicle / Ice and Fire dragon) to a maid so she "
  "rides it following the owner, and can fight and fly. Order is fixed: right-click the mount first, then the "
- "maid; left-click swaps seats.",
+ "maid; left-click swaps seats. In combat, when ground pathfinding fails, it falls back to a direct MoveControl push so the mount does not stand still with the target behind a fence or in a narrow gap; normal following keeps the old behaviour.",
  [("promaid_src_neo/com/maidsmart/combat/RideBindManager.java", 1, 2270),
-  ("promaid_src_neo/com/maidsmart/combat/MaidRideKit.java", 1, 534),
+  ("promaid_src_neo/com/maidsmart/combat/MaidRideKit.java", 1, 803),
   ("promaid_src_neo/com/maidsmart/combat/RideBatonItem.java", 1, 36)], ["combat", "item", "mount"], [],
  [("call", "promaid.combat.mount-compat", "载具兼容", "Mount compat")]),
 
@@ -343,12 +366,15 @@ MODULES = [
   ("call", "promaid.combat.guards", "友军", "Friendly")]),
 
 ("promaid.combat.self-preservation", "自保", "Self-Preservation",
- "任何状态下低血且有威胁时，停止手头行为转入自保：喝药/搭高/珍珠/逃跑/记录放置方块。3789 行，"
+ "任何状态下低血且有威胁时，停止手头行为转入自保：喝药/搭高/珍珠/逃跑/记录放置方块。"
+ "受到远程攻击后仍记得攻击者高度，垫高被打断也会接着补。4971 行，"
  "全模组最大的单文件。",
  "At any time, when low on health with a threat present she abandons her current behavior and enters "
- "self-preservation: drink, pillar up, pearl, flee, log placed blocks. 3789 lines — the mod's largest single "
+ "self-preservation: drink, pillar up, pearl, flee, log placed blocks. Ranged hits are remembered so an "
+ "interrupted pillar resumes toward the attacker's height. Water used for fire dousing must be in line of "
+ "sight and have headroom, so she never teleports through a wall into a flooded pocket. 4999 lines — the mod's largest single "
  "file.",
- [("promaid_src_neo/com/maidsmart/combat/SelfPreservationBehavior.java", 1, 4696)], ["combat"], [],
+ [("promaid_src_neo/com/maidsmart/combat/SelfPreservationBehavior.java", 1, 4999)], ["combat"], [],
  [("call", "promaid.work.placed-block", "方块回收", "Block reclaim"),
   ("call", "promaid.combat.ride", "骑乘", "Ride")]),
 
@@ -357,7 +383,7 @@ MODULES = [
  "被动生存技能。",
  "Mace smash (modelled on vanilla_mob_remake zombies), riptide-trident spin charge (propellant switched to "
  "realistic fireworks) and water/powder-snow landing clutch passives.",
- [("promaid_src_neo/com/maidsmart/combat/MaidTridentSpinBehavior.java", 1, 743),
+ [("promaid_src_neo/com/maidsmart/combat/MaidTridentSpinBehavior.java", 1, 586),
   ("promaid_src_neo/com/maidsmart/combat/MaidRiptideBoost.java", 1, 558),
   ("promaid_src_neo/com/maidsmart/combat/MaidMaceSmashBehavior.java", 1, 482)], ["combat"], [], []),
 
@@ -502,11 +528,15 @@ MODULES = [
 
 ("promaid.work.placed-block", "搭方块统一回收", "Placed-Block Reclaim",
  "把每个放置的脚手架方块与其放置者 UUID 绑定；含寿命到期、回魂暂停、跨维度归还背包、崩溃后安全清理。"
- "四个主人共用：挖矿/伐木/搭路/自保。",
+ "四个主人共用：挖矿/伐木/搭路/自保。实测一千〇六起同族带金色描边：登记/移除经网络层同步到客户端渲染"
+ "（PlacedMarkClient），空手潜行右键可立刻强制回收成掉落物。",
  "Binds every scaffold block to its placing maid's UUID with lifetime expiry, soul-spell pause, "
  "cross-dimension return to backpack and crash-safe startup cleanup. Four owners share it: mining, "
- "woodcutting, bridging and self-preservation.",
- [("promaid_src_neo/com/maidsmart/task/PlacedBlockTracker.java", 1, 437)], ["work", "shared"], [], []),
+ "woodcutting, bridging and self-preservation. Since R999 the same family also drives the client-side "
+ "gold outline (PlacedMarkClient) synced from the server registry, plus empty-hand sneak right-click "
+ "force reclaim into dropped items.",
+ [("promaid_src_neo/com/maidsmart/task/PlacedBlockTracker.java", 1, 460),
+  ("promaid_src_neo/com/maidsmart/client/PlacedMarkClient.java", 1, None)], ["work", "shared"], [], []),
 
 ("promaid.work.tags", "站桩标记（跨切面）", "Work-Still Tagging (cross-cutting)",
  "persistentData 标记（WORK_STILL_TAG 与 BUILD_SIT_TAG）告诉 mixin 抑制移动目标下沉；被 17 处 mixin 引用。"
@@ -851,10 +881,10 @@ MODULES = [
  "世界探查工具。",
  "The layer around LLM chat: a 7-stage proactive dialogue state machine, reply-feedback learning, perception "
  "bubbles, autonomous task switching, a cross-turn work list, work reporting and world-probe tools.",
- [("promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java", 1, 605),
-  ("promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java", 1, 53),
+ [("promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java", 1, 591),
+  ("promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java", 1, 33),
   ("promaid_src_neo/com/maidsmart/dialogue/OutputLanguage.java", 1, 143),
-  ("promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java", 1, 119)], ["dialogue", "ai"], [],
+  ("promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java", 1, 121)], ["dialogue", "ai"], [],
  [("call", "promaid.social.memory", "记忆", "Memory"),
   ("call", "promaid.social.affect", "情绪", "Affect")]),
 
@@ -937,6 +967,17 @@ MODULES = [
  "(farming was explicitly removed in v1.2.4), bypassing the TLM brain entirely.",
  [("promaid_src_neo/com/maidsmart/follow/HomePatrolHandler.java", 1, 116),
   ("promaid_src_neo/com/maidsmart/follow/HomeWorkMovementDriver.java", 1, 147)], ["system"], [], []),
+
+("promaid.system.wake", "叫醒与找床断路", "Waking & Sleep Block",
+ "拿着本模组物品右击睡着的女仆即可叫醒：停止睡眠、清掉寻床目标、播一条抱怨气泡与语音，并让两条找床链路"
+ "（TLM 的女仆床任务与本模组的原版床行为）60 秒内不启动；收放魂符会清空这段断路。",
+ "Right-clicking a sleeping maid with any this-mod item wakes her: stops sleeping, clears walk targets, plays a "
+ "complaint bubble and voice, and keeps both bed-seeking chains (TLM's maid-bed task and our vanilla-bed "
+ "behavior) from starting for 60 seconds; the soul spell clears the block.",
+ [("promaid_src_neo/com/maidsmart/task/MaidWakeHandler.java", 1, 110),
+  ("promaid_src_neo/com/maidsmart/task/MaidBedInteropBehavior.java", 1, 164),
+  ("promaid_src_neo/com/maidsmart/mixin/MaidBedWakeBlockMixin.java", 1, 32)], ["system"], [],
+ [("call", "promaid.social.voice", "抱怨语音", "Complaint voice")]),
 
 ("promaid.system.schedule", "排班表", "Schedule System",
  "排班表物品右键打开界面：选女仆、选班次（早班/晚班/全天）、6 个任务槽排一天；底层存时段段表，按游戏挂钟"
@@ -1056,17 +1097,22 @@ MODULES = [
  "item, owner inventory and readiness. All registered through the extension hub.",
  [("promaid_src_neo/com/maidsmart/tool/SwitchTaskTool.java", 1, 355),
   ("promaid_src_neo/com/maidsmart/tool/SmartCraftTool.java", 1, 224),
+  ("promaid_src_neo/com/maidsmart/tool/GatedTool.java", 1, 70),
   ("promaid_src_neo/com/maidsmart/tool/AirRaidTool.java", 1, 214)], ["core", "ai"], [], []),
 
 ("promaid.core.safety", "建构安全与共享工具", "Build Safety & Shared Utilities",
  "女仆一切垫脚与搭桥选材的统一安全过滤、无主降级、悬空禁搭、危险方块表、天然方块黑白名单、实体快照遍历、"
- "静态状态表护栏、日志、物品归还、额外容器、手持光源、临时探针。",
+ "静态状态表护栏、日志、物品归还、额外容器、手持光源、临时探针；另有 512 格长射线选女仆与原版/他模组消息"
+ "的归属判定（只静默本模组发出的提示）。",
  "The unified safety filter for every block a maid places: ownerless downgrade, no-building-while-airborne, "
  "dangerous-block tables, natural-block allow/deny lists, entity-snapshot iteration, static-state-table guards, "
- "logging, item give-back, extra containers, and a held light source.",
+ "logging, item give-back, extra containers and a held light source; plus the 512-block long-ray maid pick and "
+ "the origin check that silences only this mod's own messages.",
  [("promaid_src_neo/com/maidsmart/tool/MaidBuildBlockFilter.java", 1, 452),
   ("promaid_src_neo/com/maidsmart/tool/MaidPlaceGuard.java", 1, 268),
-  ("promaid_src_neo/com/maidsmart/tool/MaidExtraContainer.java", 1, 352)], ["core", "shared"], [], []),
+  ("promaid_src_neo/com/maidsmart/tool/MaidExtraContainer.java", 1, 352),
+  ("promaid_src_neo/com/maidsmart/tool/MaidFarPick.java", 1, 55),
+  ("promaid_src_neo/com/maidsmart/tool/PromaidHintGate.java", 1, 43)], ["core", "shared"], [], []),
 
 ("promaid.core.gui", "游戏内文件浏览器", "In-Game File Picker",
  "无头安全的文件选择界面，替代 AWT 文件对话框，供蓝图手册使用。",

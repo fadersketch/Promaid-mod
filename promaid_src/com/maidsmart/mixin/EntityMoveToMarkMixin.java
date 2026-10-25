@@ -2,11 +2,16 @@ package com.maidsmart.mixin;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.follow.MaidTeleportRebuild;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.RelativeMovement;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+import java.util.Set;
 
 /**
  * 【issue #36】传送动作的嗅探点：给女仆打一个"下一次发包时让客户端重建"的标记。
@@ -42,5 +47,29 @@ public abstract class EntityMoveToMarkMixin {
             return;
         }
         MaidTeleportRebuild.mark(self.m_19879_());
+    }
+
+    /**
+     * 【扫帚模式】任何传送都连人带扫帚。
+     * <p>原版 {@code teleportTo} 会先 {@code unRide()}——不拦的话她瞬移走了、扫帚留在原地。
+     * 这里统一接到 {@link com.maidsmart.combat.MaidBroomKit#teleportWithBroom}：
+     * 骑扫帚时按「下车 → 搬扫帚 → 搬她 → 重新落座」四步做完并取消原版；没骑扫帚则原样放行。
+     * <p>放在 {@code Entity} 层是有意的：本模组自己的召回、排班表、自保、烫伤脱困，以及
+     * 原版 {@code /tp}、别的模组的传送，最终都走这个方法，补一处即可覆盖全部链路。
+     */
+    @Inject(method = "m_264318_(Lnet/minecraft/server/level/ServerLevel;DDDLjava/util/Set;FF)Z",
+            at = @At("HEAD"), cancellable = true)
+    private void promaid$broomTeleport(ServerLevel level, double x, double y, double z,
+                                       Set<RelativeMovement> relatives, float yRot, float xRot,
+                                       CallbackInfoReturnable<Boolean> cir) {
+        Entity self = (Entity) (Object) this;
+        if (!(self instanceof EntityMaid maid)) {
+            return;
+        }
+        Boolean handled = com.maidsmart.combat.MaidBroomKit.teleportWithBroom(
+                maid, level, x, y, z, relatives, yRot, xRot);
+        if (handled != null) {
+            cir.setReturnValue(handled);
+        }
     }
 }

@@ -35,6 +35,15 @@ public abstract class MaidTeleportPreserveMixin {
         // 距离主人 > 7 格 → teleportToOwner 把女仆瞬移回主人身边（主人没动、女仆被传）。
         // 这里从 TLM 源头一网打尽：建造女仆永不瞬移（站桩定位由建造行为自己负责）。
         try {
+            // 【R1118】拴绳绑定 / 航图「飞过去」/ 飞行跟随进行中：任何自动传送一律不拉。
+            // TLM 的 teleportToOwner 走 Entity.teleportTo → unRide()，会把她背上的玩家甩下去
+            // （实测：起飞挂载与「解除(玩家离鞍)」落在同一秒）。
+            if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)
+                    || com.maidsmart.patrol.MaidTravelTarget.active(maid)
+                    || com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+                cir.setReturnValue(false);
+                return;
+            }
             // v1.5.252q：m_135815_ = getPath（javap 实证）——旧版写 "maid_smart:build"
             // 恒为 false，建造女仆瞬移拦截从未生效，此处修正
             if (maid.getTask() != null && "build".equals(maid.getTask().getUid().m_135815_())) {
@@ -62,14 +71,14 @@ public abstract class MaidTeleportPreserveMixin {
             // 固定会这样"正是这条路径（我们 mod 的救援/拉回已豁免，TLM 原版没拦）。
             // 坐垫/骑乘/蹲下 = 玩家明确停放，TLM 原版传送同样不拉。
             if (maid.isMaidInSittingPose() || maid.m_20159_()
-                    || maid.m_6040_()) { // m_6040_ = isShiftKeyDown（蹲下）
+                    || maid.m_6144_()) { // m_6144_ = isShiftKeyDown（蹲下）
                 cir.setReturnValue(false);
                 return;
             }
             // v1.2.0：飞行作战——滑翔途中禁止 TLM 跟随瞬移。滑翔中/猛击下落中被
             // teleportToOwner 拽回主人身边 = 这一轮飞行与猛击全部白费（与 1.21.1 的
             // "滑翔途中不能触发传送"同一条硬约束）。
-            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+            if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
                 cir.setReturnValue(false);
                 return;
             }

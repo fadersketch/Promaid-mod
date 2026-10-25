@@ -13,7 +13,7 @@ package com.maidsmart.tool;
  * 判定靠一句话就能讲清（见下），漏了什么在面板里点一下就能放开——面板存在就是为了这个。
  * <p>【收录口径（一句话）】原版方块、能在世界里自然捡到／挖到、放下去能站人（有完整碰撞）。
  * 因此**不收**：合成/烧炼/切石产物（木板、玻璃、石砖、羊毛、混凝土、铜块、紫珀……）、
- * 结构专属建材（海晶石、下界砖）、无碰撞的植物（花/草/火把/树叶/地毯——它们本来就被 {@link MaidBuildBlockFilter} 的碰撞判定拦掉）、以及一切模组方块。 <p>【与既有黑名单的关系（互不冲突、层层叠加）】沙子/砾石这类**下落方块**、 仙人掌/岩浆块这类**伤害方块**、{@code dangerBlocks} 配置表——它们仍由 {@link MaidBuildBlockFilter#isUsableBuildBlock} 原有的几条判定拦住，本表收不收都不影响 （沙子在表里、照样不许搭——正好证明两层判定是各自独立的）。 <p>【两树同一份】本类只认**注册名字符串**，不碰任何加载器注册表，所以 SRG 树与 Mojmap 树里逐字相同（调用方 {@link MaidBuildBlockFilter} 自己把 Block 换成注册名再问这里）。
+ * 结构专属建材（海晶石、下界砖）、无碰撞的植物（花/草/火把/树叶/地毯——它们本来就被 {@link MaidBuildBlockFilter} 的碰撞判定拦掉）、以及一切模组方块。 <p>【与既有黑名单的关系（互不冲突、层层叠加）】沙子/砾石这类**下落方块**、 仙人掌/岩浆块这类**伤害方块**、床/门这类**两格方块**、{@code dangerBlocks} 配置表——它们仍由 {@link MaidBuildBlockFilter#isUsableBuildBlock} 原有的几条判定拦住，本表收不收都不影响 （沙子在表里、照样不许搭——正好证明两层判定是各自独立的）。 <p>【两树同一份】本类只认**注册名字符串**，不碰任何加载器注册表，所以 SRG 树与 Mojmap 树里逐字相同（调用方 {@link MaidBuildBlockFilter} 自己把 Block 换成注册名再问这里）。
  */
 public final class NaturalBlocks {
 

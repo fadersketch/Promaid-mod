@@ -29,6 +29,15 @@ public abstract class MaidTeleportPreserveMixin {
             return;
         }
         EntityMaid maid = (EntityMaid) (Object) this;
+        // 【R1118】拴绳绑定 / 航图「飞过去」/ 飞行跟随进行中：任何自动传送一律不拉。
+        // TLM 的 teleportToOwner 走 Entity.teleportTo → unRide()，会把她背上的玩家甩下去
+        // （实测：起飞挂载与「解除(玩家离鞍)」落在同一秒）。
+        if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)
+                || com.maidsmart.patrol.MaidTravelTarget.active(maid)
+                || com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+            cir.setReturnValue(false);
+            return;
+        }
         // 实测四百四十二：重锤跃起中禁止 TLM 跟随瞬移——她跳到半空被 teleportToOwner
         // 拽回主人身边，猛击白跳、战位全乱（反馈："重锤状态下空中禁止传送，否则很
         // 容易因为飞到高空又传送回来，造成战术上的失误"）。跃起 ≤5 秒自动收尾。

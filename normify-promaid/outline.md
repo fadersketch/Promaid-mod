@@ -1,6 +1,6 @@
 # Promaid 架构大纲 / Architecture Outline
 
-修订 f33c45a1ff17ca592b7a3d4ee76d313eb49dac00 · 120 模块 / 61 API / 76 箭头 / 最大深度 3
+修订 f33c45a1ff17ca592b7a3d4ee76d313eb49dac00 · 121 模块 / 61 API / 77 箭头 / 最大深度 3
 
 - **Promaid 模组总览** `promaid`
   - **入口与装配** `promaid.entry`
@@ -156,6 +156,7 @@
       - `rpc:WorkAreaClamp.clamp(...)` — 把目标钳进工作圆。
     - **可见性自愈** `promaid.system.visibility` *(leaf)*
     - **Home 巡逻与工作驱动** `promaid.system.home` *(leaf)*
+    - **叫醒与找床断路** `promaid.system.wake` *(leaf)*
     - **排班表** `promaid.system.schedule`
       - **任务切换引擎** `promaid.system.schedule.switch` *(leaf)*
       - **排班网络包** `promaid.system.schedule.net` *(leaf)*

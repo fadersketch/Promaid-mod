@@ -374,16 +374,22 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
     protected long walkStuckLogAt = 0L;
 
     /** 实测九百七十九【链路卡死自愈】：同一目标 + 同一双脚 + 挖掘进度一字未动，连续这么多拍
-     *  （160 拍 = 8 秒）→ 认这块真够不到，弃掉重扫。比 WALK_STILL_TICKS 那条"停导航重发"
+     *  （60 拍 = 3 秒）→ 认这块真够不到，弃掉重扫。比 WALK_STILL_TICKS 那条"停导航重发"
      *  更久：那条重发的还是同一个走不到的目标，真够不着时她会顶着它无限循环（日志里
-     *  "够不着就继续推进 / 走不到→改走接近链"反复出现、气泡一条没有、走位权一直不放）。 */
-    protected static final int STALL_GIVEUP_TICKS = 160;
+     *  "够不着就继续推进 / 走不到→改走接近链"反复出现、气泡一条没有、走位权一直不放）。
+     *  实测一千〇一十三：160 拍（8 秒）对玩家来说长得像"她坏了"——站着不动 8 秒才换目标
+     *  比误判换目标更糟。真正在挖时 destroyProgress 每拍都在变，这里只抓"完全没进展"，
+     *  3 秒足够；分帧扫描进行中另有 {@code stallWatchdogSuppressed} 豁免。 */
+    protected static final int STALL_GIVEUP_TICKS = 60;
     protected BlockPos stallFeet = null;
     protected BlockPos stallTargetRef = null;
     protected float stallProgressRef = -1.0f;
     protected int stallTicks = 0;
     /** 连续自愈次数（弃目标后又卡 → 累加；她挪窝即清零） */
     protected int stallStreak = 0;
+    /** R1125：「同一目标硬超时」的计时起点（目标变化即重置；null = 还没锁目标） */
+    protected BlockPos hardTargetRef = null;
+    protected long hardTargetSince = -1L;
 
     /** 实测九百三十七【水流卡住兜底】：脚下格不变持续这么多拍即判"被水流卡住"。 */
     protected static final int WATER_STUCK_TICKS = 40;
@@ -621,6 +627,60 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
         return true;
     }
 
+    /**
+     * R1125：同一目标硬超时——与 {@link #stallWatchdog} 的"站着不动才判"不同，这里只认
+     * "同一个目标锁了多久"：哪怕她一直在走位、一直在挖/砍，只要超过子类给的时限还没解决，
+     * 就放弃它。效果与语音同"这块我够不到"（共用同一条弃目标收尾）。
+     */
+    protected boolean hardWatchdog(ServerLevel level, EntityMaid maid, long gameTime) {
+        int limit = this.hardTimeoutTicks();
+        BlockPos target = this.targetPos;
+        if (limit <= 0 || target == null) {
+            this.hardTargetRef = null;
+            this.hardTargetSince = -1L;
+            return false;
+        }
+        if (this.hardTargetRef == null || !target.equals(this.hardTargetRef)) {
+            this.hardTargetRef = target.m_7949_();
+            this.hardTargetSince = gameTime;
+            return false;
+        }
+        if (gameTime - this.hardTargetSince < limit) {
+            return false;
+        }
+        this.hardTargetSince = gameTime;
+        this.hardTargetRef = null;
+        this.stallStreak++;
+        BlockPos dead = target;
+        RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new HashMap<>())
+                .put(dead.m_7949_(), gameTime);
+        this.onStallGiveUp(level, maid, gameTime, dead);
+        this.targetPos = null;
+        this.destroyProgress = 0.0f;
+        this.chainQueue.clear();
+        this.chainBlock = null;
+        this.scanCooldown = 0;
+        this.walkRetargetCooldown = 0;
+        this.lastWalkTarget = null;
+        this.walkStillSince = -1L;
+        maid.m_21573_().m_26573_();
+        maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
+        MaidWorkTags.setChainDrive(maid, false);
+        this.notifyNoTarget(maid, gameTime, "这块我够不到，先换个地方找找～");
+        LOGGER.info("work hard timeout: maid={} target={} limit={} streak={}",
+                maid.m_20148_(), dead, limit, this.stallStreak);
+        if (this.stallStreak >= 3) {
+            this.stallStreak = 0;
+            this.onStallStreak(level, maid, gameTime);
+        }
+        return true;
+    }
+
+    /** 同一目标硬超时（tick）——子类按各自配置返回；<= 0 = 关闭。 */
+    protected int hardTimeoutTicks() {
+        return -1;
+    }
+
     /** 卡死判定豁免（子类：分帧扫描进行中她的"站着等"是正常的，不打表） */
     protected boolean stallWatchdogSuppressed(ServerLevel level, EntityMaid maid) {
         return false;
@@ -729,12 +789,27 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
     }
 
     /** 实测九百八十二：每 tick（挂在常驻 core 行为上）——到点切空闲、满协议时长切回工作。
-     *  真在战斗 / 排班接管 → 顺延让位，等它收场；被打断过也一样把她送回工作。 */
+     *  真在战斗 / 排班接管 → 顺延让位，等它收场。实测一千〇五【玩家介入即止】：链路只对
+     *  我们自己排的那条线负责——任务被外部改过（玩家切模式 / 排班接管）就整条作废，
+     *  绝不把她切回工作（旧版会把玩家切成的攻击模式切回采矿，于是"每隔一阵又报找不到矿"）。 */
     public static void tickWorkIdleSwitch(EntityMaid maid, long gameTime) {
         try {
             int id = maid.m_19879_();
             long[] st = WORK_IDLE_MEM.get(id);
             if (st == null) {
+                return;
+            }
+            String curTask = maid.getTask() != null && maid.getTask().getUid() != null
+                    ? maid.getTask().getUid().toString() : "";
+            String prev = WORK_IDLE_PREV.get(id);
+            // 链路期望的任务：还没切空闲 = 原工作（prev）；已切 = TLM 空闲
+            String expect = st[1] == 0L ? prev : "touhou_little_maid:idle";
+            if (expect == null || !expect.equals(curTask)) {
+                WORK_IDLE_MEM.remove(id);
+                WORK_IDLE_PREV.remove(id);
+                IDLE_PAUSE_UNTIL.remove(id); // 静默窗口一并清：下轮从干净状态重来
+                LOGGER.info("work idle-switch: maid={} task changed by player (prev={} cur={}) -> chain dropped",
+                        maid.m_20148_(), prev, curTask);
                 return;
             }
             if (st[1] == 0L) {
@@ -758,13 +833,13 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
                 st[1] = gameTime + 20L; // 让位：战斗/排班收场后再还原
                 return;
             }
-            String prev = WORK_IDLE_PREV.remove(id);
+            String prevBack = WORK_IDLE_PREV.remove(id);
             WORK_IDLE_MEM.remove(id);
-            if (prev == null) {
+            if (prevBack == null) {
                 return;
             }
-            if (switchMaidTask(maid, new net.minecraft.resources.ResourceLocation(prev))) {
-                LOGGER.info("work idle-switch: maid={} -> back {}", maid.m_20148_(), prev);
+            if (switchMaidTask(maid, new net.minecraft.resources.ResourceLocation(prevBack))) {
+                LOGGER.info("work idle-switch: maid={} -> back {}", maid.m_20148_(), prevBack);
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkBehavior", ignored);
         }
@@ -802,6 +877,10 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.113（C2）：搭方块材料耗尽播报（限频 30 秒） */
     protected void notifyNoBuildBlock(EntityMaid maid) {
+        // R1115：开关关掉时"取料失败"是设计如此，不是没材料——同样静默
+        if (!com.maidsmart.config.MaidSmartConfig.MINE_PILLAR_ENABLED.get()) {
+            return;
+        }
         // 实测四百四十三：悬空禁搭导致的"取料失败"不是真的没材料——静默
         if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
             return;
@@ -818,21 +897,10 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.25f：防窒息兜底（移植自保 antiSuffocate）——每 tick 检测女仆"身体中心"
      * （半身位置）所在格是否为实心满块——是则说明她卡进了方块（搭方块后位移滞后 /
-     * 放偏 / 被推挤），直接 setPos 把位置强制移到该方块顶面之上。头顶检查拦不住
-     * 横向卡入，这是最后一道保险：宁可瞬移半步也不让她被自己搭的方块闷住。
-     */
-    protected void antiSuffocate(EntityMaid maid) {        net.minecraft.world.phys.AABB box = maid.m_20191_();
-        double cy = box.f_82289_ + (box.f_82292_ - box.f_82289_) * 0.5; // 身体中心高度（半身）
-        BlockPos mid = new BlockPos((int) Math.floor(maid.m_20185_()),
-                (int) Math.floor(cy), (int) Math.floor(maid.m_20189_()));
-        BlockState st = maid.m_9236_().m_8055_(mid);
-        if (st.m_60795_() || !st.m_60796_(maid.m_9236_(), mid)) {
-            return; // 身体中心在空气 / 非实心满块（楼梯台阶不算卡住）
-        }
-        double top = mid.m_123342_() + 1.0;
-        if (top > box.f_82289_ + 0.01) {
-            maid.m_6034_(maid.m_20185_(), top + 0.02, maid.m_20189_());
-        }
+     * 放偏 / 被推挤），直接改位置挪出去。实测一千〇八起改走自保的共享实现：
+     * 头格被方块压住也管（旧版只看半身 → 头卡住时一点反应都没有）。 */
+    protected void antiSuffocate(EntityMaid maid) {
+        com.maidsmart.combat.SelfPreservationBehavior.escapeSuffocation(maid);
     }
 
     /**
@@ -846,7 +914,14 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
             return;
         }
         BlockPos feet = maid.m_20183_();
-        if (this.waterStuckAt == null || !feet.equals(this.waterStuckAt)) {
+        // R1125：水流把她推回两个方块之间反复横跳时，脚下格每拍都在变——旧版要求"格完全相等"，
+        // 于是计时永远被重置、脱困保护一次都不触发。现在给 3 格水平 / 2 格垂直的容差：
+        // 只要还在锚点附近（没有真的离开这片水域）就继续累计。
+        boolean near = this.waterStuckAt != null
+                && Math.abs(feet.m_123341_() - this.waterStuckAt.m_123341_()) <= 3
+                && Math.abs(feet.m_123342_() - this.waterStuckAt.m_123342_()) <= 2
+                && Math.abs(feet.m_123343_() - this.waterStuckAt.m_123343_()) <= 3;
+        if (!near) {
             this.waterStuckAt = feet;
             this.waterStuckSince = gameTime;
             return;
@@ -952,6 +1027,10 @@ public abstract class MaidWorkBehavior extends Behavior<EntityMaid> {
     /** v1.5.24：取背包中数量最多的可搭方块（BlockItem + 非下落），用于搭高挖矿。
      *  v1.1.0 实测二百三十一：含手部栏（主/副手）——手里拿的方块也能垫（审计修复） */
     protected Item takeBuildBlock(EntityMaid maid) {
+        // R1115：挖矿/伐木搭方块总开关——关掉即"没有可垫的方块"，两条链路自然退回走路/换目标
+        if (!com.maidsmart.config.MaidSmartConfig.MINE_PILLAR_ENABLED.get()) {
+            return null;
+        }
         // 实测四百四十三：悬空/坠落中禁搭方块——统一闸口
         if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
             return null;

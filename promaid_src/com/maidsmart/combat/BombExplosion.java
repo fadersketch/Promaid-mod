@@ -117,13 +117,67 @@ public final class BombExplosion {
                 BombConfig.pose(maid, b.display, MaidBombing.BLAST_POSE_TICKS);
             }
         }
-        explode(level, maid, x, y, z, b.kind.power, b.kind.fire);
+        // 【实测一千〇六十】末地水晶 / 压缩盒连炸：原版 LivingEntity.hurt 在
+        // invulnerableTime > 10 时会把"伤害 ≤ 上一记"的命中直接吞掉——五枚叠放在同一
+        // tick 起爆时，第二枚起全是 0 伤害，玩家看到的就是"五枚只吃一枚、甚至完全打不到"。
+        // 每一炸前清掉爆心范围内活体的无敌帧，让每一枚按自己的威力完整结算；
+        // 爆炸本身会重新写入无敌帧，所以只影响这一次连续爆发。
+        // 水晶恒走这条（刚被平A打中的目标也有无敌帧，水晶照样该炸出伤害）；
+        // 重生锚的并排压缩爆发由 burst 标记。
+        if (b.kind == MaidBombing.Kind.CRYSTAL || b.burst) {
+            clearInvulnerability(level, maid, x, y, z, b.kind.power);
+        }
+        explode(level, maid, x, y, z, b.kind.power, b.kind.fire, b.kind.cn);
     }
 
-    private static void explode(ServerLevel level, EntityMaid maid, double x, double y, double z, float power, boolean fire) {
+    /**
+     * 把爆心附近活体的受击无敌帧清零（放过放炸弹的女仆与友军）。每炸一次都会重新写入，
+     * 所以只作用于紧跟着的那一次爆炸结算。
+     */
+    private static void clearInvulnerability(ServerLevel level, EntityMaid maid,
+                                             double x, double y, double z, float power) {
+        try {
+            double r = Math.max(1.0, power * 2.0);
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    x - r, y - r, z - r, x + r, y + r, z + r);
+            for (LivingEntity le : level.m_45976_(LivingEntity.class, box)) {
+                if (le == null || le == maid) {
+                    continue;
+                }
+                if (maid != null && FriendlyFireGuard.isFriendly(maid, le)) {
+                    continue; // 主人 / 同主女仆 / 友军本来就不吃这一炸，别动他们的无敌帧
+                }
+                le.f_19802_ = 0;
+            }
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("BombExplosion", ignored);
+        }
+    }
+
+    private static void explode(ServerLevel level, EntityMaid maid, double x, double y, double z, float power, boolean fire, String label) {
         Level.ExplosionInteraction mode = BombConfig.cfgBreakBlocks()
                 ? Level.ExplosionInteraction.BLOCK
                 : Level.ExplosionInteraction.NONE;
+        // 【实测一千〇六十·伤害探针】起爆前记下半径内每个非友方活体的血量，起爆后对比。
+        // 这样日志能直接回答"五枚叠放到底每枚打掉多少、有没有一枚都没打中"。
+        List<LivingEntity> probeVictims = new ArrayList<>();
+        List<Float> probeBefore = new ArrayList<>();
+        try {
+            double r = Math.max(1.0, power * 2.0);
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    x - r, y - r, z - r, x + r, y + r, z + r);
+            for (LivingEntity le : level.m_45976_(LivingEntity.class, box)) {
+                if (le == null || le == maid) {
+                    continue;
+                }
+                if (maid != null && FriendlyFireGuard.isFriendly(maid, le)) {
+                    continue;
+                }
+                probeVictims.add(le);
+                probeBefore.add(le.m_21223_());
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombExplosion", ignored);
+        }
         // v1.2.2 实测五百九十七【粉色火焰】：原版这一炸会**自己点火**——javap 实证
         // （Explosion.finalizeExplosion）着火那段在 `interactsWithBlocks()` 之外，只看 fire=true，
         // 所以哪怕我们默认"不破坏方块"（ExplosionInteraction.NONE → BlockInteraction.KEEP），
@@ -181,6 +235,30 @@ public final class BombExplosion {
                     MaidBombing.log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火");
                 }
             }
+        }
+        // 【实测一千〇六十·伤害探针】起爆后逐个体比对血量，写出这一炸的真实战绩。
+        // 判读口径：一行 = 一枚炸弹；若所有目标都没掉血，会写明"半径内无掉血目标"。
+        try {
+            StringBuilder sb = new StringBuilder();
+            int lost = 0;
+            for (int i = 0; i < probeVictims.size(); i++) {
+                LivingEntity le = probeVictims.get(i);
+                float b = probeBefore.get(i);
+                float a = le.m_21223_();
+                if (a < b - 0.05f) {
+                    lost++;
+                    String name = le.m_5446_() == null
+                            ? le.m_6095_().toString()
+                            : le.m_5446_().getString();
+                    sb.append(name).append(' ')
+                            .append(String.format(java.util.Locale.ROOT, "%.1f→%.1f（-%s）；", b, a,
+                                    String.format(java.util.Locale.ROOT, "%.1f", b - a)));
+                }
+            }
+            MaidBombing.log(label + " 起爆 @" + String.format(java.util.Locale.ROOT, "%.1f,%.1f,%.1f", x, y, z)
+                    + " 威力 " + power + "："
+                    + (lost == 0 ? "半径内无掉血目标" : sb.toString()));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("BombExplosion", ignored);
         }
     }
 }

@@ -206,6 +206,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     private int guardTicks = 0;
     /** 上次成功垫出方块的 gameTime（卡死检测：太久没垫出 = 头顶被挡/没料，放弃） */
     private long lastPlacedGameTime = 0;
+    /** v1.3.3：上次因目标格被主人/其他女仆碰撞箱占住而放弃放置的 gameTime。
+     *  20 秒"搭不上去"判定要把这档排除——那是等对方挪开，不是地形挡路。 */
+    private long lastOwnerBlockedGameTime = 0;
     /** v1.1.0 实测一百八十：垫块后"走上去"目标——12 tick 内持续施加水平速度把女仆
      *  推进刚垫的方块格（踏入即停）；旧版只给一次速度脉冲，摩擦力半格就停，
      *  跨沟导航又寻路失败 → 人不走上去 → 平桥链断掉 */
@@ -351,6 +354,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         this.guardTicks = 0;
         this.walkOnTicks = 0; // 实测一百八十：跨启动残留清零
         this.lastPlacedGameTime = level.m_46467_();
+        this.lastOwnerBlockedGameTime = 0;
         // v1.1.0 实测二十九：启动/中止日志（latest.log 搜 "bridge-up"）——
         // 间歇性失效排查用；中止原因在 doStop 记
         com.mojang.logging.LogUtils.getLogger().info(
@@ -404,8 +408,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (!hasBuildBlock(maid)) {
             return "no-block";
         }
-        if (dyNow >= 1 && gameTime - this.lastPlacedGameTime > 400L) {
-            return "head-blocked";
+        if (dyNow >= 1 && gameTime - Math.max(this.lastPlacedGameTime,
+                this.lastOwnerBlockedGameTime) > 400L) {
+            // v1.3.3：目标格一直被主人/其他女仆占着——不是搭不上去
+            if (this.ownerBlockedRecently(gameTime)) {
+                return "owner-blocked";
+            }
+            // 实测一千〇八：只有现场真的没有放置/头顶空间才算 head-blocked
+            return this.headSpaceBlocked(level, maid) ? "head-blocked" : "stuck";
         }
         return "unknown";
     }
@@ -610,6 +620,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             // 实测五百三十六：目标格被主人碰撞箱占着就不搭
             // （防把主人痊住/盖头）——在取料前拦，不浪费方块
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
+                this.lastOwnerBlockedGameTime = level.m_46467_();
                 continue;
             }
             // 实测九百七十八：铺这一格之前先转身——旧版只施速不转身，会倒着搭、倒着走
@@ -678,6 +689,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             // 实测五百三十六：目标格被主人碰撞箱占着就不搭
             // （防把主人痊住/盖头）——在取料前拦，不浪费方块
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, support)) {
+                this.lastOwnerBlockedGameTime = level.m_46467_();
                 continue;
             }
             // 实测九百七十八：下行台阶先转身再垫那一格
@@ -759,6 +771,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             // 实测五百三十六：目标格被主人碰撞箱占着就不搭
             // （防把主人痊住/盖头）——在取料前拦，不浪费方块
             if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, place)) {
+                this.lastOwnerBlockedGameTime = level.m_46467_();
                 continue;
             }
             Item item = takeBuildBlock(maid);
@@ -846,10 +859,29 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             this.notifyNoBlock(maid);
             return false;
         }
-        // 头顶被挡 → 20 秒垫不出任何方块再放弃（可能是站位问题，给她一点腾挪时间）
-        if (dyNow >= 1 && gameTime - this.lastPlacedGameTime > 400L) {
-            maid.getChatBubbleManager().addTextChatBubble(
-                    "搭不上去了（头顶被挡住），我先下来……");
+        // 20 秒垫不出任何方块 → 放弃（可能是站位问题，给她一点腾挪时间）。
+        // 实测一千〇八（issue #41）：旧版不看现场、一律说"头顶被挡住"——可头顶明明
+        // 有空间（她只是走位/等导航/被主人挡位）时就是误报。现在按 placeStep 同一
+        // 判据复核：真被实心块挡住才说头顶，否则说中性的"搭不上去"，并把脚下/头顶
+        // 三格的方块写进 promaid.log，下一次反馈能直接看出挡的是什么。
+        if (dyNow >= 1 && gameTime - Math.max(this.lastPlacedGameTime,
+                this.lastOwnerBlockedGameTime) > 400L) {
+            // v1.3.3（超平坦误报"搭不上去"）：被拦下的是"目标格里有主人/别的女仆"，
+            // 不是地形挡住、也不是没路——对方一挪开就能继续垫。这里保持行为运行、
+            // 不播失败气泡，避免在空旷平台上说"搭不上去"。
+            if (this.ownerBlockedRecently(gameTime)) {
+                return true;
+            }
+            boolean headBlocked = this.headSpaceBlocked(level, maid);
+            com.maidsmart.tool.PromaidLog.log("搭路", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 20 秒没垫出方块：" + (headBlocked ? "头顶/放置格被挡" : "头顶仍有空间")
+                    + "（脚下=" + describe(level, maid.m_20183_())
+                    + " 头上1=" + describe(level, maid.m_20183_().m_7918_(0, 1, 0))
+                    + " 头上2=" + describe(level, maid.m_20183_().m_7918_(0, 2, 0))
+                    + " 主人dy=" + dyNow + "）");
+            maid.getChatBubbleManager().addTextChatBubble(headBlocked
+                    ? "搭不上去了（头顶被挡住），我先下来……"
+                    : "搭不上去，我先下来……");
             return false;
         }
         return true;
@@ -880,24 +912,34 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     /* ==================== 搭块（照挖矿 pillarUpStep 精简） ==================== */
 
-    /** 脚下垫一块把自己顶高：脚下悬空垫所在格；平地垫身体格。头顶 2 格必须空。 */
+    /** 脚下垫一块把自己顶高：放置格一律取脚下那一格；头顶不能有会窒息的实心块。 */
     private void placeStep(ServerLevel level, EntityMaid maid) {
         BlockPos pos = maid.m_20183_();
-        BlockPos place = level.m_8055_(pos).m_60795_() ? pos : pos.m_7918_(0, 1, 0);
-        if (!level.m_8055_(place).m_60795_()
-                || !level.m_8055_(place.m_7918_(0, 1, 0)).m_60795_()
-                || !level.m_8055_(place.m_7918_(0, 2, 0)).m_60795_()) {
-            return; // 放置格/头顶空间不足——等站位变化再试
+        // 实测一千〇八（issue #41）：只垫脚下那一格。旧版"脚下不是空气就垫 pos+1"会把
+        // 方块放进她的上半身/头格——顶起稍有滞后就是自己把自己闷住（反馈实证）。
+        // 脚下格有不可覆盖的方块（红石粉/雪层/火把等，非空气非流体）时不垫，绝不拆改。
+        BlockPos place = pos;
+        net.minecraft.world.level.block.state.BlockState feet = level.m_8055_(pos);
+        if (!feet.m_60795_() && feet.m_60819_().m_76178_()) {
+            return;
+        }
+        if (feet.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13132_)) {
+            return;
+        }
+        if (suffocates(level, place.m_7918_(0, 1, 0))
+                || suffocates(level, place.m_7918_(0, 2, 0))) {
+            return; // 放置格/头顶有会窒息的实心块——等站位变化再试
         }
         // 实际头顶（碰撞箱顶）检查：连续垫高时实体位移滞后，防把自己埋了
         double headY = maid.m_20191_().m_82374_(net.minecraft.core.Direction.Axis.Y);
         BlockPos headPos = new BlockPos((int) maid.m_20185_(), (int) (headY + 0.05), (int) maid.m_20189_());
-        if (!level.m_8055_(headPos).m_60795_() || !level.m_8055_(headPos.m_7918_(0, 1, 0)).m_60795_()) {
+        if (suffocates(level, headPos) || suffocates(level, headPos.m_7918_(0, 1, 0))) {
             return;
         }
         // 实测五百三十六：目标格被主人碰撞箱占着就不搭
         // （防把主人痊住/盖头）——在取料前拦，不浪费方块
         if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, place)) {
+            this.lastOwnerBlockedGameTime = level.m_46467_();
             return;
         }
         Item item = takeBuildBlock(maid);
@@ -1055,18 +1097,43 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     /* ==================== 防窒息/防掉落（照挖矿精简版） ==================== */
 
     private void antiSuffocate(EntityMaid maid) {
-        AABB box = maid.m_20191_();
-        double cy = box.f_82289_ + (box.f_82292_ - box.f_82289_) * 0.5;
-        BlockPos mid = new BlockPos((int) Math.floor(maid.m_20185_()),
-                (int) Math.floor(cy), (int) Math.floor(maid.m_20189_()));
-        var st = maid.m_9236_().m_8055_(mid);
-        if (st.m_60795_() || !st.m_60796_(maid.m_9236_(), mid)) {
-            return;
+        // 实测一千〇八：改走自保的共享实现——头格被方块压住也管（旧版只看半身）
+        com.maidsmart.combat.SelfPreservationBehavior.escapeSuffocation(maid);
+    }
+
+    /** 实测一千〇八：该格是否会闷住她（isSuffocating 的实心满块；空气/水/火把/树叶不算） */
+    private static boolean suffocates(ServerLevel level, BlockPos pos) {
+        net.minecraft.world.level.block.state.BlockState st = level.m_8055_(pos);
+        return !st.m_60795_() && st.m_60796_(level, pos);
+    }
+
+    /** v1.3.3：最近 1 秒内是否因目标格被占（主人/其他女仆的碰撞箱）而垫不出去。
+     *  这种情况要等她/他挪开，不能算作"搭不上去"。 */
+    private boolean ownerBlockedRecently(long gameTime) {
+        return this.lastOwnerBlockedGameTime > 0L
+                && gameTime - this.lastOwnerBlockedGameTime <= 20L;
+    }
+
+    /** 实测一千〇八：放置格/头顶是否真的没有空间（与 placeStep 同一判据）。
+     *  只认会窒息的实心块——脚下是红石/雪层这类"不能覆盖但不挡头"的格子时，
+     *  走的是中性的"搭不上去"，不再冤枉头顶。 */
+    private boolean headSpaceBlocked(ServerLevel level, EntityMaid maid) {
+        BlockPos pos = maid.m_20183_();
+        if (suffocates(level, pos.m_7918_(0, 1, 0)) || suffocates(level, pos.m_7918_(0, 2, 0))) {
+            return true;
         }
-        double top = mid.m_123342_() + 1.0;
-        if (top > box.f_82289_ + 0.01) {
-            maid.m_6034_(maid.m_20185_(), top + 0.02, maid.m_20189_());
-        }
+        double headY = maid.m_20191_().m_82374_(net.minecraft.core.Direction.Axis.Y);
+        BlockPos headPos = new BlockPos((int) maid.m_20185_(), (int) (headY + 0.05), (int) maid.m_20189_());
+        return suffocates(level, headPos) || suffocates(level, headPos.m_7918_(0, 1, 0));
+    }
+
+    /** 实测一千〇八：诊断日志用——格坐标=方块注册名 */
+    private static String describe(ServerLevel level, BlockPos p) {
+        net.minecraft.resources.ResourceLocation id =
+                net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(
+                        level.m_8055_(p).m_60734_());
+        return p.m_123341_() + "," + p.m_123342_() + "," + p.m_123343_()
+                + "=" + (id == null ? "?" : id.m_135815_());
     }
 
     private void pillarGuard(ServerLevel level, EntityMaid maid) {

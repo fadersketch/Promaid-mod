@@ -422,8 +422,12 @@ public final class BombThrow {
             // 全归它自己——本模组不替换、不拦截（伤害的友军豁免仍由 FriendlyFireGuard /
             // FriendlyWindGuard 按"爆炸来源是女仆"那条既有判据兜住）。
             if (primed.vanilla && tnt != null && MaidBombing.PENDING.size() < MaidBombing.MAX_PENDING) {
+                // 【实测一千〇六十二】一次性投多枚 → 整批按 burst 起爆：每炸前清受击无敌帧。
+                // 旧版 TNT 的 burst 恒 false，五枚同 tick 起爆时只有第一枚出伤，其余全被
+                // 无敌帧吞成 0（实测日志 21:01:35：第一发 -21.7，后面 -0.8 / 0 / 0 / 0）。
                 MaidBombing.PENDING.add(new MaidBombing.Bomb(level, maid, tnt, bomb.m_20183_(), null, null,
-                        MaidBombing.Kind.TNT, gameTime + BombConfig.cfgTntFuse() + MaidBombing.BOMB_TIMEOUT / 2, tntStack));
+                        MaidBombing.Kind.TNT, gameTime + BombConfig.cfgTntFuse() + MaidBombing.BOMB_TIMEOUT / 2, tntStack,
+                        want > 1));
             }
             thrown++;
             if (BombConfig.cfgPinkMark()) {

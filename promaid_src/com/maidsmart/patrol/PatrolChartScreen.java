@@ -36,6 +36,10 @@ public class PatrolChartScreen extends Screen {
     private static final int VIEW_MANAGE = 1;
     /** v1.3.9.2：「标记管理」——单开一页列这条轨道上的全部标记（ */
     private static final int VIEW_MARKS = 2;
+    /** 独立目标点列表 */
+    private static final int VIEW_TARGETS = 3;
+    /** 单个目标点的管理页（改名 / 删除 / 飞过去） */
+    private static final int VIEW_TARGET_MANAGE = 4;
     private static final int ROW_H = 22;
 
     /** 刷新节流（tick）：每 {@link #REFRESH_TICKS} 拍问一次服务端 */
@@ -46,7 +50,13 @@ public class PatrolChartScreen extends Screen {
     private PatrolBook book;
     /** 管理页看的是哪条（id） */
     private String viewingId = "";
+    /** 目标点管理页看的是哪个（id） */
+    private String viewingTargetId = "";
     private int view = VIEW_LIST;
+    /** 服务端判定：玩家此刻是否处于可执行「飞过去」的同行/拴绳状态 */
+    private boolean canFlyToTarget;
+    /** 玩家所在维度（与目标点维度比较，跨维度时按钮变暗） */
+    private String playerDim = "";
     /** 女仆名单：{uuid, 名字, 绑定的轨道id} */
     private List<String[]> maids = new ArrayList<>();
     private List<String> problems = new ArrayList<>();
@@ -65,9 +75,13 @@ public class PatrolChartScreen extends Screen {
     private int maidPage;
     /** 「标记管理」页翻页 */
     private int markPage;
+    /** 目标点列表翻页 */
+    private int targetPage;
 
     /** 改名：一个内联输入框 + 确定/取消（照 {@code ScheduleBookScreen} 的 activeBox 转发口径） */
     private boolean renaming;
+    /** 这次改名改的是目标点（而不是轨道） */
+    private boolean renamingTarget;
     private EditBox activeBox;
 
     /** 上一次 rebuild 时"界面所依据的数据"的指纹——{@link #tick} 每拍对一次，对不上就自愈重建 */
@@ -103,7 +117,8 @@ public class PatrolChartScreen extends Screen {
 
     public static void accept(boolean offHand, net.minecraft.nbt.CompoundTag bookTag,
                               List<String> problems, List<String> notes,
-                              double length, double seconds, boolean open) {
+                              double length, double seconds, boolean open,
+                              boolean canFlyToTarget, String playerDim) {
         try {
             Minecraft mc = Minecraft.m_91087_();
             if (mc == null) {
@@ -134,10 +149,17 @@ public class PatrolChartScreen extends Screen {
                 s.notes = notes == null ? new ArrayList<>() : notes;
                 s.length = length;
                 s.seconds = seconds;
+                s.canFlyToTarget = canFlyToTarget;
+                s.playerDim = playerDim == null ? "" : playerDim;
                 // 管理页/标记页看的那条被删了 → 回列表（**只在包里有内容时**判，空包不作数）
                 if (!parsed.isEmpty() && s.view != VIEW_LIST
+                        && s.view != VIEW_TARGETS && s.view != VIEW_TARGET_MANAGE
                         && parsed.byId(s.viewingId) == null) {
                     s.view = VIEW_LIST;
+                }
+                // 目标点页/管理页是合法空页（可以在那里点「标记目标点」），刷新包不再把玩家踢回列表
+                if (s.view == VIEW_TARGET_MANAGE && parsed.targetById(s.viewingTargetId) == null) {
+                    s.view = VIEW_TARGETS;
                 }
                 // 改名过程中不要重建控件（否则输入框会被服务端那一版旧名字冲掉）
                 if (!s.renaming) {
@@ -150,6 +172,8 @@ public class PatrolChartScreen extends Screen {
             if (open) {
                 PatrolChartScreen fresh = new PatrolChartScreen(
                         offHand, parsed, problems, notes, length, seconds);
+                fresh.canFlyToTarget = canFlyToTarget;
+                fresh.playerDim = playerDim == null ? "" : playerDim;
                 // 【书以手上物品为准】包里那一版可能是空的（玩家实测就是），开屏时就地把物品读回来，
                 // 免得先闪一下空界面。
                 fresh.syncBookFromItem();
@@ -158,7 +182,9 @@ public class PatrolChartScreen extends Screen {
                 // 这个判断必须在下面 MarkingStatePacket(false) 到达之前做，所以服务端是先发书、
                 // 后发"标记已关"（见 PatrolNetworking.openFor）。
                 String markId = PatrolPreviewClient.markingRouteId();
-                if (!markId.isEmpty() && fresh.book.byId(markId) != null) {
+                if (PatrolMarking.TARGET_MODE.equals(markId)) {
+                    fresh.view = VIEW_TARGETS;
+                } else if (!markId.isEmpty() && fresh.book.byId(markId) != null) {
                     fresh.view = VIEW_MANAGE;
                     fresh.viewingId = markId;
                 }
@@ -223,6 +249,10 @@ public class PatrolChartScreen extends Screen {
                 renameWidgets();
             } else if (view == VIEW_MARKS) {
                 marksButtons();
+            } else if (view == VIEW_TARGET_MANAGE) {
+                targetManageButtons();
+            } else if (view == VIEW_TARGETS) {
+                targetListButtons();
             } else if (view == VIEW_MANAGE) {
                 manageButtons();
             } else {
@@ -247,17 +277,25 @@ public class PatrolChartScreen extends Screen {
     private String contentSig() {
         StringBuilder sb = new StringBuilder(96);
         sb.append(view).append('/').append(renaming ? 'R' : '-').append('/')
-                .append(book.selectedId()).append('/').append(book.size());
+                .append(book.selectedId()).append('/').append(book.size()).append('/')
+                .append(canFlyToTarget).append('/').append(playerDim).append('/')
+                .append(viewingTargetId);
         for (PatrolRoute r : book.routes()) {
             sb.append('/').append(r.id()).append(':').append(r.size()).append(r.closed() ? 'C' : 'O');
+        }
+        for (PatrolTarget t : book.targets()) {
+            sb.append("/T").append(t.id()).append(':').append(t.name())
+                    .append('@').append(t.dimension());
         }
         sb.append('/').append(maids.size());
         return sb.toString();
     }
 
-    private void addButton(String label, int x, int y, int w, int h, Button.OnPress onPress) {
-        this.m_142416_(Button.m_253074_(Component.m_237113_(label), onPress)
-                .m_252987_(x, y, w, h).m_253136_());
+    private Button addButton(String label, int x, int y, int w, int h, Button.OnPress onPress) {
+        Button b = Button.m_253074_(Component.m_237113_(label), onPress)
+                .m_252987_(x, y, w, h).m_253136_();
+        this.m_142416_(b);
+        return b;
     }
 
     /* ---------- 轨道列表 ---------- */
@@ -268,6 +306,11 @@ public class PatrolChartScreen extends Screen {
         addButton("§a＋ 创建一个轨道", cx - 70, 30, 140, 20, b -> {
             sendOp("create", "", "");
             hint("已新建一条轨道——点它的「管理」进去，先「开始标记」再拿中键打点");
+        });
+        addButton("§c目标点管理 §7(" + book.targets().size() + ")", cx - 170, 30, 96, 20, b -> {
+            view = VIEW_TARGETS;
+            targetPage = 0;
+            rebuild();
         });
         if (book.isEmpty()) {
             return;
@@ -436,9 +479,13 @@ public class PatrolChartScreen extends Screen {
         int pages = Math.max(1, (total + per - 1) / per);
         markPage = Math.max(0, Math.min(markPage, pages - 1));
         int from = markPage * per;
-        int y = 58;
+        // 【R1128】按钮与文字同一行：文字画在 72 + i*ROW_H + 5，按钮高 18 要卡在
+        // 文字上下各留 4.5 的居中位 → 顶边 = 72 + i*ROW_H。旧版从 58 起，整体高了一行多。
+        int y = 72;
         for (int i = 0; i < per && from + i < total; i++) {
             final int idx = from + i;
+            addButton(r.isSlow(idx) ? "§6缓" : "§7缓", cx + 56, y + i * ROW_H, 34, 18,
+                    b -> toggleSlowAt(idx));
             addButton("§c删", cx + 96, y + i * ROW_H, 34, 18, b -> deleteAt(idx));
         }
         int py = this.f_96544_ - 34;
@@ -457,6 +504,115 @@ public class PatrolChartScreen extends Screen {
         addButton("§c清空全部标记", cx + 84, py, 92, 18, b -> clearPoints());
     }
 
+    /* ---------- 独立目标点：列表 / 管理 ---------- */
+
+    private PatrolTarget viewingTarget() {
+        return book.targetById(viewingTargetId);
+    }
+
+    /** 进入"标记目标点"态：退出界面，之后每按一次中键新增一个目标点 */
+    private void startTargetMarking() {
+        send(new PatrolNetworking.StartMarkingPacket(offHand, PatrolMarking.TARGET_MODE, true));
+        PatrolPreviewClient.setMarking(true, PatrolMarking.TARGET_MODE);
+        hint("开始标记目标点：退出界面后按 §e鼠标中键§7 每按一次记一个目标点（红色）");
+        this.m_7379_();
+    }
+
+    private void targetListButtons() {
+        int cx = this.f_96543_ / 2;
+        addButton("§7◀ 返回航图", cx - 170, 32, 72, 18, b -> {
+            view = VIEW_LIST;
+            rebuild();
+        });
+        addButton("§e＋ 标记目标点", cx - 90, 32, 110, 18, b -> startTargetMarking());
+        if (book.targets().isEmpty()) {
+            return;
+        }
+        int per = perPage();
+        int total = book.targets().size();
+        int pages = Math.max(1, (total + per - 1) / per);
+        targetPage = Math.max(0, Math.min(targetPage, pages - 1));
+        int from = targetPage * per;
+        int y = 58;
+        for (int i = 0; i < per && from + i < total; i++) {
+            PatrolTarget t = book.targets().get(from + i);
+            int rowY = y + i * ROW_H;
+            final String id = t.id();
+            addButton("§b管理", cx - 20, rowY, 46, 18, b -> {
+                view = VIEW_TARGET_MANAGE;
+                viewingTargetId = id;
+                rebuild();
+            });
+            addButton("§7改名", cx + 30, rowY, 44, 18, b -> startTargetRename(id));
+            addButton("§c删除", cx + 78, rowY, 44, 18, b -> {
+                sendOp("tdelete", id, "");
+                hint("已删除目标点「" + t.displayName() + "」");
+            });
+        }
+        int py = y + per * ROW_H + 2;
+        addButton("§7◀ 上一页", cx - 160, py, 66, 18, b -> {
+            targetPage = Math.max(0, targetPage - 1);
+            rebuild();
+        });
+        addButton("§7第 " + (targetPage + 1) + "/" + pages + " 页", cx - 88, py, 66, 18, b -> {
+        });
+        addButton("§7下一页 ▶", cx - 16, py, 66, 18, b -> {
+            targetPage = Math.min(pages - 1, targetPage + 1);
+            rebuild();
+        });
+    }
+
+    private void targetManageButtons() {
+        int cx = this.f_96543_ / 2;
+        PatrolTarget t = viewingTarget();
+        addButton("§7◀ 返回目标点", cx - 170, 32, 82, 18, b -> {
+            view = VIEW_TARGETS;
+            rebuild();
+        });
+        addButton("§7改名", cx - 82, 32, 44, 18, b -> {
+            if (t != null) {
+                startTargetRename(t.id());
+            }
+        });
+        addButton("§e标记新目标点", cx - 32, 32, 104, 18, b -> startTargetMarking());
+        addButton("§c删除", cx + 78, 32, 48, 18, b -> {
+            if (t == null) {
+                return;
+            }
+            sendOp("tdelete", t.id(), "");
+            view = VIEW_TARGETS;
+            hint("已删除目标点「" + t.displayName() + "」");
+            rebuild();
+        });
+        // 「飞过去」只在"玩家与自己的女仆同行/被拴着"时出现；跨维度只读变暗
+        if (t != null && canFlyToTarget) {
+            boolean sameDim = t.dimension().isEmpty() || t.dimension().equals(playerDim);
+            String label = sameDim ? "§a✈ 飞过去" : "§8飞过去（目标在其他维度）";
+            Button fly = addButton(label, cx - 80, this.f_96544_ - 34, 160, 20, b -> {
+                if (!sameDim) {
+                    hint("目标点在其他维度，飞不过去");
+                    return;
+                }
+                send(new PatrolNetworking.FlyToTargetPacket(offHand, t.id()));
+                hint("已让女仆飞往「" + t.displayName() + "」");
+                this.m_7379_();
+            });
+            if (!sameDim) {
+                fly.f_93623_ = false; // GUI Button.active
+            }
+        }
+    }
+
+    private void startTargetRename(String id) {
+        if (book.targetById(id) == null) {
+            return;
+        }
+        viewingTargetId = id;
+        renaming = true;
+        renamingTarget = true;
+        rebuild();
+    }
+
     /** 删掉这条轨道上第 {@code idx} 个标记（0 基；服务端负责真删，客户端只发意图） */
     private void deleteAt(int idx) {
         PatrolRoute r = viewingRoute();
@@ -468,6 +624,20 @@ public class PatrolChartScreen extends Screen {
         hint("已请求删掉第 " + (idx + 1) + " 个标记…");
     }
 
+    /** 【R1127】把第 {@code idx} 个标记设为 / 取消减速点（服务端改书，客户端只发意图）。 */
+    private void toggleSlowAt(int idx) {
+        PatrolRoute r = viewingRoute();
+        if (r == null || idx < 0 || idx >= r.size()) {
+            hint("这条轨道上没有这个标记");
+            return;
+        }
+        // 【R1128】本地先翻面：按下就立刻看到按钮/行文字变化，服务端回包后再以物品为准。
+        boolean slow = r.toggleSlow(idx);
+        sendOp("slowat", r.id(), Integer.toString(idx));
+        hint(slow ? "已设为减速点（10×10×10，速度 1/10）" : "已取消减速点");
+        rebuild();
+    }
+
     /* ---------- 改名 ---------- */
 
     private void startRename(String id) {
@@ -477,38 +647,54 @@ public class PatrolChartScreen extends Screen {
         }
         viewingId = id;
         renaming = true;
+        renamingTarget = false;
         rebuild();
     }
 
     private void renameWidgets() {
         int cx = this.f_96543_ / 2;
-        PatrolRoute r = viewingRoute();
-        if (r == null) {
+        PatrolRoute r = renamingTarget ? null : viewingRoute();
+        PatrolTarget t = renamingTarget ? viewingTarget() : null;
+        if (r == null && t == null) {
             renaming = false;
+            renamingTarget = false;
             rebuild();
             return;
         }
         EditBox box = new EditBox(this.f_96547_, cx - 100, this.f_96544_ / 2 - 12, 200, 20,
-                Component.m_237113_("轨道名"));
+                Component.m_237113_(renamingTarget ? "目标点名字" : "轨道名"));
         box.m_94199_(32);
-        box.m_94144_(r.name());
+        box.m_94144_(renamingTarget ? t.name() : r.name());
         box.m_93692_(true);
         this.activeBox = box;
         this.m_142416_(box);
         addButton("§a确定", cx - 100, this.f_96544_ / 2 + 14, 96, 20, b -> confirmRename());
         addButton("§7取消", cx + 4, this.f_96544_ / 2 + 14, 96, 20, b -> {
             renaming = false;
+            renamingTarget = false;
             rebuild();
         });
     }
 
     private void confirmRename() {
-        PatrolRoute r = viewingRoute();
-        if (r != null && activeBox != null && !activeBox.m_94155_().trim().isEmpty()) {
-            sendOp("rename", r.id(), activeBox.m_94155_().trim());
-            hint("已改名为「" + activeBox.m_94155_().trim() + "」");
+        String text = activeBox == null ? "" : activeBox.m_94155_().trim();
+        if (!text.isEmpty()) {
+            if (renamingTarget) {
+                PatrolTarget t = viewingTarget();
+                if (t != null) {
+                    sendOp("trename", t.id(), text);
+                    hint("已改名为「" + text + "」");
+                }
+            } else {
+                PatrolRoute r = viewingRoute();
+                if (r != null) {
+                    sendOp("rename", r.id(), text);
+                    hint("已改名为「" + text + "」");
+                }
+            }
         }
         renaming = false;
+        renamingTarget = false;
         rebuild();
     }
 
@@ -516,7 +702,9 @@ public class PatrolChartScreen extends Screen {
      *  【v1.3.9.6】标记管理页顶部多了一行提示（见 {@link #renderMarks}），列表起点随之下移，
      *  否则第一行标记会压在那行提示上。 */
     private int perPage() {
-        int top = view == VIEW_MANAGE ? 92 : (view == VIEW_MARKS ? 74 : 58);
+        int top = view == VIEW_MANAGE ? 92
+                : (view == VIEW_MARKS ? 74
+                : (view == VIEW_TARGETS || view == VIEW_TARGET_MANAGE ? 58 : 58));
         int avail = this.f_96544_ - top - 64;
         return Math.max(2, Math.min(8, avail / ROW_H));
     }
@@ -600,6 +788,10 @@ public class PatrolChartScreen extends Screen {
         sb.append(b.size());
         for (PatrolRoute r : b.routes()) {
             sb.append('/').append(r.name()).append(':').append(r.size()).append(r.closed() ? 'C' : 'O');
+        }
+        for (PatrolTarget t : b.targets()) {
+            sb.append("/T").append(t.id()).append(':').append(t.name())
+                    .append('@').append(t.dimension());
         }
         return sb.toString();
     }
@@ -689,9 +881,17 @@ public class PatrolChartScreen extends Screen {
         this.m_280039_(g);
         super.m_88315_(g, mx, my, pt);
         int cx = this.f_96543_ / 2;
-        g.m_280137_(this.f_96547_, "§b巡逻航图", cx, 10, C_TEXT);
+        g.m_280137_(this.f_96547_, (view == VIEW_TARGETS || view == VIEW_TARGET_MANAGE)
+                ? "§c巡逻航图 · 目标点" : "§b巡逻航图", cx, 10, C_TEXT);
         if (renaming) {
-            g.m_280137_(this.f_96547_, "§f重命名轨道（回车确定 / ESC 取消）", cx, this.f_96544_ / 2 - 30, C_DIM);
+            g.m_280137_(this.f_96547_, renamingTarget
+                            ? "§f重命名目标点（回车确定 / ESC 取消）"
+                            : "§f重命名轨道（回车确定 / ESC 取消）",
+                    cx, this.f_96544_ / 2 - 30, C_DIM);
+        } else if (view == VIEW_TARGET_MANAGE) {
+            renderTargetManage(g, cx);
+        } else if (view == VIEW_TARGETS) {
+            renderTargets(g, cx);
         } else if (view == VIEW_MARKS) {
             renderMarks(g, cx);
         } else if (view == VIEW_MANAGE) {
@@ -813,9 +1013,66 @@ public class PatrolChartScreen extends Screen {
             net.minecraft.world.phys.Vec3 p = r.points().get(idx);
             int rowY = y + i * ROW_H + 5;
             String tag = idx == 0 ? "§a首" : (idx == r.size() - 1 ? "§6末" : "§7·");
+            if (r.isSlow(idx)) {
+                tag += " §6慢";
+            }
             g.m_280488_(this.f_96547_, String.format("§7#%d %s§f(%.1f, %.1f, %.1f)",
                     idx + 1, tag, p.f_82479_, p.f_82480_, p.f_82481_), cx - 158, rowY, C_TEXT);
         }
+    }
+
+    /** 目标点列表：名字 + 坐标 + 维度 */
+    private void renderTargets(GuiGraphics g, int cx) {
+        g.m_280137_(this.f_96547_, "§7共 " + book.targets().size() + "/" + PatrolBook.MAX_TARGETS
+                + " 个目标点（红色标记；点「管理」看坐标 / 飞过去）", cx, 20, C_DIM);
+        if (book.targets().isEmpty()) {
+            g.m_280137_(this.f_96547_, "§7还没有目标点——点上面的「＋ 标记目标点」，退出界面后中键记录",
+                    cx, 70, C_DIM);
+            return;
+        }
+        int per = perPage();
+        int from = targetPage * per;
+        int y = 58;
+        for (int i = 0; i < per && from + i < book.targets().size(); i++) {
+            PatrolTarget t = book.targets().get(from + i);
+            int rowY = y + i * ROW_H + 5;
+            String dim = shortDim(t.dimension());
+            String line = "§c◆ §f" + trim(t.displayName(), 9)
+                    + String.format(" §7(%.1f, %.1f, %.1f)", t.x(), t.y(), t.z())
+                    + (dim.isEmpty() || t.dimension().equals(playerDim) ? "" : " §c[异界]");
+            // 右侧「管理」按钮从 cx-20 起：留给文字 132px，超出按像素截断（R1116 修叠字）
+            g.m_280488_(this.f_96547_, trimToWidth(line, 132), cx - 158, rowY, C_TEXT);
+        }
+    }
+
+    /** 目标点管理：坐标 + 维度 + 「飞过去」的可用性说明 */
+    private void renderTargetManage(GuiGraphics g, int cx) {
+        PatrolTarget t = viewingTarget();
+        if (t == null) {
+            g.m_280137_(this.f_96547_, "§7没有这个目标点（可能刚被删了）", cx, 70, C_DIM);
+            return;
+        }
+        g.m_280137_(this.f_96547_, "§f「" + trim(t.displayName(), 16) + "」", cx, 22, C_TEXT);
+        g.m_280137_(this.f_96547_, String.format("§c◆ §7坐标 (%.1f, %.1f, %.1f) ｜ 维度 %s",
+                        t.x(), t.y(), t.z(), shortDim(t.dimension())),
+                cx, 54, C_DIM);
+        String line;
+        if (!canFlyToTarget) {
+            line = "§8只有和女仆同乘扫帚/直升机，或用武装拴绳拴着能飞的女仆时，才能点「飞过去」";
+        } else if (!t.dimension().isEmpty() && !t.dimension().equals(playerDim)) {
+            line = "§e目标点在其他维度——「飞过去」不可用（只读）";
+        } else {
+            line = "§7点下方「飞过去」：退出航图，女仆以这里为目的地起飞（跟平时的跟随一样，只是目标变远）";
+        }
+        g.m_280137_(this.f_96547_, trim(line, 58), cx, 70, C_DIM);
+    }
+
+    private static String shortDim(String dim) {
+        if (dim == null || dim.isEmpty()) {
+            return "";
+        }
+        int i = dim.indexOf(':');
+        return i >= 0 ? dim.substring(i + 1) : dim;
     }
 
     /** 这条轨道被几只（名单里的）女仆绑着 */
@@ -835,6 +1092,25 @@ public class PatrolChartScreen extends Screen {
             return s == null ? "" : s;
         }
         return s.substring(0, Math.min(s.length(), max + 2)) + "…";
+    }
+
+    /** R1116：按像素宽截断（§ 颜色码不占宽度、成对拷贝），保证行文字不压到右侧按钮上 */
+    private String trimToWidth(String s, int maxW) {
+        if (s == null || this.f_96547_.m_92895_(s) <= maxW) { // m_92895_ = Font.width(String)
+            return s == null ? "" : s;
+        }
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        while (i < s.length()) {
+            int step = (s.charAt(i) == '§' && i + 1 < s.length()) ? 2 : 1;
+            String next = sb + s.substring(i, Math.min(i + step, s.length()));
+            if (this.f_96547_.m_92895_(next + "…") > maxW) {
+                break;
+            }
+            sb.append(s, i, Math.min(i + step, s.length()));
+            i += step;
+        }
+        return sb + "…";
     }
 
     private void hint(String text) {

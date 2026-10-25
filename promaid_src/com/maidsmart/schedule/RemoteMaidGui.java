@@ -34,6 +34,16 @@ public final class RemoteMaidGui {
     /** "玩家UUID|女仆UUID" → 这次远程会话 */
     private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
 
+    /**
+     * 【R1134】刚被 {@link #disable} 收回的会话：再留 {#SWITCH_GRACE_MS} 毫秒。
+     * <p>为什么需要：TLM 的「饰品/背包/任务」页是**另一只容器**——点那些按钮时服务端先
+     * {@code removed} 掉当前这只（我们据此收回授权），随后才开新的那只。若收回是立刻生效的，
+     * 新容器下一 tick 的 {@code stillValid} 就按 3 格判死，玩家看到的是"点了饰品一闪而过"。
+     * 这里留一个很短的重连窗口：期间 {@link #isActive} 命中就把会话接回 {@link #SESSIONS}。
+     */
+    private static final Map<String, Long> RECENT = new ConcurrentHashMap<>();
+    private static final long SWITCH_GRACE_MS = 3000L;
+
     /** 会话存活上限（毫秒）：界面开着就一直被 {@link #isActive} 续期，不清也不会掉 */
     private static final long TTL_MS = 30L * 60L * 1000L;
 
@@ -90,11 +100,32 @@ public final class RemoteMaidGui {
         }
     }
 
-    /** 收回授权（界面关了 / 没开成）——下一个 tick 原版就会按距离把她从客户端拆回原样 */
+    /** 收回授权（界面关了 / 没开成）——留一个极短的换容器窗口，见 {@link #RECENT} */
     public static void disable(Player player, EntityMaid maid) {
         String k = key(player, maid);
-        if (k != null) {
-            SESSIONS.remove(k);
+        if (k == null) {
+            return;
+        }
+        SESSIONS.remove(k);
+        RECENT.put(k, System.currentTimeMillis() + SWITCH_GRACE_MS);
+    }
+
+    /**
+     * 她离开世界（魂符收回 / 死亡 / 换维度）：所有还在等的远程会话<b>静默作废</b>。
+     * <p>为什么必须单独清：会话是"点了女仆配置、正在等同步"或"界面已经开着"的那一对。
+     * 她一旦被收进魂符，泵下一 tick 就找不到人；旧版会等到超时再回一句"她已经不在了"，
+     * 玩家看到的却是"我明明是自己收的符，为什么报错"。收符/死亡属于正常操作，
+     * 这里直接把会话抹掉，连提示都不发。
+     */
+    public static void cancelForMaid(java.util.UUID maidId) {
+        if (maidId == null) {
+            return;
+        }
+        try {
+            String suffix = "|" + maidId;
+            SESSIONS.keySet().removeIf(k -> k.endsWith(suffix));
+            RECENT.keySet().removeIf(k -> k.endsWith(suffix));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RemoteMaidGui", ignored);
         }
     }
 
@@ -111,11 +142,23 @@ public final class RemoteMaidGui {
         if (k == null) {
             return false;
         }
+        long now = System.currentTimeMillis();
         Session s = SESSIONS.get(k);
         if (s == null) {
-            return false;
+            // 【R1134】换容器/换页的那一拍：刚收回、还在宽限期内 → 把会话接回来
+            Long until = RECENT.get(k);
+            if (until == null || now > until) {
+                if (until != null) {
+                    RECENT.remove(k);
+                }
+                return false;
+            }
+            RECENT.remove(k);
+            s = new Session(player.m_20148_(), maid.m_20148_(), maid.m_9236_().m_46472_(),
+                    now, maid.m_9236_().m_46467_());
+            s.opened = true; // 界面已经开着了，泵只维持同步、不再重复开
+            SESSIONS.put(k, s);
         }
-        long now = System.currentTimeMillis();
         if (now - s.lastHit > TTL_MS) {
             SESSIONS.remove(k);
             return false;
@@ -152,6 +195,12 @@ public final class RemoteMaidGui {
             Entity found = level.m_8791_(s.maidId);
             boolean timedOut = tick - s.requestedTick > SYNC_TIMEOUT_TICKS;
             if (player == null || !(found instanceof EntityMaid maid) || !maid.m_6084_()) {
+                if (s.opened) {
+                    // 界面本来就开着，她没了（收魂 / 死亡 / 换维度）→ 安静收场：
+                    // 玩家不是来"打开"的，没必要再报一句"没能打开"。
+                    it.remove();
+                    continue;
+                }
                 if (timedOut) {
                     it.remove();
                     say(player, "§7没能打开她的配置界面——她已经不在了（被收回 / 死亡 / 离开了这一维度）");
@@ -213,6 +262,7 @@ public final class RemoteMaidGui {
     private static void prune(long now) {
         try {
             SESSIONS.values().removeIf(s -> now - s.lastHit > TTL_MS);
+            RECENT.values().removeIf(until -> now > until);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RemoteMaidGui", ignored);
         }
     }

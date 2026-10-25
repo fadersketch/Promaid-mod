@@ -133,6 +133,11 @@ public final class IndexStonePreviewClient {
         if (mc.hitResult instanceof net.minecraft.world.phys.EntityHitResult) {
             return; // 指向实体 → 交给原版（右键女仆=绑定，绝不能被吞）
         }
+        // 【R1108】视线里 512 格内有一只女仆 → 同样让给服务端：远处右击走 RightClickItem，
+        // 那边会用同长度长射线绑她；锁定状态下也要放行（绑定本来就要求先锁方块）。
+        if (aimsAtFarMaid(mc)) {
+            return;
+        }
         if (locked) {
             // v1.2.0 实测四百八十五【锁定期间不可改选】：锁定的语义 = 期间只能操作这一格。
             // 等于锁定期间还能改选别的方块 —— 与用户要求不符。现在改为：
@@ -170,6 +175,19 @@ public final class IndexStonePreviewClient {
         if (clientPickDistance(mc) > NEAR_REACH) {
             hintUsage(); // 指向空气 → 提示用法
         }
+    }
+
+    /** 【R1108】512 格视线里是否有一只女仆（是 → 这次右击交给服务端长射线绑定） */
+    private static boolean aimsAtFarMaid(Minecraft mc) {
+        try {
+            Entity cam = mc.getCameraEntity() != null ? mc.getCameraEntity() : mc.player;
+            HitResult hit = cam.pick(PICK_RANGE, mc.getTimer().getGameTimeDeltaPartialTick(false), false);
+            return hit instanceof net.minecraft.world.phys.EntityHitResult ehr
+                    && ehr.getEntity() instanceof
+                    com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
+        }
+        return false;
     }
 
     /** 长射线命中的方块；命中距离 ≤ 原版触及距离 或 未命中/空气 → null */

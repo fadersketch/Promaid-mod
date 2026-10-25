@@ -45,20 +45,44 @@ public final class AiMemorySearch {
 
     /** 检索（带查询向量的语义路版本）。 */
     public static List<Hit> search(AiMemoryStore store, String query, int limit, float[] queryVector) {
+        return search(store, query, limit, queryVector, -1L);
+    }
+
+    /** 检索（带当前游戏时间——"昨天/上周"按此刻解析，而不是按最新一条记忆）。 */
+    public static List<Hit> search(AiMemoryStore store, String query, int limit,
+                                   float[] queryVector, long nowTick) {
         Map<String, Hit> fused = new HashMap<>();
         addRrf(fused, searchParagraphsBm25(store, query), "p");
         addRrf(fused, searchRecent(store), "r");
         addRrf(fused, searchProfiles(store, query), "f");
         addRrf(fused, searchRelations(store, query), "e");
         addRrf(fused, searchIndex(store, query), "i");
-        addRrf(fused, searchTemporal(store, query), "t");
+        addRrf(fused, searchTemporal(store, query, nowTick), "t");
         if (queryVector != null) {
             addRrf(fused, searchSemantic(store, queryVector), "v");
         }
+        return top(fused, limit);
+    }
+
+    /**
+     * 环境相关检索：与 query 相关，但不掺"最近段落"这一路——主动对话拿环境当查询时，
+     * 最近记忆不能因为"新"就挤进来。
+     */
+    public static List<Hit> searchEnvironment(AiMemoryStore store, String query, int limit, long nowTick) {
+        Map<String, Hit> fused = new HashMap<>();
+        addRrf(fused, searchParagraphsBm25(store, query), "p");
+        addRrf(fused, searchProfiles(store, query), "f");
+        addRrf(fused, searchRelations(store, query), "e");
+        addRrf(fused, searchIndex(store, query), "i");
+        addRrf(fused, searchTemporal(store, query, nowTick), "t");
+        return top(fused, limit);
+    }
+
+    private static List<Hit> top(Map<String, Hit> fused, int limit) {
         List<Hit> out = new ArrayList<>(fused.values());
         out.sort(Comparator.comparingDouble(Hit::score).reversed());
         if (out.size() > limit) {
-            return out.subList(0, limit);
+            return new ArrayList<>(out.subList(0, limit));
         }
         return out;
     }
@@ -126,7 +150,9 @@ public final class AiMemorySearch {
         list.removeIf(AiMemoryStore::hasErrorTag);
         list.sort(Comparator.comparingLong(AiMemoryModels.Paragraph::lastAccessed).reversed());
         List<Hit> out = new ArrayList<>();
-        for (AiMemoryModels.Paragraph p : list) {
+        int limit = Math.min(12, list.size());
+        for (int i = 0; i < limit; i++) {
+            AiMemoryModels.Paragraph p = list.get(i);
             out.add(new Hit("recent", "（重要度" + p.salience() + "）" + p.content(), 1.0));
         }
         return out;
@@ -215,7 +241,7 @@ public final class AiMemorySearch {
             if (hit > 0) {
                 out.add(new Hit("index",
                         "【" + r.level() + "记 第" + r.startDay() + "~" + r.endDay() + "天】"
-                                + AiMemoryModels.clip(r.content(), 120),
+                                + AiMemoryModels.clip(r.content(), 240),
                         hit * 2.0));
             }
         }
@@ -228,7 +254,7 @@ public final class AiMemorySearch {
      * 距离排序。"昨天我们在哪里找到铁矿"这种问法，答案在"昨天"的段落里，词面根本对不上，
      * 只有时间路能命中。
      */
-    private static List<Hit> searchTemporal(AiMemoryStore store, String query) {
+    private static List<Hit> searchTemporal(AiMemoryStore store, String query, long currentTick) {
         List<Hit> out = new ArrayList<>();
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_TEMPORAL_ENABLE.get()
                 || !AiMemoryTimeQuery.hasCue(query)) {
@@ -238,9 +264,11 @@ public final class AiMemorySearch {
         if (paras.isEmpty()) {
             return out;
         }
-        long nowTick = 0L;
-        for (AiMemoryModels.Paragraph p : paras) {
-            nowTick = Math.max(nowTick, p.eventTimeEnd());
+        long nowTick = currentTick > 0 ? currentTick : 0L;
+        if (nowTick <= 0) {
+            for (AiMemoryModels.Paragraph p : paras) {
+                nowTick = Math.max(nowTick, p.eventTimeEnd());
+            }
         }
         long nowDay = AiMemoryTimeQuery.gameDayOf(nowTick);
         AiMemoryTimeQuery.Window w = AiMemoryTimeQuery.resolve(query, nowDay);
@@ -289,7 +317,7 @@ public final class AiMemorySearch {
         int rank = 1;
         for (Hit h : ranked) {
             double contrib = 1.0 / (com.maidsmart.config.MaidSmartConfig.MEMORY_RRF_K.get() + rank);
-            String key = prefix + "|" + h.content();
+            String key = h.content(); // 同一段内容被多路召回时融合，而不是按来源各算一条
             Hit old = fused.get(key);
             if (old == null) {
                 fused.put(key, new Hit(h.type(), h.content(), contrib));

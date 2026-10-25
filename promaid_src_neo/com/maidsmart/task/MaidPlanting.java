@@ -362,6 +362,11 @@ public final class MaidPlanting {
                     if (!under.isFaceSturdy(level, p.offset(0, -1, 0), net.minecraft.core.Direction.UP)) {
                         continue;
                     }
+                    // 实测一千〇一十二：这块土是她自己垫的临时方块（挖矿/搭路，10 秒后回收）
+                    // → 不种。否则树苗会跟着垫块一起消失。
+                    if (com.maidsmart.task.PlacedBlockTracker.isAnyPlaced(level, p.offset(0, -1, 0))) {
+                        continue;
+                    }
                     if (!areaClearOfCollision(level, p)) {
                         continue; // 实测三百五十：3×3 内有碰撞方块（墙/箱子等）不种
                     }

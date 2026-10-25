@@ -21,7 +21,27 @@ import java.util.List;
  * 改为服务端安全地自行构造：语言取配置（默认 zh_cn），名字取女仆实体名，描述留空。
  */
 public final class ChatInfoUtil {
+    /**
+     * 内部触发标记：混入看到它就把这条消息按系统消息发送，且不写入主人对话历史。
+     * 每次启动随机一个 UUID——固定串可能被主人输入伪造，从而冒充系统消息绕过会话记录。
+     */
+    private static final String INTERNAL_MARKER =
+            "[promaid:internal:" + java.util.UUID.randomUUID() + "]";
+
     private ChatInfoUtil() {
+    }
+
+    public static String internal(String prompt) {
+        return INTERNAL_MARKER + prompt;
+    }
+
+    public static boolean isInternal(String prompt) {
+        return prompt != null && prompt.startsWith(INTERNAL_MARKER);
+    }
+
+    public static String stripInternal(String prompt) {
+        return prompt != null && prompt.startsWith(INTERNAL_MARKER)
+                ? prompt.substring(INTERNAL_MARKER.length()) : prompt;
     }
 
     /** 取女仆 ChatClientInfo，并按配置强制输出语言（name/description 保持原样） */

@@ -151,6 +151,10 @@ public final class BlueprintCatalog {
             if (steps == null || steps.isEmpty()) {
                 continue;
             }
+            // 【R1079】整合包配置禁用的蓝图不进军手册目录（文件仍在，只是不展示/不可建）
+            if (BlueprintStepMath.isDisabled(id)) {
+                continue;
+            }
             // v1.5.25g：手册目录只显示 ≤catalogMaxBlocks() 的蓝图（防右击卡死）；
             // 超大的仍注册在 EXTERNAL，LLM smart_build 可直接下达（不受此限）
             if (steps.size() > BlueprintLib.catalogMaxBlocks()) {
@@ -161,6 +165,9 @@ public final class BlueprintCatalog {
         }
         int builtInCount = 0;
         for (String id : BUILT_IN_NAMES.keySet()) {
+            if (BlueprintStepMath.isDisabled(id)) {
+                continue;   // 【R1079】同上：配置禁用的内置蓝图不展示
+            }
             List<String> steps = getBuiltIn(id);
             if (steps != null && !steps.isEmpty()) {
                 out.add(new String[]{id, getBlueprintName(id), describe(id, steps)});

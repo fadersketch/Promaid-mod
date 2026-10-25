@@ -21,7 +21,7 @@ import java.util.List;
  * 【软依赖】全部走反射 + 一次性缓存：附属没装 / 版本不符 → 所有判定恒 false，
  * 调用方按"没有法术任务"处理，行为与旧版完全一致（与 {@link GunCompat} 同一套路，
  * 不给本模组增加任何前置或硬链接）。
- * 【判据口径】 - "法术装备" = 附属自己认的法术书/法器（`ISpellBookProvider.isSpellBook`：铁魔法的法术书、 新生魔艺的法器…）——法术本体就存在这些物品里（铁魔法一本法术书 = 一个法术）， 所以"随身有法术装备"就是"学过法术、用得出法术"；**v1.2.4 实测六百二十五 起再排掉 两个 provider**（`slashblade` 认拔刀剑、`youkaishomecoming` 认弹幕/激光/符卡——它们 本身就是武器、且各自已有专属战斗模式），见 {@link #spellProviderOf} 与配置 `combat.spellGearIgnore`。 - "会不会用法术" = 主手/副手/背包/饰品栏里有法术装备，或者附属自己的数据里已经有她的 法术书（`MaidIronsSpellData/MaidArsNouveauSpellData.get(uuid).getSpellBooks()` 非空， 覆盖附属收进"末影口袋"等特殊位置的情况）。
+ * 【判据口径】 - "法术装备" = 附属自己认的法术书/法器（`ISpellBookProvider.isSpellBook`：铁魔法的法术书、 新生魔艺的法器…）——法术本体就存在这些物品里（铁魔法一本法术书 = 一个法术）， 所以"随身有法术装备"就是"学过法术、用得出法术"；**v1.2.4 实测六百二十五 起再排掉 两个 provider**（`slashblade` 认拔刀剑、`youkaishomecoming` 认弹幕/激光/符卡——它们 本身就是武器、且各自已有专属战斗模式），见 {@link #spellProviderOf} 与配置 `combat.spellGearIgnore`。 - "会不会用法术" = 主手/副手/背包/饰品栏里有法术装备，或者附属自己的数据里已经有她的 法术书（各 provider 数据类 {@code get(uuid).getSpellBooks()} 非空——铁魔法 / 新生魔艺 / Psi / Goety / 魔法与技艺 / 电魔术 / 夜雀 / 拔刀剑，忽略表内的仍按武器算，见 {@link #DATA_PROVIDERS}）， 覆盖附属收进"末影口袋"等特殊位置的情况）。
  */
 public final class MaidSpellCompat {
     /** 附属 modId（其 mods.toml 实证：touhou_little_maid_spell） */
@@ -37,9 +37,23 @@ public final class MaidSpellCompat {
     private static final String CLS_DATA = "com.github.yimeng261.maidspell.api.IMaidSpellData";
     /** 附属自己的盟友判定（v1.2.2 实测五百六十：友军风免复用它，保证与附属对伤害的口径一致） */
     private static final String CLS_ALLY = "com.github.yimeng261.maidspell.compat.MaidSpellAllyResolver";
-    private static final String[] DATA_CLASSES = {
-            "com.github.yimeng261.maidspell.spell.data.MaidIronsSpellData",
-            "com.github.yimeng261.maidspell.spell.data.MaidArsNouveauSpellData",
+    /**
+     * 各法术前置的"女仆法术数据"类——每个 provider 一个：静态 {@code get(UUID)} 拿数据，
+     * 再 {@code getSpellBooks()} 看书单（覆盖法术书被收进末影口袋等特殊位置的情况）。
+     * 元素 = {provider id（与 {@code getLoadedMods()} 同一口径）, 数据类名}。
+     * 实测一千〇一十六：表里是万法皆通 1.9.x 两个平台 provider 表的并集
+     * （Forge 有魔法与技艺/电魔术，Neo 有实用魔法）；本平台没有的类解析成 null 自动跳过。
+     */
+    private static final String[][] DATA_PROVIDERS = {
+            {"irons_spellbooks", "com.github.yimeng261.maidspell.spell.data.MaidIronsSpellData"},
+            {"ars_nouveau", "com.github.yimeng261.maidspell.spell.data.MaidArsNouveauSpellData"},
+            {"psi", "com.github.yimeng261.maidspell.spell.data.MaidPsiSpellData"},
+            {"goety", "com.github.yimeng261.maidspell.spell.data.MaidGoetySpellData"},
+            {"usefulmagic", "com.github.yimeng261.maidspell.spell.data.MaidUsefulMagicSpellData"},
+            {"mna", "com.github.yimeng261.maidspell.spell.data.MaidManaAndArtificeSpellData"},
+            {"ebwizardry", "com.github.yimeng261.maidspell.spell.data.MaidWizardrySpellData"},
+            {"youkaishomecoming", "com.github.yimeng261.maidspell.spell.data.MaidYHSpellData"},
+            {"slashblade", "com.github.yimeng261.maidspell.spell.data.MaidSlashBladeData"},
     };
 
     private static boolean resolved;
@@ -49,6 +63,7 @@ public final class MaidSpellCompat {
     private static Method mIsSpellBook;   // boolean ISpellBookProvider.isSpellBook(ItemStack)
     private static Method mGetSpellBooks; // List<ItemStack> IMaidSpellData.getSpellBooks()
     private static Method[] mDataGet = new Method[0]; // static <Data> get(UUID)
+    private static String[] mDataProvider = new String[0]; // 与 mDataGet 平行：provider id
     private static Method mAreFriendly;   // static boolean MaidSpellAllyResolver.areFriendly(Entity, Entity)
 
     private MaidSpellCompat() {
@@ -306,8 +321,15 @@ public final class MaidSpellCompat {
         }
         try {
             java.util.UUID id = maid.m_20148_();
-            for (Method get : mDataGet) {
+            java.util.Set<String> ignore = ignoreProviders();
+            for (int i = 0; i < mDataGet.length; i++) {
+                Method get = mDataGet[i];
                 if (get == null) {
+                    continue;
+                }
+                // 忽略表里的 provider（默认拔刀剑/夜雀）本身是武器，不按"会法术"算——
+                // 与 hasSpellGear 的忽略口径保持一致，避免从数据这条后门绕回来。
+                if (i < mDataProvider.length && ignore.contains(mDataProvider[i])) {
                     continue;
                 }
                 Object data = get.invoke(null, id);
@@ -342,16 +364,32 @@ public final class MaidSpellCompat {
             mGetProvider = manager.getMethod("getProvider", String.class);
             mIsSpellBook = provider.getMethod("isSpellBook", ItemStack.class);
             mGetSpellBooks = data.getMethod("getSpellBooks");
-            mDataGet = new Method[DATA_CLASSES.length];
-            for (int i = 0; i < DATA_CLASSES.length; i++) {
+            mDataGet = new Method[DATA_PROVIDERS.length];
+            mDataProvider = new String[DATA_PROVIDERS.length];
+            for (int i = 0; i < DATA_PROVIDERS.length; i++) {
+                mDataProvider[i] = DATA_PROVIDERS[i][0];
                 try {
-                    mDataGet[i] = Class.forName(DATA_CLASSES[i], false, cl)
+                    mDataGet[i] = Class.forName(DATA_PROVIDERS[i][1], false, cl)
                             .getMethod("get", java.util.UUID.class);
                 } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
                     mDataGet[i] = null; // 该前置魔法模组没装（附属只启用其中一部分）
                 }
             }
             present = true;
+            // 实测一千〇一十六：把它认到的法术前置记一行——新版本加/换魔法时，
+            // 一眼能确认我们这边看到的是不是同一批（空袭的通用施法会自动跟随这份名单）。
+            try {
+                Object mods = mLoadedMods.invoke(null);
+                if (mods instanceof List<?> l && !l.isEmpty()) {
+                    java.util.List<String> names = new java.util.ArrayList<>();
+                    for (Object o : l) {
+                        names.add(String.valueOf(o));
+                    }
+                    com.maidsmart.tool.PromaidLog.log("法术兼容",
+                            "法术前置已就绪：" + String.join(", ", names));
+                }
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
+            }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidSpellCompat", ignored);
             present = false;
         }

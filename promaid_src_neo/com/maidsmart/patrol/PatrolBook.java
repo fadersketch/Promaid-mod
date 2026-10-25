@@ -30,8 +30,12 @@ public final class PatrolBook {
     public static final String TAG_LEGACY_SINGLE = "MaidSmartPatrol";
     /** 一本航图最多几条轨道 */
     public static final int MAX_ROUTES = 16;
+    /** 一本航图最多几个独立目标点 */
+    public static final int MAX_TARGETS = PatrolTarget.MAX_TARGETS;
 
     private final List<PatrolRoute> routes = new ArrayList<>();
+    /** 独立目标点（"飞过去"用；与轨道分开管理） */
+    private final List<PatrolTarget> targets = new ArrayList<>();
     /** 当前选中的那条（id；空 = 无） */
     private String selectedId = "";
 
@@ -50,6 +54,68 @@ public final class PatrolBook {
 
     public boolean isEmpty() {
         return routes.isEmpty();
+    }
+
+    /* ==================== 独立目标点 ==================== */
+
+    public List<PatrolTarget> targets() {
+        return targets;
+    }
+
+    public boolean hasTargets() {
+        return !targets.isEmpty();
+    }
+
+    /** 轨迹与目标点都空 = 整本书空（预览/开屏判据用） */
+    public boolean emptyAll() {
+        return routes.isEmpty() && targets.isEmpty();
+    }
+
+    public PatrolTarget targetById(String id) {
+        if (id == null || id.isEmpty()) {
+            return null;
+        }
+        for (PatrolTarget t : targets) {
+            if (id.equals(t.id())) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    /** 追加一个目标点（自动编号名）；满了返回 null */
+    public PatrolTarget addTarget(net.minecraft.world.phys.Vec3 pos, String dimension) {
+        if (pos == null || targets.size() >= MAX_TARGETS) {
+            return null;
+        }
+        PatrolTarget t = new PatrolTarget(freeTargetName(), pos, dimension);
+        targets.add(t);
+        return t;
+    }
+
+    public PatrolTarget removeTarget(String id) {
+        PatrolTarget t = targetById(id);
+        if (t != null) {
+            targets.remove(t);
+        }
+        return t;
+    }
+
+    private String freeTargetName() {
+        for (int i = 1; i <= MAX_TARGETS + 1; i++) {
+            String cand = "目标" + i;
+            boolean used = false;
+            for (PatrolTarget t : targets) {
+                if (cand.equals(t.name())) {
+                    used = true;
+                    break;
+                }
+            }
+            if (!used) {
+                return cand;
+            }
+        }
+        return "目标";
     }
 
     /** 按 id 找（找不到返回 null） */
@@ -153,6 +219,9 @@ public final class PatrolBook {
         for (PatrolRoute r : routes) {
             b.routes.add(r.copy());
         }
+        for (PatrolTarget t : targets) {
+            b.targets.add(t.copy());
+        }
         b.selectedId = this.selectedId;
         return b;
     }
@@ -167,6 +236,11 @@ public final class PatrolBook {
             list.add(r.save());
         }
         root.put("routes", list);
+        ListTag tlist = new ListTag();
+        for (PatrolTarget t : targets) {
+            tlist.add(t.save());
+        }
+        root.put("targets", tlist);
         return root;
     }
 
@@ -224,6 +298,15 @@ public final class PatrolBook {
                     continue;
                 }
                 book.routes.add(PatrolRoute.load(ct));
+            }
+        }
+        Tag rawTargets = root.get("targets");
+        if (rawTargets instanceof ListTag tlist) {
+            for (Tag t : tlist) {
+                if (!(t instanceof CompoundTag ct) || book.targets.size() >= MAX_TARGETS) {
+                    continue;
+                }
+                book.targets.add(PatrolTarget.load(ct));
             }
         }
     }

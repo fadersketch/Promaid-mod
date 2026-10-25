@@ -94,8 +94,8 @@ public final class MaidPlaceGuard {
                     || maid.m_20159_()) {
                 return false;
             }
-            // (a) 滑翔 / 飞行作战空中——飞行期一律不搭（旧版在这里把滑翔放行了）
-            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+            // (a) 滑翔 / 飞行作战空中 / 重锤跃起——飞行期一律不搭
+            if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
                 return true;
             }
             // (b) 深坠落：坠够"落地水触发高度"就交给落地水（四百四十三的原始口径）

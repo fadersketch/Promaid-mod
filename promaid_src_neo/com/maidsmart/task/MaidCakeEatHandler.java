@@ -14,6 +14,7 @@ import net.minecraft.world.item.Items;
 import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.bus.api.EventPriority;
 
 /**
  * 蛋糕投喂与好感加成（实测一百二十五）：
@@ -34,6 +35,41 @@ public class MaidCakeEatHandler {
     /** 每次吃完一块蛋糕的好感加成 */
     public static final int CAKE_FAVOR_POINTS = 10;
 
+    /** 启动探测发现其他模组已经改了蛋糕 → 自动停用（配置开关同步置 false）。 */
+    private static volatile boolean AUTO_DISABLED = false;
+
+    /**
+     * 【R1102·实测一千一百〇三】会把「可食用物品」直接喂给女仆并取消原交互的附属（反编译实证）：
+     * solmaid（生活调味料：酒狐萝贝）的 MaidFeeding 对**任意**女仆——包括野生未驯服的——
+     * 只要主手物品有食物属性就塞给她吃掉并 setCanceled：TLM 的驯服交互
+     * （EntityMaid.mobInteract → tameMaid，蛋糕正是驯服物）根本走不到。我们给蛋糕挂上
+     * FOOD 组件之后正好武装了它——这类附属在场时蛋糕功能必须让出（与"别的模组改过蛋糕"
+     * 同一条自动关闭口径，只是探测信号不同：那边看 FOOD 组件，这边看附属名单 + 运行时抢答）。
+     */
+    private static final java.util.Set<String> FEED_HIJACKER_MODS = java.util.Set.of("solmaid");
+
+    /** 本次交互是不是【我们自己】取消的（低优先级哨兵用它排除自己的取消，防误报）。 */
+    private boolean weCanceledThisEvent = false;
+
+    /** 装了哪个「喂食抢答型」附属；没装返回 null。 */
+    private static String loadedFeedHijacker() {
+        try {
+            for (String id : FEED_HIJACKER_MODS) {
+                if (net.neoforged.fml.ModList.get().isLoaded(id)) {
+                    return id;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCakeEatHandler.loadedFeedHijacker", ignored);
+        }
+        return null;
+    }
+
+    /** 蛋糕功能总闸：配置开 + 未被冲突探测自动关闭。 */
+    public static boolean isEnabled() {
+        return !AUTO_DISABLED
+                && com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.get();
+    }
+
     /** 蛋糕食物属性（营养 14 = 7 切片 × 2、饱和度 0.6——整块蛋糕一次吃完的量）；
      *  eatSeconds 留 1.21.1 的默认 1.6 秒（= 32 tick，与原版食物同量级）。
      *  与 1.20.1 那条 mixin 的 CAKE_FOOD 同口径——两树的蛋糕营养/回复量必须一致。 */
@@ -41,11 +77,12 @@ public class MaidCakeEatHandler {
             .nutrition(14).saturationModifier(0.6f).build();
 
     /**
-     *（NeoForge 的「改默认数据组件」事件——1.21.1 里食物就是这么定义的了）。
-     * 挂上之后：女仆的工作餐/家餐判定（TLM 读 ItemStack.getFoodProperties）、
-     * 进食动画与时长、物品提示全部自动成立。
-     * 【一次性】只在加载期跑一次：改 misc.cakeEdible 开关要**重启游戏**才完全生效
-     *（投喂那条走 isCake，运行时立刻停）。关掉开关 = 组件不挂，蛋糕恢复原版不可食。
+     *（NeoForge 的「改默认数据组件」事件——1.21.1 里食物就是这么定义的了）。挂上之后：
+     * 工作餐/家餐判定、进食动画与时长、物品提示全部自动成立。一次性：只在加载期跑，
+     * 改开关要**重启游戏**才完全生效；关掉 = 组件不挂，蛋糕恢复原版不可食。
+     * 【冲突探测】蛋糕已有 FOOD = 别的模组改过 → 让出；【R1102】「喂食抢答型」附属
+     * （{@link #FEED_HIJACKER_MODS}）不改蛋糕、却会把可食用物品直接喂给任意女仆并
+     * 取消交互——在场时同样让出（组件根本不挂）。
      */
     public static void onModifyDefaultComponents(ModifyDefaultComponentsEvent event) {
         boolean enabled;
@@ -54,13 +91,68 @@ public class MaidCakeEatHandler {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidCakeEatHandler", ignored);
             enabled = true; // 配置尚未挂上 → 按默认（开）走
         }
-        if (!enabled) {
+        if (!enabled || AUTO_DISABLED) {
             return;
+        }
+        // 【R1102】先让出「喂食抢答型」附属：挂了 FOOD 只会武装它们抢走蛋糕驯服
+        String hijacker = loadedFeedHijacker();
+        if (hijacker != null) {
+            disableBecauseConflict("喂食型附属 " + hijacker
+                    + "（生活调味料：酒狐萝贝）会把可食用物品直接喂给女仆并抢走交互，"
+                    + "蛋糕驯服会被截走");
+            return;
+        }
+        try {
+            FoodProperties existing = Items.CAKE.components().get(DataComponents.FOOD);
+            if (existing != null) {
+                if (!CAKE_FOOD.equals(existing)) {
+                    disableBecauseConflict("已有 FOOD 组件：营养 " + existing.nutrition()
+                            + " / 饱和 " + existing.saturation());
+                }
+                return;
+            }
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("MaidCakeEatHandler.checkExistingFood", ignored);
         }
         event.modify(Items.CAKE, builder -> builder.set(DataComponents.FOOD, CAKE_FOOD));
         com.maidsmart.tool.PromaidLog.log("蛋糕可食用",
                 "已给 minecraft:cake 挂上 FOOD 组件（营养 14 / 饱和 0.6 / 1.6 秒）"
                         + "——女仆把它当食物，玩家右键也能吃");
+    }
+
+    /** 服务端启动复核（加载全部结束）：若 FOOD 被别的模组后写/覆盖，自动关闭蛋糕功能。
+     *  【R1102】也兜底复核「喂食抢答型」附属（组件事件早于一切时 ModList 万一没就绪）。 */
+    public static void verifyAfterLoad() {
+        if (!isEnabled()) {
+            return;
+        }
+        try {
+            String hijacker = loadedFeedHijacker();
+            if (hijacker != null) {
+                disableBecauseConflict("喂食型附属 " + hijacker + " 在场（组件事件那次没拦到）");
+                return;
+            }
+            FoodProperties food = Items.CAKE.components().get(DataComponents.FOOD);
+            if (food != null && !CAKE_FOOD.equals(food)) {
+                disableBecauseConflict("FOOD 已被其他模组覆盖：营养 " + food.nutrition()
+                        + " / 饱和 " + food.saturation());
+            }
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("MaidCakeEatHandler.verifyAfterLoad", ignored);
+        }
+    }
+
+    /** 自动关闭（带现场细节）：内存里把开关置 false，并留一行明确的日志。 */
+    private static void disableBecauseConflict(String detail) {
+        AUTO_DISABLED = true;
+        try {
+            com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.set(false);
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("MaidCakeEatHandler.disableBecauseConflict", ignored);
+        }
+        com.maidsmart.tool.PromaidLog.log("蛋糕可食用",
+                "检测到冲突（" + detail + "），本模组的蛋糕功能已自动关闭"
+                        + "（可在配置面板手动恢复；冲突源仍在时会再次让出）");
     }
 
     /** 是否为蛋糕物品（判定口径：注册名 minecraft:cake——与上方
@@ -70,7 +162,7 @@ public class MaidCakeEatHandler {
         if (stack == null || stack.isEmpty()) {
             return false;
         }
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.get()) {
+        if (!isEnabled()) {
             return false;
         }
         net.minecraft.resources.ResourceLocation key =
@@ -119,9 +211,14 @@ public class MaidCakeEatHandler {
         com.maidsmart.voice.SystemTTSManager.speak(maid, text);
     }
 
-    /** 玩家蛋糕右击自己的女仆：取消原交互（不开 GUI）→ 玩家蛋糕消失 → 女仆立刻吃 */
+    /** 玩家蛋糕右击自己的女仆：取消原交互（不开 GUI）→ 玩家蛋糕消失 → 女仆立刻吃。
+     *  【R1102】别的事件监听已把本次交互取消时直接让路——否则会双喂（对方喂一份、
+     *  我们再喂一份，玩家一次点击亏两块蛋糕）。 */
     @SubscribeEvent
     public void onInteract(PlayerInteractEvent.EntityInteract event) {
+        if (event.isCanceled()) {
+            return; // 已被别的模组处理 → 让路
+        }
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || !(event.getTarget() instanceof EntityMaid maid)
                 || !maid.isOwnedBy(player)) {
@@ -133,6 +230,7 @@ public class MaidCakeEatHandler {
             return;
         }
         event.setCanceled(true);
+        this.weCanceledThisEvent = true; // 告诉低优先级哨兵：这次取消是我们干的
         // 玩家手上蛋糕消失 + 玩家挥手动画
         stack.shrink(1);
         player.swing(hand);
@@ -140,5 +238,41 @@ public class MaidCakeEatHandler {
         maid.playSound(SoundEvents.GENERIC_EAT, 1.0f, 1.0f);
         maid.spawnItemParticles(new ItemStack(Items.CAKE), 8);
         onCakeEaten(maid, true);
+    }
+
+    /**
+     * 【R1102·实测一千一百〇三】低优先级哨兵：所有监听跑完、原版 mobInteract 之前，
+     * 看「野生女仆 + 我们的蛋糕」的交互是不是被【别的模组】取消并抢去喂了
+     * （对方会把蛋糕塞进她手里并让她开吃）——是就当场自动关闭蛋糕功能。
+     * 名单外的喂食型附属靠这一条兜底（第一个被抢的蛋糕收不回来，之后恢复正常）。
+     */
+    @SubscribeEvent(priority = EventPriority.LOWEST)
+    public void onInteractGuard(PlayerInteractEvent.EntityInteract event) {
+        try {
+            if (!event.isCanceled() || this.weCanceledThisEvent) {
+                return;
+            }
+            if (!(event.getEntity() instanceof ServerPlayer)
+                    || !(event.getTarget() instanceof EntityMaid maid)) {
+                return;
+            }
+            if (maid.getOwner() != null) {
+                return; // 有主人的女仆：取消来自别的链路，不算驯服抢答
+            }
+            if (!isCake(event.getItemStack())) {
+                return;
+            }
+            // 抢答的特征：她手里被塞了蛋糕 / 正在吃——保护类取消不会动她的手
+            boolean fedCake = isCake(maid.getItemInHand(InteractionHand.MAIN_HAND))
+                    || isCake(maid.getItemInHand(InteractionHand.OFF_HAND));
+            if (!fedCake && !maid.isUsingItem()) {
+                return;
+            }
+            disableBecauseConflict("野生女仆 + 蛋糕的驯服交互被其他模组抢去喂掉（蛋糕已进她手/正在吃）");
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("MaidCakeEatHandler.onInteractGuard", ignored);
+        } finally {
+            this.weCanceledThisEvent = false;
+        }
     }
 }

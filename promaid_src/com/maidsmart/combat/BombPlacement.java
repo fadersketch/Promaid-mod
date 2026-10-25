@@ -216,7 +216,7 @@ public final class BombPlacement {
                 if (MaidBombing.PENDING.size() < MaidBombing.MAX_PENDING) {
                     MaidBombing.PENDING.add(new MaidBombing.Bomb(level, maid, null, ph.placed.get(i),
                             new ArrayList<>(ph.placed), new ArrayList<>(ph.placedBlock), ph.kind,
-                            gameTime + BombConfig.cfgFuse(), ph.display));
+                            gameTime + BombConfig.cfgFuse(), ph.display, true));
                 }
             }
         }
@@ -242,16 +242,20 @@ public final class BombPlacement {
                 }
                 if (MaidBombing.PENDING.size() < MaidBombing.MAX_PENDING) {
                     MaidBombing.PENDING.add(new MaidBombing.Bomb(level, maid, xc, base, null, null, ph.kind,
-                            gameTime + BombConfig.cfgFuse(), ph.display));
+                            gameTime + BombConfig.cfgFuse(), ph.display, true));
                 }
             }
             MaidBombing.log("压缩盒供弹：末地水晶一次放 " + crystalBurst + " 枚（同一底座，一起起爆）");
         }
+        // 【实测一千〇六十】压缩盒同一次放多枚：整批都按"burst"起爆——每一炸前清无敌帧，
+        // 否则同 tick 的第二枚起全被原版受击无敌帧吞掉（五枚叠放只吃第一枚的伤害）。
+        boolean burst = (ph.kind == MaidBombing.Kind.CRYSTAL && crystalBurst > 1)
+                || (ph.kind == MaidBombing.Kind.ANCHOR && anchorCharged > 1);
         List<BlockPos> posList = ph.placed.isEmpty() ? null : new ArrayList<>(ph.placed);
         List<Block> blockList = ph.placedBlock.isEmpty() ? null : new ArrayList<>(ph.placedBlock);
         if (MaidBombing.PENDING.size() < MaidBombing.MAX_PENDING) {
             MaidBombing.PENDING.add(new MaidBombing.Bomb(level, maid, spawned, base, posList, blockList, ph.kind,
-                    gameTime + BombConfig.cfgFuse(), ph.display));
+                    gameTime + BombConfig.cfgFuse(), ph.display, burst));
         }
         if (BombConfig.cfgPinkMark()) {
             if (spawned != null) {

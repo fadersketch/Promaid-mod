@@ -1034,7 +1034,17 @@ public final class MaidBroomDrive {
             int bx = (int) Math.floor(x);
             int bz = (int) Math.floor(z);
             int bottom = (int) Math.floor(fromY) + 1;
-            for (int y = (int) Math.floor(wantY); y >= bottom; y--) {
+            int top = (int) Math.floor(wantY);
+            // 【R1113】不能只看"目标那一格是否透光"：主人飞在屋顶上时，目标点（主人 +2 格）
+            // 本身就在屋顶上方的空气里——旧版会一路往上顶，穿过天花板把乘客嵌进方块里窒息。
+            // 所以先量两条竖直通道的"第一块挡住的天花板"：她自己这一列（必须能升上去）与
+            // 目标这一列（必须放得下），取较低者作为本拍的上限。
+            int capTarget = ceilingCap(level, bx, bz, bottom, top);
+            int capSelf = ceilingCap(level,
+                    (int) Math.floor(maid.m_20185_()), (int) Math.floor(maid.m_20189_()),
+                    bottom, top);
+            top = Math.min(top, Math.min(capTarget, capSelf));
+            for (int y = top; y >= bottom; y--) {
                 if (isAirAt(level, new net.minecraft.core.BlockPos(bx, y, bz))
                         && isAirAt(level, new net.minecraft.core.BlockPos(bx, y + 1, bz))) {
                     return y + 0.5;
@@ -1043,7 +1053,25 @@ public final class MaidBroomDrive {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             // 读不到方块（异常）→ 按想要的高度走（与旧行为一致，不新增坑）
         }
-        return wantY;
+        // 【R1113】一格都放不下：留在她现在的高度悬停（旧版返回 wantY = 硬塞进方块）。
+        return fromY;
+    }
+
+    /**
+     * 从 {@code bottom} 往上扫到 {@code top}，返回**第一块非空气方块下面那一格**。
+     * 没有任何阻挡 → 返回 {@code top}（整段都能用）。
+     */
+    private static int ceilingCap(net.minecraft.world.level.Level level, int bx, int bz,
+                                  int bottom, int top) {
+        try {
+            for (int y = bottom; y <= top + 1; y++) {
+                if (!isAirAt(level, new net.minecraft.core.BlockPos(bx, y, bz))) {
+                    return y - 1;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
+        }
+        return top;
     }
 
     /**
@@ -1462,10 +1490,14 @@ public final class MaidBroomDrive {
         }
         // 到点减速带：远处全速、近了按距离线性收干（分子分母同量纲，dist→0 时速度→0）
         double ramp = Math.min(1.0, dist / ARRIVE_RAMP);
+        // 【R1127】绑定航迹的 8×8×8 减速点内大幅降速（只削水平分量：竖直还按原高差走，
+        // 免得减速时掉高度）。不在巡逻/不在减速点/接敌 → 1.0，一切照旧。
+        double routeScale = combat ? 1.0 : com.maidsmart.patrol.PatrolFlight.speedScale(maid,
+                new Vec3(broom.m_20185_(), broom.m_20186_(), broom.m_20189_()));
         double inv = 1.0 / dist;
-        Vec3 tgt = new Vec3(dx * inv * MAX_H_SPEED * ramp,
+        Vec3 tgt = new Vec3(dx * inv * MAX_H_SPEED * ramp * routeScale,
                 dy * inv * MAX_V_SPEED * ramp,
-                dz * inv * MAX_H_SPEED * ramp);
+                dz * inv * MAX_H_SPEED * ramp * routeScale);
         Vec3 nv = cur.m_165921_(tgt, BLEND);
         // 朝向 = 速度方向（纯垂直位移时不改朝向）
         float yaw = horiz > 0.15 ? (float) (-Math.atan2(dx, dz) * DEG) : yaw(broom);
@@ -1491,12 +1523,18 @@ public final class MaidBroomDrive {
             if (broom == null) {
                 return null;
             }
-            // ① 一次性外部目标优先
+            // ① 【R1113】航图目标点优先：玩家点了「飞过去」→ 这一趟只认那个坐标，
+            //    平时跟随/守家/巡逻航迹全部让位（接敌档仍在这一档之前，一个字节没动）。
+            Vec3 travel = com.maidsmart.patrol.MaidTravelTarget.aim(maid, broom);
+            if (travel != null) {
+                return travel;
+            }
+            // ② 一次性外部目标优先
             Vec3 goto_ = com.maidsmart.patrol.PatrolCommand.poll(maid, broom);
             if (goto_ != null) {
                 return new Vec3(goto_.f_82479_, goto_.f_82480_, goto_.f_82481_);
             }
-            // ② 沿航迹
+            // ③ 沿航迹
             return com.maidsmart.patrol.PatrolFlight.nextPoint(maid, broom);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
             return null;
@@ -1973,6 +2011,121 @@ public final class MaidBroomDrive {
 
     private static void giveBack(EntityMaid maid, ItemStack stack) {
         com.maidsmart.tool.MaidGiveBack.give(maid, stack, "扫帚模式");
+    }
+
+    /* ==================== R1126：玩家同乘时的驾驶权 ==================== */
+
+    /**
+     * 扫帚 UUID → 玩家"已经按移动键接管"的标记时刻。
+     * <p>口径：玩家坐上女仆正在跑的扫帚时**不立刻接管**，她照旧按原路线飞；只有玩家真的按了
+     * WASD（且过了半秒防抖）才把方向盘交回去，此后这一趟都归玩家（松开也不自动抢回来）。
+     */
+    private static final Map<UUID, Long> PLAYER_TOOK_OVER = new HashMap<>();
+    /** 扫帚 UUID → 玩家第一次坐上来的时刻（用来吞掉"走过来时就一直按着 W"） */
+    private static final Map<UUID, Long> SEAT_AT = new HashMap<>();
+    /** 扫帚 UUID → 上一拍见过玩家的时刻；断档即视为"重新坐下"，清掉上一趟的接管锁 */
+    private static final Map<UUID, Long> LAST_SEEN_AT = new HashMap<>();
+    private static final Map<UUID, Boolean> BROOM_ACTIVE_CACHE = new HashMap<>();
+    private static final Map<UUID, Long> BROOM_ACTIVE_AT = new HashMap<>();
+    /** 坐上后这么多 tick 内的输入不算"接管"（0.5 秒防抖） */
+    private static final long TAKEOVER_GRACE = 10L;
+    /** 两次调用间隔超过这么多 tick 就当作换了一趟（下坐再上坐时没有回调可用） */
+    private static final long RESEAT_GAP = 5L;
+
+    /**
+     * 这一拍该不该由女仆握方向盘（调用点：{@code getControllingPassenger()} 的 HEAD）。
+     * <p>返回 true 时原版走 {@code travel} 而非 {@code travelRidden}；玩家驾驶时服务端
+     * **根本不调 travel**，所以必须先交出"控制乘客"，服务端才会执行我们写的位移。
+     * <p>有序：有飞过去目标 → 她飞（WASD 取消）；扫帚任务且能飞 → 她飞（WASD 防抖后接管）；
+     * 其它 → 玩家驾驶，原版一字不改。
+     */
+    public static boolean maidShouldPilot(EntityBroom broom, EntityMaid maid) {
+        try {
+            if (broom == null || maid == null || maid.m_20202_() != broom) {
+                return false;
+            }
+            if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+                return false;
+            }
+            net.minecraft.world.entity.player.Player player = playerPassenger(broom);
+            UUID id = broom.m_20148_();
+            long now = maid.m_9236_().m_46467_();
+            if (player == null) {
+                PLAYER_TOOK_OVER.remove(id);
+                SEAT_AT.remove(id);
+                LAST_SEEN_AT.remove(id);
+                return false;
+            }
+            Long seenAt = LAST_SEEN_AT.put(id, now);
+            if (seenAt == null || now - seenAt > RESEAT_GAP) {
+                PLAYER_TOOK_OVER.remove(id);
+                SEAT_AT.put(id, now);
+            }
+            boolean input = pressedMoveKey(player);
+            Vec3 travel = com.maidsmart.patrol.MaidTravelTarget.aim(maid);
+            if (travel != null) {
+                PLAYER_TOOK_OVER.remove(id);
+                if (input) {
+                    if (!maid.m_9236_().f_46443_) {
+                        com.maidsmart.patrol.MaidTravelTarget.cancel(maid,
+                                "玩家动了移动键，把扫帚交还玩家");
+                    }
+                    if (MaidBroomKit.isBroomTask(maid)) {
+                        PLAYER_TOOK_OVER.put(id, now);
+                    }
+                    return false;
+                }
+                return true;
+            }
+            if (!MaidBroomKit.isBroomTask(maid) || !broomActiveCached(maid)) {
+                PLAYER_TOOK_OVER.remove(id);
+                return false;
+            }
+            if (PLAYER_TOOK_OVER.containsKey(id)) {
+                return false;
+            }
+            long seatAt = SEAT_AT.getOrDefault(id, now);
+            if (input && now - seatAt >= TAKEOVER_GRACE) {
+                PLAYER_TOOK_OVER.put(id, now);
+                return false;
+            }
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
+            return false;
+        }
+    }
+
+    /** 扫帚上的玩家乘客（第一/第二都认）；没有返回 null。 */
+    private static net.minecraft.world.entity.player.Player playerPassenger(EntityBroom broom) {
+        try {
+            for (net.minecraft.world.entity.Entity e : broom.m_20197_()) {
+                if (e instanceof net.minecraft.world.entity.player.Player p) {
+                    return p;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidBroomDrive", ignored);
+        }
+        return null;
+    }
+
+    /** 玩家这一拍有没有按 WASD（x/z 输入）。服务端值由 ServerPlayer#setPlayerInput 同步。 */
+    private static boolean pressedMoveKey(net.minecraft.world.entity.player.Player player) {
+        return Math.abs(player.f_20900_) > 0.01f || Math.abs(player.f_20902_) > 0.01f;
+    }
+
+    /** 扫帚模式的激活判定按 5 tick 缓存：{@code getControllingPassenger} 每拍会被问很多次。 */
+    private static boolean broomActiveCached(EntityMaid maid) {
+        UUID id = maid.m_20148_();
+        long now = maid.m_9236_().m_46467_();
+        Long at = BROOM_ACTIVE_AT.get(id);
+        Boolean cached = BROOM_ACTIVE_CACHE.get(id);
+        if (at != null && cached != null && now - at < 5L) {
+            return cached;
+        }
+        boolean active = MaidBroomKit.isModeActive(maid);
+        BROOM_ACTIVE_CACHE.put(id, active);
+        BROOM_ACTIVE_AT.put(id, now);
+        return active;
     }
 
     /**

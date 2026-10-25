@@ -72,8 +72,10 @@ public final class SchedulePacketsMaid {
                     parts.add("§7" + r.kept() + " 名坐着/骑乘/在家模式保持原位");
                 }
                 if (parts.isEmpty()) {
+                    // v1.3.3 实测一千〇四：去距离限制后"已在身边"也照传（会进 summoned），
+                    // 走到这里只剩"根本没找到她"这一种
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "§7没有需要集合的女仆（都在身边或不在场上）"));
+                            "§7没有可集合的女仆（不在场上或没登记过）"));
                 } else {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             String.join("§r；", parts)));
@@ -389,39 +391,28 @@ public final class SchedulePacketsMaid {
                 }
                 if (maid.m_9236_() instanceof ServerLevel target && !target.m_46472_()
                         .equals(player.m_9236_().m_46472_())) {
-                    // 跨维度：目的地用她脚下的安全落点（findStand 的判定口径与召回一致）
+                    // v1.3.3 实测一千〇四【直达坐标】：目的地 = 她的坐标本身（/tp 语义）——
+                    // 旧版用 findStandNear 在她脚下找"安全落点"，会把你放在旁边几格；
+                    // 现在与「召她过来」对称：她来你的坐标，你去她的坐标。
                     String nm = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             "§e她不在你这个维度（在" + ScheduleNetworking.dimName(maid.m_9236_()) + "）——正在把你送过去"));
-                    BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
-                            .findStandNear(target, maid.m_20183_());
-                    if (stand == null) {
-                        // v1.2.0 实测五百四十六【强制 + 无视地块】：旧版这里直接取消传送
-                        //（"她脚下没找到可站立的位置"）——空袭女仆悬停/飞在海上或虚空上时
-                        // 就永远传不过去。现在退到**她自己所在的那一格**（同维度分支早就
-                        // 是这么兜底的，跨维度漏了）；她那格若是空中，就把你放到空中。
-                        stand = maid.m_20183_();
-                    }
-                    boolean ok = player.m_264318_(target, stand.m_123341_() + 0.5,
-                            stand.m_123342_(), stand.m_123343_() + 0.5,
-                            java.util.Collections.emptySet(), player.m_146908_(), player.m_146909_());
+                    boolean ok = player.m_264318_(target, maid.m_20185_(), maid.m_20186_(),
+                            maid.m_20189_(), java.util.Collections.emptySet(),
+                            player.m_146908_(), player.m_146909_());
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(ok
                             ? "§a已传送到「" + nm + "」身边（" + ScheduleNetworking.dimName(target) + "）"
                             : "§c传送失败"));
                     return;
                 }
-                // 同维度：她脚下找落点；找不到就退到她自己站的那一格（她站的地方总归能站人）
-                BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
-                        .findStandNear((ServerLevel) player.m_9236_(), maid.m_20183_());
-                if (stand == null) {
-                    stand = maid.m_20183_();
-                }
-                player.m_264318_((ServerLevel) player.m_9236_(), stand.m_123341_() + 0.5,
-                        stand.m_123342_(), stand.m_123343_() + 0.5,
-                        java.util.Collections.emptySet(), player.m_146908_(), player.m_146909_());
+                // 同维度：直达她脚下的坐标（/tp 语义；她站的地方总归能站人）
+                player.m_264318_((ServerLevel) player.m_9236_(), maid.m_20185_(), maid.m_20186_(),
+                        maid.m_20189_(), java.util.Collections.emptySet(),
+                        player.m_146908_(), player.m_146909_());
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "§a已传送到她身边（" + stand.m_123341_() + " " + stand.m_123342_()
-                                + " " + stand.m_123343_() + "）"));
+                        "§a已传送到她身边（" + (int) Math.floor(maid.m_20185_()) + " "
+                                + (int) Math.floor(maid.m_20186_()) + " "
+                                + (int) Math.floor(maid.m_20189_()) + "）"));
             });
             ctx.get().setPacketHandled(true);
         }

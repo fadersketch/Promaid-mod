@@ -23,8 +23,21 @@ MARKS = ['Class.forName(', 'getMethod(', 'getDeclaredMethod(', 'getDeclaredField
 BASELINE = {
     # 实测九百九十八：TNT 矿车引信直写（MinecartTNT 的私有 fuse 字段，两版都没有写口）
     # 各新增 1 处 getDeclaredField → 7/7 上调为 8/8（显式上调并留痕，见 TD-15）。
-    'promaid_src': {'Class.forName(': 86, 'getMethod(': 204, 'getDeclaredMethod(': 6, 'getDeclaredField(': 8},
-    'promaid_src_neo': {'Class.forName(': 82, 'getMethod(': 203, 'getDeclaredMethod(': 5, 'getDeclaredField(': 8},
+    # 实测一千〇三：TACZ 弹药口径比对（IAmmo.isAmmoOfGun——精妙背包弹药桥要按"这把枪认的
+    # 那类弹"搬，不能搬错口径）各新增 1 处 Class.forName + 1 处 getMethod → 显式上调并留痕。
+    # 实测一千〇二十四：长矛满蓄力要把 useItemRemaining 钉在 spearcore 的伤害窗口末尾，
+    # 需要探针 SpearItem#computeDamageUseDuration（可选依赖，不能编译期直连）→ Neo getMethod 204→205。
+    # R1042：通用链路补回长矛"移动越快伤害越高"，需要探针 SpearItem#getDamageMultiplier
+    #（同一可选依赖）→ Neo getMethod 205→206。
+    # R1083：鞘翅长矛链路镜像到 Forge——同样两处探针（computeDamageUseDuration /
+    # getDamageMultiplier），外加 Forge 没有 useItem 访问器 mixin，满蓄力直写
+    # LivingEntity.useItemRemaining（私有 f_20936_）→ Forge getMethod 205→207、
+    # getDeclaredField 8→9。
+    # R1086：神秘遗物进阶药水（NBT EnigmaticPotion）没有原版 Potion 对象，效果表只能
+    # 走它的 PotionHelper.getEffects + EnigmaticPotions 静态列表 → Forge
+    # Class.forName 87→89、getMethod 207→209（Neo 无对应模组，不动）。
+    'promaid_src': {'Class.forName(': 89, 'getMethod(': 209, 'getDeclaredMethod(': 6, 'getDeclaredField(': 9},
+    'promaid_src_neo': {'Class.forName(': 83, 'getMethod(': 206, 'getDeclaredMethod(': 5, 'getDeclaredField(': 8},
 }
 
 FAILS, WARNS = [], []

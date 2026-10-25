@@ -50,6 +50,20 @@ public final class AiMemoryExtractor {
     /** 实测八百二十九c：摘要计数（每 N 次刷一次记忆快照）。 */
     private static final java.util.Map<String, Integer> SUMMARY_COUNT =
             new java.util.concurrent.ConcurrentHashMap<>();
+    /** 记忆提取/归档共用并发上限：多女仆同 tick 不一起打爆 API。 */
+    private static final java.util.concurrent.Semaphore LLM_SLOTS =
+            new java.util.concurrent.Semaphore(4);
+    /** 单批最多尝试次数；持续失败（如 401）时推进水位并放弃，避免无限烧钱。 */
+    private static final int MAX_ATTEMPTS = 5;
+    /** 部分成功批次：只重试失败的那个 agent，已成功的写入不重复。 */
+    private static final java.util.Map<UUID, PartialBatch> PARTIAL =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private record PartialBatch(long newestTime, boolean summaryDone, boolean factsDone,
+                                int attempts, int pending) {
+    }
+
+    private enum AgentKind { SINGLE, SUMMARY, FACTS }
 
     private AiMemoryExtractor() {
     }
@@ -57,6 +71,42 @@ public final class AiMemoryExtractor {
     /** v1.2.1：提取是否进行中（手册链路调试面板显示用） */
     public static boolean isExtracting(UUID maidUuid) {
         return EXTRACTING.containsKey(maidUuid);
+    }
+
+    /** 记忆提取/归档共用并发槽（归档器同包调用；每条 HTTP 请求占一个）。 */
+    static boolean tryAcquireLlmSlot() {
+        return LLM_SLOTS.tryAcquire();
+    }
+
+    static void releaseLlmSlot() {
+        LLM_SLOTS.release();
+    }
+
+    private static boolean tryAcquireLlmSlots(int n) {
+        return n <= 0 || LLM_SLOTS.tryAcquire(n);
+    }
+
+    private static void releaseLlmSlots(int n) {
+        if (n > 0) {
+            LLM_SLOTS.release(n);
+        }
+    }
+
+    /** 整批完成：推进水位、从续写队列摘除、清状态。 */
+    private static void completeBatch(AiMemoryStore store, long newestTime, UUID id) {
+        store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
+        EXTRACTING.remove(id);
+        PARTIAL.remove(id);
+        continuityComplete(store, id);
+    }
+
+    /** 放弃该批次（重试上限/原批次已不在历史）：推进水位防止卡死，并记录原因。 */
+    private static void giveUp(AiMemoryStore store, long newestTime, UUID id, String reason) {
+        LOGGER.warn("AiMemoryExtractor: 放弃提取批次 maid={} newest={} 原因={}", id, newestTime, reason);
+        store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
+        EXTRACTING.remove(id);
+        PARTIAL.remove(id);
+        continuityComplete(store, id);
     }
 
     /** 记忆根目录：<世界目录>/promaid_memory
@@ -91,6 +141,12 @@ public final class AiMemoryExtractor {
         if (!AiMemoryManager.isEnabled(maid)) {
             return;
         }
+        // TLM 全局 LLM / 单女仆 LLM 关闭：提取是独立的 HTTP 调用，不会经过 chat 入口，
+        // 必须在这里显式拦住，否则玩家关了 LLM 仍会持续烧 token。
+        if (!com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig.LLM_ENABLED.get()
+                || !com.maidsmart.memory.LlmEnableManager.isEnabled(maid)) {
+            return;
+        }
         UUID id = maid.getUUID();
         Long since = EXTRACTING.get(id);
         if (since != null) {
@@ -120,7 +176,9 @@ public final class AiMemoryExtractor {
         long last = store.meta().lastExtractedTime();
         // 实测八百二十九c：崩溃恢复——上次没总结完的对话（关服/崩溃遗留）优先补发一次
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_CONTINUITY_ENABLE.get()) {
-            recoverPending(maid, server, os, model, store, maid.level().getGameTime());
+            if (recoverPending(maid, server, os, model, store, maid.level().getGameTime())) {
+                return; // 正在补发旧批次，本 tick 不再开新批次
+            }
         }
         List<LLMMessage> fresh = new ArrayList<>();
         for (LLMMessage msg : cm.getHistory().getDeque()) {
@@ -145,10 +203,56 @@ public final class AiMemoryExtractor {
         if (fresh.size() < threshold) {
             return;
         }
-        // 取最新 threshold 条（deque 时间有序）
-        List<LLMMessage> batch = fresh.subList(fresh.size() - threshold, fresh.size());
+        // 取最新 threshold 条（deque 时间有序）；若上一批只成功了一部分，优先把那一批补完，
+        // 不因为新消息进来就丢掉失败的半批。
+        List<LLMMessage> batch;
+        long newestTime;
+        PartialBatch prior = PARTIAL.get(id);
+        boolean retry = prior != null;
+        boolean dual = com.maidsmart.config.MaidSmartConfig.MEMORY_DUAL_AGENT.get();
+        boolean summaryDone;
+        boolean factsDone;
+        if (retry) {
+            newestTime = prior.newestTime();
+            int end = fresh.size();
+            while (end > 0 && fresh.get(end - 1).gameTime() > newestTime) {
+                end--;
+            }
+            if (end < threshold) {
+                giveUp(store, newestTime, id, "原批次已不在对话历史");
+                return;
+            }
+            batch = fresh.subList(end - threshold, end);
+            summaryDone = prior.summaryDone();
+            factsDone = prior.factsDone();
+        } else {
+            batch = fresh.subList(fresh.size() - threshold, fresh.size());
+            newestTime = batch.get(batch.size() - 1).gameTime();
+            summaryDone = false;
+            factsDone = false;
+        }
+        int need = dual ? ((summaryDone ? 0 : 1) + (factsDone ? 0 : 1))
+                : ((summaryDone && factsDone) ? 0 : 1);
+        if (need <= 0) {
+            completeBatch(store, newestTime, id);
+            return;
+        }
+        int attempts = (retry ? prior.attempts() : 0) + 1;
+        if (attempts > MAX_ATTEMPTS) {
+            giveUp(store, newestTime, id, "超过最大重试次数");
+            return;
+        }
+        // 先占并发槽，再占 API 日配额——任一不足都整批跳过，下轮重试；不会发半批。
+        if (!tryAcquireLlmSlots(need)) {
+            return;
+        }
+        if (!com.maidsmart.dialogue.ApiQuotaManager.tryAcquire(need)) {
+            releaseLlmSlots(need);
+            return;
+        }
         EXTRACTING.put(id, System.currentTimeMillis());
-        long newestTime = batch.get(batch.size() - 1).gameTime();
+        PartialBatch state = new PartialBatch(newestTime, summaryDone, factsDone, attempts, need);
+        PARTIAL.put(id, state);
         long gameTime = maid.level().getGameTime();
         int maxChars = com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_MESSAGE_CHARS.get();
         // v1.1.0：双 agent——摘要与事实/事件分两次独立 prompt（更聚焦、互不阻塞）；
@@ -156,10 +260,13 @@ public final class AiMemoryExtractor {
         String prompt = buildPrompt(batch, maxChars);
         String summaryPrompt = buildSummaryPrompt(batch, maxChars);
         String factsPrompt = buildFactsPrompt(batch, maxChars);
-        // 实测八百二十九c：发请求前把这批对话挂进续写队列（关服/崩溃后仍能补发）
-        continuityEnqueue(store, id, batch, gameTime);
+        // 实测八百二十九c：发请求前把这批对话挂进续写队列（关服/崩溃后仍能补发）。
+        // 重试同一批时不重复入队，避免续写队列堆积重复轮次。
+        if (!retry) {
+            continuityEnqueue(store, id, batch, gameTime);
+        }
         sendExtraction(maid, server, os, model, prompt, summaryPrompt, factsPrompt,
-                store, newestTime, gameTime);
+                store, newestTime, gameTime, state);
     }
 
     /** v1.5.198：记忆 API 自定义回退——自定义值非空用自定义，否则跟随 TLM 站点 */
@@ -231,9 +338,10 @@ public final class AiMemoryExtractor {
         if (includeSummary) {
             sb.append("SUMMARY: 一句话摘要（这段对话发生了什么）\n");
             sb.append("IMPORTANCE: 1-5（这段对话整体重要度）\n");
-            // 实测八百二十九c：记忆快照——女仆第一人称的一段"心里话"（≤200字），
-            // 每 N 次摘要才真正落盘（memory.snapshotEveryN）；没有深刻经历写 none。
-            sb.append("SNAPSHOT: 用女仆第一人称、不超过200字写下最近最深刻的一件事的心里话"
+            // 实测八百二十九c：记忆快照——女仆第一人称的一段"心里话"（≤400字，
+            // 与 AiMemorySnapshotStore.MAX_CHARS 一致），每 N 次摘要才真正落盘
+            // （memory.snapshotEveryN）；没有深刻经历写 none。
+            sb.append("SNAPSHOT: 用女仆第一人称、不超过400字写下最近最深刻的一件事的心里话"
                     + "（如\"我一直记得那天主人……\"）；没有值得一直记住的事写 none\n");
         }
         sb.append("TAGS: tag1,tag2（英文小写，如 relationship,preference,world）\n");
@@ -269,29 +377,33 @@ public final class AiMemoryExtractor {
     // ---------- 后台请求 ----------
 
     /**
-     * v1.1.0：双 agent 分发——memory.dualAgent 开启时，摘要与事实/事件各发一次
-     * 独立请求（任一失败不阻塞对方；水位线等两个都完成才推进，防重试风暴）；
-     * 关闭时回退单 agent 合并请求（原行为）。
+     * 双 agent 分发：只发还没成功的 agent；两个都成功才推进水位。
+     * 失败时保留 PARTIAL，按 EXTRACTING 超时窗口只重试失败的那一半，
+     * 已成功的写入不会重复。
      */
     private static void sendExtraction(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
                                        String model, String singlePrompt, String summaryPrompt,
                                        String factsPrompt, AiMemoryStore store,
-                                       long newestTime, long gameTime) {
+                                       long newestTime, long gameTime, PartialBatch state) {
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_DUAL_AGENT.get()) {
             sendSingle(maid, server, site, model, singlePrompt, store, newestTime, gameTime);
             return;
         }
-        // 双 agent：两个请求共享完成计数（回调全部经 server.execute 切回服务器线程，
-        // 串行执行，计数安全）
-        int[] remaining = {2};
-        sendAgent(maid, server, site, model, summaryPrompt, store, newestTime, gameTime, remaining, true);
-        sendAgent(maid, server, site, model, factsPrompt, store, newestTime, gameTime, remaining, false);
+        if (!state.summaryDone()) {
+            sendAgent(maid, server, site, model, summaryPrompt, store, newestTime, gameTime,
+                    AgentKind.SUMMARY);
+        }
+        if (!state.factsDone()) {
+            sendAgent(maid, server, site, model, factsPrompt, store, newestTime, gameTime,
+                    AgentKind.FACTS);
+        }
     }
 
     /** 单 agent 合并请求（memory.dualAgent=关 的原行为） */
     private static void sendSingle(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
                                    String model, String prompt, AiMemoryStore store,
                                    long newestTime, long gameTime) {
+        UUID id = maid.getUUID();
         try {
             ChatCompletion req = ChatCompletion.create().model(model).userChat(prompt);
             if (site.hasThinkingField()) {
@@ -300,33 +412,38 @@ public final class AiMemoryExtractor {
             HttpRequest.Builder builder = buildRequest(site, req);
             LLMSite.LLM_HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
                     .whenComplete((resp, err) -> server.execute(() -> {
-                        UUID id = maid.getUUID();
+                        boolean ok = false;
                         try {
                             String content = responseContent(resp, err);
                             if (content == null) {
                                 logFail(maid, err, resp);
-                                fail(store, newestTime, id);
-                                return;
+                            } else if (!AiMemoryManager.isEnabled(maid)) {
+                                LOGGER.info("AiMemoryExtractor: 提取完成但 AI/记忆已关闭，丢弃结果 maid={}", id);
+                            } else {
+                                handleExtraction(store, content, newestTime, gameTime, id);
+                                ok = true;
                             }
-                            handleExtraction(store, content, newestTime, gameTime, id);
                         } catch (Exception e) {
-                            fail(store, newestTime, id);
+                            com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e);
+                        } finally {
+                            releaseLlmSlot();
+                            agentFinished(store, newestTime, id, AgentKind.SINGLE, ok);
                         }
                     }));
         } catch (Exception e) {
-             com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e); // 构造请求失败（URL 非法等）——同样推进位置，防卡死
-            EXTRACTING.remove(maid.getUUID());
+            com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e); // 构造请求失败（URL 非法等）
+            releaseLlmSlot();
+            agentFinished(store, newestTime, id, AgentKind.SINGLE, false);
         }
     }
 
     /**
-     * v1.1.0：双 agent 单请求——完成回调里按 agent 类型写记忆，再结算计数。
-     * isSummaryAgent=true → 摘要；false → 事实/事件。
+     * 双 agent 单请求——完成回调里按 agent 类型写记忆，再结算本批。
+     * 失败不推进水位、不清续写队列；下次只补失败的那个 agent。
      */
     private static void sendAgent(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
                                   String model, String prompt, AiMemoryStore store,
-                                  long newestTime, long gameTime, int[] remaining,
-                                  boolean isSummaryAgent) {
+                                  long newestTime, long gameTime, AgentKind kind) {
         UUID id = maid.getUUID();
         try {
             ChatCompletion req = ChatCompletion.create().model(model).userChat(prompt);
@@ -336,39 +453,91 @@ public final class AiMemoryExtractor {
             HttpRequest.Builder builder = buildRequest(site, req);
             LLMSite.LLM_HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
                     .whenComplete((resp, err) -> server.execute(() -> {
+                        boolean ok = false;
                         try {
                             String content = responseContent(resp, err);
                             if (content == null) {
                                 logFail(maid, err, resp);
-                                done(store, newestTime, id, remaining);
-                                return;
-                            }
-                            if (isSummaryAgent) {
-                                handleSummary(store, content, gameTime, id);
+                            } else if (!AiMemoryManager.isEnabled(maid)) {
+                                LOGGER.info("AiMemoryExtractor: {} agent 完成但 AI/记忆已关闭，丢弃结果 maid={}",
+                                        kind, id);
                             } else {
-                                handleFacts(store, content, gameTime);
+                                if (kind == AgentKind.SUMMARY) {
+                                    handleSummary(store, content, gameTime, id);
+                                } else {
+                                    handleFacts(store, content, gameTime, id);
+                                }
+                                ok = true;
                             }
-                            done(store, newestTime, id, remaining);
                         } catch (Exception e) {
-                            done(store, newestTime, id, remaining);
+                            com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e);
+                        } finally {
+                            releaseLlmSlot();
+                            agentFinished(store, newestTime, id, kind, ok);
                         }
                     }));
         } catch (Exception e) {
-             com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e); // 构造请求失败（URL 非法等）——同样计入完成计数
-            done(store, newestTime, id, remaining);
+            com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", e); // 构造请求失败（URL 非法等）
+            releaseLlmSlot();
+            agentFinished(store, newestTime, id, kind, false);
         }
+    }
+
+    /** 单个 agent 完成结算：全部成功才推进水位；部分失败保留状态等待补跑。 */
+    private static void agentFinished(AiMemoryStore store, long newestTime, UUID id,
+                                      AgentKind kind, boolean ok) {
+        PartialBatch cur = PARTIAL.get(id);
+        if (cur == null || cur.newestTime() != newestTime) {
+            return; // 过期回调（批次已放弃/被替换）
+        }
+        boolean summary = cur.summaryDone();
+        boolean facts = cur.factsDone();
+        if (kind == AgentKind.SINGLE) {
+            if (ok) {
+                summary = true;
+                facts = true;
+            }
+        } else if (kind == AgentKind.SUMMARY) {
+            if (ok) {
+                summary = true;
+            }
+        } else if (ok) {
+            facts = true;
+        }
+        int pending = Math.max(0, cur.pending() - 1);
+        if (summary && facts) {
+            completeBatch(store, newestTime, id);
+            return;
+        }
+        if (pending > 0) {
+            PARTIAL.put(id, new PartialBatch(newestTime, summary, facts, cur.attempts(), pending));
+            return;
+        }
+        if (cur.attempts() >= MAX_ATTEMPTS) {
+            giveUp(store, newestTime, id, "超过最大重试次数");
+            return;
+        }
+        // 保留 EXTRACTING（用它的超时窗口做 5 分钟退避）；下轮 need 只算失败的那一半
+        PARTIAL.put(id, new PartialBatch(newestTime, summary, facts, cur.attempts(), 0));
     }
 
     /** 构造 OpenAI 兼容请求（共享 URL/密钥/超时/额外头逻辑） */
     private static HttpRequest.Builder buildRequest(LLMOpenAISite site, ChatCompletion req) {
-        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(pick(site.url(),
-                com.maidsmart.config.MaidSmartConfig.MEMORY_API_URL.get())))
-                .header("Authorization", "Bearer " + pick(site.secretKey(),
-                        com.maidsmart.config.MaidSmartConfig.MEMORY_API_KEY.get()))
+        String customUrl = com.maidsmart.config.MaidSmartConfig.MEMORY_API_URL.get();
+        boolean useCustom = customUrl != null && !customUrl.isBlank();
+        String url = useCustom ? customUrl.trim() : site.url();
+        // 自定义 URL 时只认自定义 key/headers：旧版会回落到 TLM 的密钥并把它发给自定义端点。
+        String key = useCustom
+                ? com.maidsmart.config.MaidSmartConfig.MEMORY_API_KEY.get()
+                : site.secretKey();
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofSeconds(60))
                 .POST(HttpRequest.BodyPublishers.ofString(AiMemoryModels.GSON.toJson(req)));
-        if (site.headers() != null) {
+        if (key != null && !key.isBlank()) {
+            builder.header("Authorization", "Bearer " + key.trim());
+        }
+        if (!useCustom && site.headers() != null) {
             site.headers().forEach(builder::header);
         }
         return builder;
@@ -399,25 +568,6 @@ public final class AiMemoryExtractor {
                 resp == null ? "null" : resp.statusCode());
     }
 
-    /** v1.1.0：双 agent 完成结算——两个 agent 都完成（无论成败）才推进水位线 + 移除进行中标记 */
-    private static void done(AiMemoryStore store, long newestTime, UUID id, int[] remaining) {
-        if (remaining[0] <= 0) {
-            return;
-        }
-        remaining[0]--;
-        if (remaining[0] == 0) {
-            store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
-            EXTRACTING.remove(id);
-            continuityComplete(store, id); // 实测八百二十九c：成功 → 从续写队列摘除
-        }
-    }
-
-    /** 失败/空响应：静默推进提取位置（防重试风暴），移除进行中标记 */
-    private static void fail(AiMemoryStore store, long newestTime, UUID id) {
-        store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
-        EXTRACTING.remove(id);
-        continuityDrop(id); // 实测八百二十九c：失败 → 留在续写队列，下次补发
-    }
 
     // ---------- 实测八百二十九c：续写队列 / 快照 / 崩溃恢复 ----------
 
@@ -449,31 +599,39 @@ public final class AiMemoryExtractor {
         }
     }
 
-    /** 失败：只清"在飞"表，续写队列里的待办保留供恢复。 */
-    private static void continuityDrop(UUID id) {
-        INFLIGHT.remove(id);
-    }
-
     /**
      * 崩溃/关服恢复：续写队列里还有没总结完的对话 → 重发一次（限频 60 秒，避免失败时刷请求）。
      * 成功写回后从队列摘除。
      */
-    private static void recoverPending(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
-                                       String model, AiMemoryStore store, long gameTime) {
+    private static boolean recoverPending(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
+                                          String model, AiMemoryStore store, long gameTime) {
         UUID id = maid.getUUID();
         if (EXTRACTING.containsKey(id) || INFLIGHT.containsKey(id)) {
-            return;
+            return false;
         }
         List<AiMemoryContinuityStore.Turn> pending = store.continuity().nextBatch();
         if (pending.isEmpty()) {
-            return;
+            return false;
         }
         long now = System.currentTimeMillis();
         Long lastTry = LAST_RECOVERY.get(id.toString());
         if (lastTry != null && now - lastTry < 60000L) {
-            return;
+            return false;
+        }
+        if (!AiMemoryManager.isEnabled(maid)
+                || !com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig.LLM_ENABLED.get()
+                || !com.maidsmart.memory.LlmEnableManager.isEnabled(maid)) {
+            return false;
+        }
+        if (!tryAcquireLlmSlot()) {
+            return false;
+        }
+        if (!com.maidsmart.dialogue.ApiQuotaManager.tryAcquire(1)) {
+            releaseLlmSlot();
+            return false;
         }
         LAST_RECOVERY.put(id.toString(), now);
+        EXTRACTING.put(id, now);
         String prompt = buildRecoveryPrompt(pending,
                 com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_MESSAGE_CHARS.get());
         try {
@@ -484,19 +642,30 @@ public final class AiMemoryExtractor {
             HttpRequest.Builder builder = buildRequest(site, req);
             LLMSite.LLM_HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
                     .whenComplete((resp, err) -> server.execute(() -> {
-                        String content = responseContent(resp, err);
-                        if (content == null) {
-                            return; // 下次再试（pending 留着）
-                        }
                         try {
+                            String content = responseContent(resp, err);
+                            if (content == null) {
+                                return; // 下次再试（pending 留着）
+                            }
+                            if (!AiMemoryManager.isEnabled(maid)) {
+                                return; // AI/记忆已关闭：结果丢弃，pending 留着
+                            }
                             handleExtraction(store, content, latestTick(pending), gameTime, id);
                             store.continuity().complete(pending);
                             LOGGER.info("AiMemoryExtractor: 补发未总结对话 {} 条 maid={}",
                                     pending.size(), id);
                         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
+                        } finally {
+                            EXTRACTING.remove(id);
+                            releaseLlmSlot();
                         }
                     }));
-        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
+            return true;
+        } catch (Exception ignored) {
+            com.maidsmart.diag.Diag.swallow("AiMemoryExtractor", ignored);
+            EXTRACTING.remove(id);
+            releaseLlmSlot();
+            return false;
         }
     }
 
@@ -644,8 +813,8 @@ public final class AiMemoryExtractor {
         }
         store.upsertEntity("主人", "person", now);
         store.prune(now, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get());
-        store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
-        EXTRACTING.remove(id);
+        com.maidsmart.memory.AiMemoryContext.invalidate(id);
+        // 水位线/续写队列由 agentFinished 在整批成功后统一推进
     }
 
     /** v1.1.0：双 agent·摘要写入（SUMMARY/IMPORTANCE/TAGS + 实测八百二十九c 的 SNAPSHOT 快照） */
@@ -657,10 +826,11 @@ public final class AiMemoryExtractor {
                     mergeTags(s.tags(), "summary"), s.importance() * 2, now, gameTime);
         }
         maybeUpdateSnapshot(store, content, s.summary(), id);
+        com.maidsmart.memory.AiMemoryContext.invalidate(id);
     }
 
     /** v1.1.0：双 agent·事实/事件写入（FACT/EVENT + TAGS；upsert/prune 在此） */
-    private static void handleFacts(AiMemoryStore store, String content, long gameTime) {
+    private static void handleFacts(AiMemoryStore store, String content, long gameTime, UUID id) {
         FactParts f = parseFactParts(content);
         SummaryParts s = parseSummaryParts(content); // 事实 prompt 也带 TAGS 行，供 EVENT 段打标
         long now = System.currentTimeMillis();
@@ -672,6 +842,7 @@ public final class AiMemoryExtractor {
         }
         store.upsertEntity("主人", "person", now);
         store.prune(now, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get());
+        com.maidsmart.memory.AiMemoryContext.invalidate(id);
     }
 
     /** 统一段落写入（走写入策略分层） */

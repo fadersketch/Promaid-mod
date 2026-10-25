@@ -6,14 +6,15 @@
   "max_columns": 3,
   "max_api_rows": 0,
   "reading": {
-    "zh": "本层 10 个子模块。",
-    "en": "10 submodules at this layer."
+    "zh": "本层 11 个子模块。",
+    "en": "11 submodules at this layer."
   },
   "order": [
     "promaid.system.follow",
     "promaid.system.work-area",
     "promaid.system.visibility",
     "promaid.system.home",
+    "promaid.system.wake",
     "promaid.system.schedule",
     "promaid.system.remote-gui",
     "promaid.system.protect",
@@ -33,6 +34,7 @@
         "promaid.system.work-area",
         "promaid.system.visibility",
         "promaid.system.home",
+        "promaid.system.wake",
         "promaid.system.schedule",
         "promaid.system.remote-gui",
         "promaid.system.protect",

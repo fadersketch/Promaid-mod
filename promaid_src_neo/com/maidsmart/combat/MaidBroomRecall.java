@@ -81,6 +81,10 @@ public final class MaidBroomRecall {
             if (com.maidsmart.patrol.PatrolFlight.effective(maid) != null) {
                 return false;
             }
+            // 【R1118】航图「飞过去」是一趟远行：牵引绳静默（旧版飞出 100 格就拽回来）。
+            if (com.maidsmart.patrol.MaidTravelTarget.active(maid)) {
+                return false;
+            }
             // 守家时拉回的是**她的工作区**，不是主人：实测（01:32:22）她沿工作范围盘旋、主人跑出 100 格
             // → 这条绳把她连人带扫帚搬到主人那边 100 格外，随后 5 分钟回不到圈里（一路被方块顶、高度被垫到 40+）。
             // 守家的语义是"待在家里"，所以这一档：**距离基准 = 圈心、落点 = 圈心**，主人走多远都不再是把

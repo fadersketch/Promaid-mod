@@ -2,6 +2,7 @@ package com.maidsmart.mixin;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
@@ -9,6 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * v1.3.0「扫帚模式」：让**没有玩家驾驶**的扫帚听女仆的——唯一改动 TLM 扫帚飞行的地方。
@@ -28,17 +30,74 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(EntityBroom.class)
 public abstract class EntityBroomMaidTravelMixin {
 
+    /**
+     * 【R1126】玩家同乘时，把「控制乘客」改回女仆。
+     * <p>原版 {@code LivingEntity.travelRidden} 只在 {@code isControlledByLocalInstance()}
+     * 为真时调 {@code travel}——服务端上玩家驾驶时那是**假**，于是服务端一个字节都不动，
+     * 位移只发生在客户端（这就是 R1125「飞过去没反应、玩家还在自主操纵」的根因）。
+     * 这里让 {@link com.maidsmart.combat.MaidBroomDrive#maidShouldPilot} 判定：该她飞时
+     * 返回 null，原版随即走 {@code travel} 分支，由服务端权威驱动；该玩家飞时原样返回。
+     */
+    @Inject(method = "m_6688_", at = @At("HEAD"), cancellable = true)
+    private void maidsmart$maidTakesWheel(
+            CallbackInfoReturnable<LivingEntity> cir) {
+        try {
+            EntityBroom self = (EntityBroom) (Object) this;
+            EntityMaid maid = maidsmart$secondMaidPassengerWithPlayerDriver();
+            if (maid != null && com.maidsmart.combat.MaidBroomDrive.maidShouldPilot(self, maid)) {
+                cir.setReturnValue(null);
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBroomMaidTravelMixin", ignored);
+        }
+    }
+
     @Inject(method = "m_7023_", at = @At("HEAD"), cancellable = true)
     private void maidsmart$maidPilotedTravel(Vec3 input, CallbackInfo ci) {
+        EntityBroom self = (EntityBroom) (Object) this;
         EntityMaid maid = maidsmart$firstMaidPassenger();
         if (maid == null) {
-            return; // 没女仆乘客（或第一乘客是玩家）→ 原版
+            // R1126：第一乘客是玩家、第二是她。只有「该她飞」时才会走到这里（上面的
+            // getControllingPassenger 已经把控制乘客改成 null）；不该她飞时原版走
+            // travelRidden，本轮根本不进 travel。
+            maid = maidsmart$secondMaidPassengerWithPlayerDriver();
+            if (maid == null || !com.maidsmart.tool.MaidScope.owned(maid)
+                    || !com.maidsmart.combat.MaidBroomDrive.maidShouldPilot(self, maid)) {
+                return;
+            }
+            net.minecraft.world.phys.Vec3 travelAim =
+                    com.maidsmart.patrol.MaidTravelTarget.aim(maid);
+            if (!com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
+                // 原版 TLM 扫帚任务（或别的任务）+ 玩家同乘：没有扫帚行为替她算推进，
+                // 就在这一拍直接按目标点算一次。没有目标 = 不该她飞（consistency 兜底）。
+                if (travelAim == null) {
+                    return;
+                }
+                com.maidsmart.combat.MaidBroomDrive.steerTo(maid, travelAim);
+            }
+            if (self.m_9236_().f_46443_) {
+                return; // 客户端让位（服务端权威驱动；见类注释的 v1.3.2 段）
+            }
+            maidsmart$noteTakeover(self, maid);
+            maidsmart$drive(self);
+            ci.cancel();
+            return;
         }
-        if (!com.maidsmart.tool.MaidScope.owned(maid)
-                || !com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
-            return; // 无主女仆 / 不是扫帚模式 → 原版
+        if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+            return; // 无主女仆 → 原版
         }
-        EntityBroom self = (EntityBroom) (Object) this;
+        net.minecraft.world.phys.Vec3 travelAim = com.maidsmart.patrol.MaidTravelTarget.aim(maid);
+        if (!com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
+            // R1126：任务不是扫帚模式，但玩家点了「飞过去」——这一趟仍由她飞
+            //（第一乘客是她 = 原版本来就没有驾驶者，我们只需补推进意图）。
+            if (travelAim == null || self.m_9236_().f_46443_) {
+                return;
+            }
+            com.maidsmart.combat.MaidBroomDrive.steerTo(maid, travelAim);
+            maidsmart$noteTakeover(self, maid);
+            maidsmart$drive(self);
+            ci.cancel();
+            return;
+        }
         if (self.m_6688_() instanceof Player) {
             return; // 有玩家在驾驶：驾驶权归玩家与 TLM 自己的 IBroomControl，我们一个字不改
         }
@@ -56,6 +115,27 @@ public abstract class EntityBroomMaidTravelMixin {
         //  冲突）——这一条由上面的三道接管条件（第一乘客是她 / 她的任务就是扫帚模式 /
         //  没有玩家在驾驶）已经严格保证：不满足就一个字节都不动。所以这里恢复 679 之前的口径。
         maidsmart$noteTakeover(self, maid);
+        maidsmart$drive(self);
+        ci.cancel();
+    }
+
+    /** 玩家驾驶、女仆坐第二座时返回她；否则 null。 */
+    private EntityMaid maidsmart$secondMaidPassengerWithPlayerDriver() {
+        try {
+            EntityBroom self = (EntityBroom) (Object) this;
+            if (self.m_20197_().size() < 2
+                    || !(self.m_20197_().get(0) instanceof Player)
+                    || !(self.m_20197_().get(1) instanceof EntityMaid m)) {
+                return null;
+            }
+            return m;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBroomMaidTravelMixin", ignored);
+            return null;
+        }
+    }
+
+    /** 用本 tick 的推进意图移动扫帚（原本只有"女仆单骑"那一支会用）。 */
+    private static void maidsmart$drive(EntityBroom self) {
         try {
             Vec3 thrust = com.maidsmart.combat.MaidBroomDrive.takeThrust(self);
             Vec3 v = thrust == null ? Vec3.f_82478_ : thrust;
@@ -65,7 +145,6 @@ public abstract class EntityBroomMaidTravelMixin {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBroomMaidTravelMixin", ignored);
             // 驱动出问题时"原地悬停"而不是放她自由落体（她只有 20 血，掉下去就是死）
         }
-        ci.cancel();
     }
 
     /** 第一乘客是女仆才返回她；此外一律 null（含"第一乘客是玩家"和"空车"） */
@@ -104,7 +183,7 @@ public abstract class EntityBroomMaidTravelMixin {
             }
             com.maidsmart.tool.PromaidLog.log("扫帚接管",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 服务端开始接管扫帚驱动（车上 "
-                            + broom.m_20197_().size() + " 人，无玩家驾驶；y="
+                            + broom.m_20197_().size() + " 人，驾驶权由女仆接管；y="
                             + String.format(java.util.Locale.ROOT, "%.2f", broom.m_20186_()) + "）");
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("EntityBroomMaidTravelMixin", ignored);
         }

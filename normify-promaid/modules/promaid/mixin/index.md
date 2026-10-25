@@ -5,10 +5,10 @@ parent: promaid
 name: {zh: 注入层（Mixin）, en: Mixin Layer}
 description:
   zh: >
-      96 个 Mixin（mixins.promaid.json 里 76 个 common 加 20 个
+      103 个 Mixin（mixins.promaid.json 里 83 个 common 加 20 个
       client），逐一核对无孤儿。这是本模组唯一能与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。
   en: >
-      96 mixins (76 common plus 20 client in mixins.promaid.json), verified 1:1
+      103 mixins (83 common plus 20 client in mixins.promaid.json), verified 1:1
       with no orphans. This layer is the mod's only legitimate channel for deep
       coupling into TLM/vanilla, and the reason it can change behavior without
       forking TLM.
@@ -22,7 +22,7 @@ state: active
 
 ## 注入层（Mixin） · Mixin Layer
 
-96 个 Mixin（mixins.promaid.json 里 76 个 common 加 20 个 client），逐一核对无孤儿。这是本模组唯一能与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。
+103 个 Mixin（mixins.promaid.json 里 83 个 common 加 20 个 client），逐一核对无孤儿。这是本模组唯一能与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。
 
 **代码证据**
 

@@ -30,6 +30,15 @@ public final class GuideContent {
         }
     }
 
+    /** 取长章节的段落区间 [from, to) 另起一章——超过十页的章节按语义拆短。 */
+    public static Chapter slice(String title, Chapter src, int from, int to) {
+        int a = Math.max(0, Math.min(from, src.paras.length));
+        int b = Math.max(a, Math.min(to, src.paras.length));
+        String[] part = new String[b - a];
+        System.arraycopy(src.paras, a, part, 0, part.length);
+        return new Chapter(title, part);
+    }
+
     /** 全部章节 */
     public static Chapter[] chapters() {
         return new Chapter[]{
@@ -38,34 +47,61 @@ public final class GuideContent {
                 GuideChaptersBasics.intro(),
                 GuideChaptersBasics.llmSetup(),
                 GuideChaptersBasics.bookGuide(),
-                GuideChaptersBasics.buildGuide(),
+                slice("建造系统教程 · 六步上手", GuideChaptersBasics.buildGuide(), 0, 14),
+                slice("建造系统教程 · 蓝图与机械图", GuideChaptersBasics.buildGuide(), 14, 26),
+                slice("建造系统教程 · 细则与取材", GuideChaptersBasics.buildGuide(), 26, 32),
                 GuideChaptersBasics.indexStoneGuide(),
-                GuideChaptersBasics.compressionBoxGuide(),
+                slice("压缩盒 · 入门与操作", GuideChaptersBasics.compressionBoxGuide(), 0, 14),
+                slice("压缩盒 · 女仆使用与爆炸物", GuideChaptersBasics.compressionBoxGuide(), 14, 22),
+                slice("压缩盒 · 配置与自检", GuideChaptersBasics.compressionBoxGuide(), 22, 24),
                 GuideChaptersWork.maidManageGuide(),
                 GuideChaptersWork.mineGuide(),
                 GuideChaptersWork.woodGuide(),
                 GuideChaptersWork.cookGuide(),
-                GuideChaptersWork.farmMiscGuide(),
-                GuideChaptersWork.scheduleGuide(),
-                GuideChaptersCombat.combatGuide(),
-                GuideChaptersFlight.flightGuide(),
-                GuideChaptersFlight.passiveGuide(),
-                GuideChaptersFlight.autoResurrectGuide(),
+                slice("农场与杂项功能 · 农场", GuideChaptersWork.farmMiscGuide(), 0, 17),
+                slice("农场与杂项功能 · 宰杀与杂项", GuideChaptersWork.farmMiscGuide(), 17, 25),
+                slice("排班表 · 列表与传送", GuideChaptersWork.scheduleGuide(), 0, 10),
+                slice("排班表 · 日程设置", GuideChaptersWork.scheduleGuide(), 10, 22),
+                slice("排班表 · 规则与工作区", GuideChaptersWork.scheduleGuide(), 22, 29),
+                slice("排班表 · 示例与总开关", GuideChaptersWork.scheduleGuide(), 29, 32),
+                slice("排班表 · 气泡与语音", GuideChaptersWork.scheduleGuide(), 32, 36),
+                slice("自保与保命 · 原理与逃生", GuideChaptersCombat.combatGuide(), 0, 9),
+                slice("自保与保命 · 魂符与搭高", GuideChaptersCombat.combatGuide(), 9, 20),
+                slice("自保与保命 · 实战举例", GuideChaptersCombat.combatGuide(), 28, 30),
+                slice("主动参战 · 选模式与还原", GuideChaptersCombat.combatGuide(), 20, 26),
+                slice("主动参战 · 威胁判定与免伤", GuideChaptersCombat.combatGuide(), 26, 28),
+                slice("空袭与飞行作战 · 入门与三件套", GuideChaptersFlight.flightGuide(), 0, 16),
+                slice("空袭与飞行作战 · 弹药与首次起飞", GuideChaptersFlight.flightGuide(), 16, 22),
+                slice("空袭与飞行作战 · 战斗链路与索敌", GuideChaptersFlight.flightGuide(), 22, 51),
+                slice("空袭与飞行作战 · 开关与法术", GuideChaptersFlight.flightGuide(), 51, 72),
+                slice("空袭与飞行作战 · 数值面板", GuideChaptersFlight.flightGuide(), 72, 78),
+                slice("空袭与飞行作战 · 空袭轰炸（上）", GuideChaptersFlight.flightGuide(), 78, 91),
+                slice("空袭与飞行作战 · 空袭轰炸（下）", GuideChaptersFlight.flightGuide(), 91, 104),
+                slice("空袭与飞行作战 · 第三方玩法与排查", GuideChaptersFlight.flightGuide(), 104, 117),
+                slice("仿创造飞行", GuideChaptersFlight.flightGuide(), 117, 127),
+                slice("诡厄巫法飞行聚晶", GuideChaptersFlight.flightGuide(), 127, 135),
+                GuideChaptersFlight.spearGuide(),
+                slice("被动技能 · 落地与死亡", GuideChaptersFlight.passiveGuide(), 0, 5),
+                slice("被动技能 · 搭路与垫脚回收", GuideChaptersFlight.passiveGuide(), 5, 13),
+                slice("被动技能 · 飞行跟随", GuideChaptersFlight.passiveGuide(), 13, 24),
+                slice("女仆自动复活 · 机制", GuideChaptersFlight.autoResurrectGuide(), 0, 11),
+                slice("女仆自动复活 · 示例与设置", GuideChaptersFlight.autoResurrectGuide(), 11, 17),
                 GuideChaptersFlight.bedInteropGuide(),
-                GuideChaptersFlight.broomGuide(),
-                // v1.3.9【巡逻航图】新道具——与扫帚模式相邻（它就是给扫帚模式 + 在家模式的
-                //  女仆画闭环轨道用的；配置入口也落在「移动与行为 → 扫帚模式」那一页里）。
+                slice("扫帚模式 · 入门与飞行", GuideChaptersFlight.broomGuide(), 0, 19),
+                slice("扫帚模式 · 限制与参数", GuideChaptersFlight.broomGuide(), 19, 30),
+                slice("扫帚模式 · 随机环绕与弹药", GuideChaptersFlight.broomGuide(), 30, 47),
+                slice("扫帚模式 · 换枪与排查", GuideChaptersFlight.broomGuide(), 47, 59),
                 GuideChaptersFlight.patrolGuide(),
-                // 【实测六百七十五】武装拴绳：从六百六十七 起一直只有更新日志提过它，
-                //  手册正文没有章节——。
-                //  位置紧跟扫帚模式（与配置面板里「扫帚模式 → 武装拴绳（二号位）」的相邻顺序一致）。
                 GuideChaptersCombat.tetherGuide(),
-                // v1.3.0(beta) 实测七百一十四：骑乘指挥棒（原版生物骑乘）——与武装拴绳相邻
-                GuideChaptersCombat.rideGuide(),
-                // v1.5.393 实测八百零四：饰品「大运」——与"飞行三件套"/骑乘指挥棒相邻
-                //  （它就是一件"飞行的时候怎么动"的道具，配置入口也落在「移动与行为」那一族里）
-                GuideChaptersCombat.daYunGuide(),
-                GuideChaptersCombat.aidGuide(),
+                slice("骑乘指挥棒 · 绑定与解除", GuideChaptersCombat.rideGuide(), 0, 12),
+                slice("骑乘指挥棒 · 走位与索敌", GuideChaptersCombat.rideGuide(), 12, 25),
+                slice("骑乘指挥棒 · 载具与龙", GuideChaptersCombat.rideGuide(), 25, 38),
+                slice("骑乘指挥棒 · 固定翼", GuideChaptersCombat.rideGuide(), 38, 53),
+                slice("骑乘指挥棒 · 投弹、数值与排查", GuideChaptersCombat.rideGuide(), 53, 66),
+                slice("饰品「大运」 · 规则与效果", GuideChaptersCombat.daYunGuide(), 0, 10),
+                slice("饰品「大运」 · 配置与排错", GuideChaptersCombat.daYunGuide(), 10, 18),
+                slice("贴身辅助 · 功能总览", GuideChaptersCombat.aidGuide(), 0, 11),
+                slice("贴身辅助 · 投喂与喂水", GuideChaptersCombat.aidGuide(), 11, 22),
                 GuideChaptersCombat.tacticsGuide(),
                 GuideChaptersCombat.weaponEquipGuide(),
                 GuideChaptersSystem.memoryGuide(),
@@ -74,11 +110,15 @@ public final class GuideContent {
                 GuideChaptersSystem.toolsGuide(),
                 GuideChaptersSystem.voiceGuide(),
                 GuideChaptersSystem.configPanelGuide(),
-                GuideChaptersSystem.termsGuide(),
+                slice("专业术语解释 · 基础与建造", GuideChaptersSystem.termsGuide(), 0, 19),
+                slice("专业术语解释 · 生存与飞行", GuideChaptersSystem.termsGuide(), 19, 30),
+                slice("专业术语解释 · 配置与速度", GuideChaptersSystem.termsGuide(), 30, 38),
                 GuideChaptersSystem.potionRules(),
                 GuideChaptersSystem.buildInternals(),
                 GuideChaptersSystem.costRules(),
+                GuideChaptersBasics.specialThanks(),
         };
+
     }
 
     // ================= 〇、功能总览（一键跳转配置） =================
@@ -154,6 +194,7 @@ public final class GuideContent {
             {"建造", "WORK:BUILD"},
             {"挖矿", "WORK:MINE"},
             {"空袭", "COMBAT:AIR_RAID:空袭·总开关（飞行作战）"},
+            {"仿创造飞行", "MOVE:FLIGHT_FOLLOW"},
             {"飞行作战", "COMBAT:AIR_RAID"},
             {"伐木", "WORK:WOOD"},
             {"烧制", "WORK:COOK_BREW"},
@@ -161,6 +202,8 @@ public final class GuideContent {
             {"钓鱼", "WORK:FISHING"},
             {"女仆管理", "COMBAT:DANGER"},
             {"排班表", "WORK:SCHEDULE"},
+            {"自保与保命", "COMBAT:SELF_PRESERVE"},
+            {"主动参战", "COMBAT:AUTO_COMBAT"},
             {"战斗与自保", "COMBAT:SELF_PRESERVE"},
             {"被动技能", "SURVIVAL"},
             {"自动复活", "SURVIVAL:REVIVE:女仆自动复活"},

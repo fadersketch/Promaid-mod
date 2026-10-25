@@ -130,6 +130,12 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
                     blockedCells++; // 悬空 / 无支撑面（草、火把、雪层等都不行）
                     continue;
                 }
+                // 实测一千〇一十二：支撑面是她自己垫的临时方块（挖矿垫脚/搭路，10 秒后
+                // 连同火把一起回收）→ 不插。玩家要的是"别把火把钉在自己刚放的石头上"。
+                if (com.maidsmart.task.PlacedBlockTracker.isAnyPlaced(level, below)) {
+                    blockedCells++;
+                    continue;
+                }
                 if (selfLit) {
                     if (masked == null) {
                         masked = new java.util.ArrayList<>();

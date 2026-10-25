@@ -516,6 +516,10 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         if (this.stallWatchdog(level, maid, gameTime)) {
             return;
         }
+        // R1125：同一目标硬超时（默认 60 秒，可配置）——哪怕一直在走位/动作也放弃
+        if (this.hardWatchdog(level, maid, gameTime)) {
+            return;
+        }
         // v1.5.109：移除 pullTowardTarget（setDeltaMovement 直接注入速度）——
         // 它与导航互相覆盖、搭高时把女仆从柱子上推走（"移速过快疯狂漂移"根因）。
         // 移动完全交给导航：目标够得着→挖；够不着→搭方块/走过去（approachOre）。
@@ -652,6 +656,14 @@ public class MaidMineBehavior extends MaidWorkBehavior {
             // 自己脚下，下一轮从她当前位置重新判定"这一片到底有没有矿"。
             this.dropStaleScan(maid);
             return;
+        }
+        // 实测一千〇五【home 检索范围】：目标落到工作区外（玩家挪了罗盘/排班锚点、圈心
+        // 移动）→ 与"跑出检索半径"同款：单独清空一次（不进排除表、不弃框，下轮扫描重选）
+        if (this.targetPos != null
+                && !com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, this.targetPos)) {
+            this.traceExit(maid, "mine 目标跑出工作区→清空", "target=" + this.targetPos);
+            this.targetPos = null;
+            this.destroyProgress = 0.0f;
         }
         // 实测九百三十八【目标路径上有岩浆 → 汇报一次】
         if (this.targetPos != null && lavaOnPath(level, maid, this.targetPos)) {
@@ -877,7 +889,7 @@ public class MaidMineBehavior extends MaidWorkBehavior {
         // 挖完：玩家同款破坏音效+粒子（levelEvent 2001），再掉落实体方块
         level.m_46796_(2001, this.targetPos, Block.m_49956_(state));
         BlockEntity be = level.m_7702_(this.targetPos);
-        // v1.5.161：自动收集（mine.autoCollect，默认关闭）——掉落物不进世界，
+        // v1.5.161：自动收集（mine.autoCollect，默认开启）——掉落物不进世界，
         // 直接塞进女仆背包（放不下才落地）；getDrops 六参版（m_49874_）与
         // dropResources 同款精准/时运判定。关闭时保持原逻辑（落地 + 即时回收）
         if (com.maidsmart.config.MaidSmartConfig.MINE_AUTO_COLLECT.get()) {
@@ -2386,6 +2398,12 @@ public class MaidMineBehavior extends MaidWorkBehavior {
     }
 
     /** 实测九百七十九：分帧扫描进行中她的"站着等"是正常的，不打卡死表 */
+    /** R1125：单个目标硬超时（配置秒 → tick；0 = 关闭）。 */
+    @Override
+    protected int hardTimeoutTicks() {
+        return com.maidsmart.config.MaidSmartConfig.MINE_HARD_TIMEOUT.get() * 20;
+    }
+
     @Override
     protected boolean stallWatchdogSuppressed(ServerLevel level, EntityMaid maid) {
         return MINE_SCANS.containsKey(maid.m_19879_());

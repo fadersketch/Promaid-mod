@@ -11,7 +11,7 @@ description:
       charge (propellant switched to realistic fireworks) and water/powder-snow
       landing clutch passives.
 source:
-  - {path: promaid_src_neo/com/maidsmart/combat/MaidTridentSpinBehavior.java, line: 1, end_line: 743}
+  - {path: promaid_src_neo/com/maidsmart/combat/MaidTridentSpinBehavior.java, line: 1, end_line: 586}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidRiptideBoost.java, line: 1, end_line: 558}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidMaceSmashBehavior.java, line: 1, end_line: 482}
 revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00

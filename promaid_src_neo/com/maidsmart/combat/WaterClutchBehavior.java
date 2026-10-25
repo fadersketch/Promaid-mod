@@ -311,20 +311,15 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         this.placeFluid(level, maid, land, !waterKey); // 有水钥匙用水；只有细雪钥匙 → 落地雪
     }
 
-    /** 背包里是否有指定物品（v1.1.0：水桶/细雪桶通用——落地雪复用） */
-    private boolean hasItem(EntityMaid maid, String itemId) {        Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+    /** 身上是否有指定物品（水桶/细雪桶通用——落地雪复用；含双手与额外容器） */
+    private boolean hasItem(EntityMaid maid, String itemId) {
+        Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                 net.minecraft.resources.ResourceLocation.parse(itemId));
         if (item == null) {
             return false;
         }
-        IItemHandler inv = maid.getAvailableBackpackInv();
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (!stack.isEmpty() && stack.getItem() == item) {
-                return true;
-            }
-        }
-        return false;
+        return com.maidsmart.tool.MaidExtraContainer.any(maid,
+                s -> !s.isEmpty() && s.getItem() == item);
     }
 
     /** 下界判断（NETHER = the_nether——照 SelfPreservationBehavior 的实证写法，勿用 OVERWORLD） */

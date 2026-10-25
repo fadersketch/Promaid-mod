@@ -3,6 +3,7 @@ package com.maidsmart.mixin;
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidMeleeAttack;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -10,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * 【持激流三叉戟时，她那一记普通挥砍换成旋转冲击】（在攻击/近战空袭中生效，**替换原本的攻击环节**）。
+ * 【持激流三叉戟 → 旋转冲击；持长矛核心长矛 → 整记平A让位给持续冲锋】（都在攻击/近战空袭中生效）。
  * 【为什么注这里（javap 实证）】TLM 攻击模式近战 = {@code MaidMeleeAttack.create(cooldown)} 返回的 OneShot，
  * 任务体是 {@code lambda$create$0}（javap -p 实证，两版同名同签名）：出手条件是"不拿远程武器 && 近战可达 &&
  * 目标可见"，动作是摆挥砍姿势后调 {@code doHurtTarget}（= 这一记"结算伤害"）。直接把这一条**换成起手旋转
@@ -27,6 +28,18 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(MaidMeleeAttack.class)
 public abstract class MaidMeleeRiptideMixin {
 
+    /** 持长矛时连挥砍动作一起吞掉：这一记的伤害只由持续冲锋里的长矛结算。 */
+    @Redirect(method = "lambda$create$0",
+            at = @At(value = "INVOKE",
+                    target = "Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;swing(Lnet/minecraft/world/InteractionHand;)V"),
+            require = 0)
+    private static void promaid$spearNoSwing(EntityMaid maid, InteractionHand hand) {
+        if (com.maidsmart.combat.SpearAttackBehavior.suppressesMelee(maid)) {
+            return;
+        }
+        maid.swing(hand);
+    }
+
     /**
      * 拦截那一记"结算伤害"：持激流三叉戟且能起手时换成旋转冲击，否则原样调回。
      *
@@ -38,6 +51,9 @@ public abstract class MaidMeleeRiptideMixin {
                     target = "Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;doHurtTarget(Lnet/minecraft/world/entity/Entity;)Z"),
             require = 0)
     private static boolean promaid$riptideInsteadOfSwing(EntityMaid maid, Entity target) {
+        if (com.maidsmart.combat.SpearAttackBehavior.suppressesMelee(maid)) {
+            return true; // 长矛冲锋接管：这一记不出手，伤害由 onUseTick 结算
+        }
         if (target instanceof LivingEntity living
                 && com.maidsmart.combat.MaidTridentSpinBehavior.replacesMelee(maid)
                 && maid.level() instanceof ServerLevel level

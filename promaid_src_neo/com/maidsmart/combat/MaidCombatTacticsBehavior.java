@@ -43,6 +43,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      *  完全打得到（反馈："女仆的手很长,完全打得到"），同时脱离敌人近战范围 */
     private static final double KITE_BACK_DIST = 3.0;
     /**
+     * 重锤 + 风弹档的贴脸绕圈半径（格）：必须留在猛击触发距离以内。
+     * 旧版统一按 2.2 格绕圈，而猛击只认 2 格内——加上攻击后的后撤与贴脸拉开，
+     * 她几乎永远站在 2 格外，于是只剩平A。这一档改成 1.6 格，给路径误差留 0.4 格余量。
+     */
+    private static final double MACE_ORBIT_RADIUS = 1.6;
+    /**
      * {@code CHECK_RANGE=8}，也正好是本类的接战范围（超出就不该举盾）。
      * <p>为什么必须放宽回 8：旧口径是「冷却中 **且** 贴身 ≤2.6 格」，而近战走位把
      * 冷却期整段推到 2.6 格以外——贴进 2.0 格就后退到 3.0（{@link #KITE_MELEE_RANGE}）、
@@ -139,6 +145,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     /** 是否战术激活（MaidMoveSuppressMixin 用）：开关 + 有存活目标 + 接战范围内 */
     public static boolean isActive(EntityMaid maid) {
+        if (com.maidsmart.combat.SpearAttackBehavior.takesOverMovement(maid)) {
+            return false; // 实测一千〇一十八：长矛冲锋期间走位归它独占
+        }
+        if (com.maidsmart.combat.SpearAirRaidBehavior.isActive(maid)) {
+            return false; // 实测一千〇二十二：长矛空袭独立链路自己飞
+        }
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TAKE_OVER_MOVEMENT.get()) {
             return false; // 实测九百九十三【接管走位·关】：战术不接管走位/跳劈（举盾走 isTacticsEnabled，不受影响）
         }
@@ -206,6 +218,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      *   原版 startUsingItem 互斥，同时用会互相顶掉（见 chargesUseSlot）； - 战术关闭 / 傀儡模式 / 骑扫帚：整体让位（见 isTacticsEnabled）。
      */
     public static boolean shouldUseShield(EntityMaid maid) {
+        if (com.maidsmart.combat.SpearAttackBehavior.takesOverMovement(maid)) {
+            return false; // 长矛正在使用物品槽位，举盾会把它顶掉
+        }
+        if (com.maidsmart.combat.SpearAirRaidBehavior.isActive(maid)) {
+            return false; // 长矛空袭独立链路同样占着使用槽位
+        }
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_SHIELD.get()) {
             return false;
         }
@@ -429,10 +447,16 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     private void meleeTick(EntityMaid maid, LivingEntity target) {
         double dist = maid.distanceTo(target);
         boolean cooling = maid.getBrain().getMemory(MemoryModuleType.ATTACK_COOLING_DOWN).isPresent();
+        // 【实测一千〇六十】重锤 + 风弹：贴脸是猛击的前置条件。
+        // 旧版的三套走位全都在把她往外推——攻击完成后撤 3.5 格、贴进 2 格退到 3 格、
+        // 平时按 2.2 格绕圈——而猛击只认 2 格内，于是风弹几乎永远没机会起跳。
+        // 这一档保留"靠近/绕圈"，但不再后撤、不再贴脸拉开，绕圈半径压到 1.6 格。
+        boolean maceWeapon = MaidMaceSmashBehavior.isMace(maid.getMainHandItem());
+        boolean maceLeap = maceWeapon && MaidMaceSmashBehavior.maceLeapMode(maid);
         // 攻击完成瞬间（冷却记忆刚写入）→ 后撤拉扯：打一刀退一步
         // v1.5.155：只适用于横扫——跳劈期间（jumpAir）不触发后撤（跳劈是接近
-        // 动作，跳完不该后退）
-        if (cooling && !this.wasCooling && !this.jumpAir) {
+        // 动作，跳完不该后退）；重锤档后退就再也回不到猛击距离，同样不触发。
+        if (cooling && !this.wasCooling && !this.jumpAir && !maceLeap) {
             this.retreatTicks = RETREAT_TICKS;
         }
         this.wasCooling = cooling;
@@ -451,7 +475,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         // 攻击节奏的短撤，这里是贴脸持续拉开；与跳劈互补：贴脸（<2 格）不跳劈，
         // 后退拉开到 3 格后再蛇形接近/跳劈——斧的"跳劈→普攻→后退"节奏由此成立
         if (com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_MELEE_KITE.get()
-                && dist < KITE_MELEE_RANGE && !this.jumpAir) {
+                && dist < KITE_MELEE_RANGE && !this.jumpAir && !maceLeap) {
             // 实测八百二十八：速度 1.15 → 1.0（不再额外加速；贴脸拉开距离的走位保留）
             this.navigateAway(maid, target, KITE_BACK_DIST - dist, 1.0f);
             return;
@@ -474,10 +498,14 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             // 70% 概率 + 群怪全禁是剑的横扫节奏，不适用于斧）
             boolean axeMode = maid.getMainHandItem().getItem()
                     instanceof net.minecraft.world.item.AxeItem;
+            // 【实测一千零五十九】重锤不走这套通用跳劈：它的起跳猛击由
+            // MaidMaceSmashBehavior 统一管（风弹 + 贴身 2 格），这里再跳一次只会
+            // 让她“一直在起跳”。重锤档保持地面平A，等敌人贴脸再交给猛击行为。
+            boolean maceMode = maceWeapon;
             // v1.5.188c：群怪抑制跳劈——多敌（索敌范围 ≥2）时【完全不跳劈】
             //（旧版 12% 概率仍会跳，反馈"面对群怪反而特别喜欢用跳劈"；
             // 群怪应尽最大可能横扫补伤害，跳劈单体收益低还破坏横扫节奏）
-            if (this.jumpCooldown <= 0 && dist > 1.8) {
+            if (this.jumpCooldown <= 0 && dist > 1.8 && !maceMode) {
                 boolean tryJump;
                 if (axeMode) {
                     // 斧：跳劈距离内 100% 尝试跳劈；更远需大跳 → 受 10 秒大跳 CD
@@ -563,7 +591,8 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                 this.orbitSide = -this.orbitSide;
             }
             this.navigateOrbit(maid, target,
-                    com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get(),
+                    maceLeap ? MACE_ORBIT_RADIUS
+                            : com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get(),
                     1.0f);
         }
         if (this.jumpCooldown > 0) {

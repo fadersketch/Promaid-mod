@@ -85,6 +85,16 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     private static final java.util.Map<String, java.util.UUID> BREW_USERS = new java.util.HashMap<>();
     /** 本行为实例当前占用的酿造台 key（行为停止/台子丢失时释放） */
     private String myBrewKey = null;
+    /** 已处理到的工位解绑代数（魂符收放/区块重载 → 解绑一次，见 MaidWorkTags#stationGen） */
+    private int seenStationGen = -1;
+
+    /** 清掉该女仆在静态占用表里的记录（魂符收起/放出时台子不再被"预留"）。 */
+    public static void forgetStation(java.util.UUID maidId) {
+        if (maidId == null) {
+            return;
+        }
+        BREW_USERS.entrySet().removeIf(e -> maidId.equals(e.getValue()));
+    }
 
     /** 酿造台占用键：维度 + 坐标（防跨维度同坐标冲突） */
     private static String brewKey(ServerLevel level, BlockPos pos) {
@@ -123,13 +133,37 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     // 缺什么（"尝试酿隐身药水缺发酵蛛眼，女仆卡在那边不动也没有相关报告"）。
     // 报告 = 女仆气泡 + 主人系统消息；30 秒冷却（按女仆）+ 同一材料不重复报，
     // 补上材料重置 missingNotified（换缺别的材料时能再报）。
-    private static final java.util.Map<java.util.UUID, Long> MISSING_CD = new java.util.HashMap<>();
-    /** 每女仆最近一次报缺的材料（同一材料不刷屏） */
-    private static final java.util.Map<java.util.UUID, String> LAST_MISSING = new java.util.HashMap<>();
-    /** v1.1.0 实测三百一十：缺料 pending 表（女仆 UUID → 首缺时刻）——
+    /** 缺料状态一律按【女仆 UUID + 材料 id】分开记：旧版只按女仆存一份，同时缺
+     *  烈焰粉和水瓶时后一个会把前一个的 pending/去重记录顶掉，两条报告互相盖掉
+     *  （反馈："酿药的时候不会报缺烈焰棒和水瓶"）。 */
+    private static final java.util.Map<String, Long> MISSING_CD = new java.util.HashMap<>();
+    /** 已报告过的缺料键（同一材料补上之前不重复报） */
+    private static final java.util.Set<String> MISSING_REPORTED = new java.util.HashSet<>();
+    /** v1.1.0 实测三百一十：缺料 pending 表（键 → 首缺时刻）——
      *  双通道确认：第一次缺料只记 pending 不报，下一轮重试确认后才真报
      *  （防共享存储被其他女仆抢走导致的假缺料误报） */
-    private static final java.util.Map<java.util.UUID, Long> MISSING_PENDING = new java.util.HashMap<>();
+    private static final java.util.Map<String, Long> MISSING_PENDING = new java.util.HashMap<>();
+
+    /** 缺料状态键（女仆 + 材料） */
+    private static String missingKey(EntityMaid maid, String itemId) {
+        return maid.getUUID() + "|" + itemId;
+    }
+
+    /** 该材料已补上 → 清掉它的 pending/已报标记（别的材料的记录不动） */
+    private static void clearMissing(EntityMaid maid, String itemId) {
+        String k = missingKey(maid, itemId);
+        MISSING_PENDING.remove(k);
+        MISSING_REPORTED.remove(k);
+        MISSING_CD.remove(k);
+    }
+
+    /** 行为停止时清掉该女仆的全部缺料记录（静态表防残留/增长） */
+    private static void clearAllMissing(EntityMaid maid) {
+        String prefix = maid.getUUID() + "|";
+        MISSING_PENDING.keySet().removeIf(k -> k.startsWith(prefix));
+        MISSING_REPORTED.removeIf(k -> k.startsWith(prefix));
+        MISSING_CD.keySet().removeIf(k -> k.startsWith(prefix));
+    }
 
     /** 酿造链常见材料中文名（气泡用——气泡是字符串，服务端拿不到客户端 I18n） */
     private static final java.util.Map<String, String> MAT_CN = new java.util.HashMap<>();
@@ -139,6 +173,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         MAT_CN.put("minecraft:gunpowder", "火药");
         MAT_CN.put("minecraft:dragon_breath", "龙息");
         MAT_CN.put("minecraft:blaze_powder", "烈焰粉");
+        MAT_CN.put("minecraft:water_bottle", "水瓶");
         MAT_CN.put("minecraft:redstone", "红石粉");
         MAT_CN.put("minecraft:glowstone_dust", "荧石粉");
         MAT_CN.put("minecraft:fermented_spider_eye", "发酵蛛眼");
@@ -164,35 +199,27 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     private void notifyMissing(EntityMaid maid, String itemId) {
         try {
             long nowTick = maid.level().getGameTime();
+            String key = missingKey(maid, itemId);
             // v1.1.0 实测三百一十：双通道确认——第一次缺料只记 pending（下轮重试），
             // 连续两轮都取不到才真报（防共享存储被抢导致的假缺料误报）
-            Long lastPending = MISSING_PENDING.get(maid.getUUID());
+            Long lastPending = MISSING_PENDING.get(key);
             if (lastPending == null) {
                 // 首缺：只记 pending（下轮重试确认），本轮不报
-                MISSING_PENDING.put(maid.getUUID(), nowTick);
+                MISSING_PENDING.put(key, nowTick);
                 return;
             }
-            if (nowTick - lastPending >= 200L) {
-                // v1.1.0 实测三百一十四（逻辑审查）：pending 超时 = 视为真缺直接报告——
-                // 旧版超时后重新记 pending，而酿造台烧制一轮 20 秒（>10 秒），女仆两次
-                // 调用 notifyMissing 间隔必然超时 → 永远走"记 pending"分支 → 真缺料
-                // 永远不报。超时说明 10 秒内没补上，按真缺处理。
-                MISSING_PENDING.remove(maid.getUUID());
-                // 落到下方报告流程（不 return）
-            } else {
-                // 上一轮也缺（10 秒内）→ 真缺，清 pending 并报告
-                MISSING_PENDING.remove(maid.getUUID());
-            }
-            Long lastCd = MISSING_CD.get(maid.getUUID());
+            // 上一轮也缺 → 真缺。超时（酿造一轮 20 秒 > 10 秒窗口）同样按真缺处理，
+            // 否则两次调用间隔必然超时、永远停在"记 pending"分支。
+            MISSING_PENDING.remove(key);
+            Long lastCd = MISSING_CD.get(key);
             if (lastCd != null && nowTick - lastCd < 600L) {
                 return;
             }
-            String lastMissing = LAST_MISSING.get(maid.getUUID());
-            if (itemId.equals(lastMissing)) {
+            if (MISSING_REPORTED.contains(key)) {
                 return; // 同一材料已报过，不刷屏
             }
-            MISSING_CD.put(maid.getUUID(), nowTick);
-            LAST_MISSING.put(maid.getUUID(), itemId);
+            MISSING_CD.put(key, nowTick);
+            MISSING_REPORTED.add(key);
             // v1.1.0 实测三百二十四：缺料落盘（旧版只有气泡/聊天，事后无从验查）
             com.maidsmart.tool.PromaidLog.log("酿造",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 真缺料：" + itemId);
@@ -204,9 +231,12 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (owner instanceof net.minecraft.server.level.ServerPlayer sp) {
                 net.minecraft.world.item.Item mat = net.minecraft.core.registries.BuiltInRegistries.ITEM
                         .get(ResourceLocation.parse(itemId));
-                net.minecraft.network.chat.Component matName =
-                        mat == null ? net.minecraft.network.chat.Component.literal(cn)
-                                : new ItemStack(mat).getDisplayName();
+                // 未注册 id（水瓶不是物品，是 potion 的数据）可能拿到 AIR——AIR 的
+                // 物品栈是空栈，旧版会把它当物品名显示成「空气」。
+                ItemStack shownMat = mat == null ? ItemStack.EMPTY : new ItemStack(mat);
+                net.minecraft.network.chat.Component matName = shownMat.isEmpty()
+                        ? net.minecraft.network.chat.Component.literal(cn)
+                        : shownMat.getDisplayName();
                 sp.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                                 "\u00a7e[酿造]\u00a7f " + com.maidsmart.tool.PromaidLog.nameOf(maid)
                                         + " 缺少材料：")
@@ -255,6 +285,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void start(ServerLevel level, EntityMaid maid, long gameTime) {
+        this.seenStationGen = MaidWorkTags.stationGen(maid);
         if (this.standPos == null) {
             this.standPos = this.findBrewingStand(level, maid);
         }
@@ -268,6 +299,16 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
+        // 魂符收放/区块重载：解绑一次并重新找台（不再抱着收魂前那台酿造台）。
+        int gen = MaidWorkTags.stationGen(maid);
+        if (gen != this.seenStationGen) {
+            this.seenStationGen = gen;
+            this.releaseBrew();
+            this.standPos = null;
+            MaidWorkTags.setStationLock(maid, false);
+            MaidWorkTags.setStill(maid, false);
+            this.standUp(maid);
+        }
         if (this.standPos == null) {
             // v1.2.4 实测六百三十七【不再"没台子就把自己钉死"】：旧版这里 setStill(true)
             // 站桩等待，而 WORK_STILL 经 MaidMoveSuppressMixin 是**彻底静止**（每 tick
@@ -282,24 +323,58 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             this.scanCooldown = 20;
             this.standPos = this.findBrewingStand(level, maid);
             if (this.standPos == null) {
+                MaidWorkTags.setStationLock(maid, false);
                 this.wander(maid);
                 return;
             }
             // v1.1.0 实测二百九十一：绑定成功 → 登记占用（多女仆分散）
             this.claimBrew(level, maid, this.standPos);
+            if (this.standPos == null) {
+                // 台子被别的女仆占用：claimBrew 已清空，本轮重新找（旧版会拿 null 去查方块）
+                MaidWorkTags.setStationLock(maid, false);
+                this.wander(maid);
+                return;
+            }
         }
         BlockState state = level.getBlockState(this.standPos);
         if (!(state.getBlock() instanceof BrewingStandBlock)) {
             this.standPos = null;
             this.releaseBrew(); // v1.1.0 实测二百九十一：台子没了 → 释放占用
             this.standUp(maid); // v1.5.252：酿造台没了恢复站立
+            MaidWorkTags.setStationLock(maid, false); // 台子被破坏 → 跟随链路恢复
             // 台子没了：不站桩（下一 tick 走上面的"找台子"分支，边走边找）
             MaidWorkTags.setStill(maid, false);
             this.wander(maid);
             return;
         }
+        // 实测一千〇五【home 检索范围】：绑着的台子落在工作区外（玩家把圈心挪了位置）→
+        // 与"台子没了"同待遇：解绑、边走边找圈内的
+        if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, this.standPos)) {
+            this.standPos = null;
+            this.releaseBrew();
+            this.standUp(maid);
+            MaidWorkTags.setStationLock(maid, false);
+            MaidWorkTags.setStill(maid, false);
+            this.wander(maid);
+            return;
+        }
+        // 台子有效 → 从这一刻起锁住：不再跟主人（走去台子的路上也不再被跟随打断）
+        MaidWorkTags.setStationLock(maid, true);
         double distSq = maid.distanceToSqr(this.standPos.getX() + 0.5, this.standPos.getY() + 0.5, this.standPos.getZ() + 0.5);
-        if (distSq > 6.25) {
+        // 【R1110】与营火/炉子同口径：只站酿造台**邻格**，不往台子顶上踩；四周都没地方站时
+        // 才退回旧行为（走方块本身），被迫在顶上也不改位置。
+        BlockPos stand = stationStandSpot(level, maid, this.standPos);
+        if (stand != null) {
+            double standSq = maid.distanceToSqr(
+                    stand.getX() + 0.5, stand.getY() + 0.5, stand.getZ() + 0.5);
+            if (standSq > 4.0 || maid.blockPosition().equals(this.standPos)) {
+                MaidWorkTags.setStill(maid, false);
+                this.standUp(maid);
+                maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
+                        new WalkTarget(new BlockPosTracker(stand), 1.0f, 1));
+                return;
+            }
+        } else if (distSq > 6.25) {
             // 还没到酿造台：解除站桩标记，允许 MoveToTargetSink 走过去
             MaidWorkTags.setStill(maid, false);
             this.standUp(maid);
@@ -332,6 +407,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         boolean still = isBrewTask(maid);
         if (!still) {
             MaidWorkTags.setStill(maid, false);
+            MaidWorkTags.setStationLock(maid, false); // 切出酿造任务 → 跟随链路立刻恢复
             this.standUp(maid);
         }
         return still;
@@ -341,9 +417,38 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     protected void stop(ServerLevel level, EntityMaid maid, long gameTime) {
         // v1.5.24：行为真正停止时解除站桩标记（双保险）+ 恢复站立
         MaidWorkTags.setStill(maid, false);
+        MaidWorkTags.setStationLock(maid, false);
+        clearAllMissing(maid); // 静态缺料表防残留
         this.standUp(maid);
         // v1.1.0 实测二百九十一：行为停止 → 释放酿造台占用（其他女仆可接手）
         this.releaseBrew();
+    }
+
+    /** 【R1110】台子旁的站位：只挑"脚下不实、头上不实、不是营火/危险方块"的邻格，就近优先 */
+    private static BlockPos stationStandSpot(ServerLevel level, EntityMaid maid, BlockPos station) {
+        BlockPos best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos p = station.relative(d);
+            BlockState feet = level.getBlockState(p);
+            BlockState head = level.getBlockState(p.above());
+            if (feet.getBlock() instanceof net.minecraft.world.level.block.CampfireBlock
+                    || feet.isSolidRender(level, p) || head.isSolidRender(level, p.above())) {
+                continue;
+            }
+            if (com.maidsmart.tool.DangerBlocks.isDanger(feet.getBlock())) {
+                continue;
+            }
+            if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, p)) {
+                continue;
+            }
+            double sq = maid.distanceToSqr(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5);
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = p;
+            }
+        }
+        return best;
     }
 
     /** v1.5.252：恢复站立（若当前是坐姿） */
@@ -410,6 +515,10 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (!fuel.isEmpty()) {
                 stand.setItem(4, fuel);
                 swing(maid, fuel); // v1.1.0 实测二百八十一：动作可视化（五百九十七：副手举燃料）
+                clearMissing(maid, "minecraft:blaze_powder");
+            } else {
+                // 燃料槽空且背包没烈焰粉：不报就是"站在台前一动不动"（反馈：不报缺烈焰粉）
+                this.notifyMissing(maid, "minecraft:blaze_powder");
             }
         }
         // 2. 收成品：槽0-2 里是"最终状态"（water/awkward 之外的一切药水）→ 收走
@@ -422,19 +531,23 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         //    永远轮不到）
         for (int i = 0; i <= 2; i++) {
             ItemStack s = stand.getItem(i);
-            if (this.isDonePotion(s)) {
-                if (cfg.mode == com.maidsmart.brew.BrewConfig.MODE_TARGETED) {
-                    if (this.isTargetFinal(s, cfg)) {
-                        this.takeIntoMaid(maid, stand, i);
-                    } else if (!this.isOnTargetChain(s, cfg)) {
-                        this.takeIntoMaid(maid, stand, i); // 非目标药水收走腾位
-                    }
-                    // 链上中间产物（非最终）留在酿造台继续
-                } else if (this.isBatchFinal((net.minecraft.server.level.ServerLevel) maid.level(), s, cfg)) {
-                    this.takeIntoMaid(maid, stand, i);
-                }
-                // 批量模式未到目标强化/形态的成品：不收，留在酿造台继续推进
+            if (s.isEmpty()) {
+                continue;
             }
+            if (cfg.mode == com.maidsmart.brew.BrewConfig.MODE_TARGETED) {
+                // 目标本身就是 water/awkward 时 isDonePotion 恒 false——旧版整个收成品段
+                // 被跳过，粗制药水永远留在台里。定向模式先认链终点。
+                if (this.isTargetFinal(s, cfg)) {
+                    this.takeIntoMaid(maid, stand, i);
+                } else if (this.isDonePotion(s) && !this.isOnTargetChain(s, cfg)) {
+                    this.takeIntoMaid(maid, stand, i); // 非目标药水收走腾位
+                }
+                // 链上中间产物（非最终）留在酿造台继续
+            } else if (this.isDonePotion(s)
+                    && this.isBatchFinal((net.minecraft.server.level.ServerLevel) maid.level(), s, cfg)) {
+                this.takeIntoMaid(maid, stand, i);
+            }
+            // 批量模式未到目标强化/形态的成品：不收，留在酿造台继续推进
         }
         // 3. 按配置下料（槽3 空时才放材料，一次一轮）
         //    v1.5.252：手册"自动酿造"关闭时跳过——只维持（补燃料+收成品），
@@ -615,8 +728,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     /** 定向模式：槽内药水是否为目标链的最终成品（含形态） */
     private boolean isTargetFinal(ItemStack s, com.maidsmart.brew.BrewConfig cfg) {
-        if (!cfg.hasValidTarget()) {
-            return false;
+        if (!cfg.hasValidTarget() || "minecraft:water".equals(cfg.targetPotion)) {
+            return false; // 水瓶是基底，不是可收取的终点（防"收了又补"死循环）
         }
         net.minecraft.world.item.alchemy.Potion p = com.maidsmart.brew.PotionCompat.of(s);
         if (p == null) {
@@ -689,10 +802,15 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                     if (!base.isEmpty()) {
                         stand.setItem(i, base);
                         swing(maid, base);
+                        clearMissing(maid, "minecraft:water_bottle");
+                    } else {
+                        // 水瓶和可继续推进的成品药水都没有 → 真缺基底（反馈：不报缺水瓶）
+                        this.notifyMissing(maid, "minecraft:water_bottle");
                     }
                 } else {
                     stand.setItem(i, bottle);
                     swing(maid, bottle);
+                    clearMissing(maid, "minecraft:water_bottle");
                 }
                 continue;
             }
@@ -731,9 +849,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 stand.setItem(3, ing);
                 swing(maid, ing); // v1.1.0 实测二百八十一：下料动作可视化（五百九十七：副手举它）
                 // 补料后重置缺料记录（下次缺别的材料能再报）
-                LAST_MISSING.remove(maid.getUUID());
-                // v1.1.0 实测三百一十：补料成功 → 清 pending（下次真缺时重新双通道确认）
-                MISSING_PENDING.remove(maid.getUUID());
+                clearMissing(maid, rid.toString());
             } else {
                 // v1.1.0 实测二百八十一：缺料立即报告（旧版静默等待，玩家不知道
                 // 卡在缺什么）——链上已有步骤照常完成，缺的这步停下并提示
@@ -753,6 +869,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 if (!bottle.isEmpty()) {
                     stand.setItem(i, bottle);
                     swing(maid, bottle);
+                    clearMissing(maid, "minecraft:water_bottle");
                 } else {
                     // v1.1.0 实测三百零六（反馈："往女仆兜里只放了 3 分钟夜视和
                     // 红石粉，然后就不会自动把 3 分钟夜视放进炼药台"）：没有水瓶 →
@@ -765,6 +882,10 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                     if (!base.isEmpty()) {
                         stand.setItem(i, base);
                         swing(maid, base);
+                        clearMissing(maid, "minecraft:water_bottle");
+                    } else {
+                        // 水瓶和可继续推进的成品药水都没有 → 真缺基底（反馈：不报缺水瓶）
+                        this.notifyMissing(maid, "minecraft:water_bottle");
                     }
                 }
                 continue;
@@ -777,6 +898,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 if (!wart.isEmpty()) {
                     stand.setItem(3, wart);
                     swing(maid, wart);
+                    clearMissing(maid, "minecraft:nether_wart");
                 }
             } else if (this.isPotion(s, "minecraft:awkward")) {
                 // 粗药阶段：放下界疣以外的正向材料（红石/荧石对粗药无效、
@@ -786,6 +908,11 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 if (!ingredient.isEmpty()) {
                     stand.setItem(3, ingredient);
                     swing(maid, ingredient); // v1.2.2 实测五百九十七：这一路旧版连挥臂都没有
+                    net.minecraft.resources.ResourceLocation iid =
+                            net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(ingredient.getItem());
+                    if (iid != null) {
+                        clearMissing(maid, iid.toString());
+                    }
                 }
             } else {
                 // 基础药水（真药水/平凡/浓稠）：按配置补强化/形态
@@ -821,6 +948,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 if (!reagent.isEmpty()) {
                     stand.setItem(3, reagent);
                     swing(maid, reagent); // v1.2.2 实测五百九十七：强化材料同样举一下
+                    clearMissing(maid, reagentId);
                     return;
                 }
                 // 配置材料有配方但背包没有 → 缺料等待（不换另一种——配置优先）
@@ -833,6 +961,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 if (!reagent.isEmpty()) {
                     stand.setItem(3, reagent);
                     swing(maid, reagent); // v1.2.2 实测五百九十七：强化材料同样举一下
+                    clearMissing(maid, altId);
                     return;
                 }
                 this.notifyMissing(maid, altId);
@@ -855,9 +984,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (!ing.isEmpty()) {
                 stand.setItem(3, ing);
                 swing(maid, ing); // v1.1.0 实测二百八十一：下料动作可视化（五百九十七：副手举它）
-                LAST_MISSING.remove(maid.getUUID());
-                // v1.1.0 实测三百一十：补料成功 → 清 pending（下次真缺时重新双通道确认）
-                MISSING_PENDING.remove(maid.getUUID());
+                // 形态材料已补上 → 清该材料的缺料记录（下次真缺时重新双通道确认）
+                clearMissing(maid, rid.toString());
             } else {
                 // v1.1.0 实测二百八十一：缺火药/龙息立即报告（"喷溅型根本没法酿"
                 // 的感知根因——旧版静默等待，玩家不知道还要往背包放形态材料）
@@ -1152,6 +1280,11 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 for (int dz = -brewRadius(); dz <= brewRadius(); dz++) {
                     BlockPos p = pos.offset(dx, dy, dz);
                     if (level.getBlockState(p).getBlock() instanceof BrewingStandBlock) {
+                        // 实测一千〇五【home 检索范围】：只认工作区（河童罗盘/排班锚点画的圈）
+                        // 里的台子——圈外的一概不管；非 home 模式恒放行（口径见 WorkAreaClamp）
+                        if (!com.maidsmart.follow.WorkAreaClamp.allowsWork(maid, p)) {
+                            continue;
+                        }
                         // v1.1.0 实测二百九十一：跳过被【其他女仆】占用的酿造台
                         //（自己占的不跳）——多个女仆分散到不同台子，不挤同一个；
                         // 占用者已死/已移除 → 懒清理该占用（与熔炉同款）

@@ -299,6 +299,19 @@ public final class BlueprintMaterials {
 
     public static int countMaterial(EntityMaid maid, String blockId) {
         Set<String> group = BlueprintLooseMatching.equivalentGroup(blockId);
+        // 她自己的 backpack 没有 → 先请 TLM 从额外容器（精妙背包/旅行者背包）
+        // 搬一组同类材料进来再统计；否则"材料在精妙背包里"会被判成没有。
+        Item want = group == null ? itemForBlock(blockId) : null;
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, stack -> {
+            if (stack == null || stack.m_41619_()) {
+                return false;
+            }
+            if (group != null) {
+                ResourceLocation id = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+                return id != null && group.contains(id.toString());
+            }
+            return want != null && stack.m_41720_() == want;
+        }, -1);
         int count = 0;
         IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
@@ -313,8 +326,7 @@ public final class BlueprintMaterials {
                 }
             } else {
                 // v1.5.287：itemForBlock（redstone_wire → 红石粉）
-                Item item = itemForBlock(blockId);
-                if (item != null && stack.m_41720_() == item) {
+                if (want != null && stack.m_41720_() == want) {
                     count += stack.m_41613_();
                 }
             }
@@ -322,24 +334,51 @@ public final class BlueprintMaterials {
         return count;
     }
 
+    /** v1.3.3 实测一千【退料】：consumeOne 的返回值——item 是"拿来放的那件物品"（与旧
+     *  consumeBlock 的返回完全同义），taken 是"真从她背包扣下来的那一件实物"（含 NBT）。
+     *  旧版只回 Item 引用，实物在函数里就被丢掉：doPlace 返回 false 的每条路
+     *  （延后 / 补支撑失败 / 放置后被打掉 …）都把材料吞了（"搭一个扣一个"只写了前半句）。
+     *  taken 为空栈 = 没有真扣实物（创造模式 / 水桶作工具档），退料端自动跳过。 */
+    public static final class Consumed {
+        public final Item item;
+        public final ItemStack taken;
+
+        Consumed(Item item, ItemStack taken) {
+            this.item = item;
+            this.taken = taken == null ? ItemStack.f_41583_ : taken;
+        }
+    }
+
+    /** 放置未成退料：把 consumeOne 真扣下来的那件原样塞回她背包（塞不下掉脚下，见 MaidGiveBack） */
+    public static void refundConsumed(EntityMaid maid, Consumed used, String why) {
+        if (maid == null || used == null || used.taken.m_41619_()) {
+            return;
+        }
+        com.maidsmart.tool.MaidGiveBack.give(maid, used.taken, why);
+    }
+
     public static Item consumeBlock(EntityMaid maid, String blockId) {
+        return consumeOne(maid, blockId).item;
+    }
+
+    public static Consumed consumeOne(EntityMaid maid, String blockId) {
         // v1.5.24：主人处于创造模式 → 材料视为无限，直接返回对应物品（不扣任何背包）
         if (maid.m_269323_() instanceof Player owner && isCreative(owner)) {
             // v1.5.287：itemForBlock（redstone_wire → 红石粉——否则创造也建不出线）
             Item exact = itemForBlock(blockId);
             if (exact != null) {
-                return exact;
+                return new Consumed(exact, null);
             }
             Set<String> cg = BlueprintLooseMatching.equivalentGroup(blockId);
             if (cg != null) {
                 for (String id : cg) {
                     Item gi = itemForBlock(id);
                     if (gi != null) {
-                        return gi;
+                        return new Consumed(gi, null);
                     }
                 }
             }
-            return null;
+            return new Consumed(null, null);
         }
         // v1.5.317：水/岩浆特殊材料（机器蓝图保留液体步骤后）——
         // 水 = 无限材料：女仆或主人背包有 1 个水桶作【工具】即可放任意多水源
@@ -347,30 +386,47 @@ public final class BlueprintMaterials {
         // 空桶，见 returnEmptyBucket——岩浆不可再生，需玩家备 N 桶周转）。
         if ("minecraft:water".equals(blockId)) {
             return hasBucketTool(maid, "minecraft:water_bucket")
-                    ? net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
-                            net.minecraft.resources.ResourceLocation.parse("minecraft:water_bucket"))
-                    : null;
+                    ? new Consumed(net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                            net.minecraft.resources.ResourceLocation.parse("minecraft:water_bucket")), null)
+                    : new Consumed(null, null);
         }
         if ("minecraft:lava".equals(blockId)) {
             Item lavaBucket = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:lava_bucket"));
+            // 真取物：先从额外容器搬 1 桶进来，下面的背包/extractExact 才拿得到。
+            com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                    s -> !s.m_41619_() && s.m_41720_() == lavaBucket, 1);
             ItemStack taken = extractExact(maid.getAvailableBackpackInv(), lavaBucket, 1);
             if (!taken.m_41619_()) {
-                return lavaBucket; // 已从女仆背包取走 1 岩浆桶
+                return new Consumed(lavaBucket, taken); // 已从女仆背包取走 1 岩浆桶
             }
-            return null; // 调用方会尝试主人背包（tryTakeFromOwner）
+            return new Consumed(null, null); // 调用方会尝试主人背包（tryTakeFromOwner）
         }
         Item item = itemForBlock(blockId);
+        Set<String> group = BlueprintLooseMatching.equivalentGroup(blockId);
+        // 真取物：先从额外容器搬 1 件目标材料进来（精确或等价族），再走原来的背包扫描。
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> {
+            if (s == null || s.m_41619_()) {
+                return false;
+            }
+            if (item != null && s.m_41720_() == item) {
+                return true;
+            }
+            if (group != null) {
+                ResourceLocation id = ForgeRegistries.ITEMS.getKey(s.m_41720_());
+                return id != null && group.contains(id.toString());
+            }
+            return false;
+        }, 1);
         IItemHandler inv = maid.getAvailableBackpackInv();
         // 1. 精确匹配优先
         if (item != null) {
             ItemStack taken = extractExact(inv, item, 1);
             if (!taken.m_41619_()) {
-                return item;
+                return new Consumed(item, taken);
             }
         }
         // 2. 等价族内任意物品
-        Set<String> group = BlueprintLooseMatching.equivalentGroup(blockId);
         if (group != null) {
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
@@ -381,9 +437,12 @@ public final class BlueprintMaterials {
                 if (stackId != null && group.contains(stackId.toString())) {
                     // 【实测七百六十二·issue #19 三修】同 extractExact：只认"真扣到了"。
                     // 先留一份 item 引用（extractItem 归零后槽里那件会被换成 EMPTY）。
+                    // v1.3.3 实测一千：再留一份整栈快照——退料要退回"含 NBT 的原样一件"。
                     Item picked = stack.m_41720_();
+                    ItemStack before = stack.m_41777_();
                     if (com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(inv, i)) {
-                        return picked;
+                        return new Consumed(picked,
+                                net.minecraftforge.items.ItemHandlerHelper.copyStackWithSize(before, 1));
                     }
                 }
             }
@@ -441,12 +500,12 @@ public final class BlueprintMaterials {
                     }
                     ItemStack taken = extractExact(inv, altItem, 1);
                     if (!taken.m_41619_()) {
-                        return altItem;
+                        return new Consumed(altItem, taken);
                     }
                 }
             }
         }
-        return null;
+        return new Consumed(null, null);
     }
 
     public static final Map<String, String> BLOCK_ITEM_OVERRIDES = Map.of(
@@ -539,12 +598,10 @@ public final class BlueprintMaterials {
         if (bucket == null) {
             return false;
         }
-        IItemHandler inv = maid.getAvailableBackpackInv();
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack s = inv.getStackInSlot(i);
-            if (!s.m_41619_() && s.m_41720_() == bucket) {
-                return true;
-            }
+        // 双手 / 背包（含压缩盒）/ 额外容器（精妙背包、旅行者背包）一起看
+        if (com.maidsmart.tool.MaidExtraContainer.any(maid,
+                s -> !s.m_41619_() && s.m_41720_() == bucket)) {
+            return true;
         }
         if (maid.m_269323_() instanceof net.minecraft.world.entity.player.Player owner) {
             net.minecraft.world.Container ci = owner.m_150109_();

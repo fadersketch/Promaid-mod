@@ -10,9 +10,9 @@ import net.minecraft.world.item.ItemStack;
 /**
  * （每 3 秒检查一次，命中即止）：
  * 1. 血量 < 30%（aidHealthThreshold）：喷溅治疗药水 → 滞留治疗药水 → 金苹果/附魔
- *    金苹果（即时增益）→ 喷溅/滞留再生药水 → 普通治疗药水塞主人背包（提示快喝）→
+ *    金苹果（即时增益）→ 喷溅/滞留再生药水 → 普通治疗药水直接喂给主人（效果立刻生效）→
  *    喂高饱食物（让主人自然回血）；
- * 2. 着火：喷溅/滞留抗火药水 → 普通抗火塞背包；
+ * 2. 着火：喷溅/滞留抗火药水 → 普通抗火直接喂给主人；
  * 3. 负面效果（中毒/凋零/缓慢/虚弱/失明/饥饿/反胃/黑暗/漂浮）：牛奶桶塞背包（全解）
  *    → 蜂蜜瓶（解中毒 + 回饱食）；
  * 4. 饱食度 < 12（aidFoodThreshold）：按饱和度恢复量喂最优食物（EmotionalActionExecutor.
@@ -91,36 +91,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  变体视为同种（否则普通/延长/喷溅/滞留抗火各是一个 key，跳岩浆会把每种
      *  变体各投一瓶，实测"多扔了不少药水"） */
     private static String potionKey(ItemStack stack) {
-        try {
-            net.minecraft.world.item.alchemy.Potion potion =
-                    net.minecraft.world.item.alchemy.PotionUtils.m_43579_(stack);
-            if (potion == null) {
-                return "unknown";
-            }
-            net.minecraft.resources.ResourceLocation key =
-                    net.minecraftforge.registries.ForgeRegistries.POTIONS.getKey(potion);
-            if (key == null) {
-                return "unknown";
-            }
-            String id = key.toString(); // minecraft:long_swiftness
-            int dot = id.indexOf(':');
-            String ns = dot >= 0 ? id.substring(0, dot + 1) : "minecraft:";
-            String base = dot >= 0 ? id.substring(dot + 1) : id;
-            if (base.startsWith("long_")) {
-                base = base.substring(5);
-            }
-            if (base.startsWith("strong_")) {
-                base = base.substring(7);
-            }
-            return ns + base; // minecraft:swiftness
-        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
-            return "unknown";
-        }
+        return MaidSupportPolicy.effectKey(stack);
     }
     /** v1.5.227：canUse 首调诊断标记（只打第一条） */
     private boolean canUseLogged = false;
 
-    /** 治疗药水（Potion 注册名）——喷溅/滞留投掷、普通饮用塞背包 */
+    /** 治疗药水（Potion 注册名）——喷溅/滞留投掷、普通饮用直接喂 */
     private static final java.util.Set<String> HEAL_POTIONS = java.util.Set.of(
             "minecraft:healing", "minecraft:strong_healing");
     /** 再生药水（持续回血，低血兜底） */
@@ -259,7 +235,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 aided = true;
             }
             if (!aided && this.giveDrinkablePotion(maid, owner, HEAL_POTIONS, "治疗", true, MaidSupportPolicy.Ctx.HEAL) >= 0) {
-                aided = true; // 普通治疗药水塞主人背包（主人自己喝）
+                aided = true; // 普通治疗药水直接喂给主人（效果立刻生效）
             }
             // v1.1.0：饱食度满时不喂食物（feedHealingFood 内部判定）——满饥饿低血时
             // 食物回血慢又浪费；药水/金苹果给 buff 的不受影响（走上面的档）
@@ -348,7 +324,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     continue; // 女仆走专门的互助链（含普通食物/图腾），不在这里重复处理
                 }
                 if (ally.m_20148_().equals(maid.m_21805_())) {
-                    continue; // 主人走前面那条更完整的专属链（含喂食/图腾/塞背包），不在这里重复
+                    continue; // 主人走前面那条更完整的专属链（含喂食/图腾/饮品），不在这里重复
                 }
                 if (!this.sameFriendlySide(maid, ally)) {
                     continue; // 不是"我们这一边"的（非同主 / 非同队）→ 不碰
@@ -493,9 +469,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             return false;
         }
         net.minecraft.world.item.Item it = s.m_41720_();
-        if (it instanceof net.minecraft.world.item.PotionItem
-                || it instanceof net.minecraft.world.item.SplashPotionItem
-                || it instanceof net.minecraft.world.item.LingeringPotionItem) {
+        if (MaidSupportPolicy.potionItem(s)) {
             return true;
         }
         if (it == net.minecraft.world.item.Items.f_42437_
@@ -682,12 +656,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  目标泛化成 LivingEntity，与姐妹链 feedDrinkablePotionTo 同口径）。 */
     private String feedDrinkablePotionToAlly(EntityMaid maid, net.minecraft.world.entity.LivingEntity ally,
                                              java.util.Set<String> potionNames, String label, boolean useCd) {
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.PotionItem, -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, MaidSupportPolicy::drinkable, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
-                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                if (stack.m_41619_() || !MaidSupportPolicy.drinkable(stack)) {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
@@ -711,14 +685,19 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 // if (player != null) 包着——目标不是玩家时原栈**原样返回**（效果照常加上）。
                 // 旧版把 result 又插回背包 ⇒ 喝了不消耗（表现：喂了很多次，药水一瓶没少）。
                 // 现在 taken 已从背包取出、**不再插回** = 显式净消耗 1，容器按原版口径返还。
-                if (result.m_41720_() != drinkShow.m_41720_()) {
+                // 容器返还分两口径：原版药水对非玩家原栈返回（不变）→ 补一个空瓶；
+                // 神秘遗物喝完自己返回空瓶/容器 → 直接插回结果，不能再补第二个
+                boolean gaveContainer = !result.m_41619_()
+                        && result.m_41720_() != drinkShow.m_41720_();
+                if (gaveContainer) {
                     net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
-                }
-                net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                        .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
-                if (bottle != null) {
-                    net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
-                            inv, new ItemStack(bottle), false);
+                } else {
+                    net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                            .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
+                    if (bottle != null) {
+                        net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                                inv, new ItemStack(bottle), false);
+                    }
                 }
                 if (useCd) {
                     int maxDur = 0;
@@ -833,7 +812,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     // v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话
                     // 改一下"）：低血链补【饮用型药水直接喂】——喷溅/滞留扔完、金苹果/再生
                     // 都没有时，普通治疗药水直接喂给姐妹（强制饮用，效果即时生效）。
-                    // 与主人链的"塞背包"不同：姐妹没有背包 UI，直接喂才是"传递"。
+                    // 与主人链同口径：都是直接喂，效果即时生效。
                     if (action == null) {
                         action = this.feedDrinkablePotionTo(maid, sister, HEAL_POTIONS, "治疗", true);
                     }
@@ -1208,7 +1187,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     /**
      * v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话改一下"）：
      * 普通（饮用型）药水【直接喂给姐妹】——旧版互助链只投喷溅/滞留型（throwPotionTo
-     * 只认 Splash/Lingering），饮用型药水从不传递（主人链有塞背包路径，姐妹链完全没有）。
+     * 只认 Splash/Lingering），饮用型药水从不传递（旧版主人链也只塞背包，两条链都不直接喂）。
      * 强制饮用：item.m_5922_（finishUsingItem）对姐妹实体生效——治疗/抗火等效果
      * 直接加上，空玻璃瓶返还喂食者背包。useCd=true 时走同种药水 CD（与投掷共用
      * potionKey 种类 CD，防喷溅刚扔完又喂一瓶）。
@@ -1216,12 +1195,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private String feedDrinkablePotionTo(EntityMaid maid, EntityMaid sister,
                                          java.util.Set<String> potionNames, String label, boolean useCd) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：饮用型药水
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.PotionItem, -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, MaidSupportPolicy::drinkable, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
-                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                if (stack.m_41619_() || !MaidSupportPolicy.drinkable(stack)) {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
@@ -1246,14 +1225,19 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 // if (player != null) 包着——目标不是玩家时原栈**原样返回**（效果照常加上）。
                 // 旧版把 result 又插回背包 ⇒ 喝了不消耗（表现：喂了很多次，药水一瓶没少）。
                 // 现在 taken 已从背包取出、**不再插回** = 显式净消耗 1，容器按原版口径返还。
-                if (result.m_41720_() != drinkShow.m_41720_()) {
+                // 容器返还分两口径：原版药水对非玩家原栈返回（不变）→ 补一个空瓶；
+                // 神秘遗物喝完自己返回空瓶/容器 → 直接插回结果，不能再补第二个
+                boolean gaveContainer = !result.m_41619_()
+                        && result.m_41720_() != drinkShow.m_41720_();
+                if (gaveContainer) {
                     net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
-                }
-                net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                        .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
-                if (bottle != null) {
-                    net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
-                            inv, new ItemStack(bottle), false);
+                } else {
+                    net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                            .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
+                    if (bottle != null) {
+                        net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                                inv, new ItemStack(bottle), false);
+                    }
                 }
                 if (useCd) {
                     int maxDur = 0;
@@ -1292,16 +1276,14 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                               net.minecraft.world.entity.LivingEntity target,
                               java.util.Set<String> potionNames, String label, boolean useCd) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：投掷型药水
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
-                        || s.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem, -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, MaidSupportPolicy::throwable, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             int bestScore = -1;
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
-                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
-                        || stack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem)) {
+                if (stack.m_41619_() || !MaidSupportPolicy.throwable(stack)) {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
@@ -1452,8 +1434,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                     java.util.Set<String> potionNames, String label, boolean useCd,
                                     MaidSupportPolicy.Ctx ctx) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：投掷型药水
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
-                        || s.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem, -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, MaidSupportPolicy::throwable, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
@@ -1461,9 +1442,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 // v1.5.252g4：投掷【只选喷溅/滞留型】——饮用型扔出去不施加效果
-                //（原版 ThrownPotion 扔饮用型只是碎瓶子），只能塞背包
-                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
-                        || stack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem)) {
+                //（原版 ThrownPotion 扔饮用型只是碎瓶子），饮用型走直接喂
+                if (stack.m_41619_() || !MaidSupportPolicy.throwable(stack)) {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
@@ -1561,25 +1541,23 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         return -1;
     }
 
-    /** v1.5.231：药水强度评分（数值越大越优先使用——强效/长效 > 普通） */
+    /**
+     * 药水强度评分：按**效果等级**（amplifier）而不是注册名里的 {@code strong_}/{@code long_}
+     * 前缀排序。整合包/模组的「瞬间治疗 II/III」「瞬间伤害 III」往往没有这些前缀，旧版会给
+     * 它们和 I 级同分，于是背包里先扫到哪瓶就用哪瓶（玩家看到的"只会用 I 级"）。
+     */
     private static int potionStrength(ItemStack stack) {
         try {
-            net.minecraft.world.item.alchemy.Potion potion =
-                    net.minecraft.world.item.alchemy.PotionUtils.m_43579_(stack);
-            if (potion == null) {
-                return 0;
+            int bestLevel = 0;
+            int bestDuration = 0;
+            for (net.minecraft.world.effect.MobEffectInstance e : potionEffectsOf(stack)) {
+                bestLevel = Math.max(bestLevel, e.m_19564_());
+                bestDuration = Math.max(bestDuration, e.m_19557_());
             }
-            net.minecraft.resources.ResourceLocation key =
-                    net.minecraftforge.registries.ForgeRegistries.POTIONS.getKey(potion);
-            if (key == null) {
-                return 0;
-            }
-            String id = key.toString();
-            int score = id.contains("strong_") || id.contains("long_") ? 2 : 1;
-            // v1.5.252g8：喷溅 > 滞留——喷溅命中立即全效；滞留只是 30 秒云，
-            // 主人移动中就吃不到（同样一瓶药水效果差一截）
-            if (stack.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem) {
-                score++;
+            // 等级优先（每级 +10），同等级再看持续时间（最多 +9）；喷溅整体优先（+100）。
+            int score = 10 + bestLevel * 10 + Math.min(bestDuration / 200, 9);
+            if (MaidSupportPolicy.splashPotion(stack)) {
+                score += 100;
             }
             return score;
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
@@ -1608,26 +1586,26 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         return toGive;
     }
 
-    /** 普通（饮用型）药水 → 塞主人背包（主人自己喝；背包满自动退回）。
-     *  v1.5.252g3：返回该药水最长效果时长（CD），没给返回 -1
-     *  v1.5.252g6：优先塞快捷栏空位
+    /** 普通（饮用型）药水 → 直接喂给主人（效果立刻生效，和喂其它生物同一套语义；
+     *  不再塞进主人物品栏让主人自己喝）。
+     *  v1.5.252g3：返回该药水最长效果时长（CD），没喂成返回 -1
      *  v1.5.252g13：useCd=false（着火/溺水情境）不走 CD——效果判定在调用处 */
     private int giveDrinkablePotion(EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd,
                                     MaidSupportPolicy.Ctx ctx) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：饮用型药水
-        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.PotionItem, -1);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, MaidSupportPolicy::drinkable, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
-                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                if (stack.m_41619_() || !MaidSupportPolicy.drinkable(stack)) {
                     continue;
                 }
                 if (!this.isPotionOf(stack, potionNames)) {
                     continue;
                 }
-                // 实测八百一十七：支援物品表门禁（饮用型塞主人背包——主人永不是亡灵）
+                // 实测八百一十七：支援物品表门禁（直接喂主人喝药水——主人永不是亡灵）
                 if (!MaidSupportPolicy.allow(stack, false, ctx)) {
                     continue;
                 }
@@ -1637,39 +1615,44 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                         maid.m_9236_().m_46467_())) {
                     continue;
                 }
-                ItemStack toGive = inv.extractItem(i, 1, false);
-                ItemStack remain = this.giveToOwnerHotbarFirst(owner, toGive);
-                if (!remain.m_41619_()) {
-                    net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, remain, false);
-                    // v1.5.231b：背包满提示（否则"给了但没给出去"无任何反馈）
-                    // v1.5.231d：明确说"我给不了东西"
-                    maid.getChatBubbleManager().addTextChatBubble(
-                            "主人背包满了，我给不了东西（" + label + "药水放不进去）……");
-                    return -1;
+                ItemStack taken = inv.extractItem(i, 1, false);
+                if (taken.m_41619_()) {
+                    continue;
+                }
+                ItemStack drinkShow = taken.m_41777_(); // 快照：CD/举瓶/日志都用它
+                // 直接喂：以主人为 target 走物品自己的完整饮用路径（效果、音效、统计都在原版里）。
+                // 目标是玩家时 PotionItem 会自己把空瓶放进主人物品栏，这里绝不能再补一个。
+                ItemStack result = taken.m_41720_().m_5922_(taken, owner.m_9236_(), owner);
+                if (!result.m_41619_()) {
+                    // 未消耗（创造模式原栈返回）或物品自带的容器：还回女仆背包，满了落地
+                    ItemStack left = net.minecraftforge.items.ItemHandlerHelper
+                            .insertItemStacked(inv, result, false);
+                    if (!left.m_41619_()) {
+                        maid.m_19983_(left);
+                    }
                 }
                 // v1.5.252g13：CD 记账【提前到气泡之前】（防气泡异常吞 CD）
                 int maxDur2 = 0;
                 for (net.minecraft.world.effect.MobEffectInstance e :
-                        potionEffectsOf(stack)) {
+                        potionEffectsOf(drinkShow)) {
                     maxDur2 = Math.max(maxDur2, e.m_19557_());
                 }
                 if (useCd) {
                     this.markPotionUsed(
-                            potionCdKey(maid.m_20148_(), potionKey(stack)),
+                            potionCdKey(maid.m_20148_(), potionKey(drinkShow)),
                             maid.m_9236_().m_46467_(), maxDur2 > 0 ? maxDur2 : 60);
                 }
-                maid.getChatBubbleManager().addTextChatBubble("主人，" + label + "药水放你背包了，快喝！");
-                // v1.1.0 实测三十二（反馈："女仆不会传递直接可以饮用的药水"——传递
-                // 功能其实一直在，但只有气泡提示没有系统字幕，观感上像没给）：
-                // 塞背包成功发绿色系统字幕（与喂食 [maid_smart] 同款显示）
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                com.maidsmart.combat.BombPose.showGated(maid, drinkShow); // 副手举一下这瓶药水
+                playSoundAt(owner, "minecraft:entity.generic.drink");
+                maid.getChatBubbleManager().addTextChatBubble("主人，药水我直接喂你喝啦～");
                 // v1.1.0 实测二百七十四：建造女仆静默非建造字幕
                 if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
                     owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7a[maid_smart] 女仆给了你一瓶" + label + "药水（在背包里，快喝）"));
+                            "\u00a7a[maid_smart] 女仆喂你喝了" + label + "药水"));
                 }
-                // v1.5.252g9：塞背包日志（latest.log 搜 "aid-owner give"）
-                LOGGER.info("aid-owner give: label={} potion={}",
-                        label, potionKey(stack));
+                LOGGER.info("aid-owner drink: label={} potion={}",
+                        label, potionKey(drinkShow));
                 return Math.max(60, Math.min(maxDur2 > 0 ? maxDur2 : 60, 12000));
             }
         } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
@@ -1783,18 +1766,34 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      */
     private static java.util.List<net.minecraft.world.effect.MobEffectInstance>
     potionEffectsOf(ItemStack stack) {
-        java.util.List<net.minecraft.world.effect.MobEffectInstance> out =
-                new java.util.ArrayList<>();
-        try {
-            net.minecraft.world.item.alchemy.Potion p =
-                    net.minecraft.world.item.alchemy.PotionUtils.m_43579_(stack);
-            if (p != null) {
-                out.addAll(p.m_43488_()); // Potion.getEffects（标准药水的效果所在）
-            }
-            out.addAll(net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)); // CustomPotionEffects
-        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("MaidAidOwnerBehavior", ignored);
+        // 注册表效果 + NBT 自定义 + 神秘遗物进阶药水（后者按 EnigmaticPotion NBT 解析）
+        return MaidSupportPolicy.effectsOf(stack);
+    }
+
+    /**
+     * 这条药水效果是否属于目标池。注册名匹配失败时用效果兜底——这样同效果的
+     * I/II/III 级、模组自定义注册名都能被同一条支援链认出来。
+     */
+    private static boolean effectMatches(java.util.Set<String> potionNames, String effectId) {
+        if (potionNames == HEAL_POTIONS) {
+            return "minecraft:instant_health".equals(effectId);
         }
-        return out;
+        if (potionNames == REGEN_POTIONS) {
+            return "minecraft:regeneration".equals(effectId);
+        }
+        if (potionNames == FIRE_RESIST_POTIONS) {
+            return "minecraft:fire_resistance".equals(effectId);
+        }
+        if (potionNames == WATER_BREATHING_POTIONS) {
+            return "minecraft:water_breathing".equals(effectId);
+        }
+        if (potionNames == HARMING_POTIONS) {
+            return "minecraft:instant_damage".equals(effectId);
+        }
+        if (potionNames == BUFF_POTIONS) {
+            return "minecraft:speed".equals(effectId) || "minecraft:strength".equals(effectId);
+        }
+        return false;
     }
 
     /** 药水注册名是否在目标集合内（m_43579_=PotionUtils.getPotion） */
@@ -1810,18 +1809,14 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (key != null && potionNames.contains(key.toString())) {
                 return true;
             }
-            // 实测八百一十七续：伤害药水再按**
-            // 效果**认一次——整合包里的进阶/终极伤害药水
-            // 注册名不是 minecraft:harming/strong_harming，只按注册名会整条漏掉。
-            // 判据本质：能回亡灵血的药水 = 含 instant_damage。
-            if (potionNames == HARMING_POTIONS) {
-                for (net.minecraft.world.effect.MobEffectInstance e : potionEffectsOf(stack)) {
-                    net.minecraft.resources.ResourceLocation eid =
-                            net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS
-                                    .getKey(e.m_19544_());
-                    if (eid != null && "minecraft:instant_damage".equals(eid.toString())) {
-                        return true;
-                    }
+            // 再按**效果**认一次：整合包/模组的进阶药水注册名往往不是 vanilla 那几个 id
+            // （例：瞬间治疗 II/III、瞬间伤害 III），只按注册名会把整条链漏掉。
+            for (net.minecraft.world.effect.MobEffectInstance e : potionEffectsOf(stack)) {
+                net.minecraft.resources.ResourceLocation eid =
+                        net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS
+                                .getKey(e.m_19544_());
+                if (eid != null && effectMatches(potionNames, eid.toString())) {
+                    return true;
                 }
             }
             return false;
@@ -1856,9 +1851,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (s.m_41619_()) {
                     continue;
                 }
-                if (s.m_41720_() instanceof net.minecraft.world.item.PotionItem
-                        || s.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
-                        || s.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem) {
+                if (MaidSupportPolicy.potionItem(s)) {
                     if (isPotionOf(s, HEAL_POTIONS) || isPotionOf(s, REGEN_POTIONS)) {
                         n += s.m_41613_();
                     }
@@ -1919,9 +1912,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             return false;
         }
         net.minecraft.world.item.Item it = s.m_41720_();
-        if (it instanceof net.minecraft.world.item.PotionItem
-                || it instanceof net.minecraft.world.item.SplashPotionItem
-                || it instanceof net.minecraft.world.item.LingeringPotionItem) {
+        if (MaidSupportPolicy.potionItem(s)) {
             return true;
         }
         // 附魔/普通金苹果

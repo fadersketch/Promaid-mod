@@ -11,10 +11,10 @@ description:
       reply-feedback learning, perception bubbles, autonomous task switching, a
       cross-turn work list, work reporting and world-probe tools.
 source:
-  - {path: promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java, line: 1, end_line: 605}
-  - {path: promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java, line: 1, end_line: 53}
+  - {path: promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java, line: 1, end_line: 591}
+  - {path: promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java, line: 1, end_line: 33}
   - {path: promaid_src_neo/com/maidsmart/dialogue/OutputLanguage.java, line: 1, end_line: 143}
-  - {path: promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java, line: 1, end_line: 119}
+  - {path: promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java, line: 1, end_line: 121}
 revision: f33c45a1ff17ca592b7a3d4ee76d313eb49dac00
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 02c297f5ce1474fa8ba3871142209f2d2cbdaa79f594ed6a22da8e8626c004cd

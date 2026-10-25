@@ -431,6 +431,9 @@ public final class BlueprintLib {
     /** 从背包取 1 个指定方块对应的物品（支持等价族 + v1.5.254 自定义替代） —— 实现见 BlueprintMaterials.consumeBlock（v1.2.4 拆分）。 */
     public static Item consumeBlock(EntityMaid maid, String blockId) { return BlueprintMaterials.consumeBlock(maid, blockId); }
 
+    /** v1.3.3 实测一千【退料】：同 consumeBlock，但把真扣下来的那一件实物（含 NBT）一并带回——放置未成时由调用方退回 —— 实现见 BlueprintMaterials.consumeOne。 */
+    public static BlueprintMaterials.Consumed consumeOne(EntityMaid maid, String blockId) { return BlueprintMaterials.consumeOne(maid, blockId); }
+
     // ================= v1.5.254：缺料自定义替代（高度分类） =================
     /** v1.5.287：方块 id → 物品 id 特例——1.20.1 不存在 redstone_wire 物品（红石粉物品是 minecraft:redstone —— 表数据见 BlueprintMaterials.BLOCK_ITEM_OVERRIDES（v1.2.4 拆分）。 */
     public static final Map<String, String> BLOCK_ITEM_OVERRIDES = BlueprintMaterials.BLOCK_ITEM_OVERRIDES;

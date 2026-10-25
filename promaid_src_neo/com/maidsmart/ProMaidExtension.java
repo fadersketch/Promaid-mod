@@ -125,6 +125,8 @@ public class ProMaidExtension implements ILittleMaid {
     @net.neoforged.bus.api.SubscribeEvent
     public void onServerStarted(net.neoforged.neoforge.event.server.ServerStartedEvent event) {
         com.maidsmart.build.BlueprintLib.setServer(event.getServer());
+        // 加载全部结束再复核蛋糕 FOOD：被其他模组后写/覆盖则本次运行自动关闭蛋糕功能。
+        com.maidsmart.task.MaidCakeEatHandler.verifyAfterLoad();
         // v1.2.0：配置默认值迁移兜底——NeoForge 侧仅靠 ModConfigEvent 实测未生效，
         // 服务端启动时再跑一次（迁移幂等：只在"值==旧默认"时才改）。
         // v1.2.0 实测五百五十七：顺序调到 applyConfigDefaults **之前**——否则本会话
@@ -170,6 +172,8 @@ public class ProMaidExtension implements ILittleMaid {
                 // v1.2.0：飞行作战的滑翔/俯冲状态是 static 表——崩溃/强杀时行为没走
                 // 到 stop()，残留会让该女仆永久"俯冲中"（再进不了飞行作战 + 空中禁
                 // 传送/落地缓冲全线卡死）。启动时对该女仆清一次状态，并清掉滑翔标志位。
+                com.maidsmart.combat.SpearCoreCompat.stopCharge(maid);
+                com.maidsmart.combat.SpearAttackBehavior.forget(maid.getUUID());
                 com.maidsmart.combat.MaidFlightCombatBehavior.forget(maid.getUUID());
                 // 实测五百四十四：激流突进的表同样会残留（本行为是 core 行为，女仆被强杀时
                 // 也走不到 stop()），而且它现在还会让空袭让位 + 豁免自动传送——残留的代价比
@@ -186,10 +190,11 @@ public class ProMaidExtension implements ILittleMaid {
         }
         // 全清兜底：static 表不能跨会话残留（世界已重新加载，此刻没有任何女仆在飞）
         com.maidsmart.combat.MaidFlightCombatBehavior.clearAll();
+        com.maidsmart.combat.SpearAttackBehavior.clearAll();
         com.maidsmart.combat.MaidTridentSpinBehavior.clearAll();
         com.maidsmart.combat.MaidFlightFollowBehavior.clearAll(); // v1.2.2 实测六百〇八
         com.maidsmart.combat.MaidRiptideBoost.clearAll();         // v1.2.4 实测六百四十
-        com.maidsmart.combat.MaidMaceSmashBehavior.clearForcedClutch();
+        com.maidsmart.combat.MaidMaceSmashBehavior.clearAll();
     }
 
     /**
@@ -218,6 +223,12 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.combat.MaidSpawnerTorchBehavior.dropSavedOffhand(maid);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
+        // 空中/跃起中死亡：行为走不到 stop()，静态 LEAPING 残留会让复活后的女仆
+        // 永远不再触发重锤猛击（且连"重锤门"诊断都不打）。
+        try {
+            com.maidsmart.combat.MaidMaceSmashBehavior.forget(maid.getUUID());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
+        }
     }
 
     @net.neoforged.bus.api.SubscribeEvent
@@ -232,6 +243,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.build.ChunkFreeze.clearAll();
         // v1.2.0：指标石会话清空（防跨存档残留锁定/绑定状态）
         com.maidsmart.build.IndexStoneService.clearAll();
+        // 实测一千〇六：金色描边的待发表清场（方块本身由各追踪器 clearAll 回收）
+        com.maidsmart.task.PlacedMarkNetworking.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
         // v1.1.0 实测四十四：撤掉全部女仆区块强制加载票（防票残留锁区块）
         com.maidsmart.follow.MaidChunkLoadManager.releaseAll(event.getServer());
@@ -265,6 +278,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         com.maidsmart.task.MaidMineBehavior.expirePlaced(server, gt);
         com.maidsmart.task.MaidWoodBehavior.expirePlaced(server, gt);
         com.maidsmart.task.BridgeUpBehavior.expirePlaced(server, gt);
+        // v1.3.3：金色描边视觉 TTL（约 3 秒）——只撤框，方块回收寿命不变
+        com.maidsmart.task.PlacedMarkNetworking.tick(server);
         // v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）60 秒到期清理
         com.maidsmart.combat.SelfPreservationBehavior.expireCombatPlaced(server, gt);
         // v1.5.103：每 30 秒清理挖矿静态 per-maid 数据（防长时运行内存泄漏）
@@ -368,6 +383,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 右击方块/右击女仆/建造收尾三处），于是"服务端会话已清空、客户端还以为锁着"
         // 会一直持续到下次 syncTo 为止 = 假死锁。
         com.maidsmart.build.IndexStoneNetworking.syncTo(player);
+        // 实测一千〇六：登录补一份女仆放置方块的金色描边全量（断线重连不丢描边）
+        com.maidsmart.task.PlacedMarkNetworking.pushSnapshot(player);
         // 多人下「配置以服务端为准」：登录推一次配置状态；再广播一遍刷新"是不是多人"
         // （LAN 里第二个人进来时它才变成多人，那一行开关要跟着出现）
         com.maidsmart.config.ConfigSyncNetworking.pushState(player);
@@ -388,6 +405,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     public void onPlayerChangedDimension(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             com.maidsmart.build.IndexStoneNetworking.syncTo(player);
+            com.maidsmart.task.PlacedMarkNetworking.pushSnapshot(player); // 实测一千〇六：换维度补描边全量
         }
     }
     /**
@@ -410,6 +428,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // （默认关：见 misc.bdStorage；命令入口 /maid_smart bd_*）
         com.maidsmart.command.MaidBdProbeCommand.register(event.getDispatcher());
         com.maidsmart.command.MaidBdRuleCommand.register(event.getDispatcher());
+        // R1114：/set goal <x> <y> <z> [女仆] —— 玩家自己指定目标点（记进航图 + 直接让她飞过去）
+        com.maidsmart.command.PatrolGoalCommand.register(event.getDispatcher());
         // v1.3.8 巡逻航迹：/maid_smart broom_goto <x y z> [女仆]（照 freeflight_goto 口径）
         //   + broom_patrol status|off [女仆]（排查/解除）
         com.maidsmart.patrol.PatrolCommand.register(event.getDispatcher());
@@ -437,6 +457,17 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     + "，维度=" + maid.level().dimension().location() + "）");
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
+        // 魂符收人 / 死亡 / 区块卸载：行为收尾不一定会执行，静态表按 UUID 残留。
+        // 统一在离场清一次，避免放出后 UUID 相同却被旧状态判成"仍在空战接管"而原地不动。
+        clearCombatStateOnTransition(maid,
+                maid.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.DISCARDED
+                        || maid.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.KILLED);
+        // 【R1121】收放魂符 / 死亡 = 这一趟「飞过去」到此为止（玩家口径）。区块卸载不清：
+        // 她重新加载后应当继续飞向原来的目标。
+        if (maid.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.DISCARDED
+                || maid.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.KILLED) {
+            com.maidsmart.patrol.MaidTravelTarget.cancel(maid, "魂符收回或死亡");
+        }
         // v1.2.0 实测五百五十七：**离场也登记一次补包**。
         // 【为什么】实测现场：她飞在离主人上千格处（-1184, 115, 96）时客户端实体丢失，
         // 手动 resync 一次即恢复——服务端始终在追踪，是客户端被"通知删除"后没人补回。
@@ -445,6 +476,11 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 出现频率下降了，但没归零）；离场这一枪把窗口两头都盖住：
         // 队列按 UUID 在全部维度里找她，只有"她还活着 + 主人同维度"时才真的补包。
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
+        // 收魂 / 死亡 / 换维度：排班表那条远程配置会话静默作废（否则她会报"没能打开"）
+        com.maidsmart.schedule.RemoteMaidGui.cancelForMaid(maid.getUUID());
+        // 收魂/区块卸载：静态占用表里不再替她"预留"炉子/酿造台（放出后重新扫）。
+        com.maidsmart.task.MaidCookBehavior.forgetStation(maid.getUUID());
+        com.maidsmart.task.MaidBrewBehavior.forgetStation(maid.getUUID());
         // 实测六百九十八【幽灵建模的第二道门】：**她活着**却离场 = 这不是死亡，是区块被拆
         // （reason=null 那一档：区块掉出 entity-ticking / 被卸载）。原版这一刻会给客户端
         // 发一次删包（ChunkMap.removeEntity），而"新实体不补包"（实测五百九十六）又拦着
@@ -453,6 +489,40 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 顺延到"她又能被找到 + 主人同维度"那一拍再打，所以早登记不算浪费。
         if (maid.isAlive()) {
             com.maidsmart.command.MaidResyncCommand.scheduleForcedResync(maid);
+        }
+    }
+
+    /**
+     * 清理飞行/长矛链路的静态表。女仆被 discard（魂符收人、死亡、跨维度）时行为 stop()
+     * 不保证执行；魂符放出后 UUID 不变，残留的 ACTIVE/STATES 会让通用空袭、战术走位、
+     * 长矛冲锋一直以为"独立链路还在接管"，表现就是原地不动。
+     * full=true 也清目标/寻路；区块卸载走 pauseRound，保留烟花冷却。
+     */
+    private static void clearCombatStateOnTransition(
+            com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid, boolean full) {
+        try {
+            java.util.UUID id = maid.getUUID();
+            com.maidsmart.combat.SpearAirRaidBehavior.forget(id);
+            com.maidsmart.combat.SpearAttackBehavior.forget(id);
+            // 重锤跃起状态同样是按 UUID 存的静态表：空中/跃起中死亡或收魂时行为走不到
+            // stop()，残留的 LEAPING 会让复活后的女仆永远不再触发猛击（连诊断都不打）。
+            com.maidsmart.combat.MaidMaceSmashBehavior.forget(id);
+            if (full) {
+                com.maidsmart.combat.MaidFlightCombatBehavior.forget(id);
+                maid.setTarget(null);
+                maid.getBrain().eraseMemory(
+                        net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET);
+                maid.getNavigation().stop();
+            } else {
+                com.maidsmart.combat.MaidFlightCombatBehavior.pauseRound(id);
+            }
+            com.maidsmart.combat.MaidRiptideBoost.clear(maid);
+            com.maidsmart.combat.MaidSelfPropelledWings.clear(maid);
+            com.maidsmart.combat.SpearCoreCompat.stopCharge(maid);
+            com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
+            com.maidsmart.combat.MaidFlightKit.forgetClimbSpellCache(id);
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
         }
     }
 
@@ -661,6 +731,18 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                             return LOC_PLAYER; // 玩家背包 / 当前界面里的箱子 / 女仆界面里的她的背包格
                         }
                     }
+                    // 实测一千〇一十一【根因：取下的装备其实穿在玩家身上，托管看不见 → 1.5 秒后
+                    // 又补一件 = 复制】：女仆界面（MaidMainContainer）的玩家段只加了主背包+快捷栏
+                    // 36 格，**不含玩家自己的护甲/副手**（那些在玩家 InventoryMenu 里）。玩家把
+                    // 取下的装备穿到身上后，容器菜单的槽位里查不到 → locateEquip 误判"四处查无"
+                    // → putBack 往她背包塞一件 / 满了掉她脚下（玩家看到的"补包到脚下"）。
+                    // 这里直接扫玩家背包的完整 41 格（0..35 主背包、36..39 护甲、40 副手）。
+                    net.minecraft.world.entity.player.Inventory pinv = p.getInventory();
+                    for (int i = 0; i < pinv.getContainerSize(); i++) {
+                        if (matchOne(pinv.getItem(i), want)) {
+                            return LOC_PLAYER; // 玩家护甲/副手/背包（当前界面没列出的那些格）
+                        }
+                    }
                 }
             }
             if (maid.level() instanceof net.minecraft.server.level.ServerLevel ml) {
@@ -811,6 +893,15 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                 || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
             return; // 只服务端处理女仆
         }
+        // 魂符放出 / 死亡重生 / 区块重载：先清掉上一世残留的飞行与长矛静态状态，
+        // 再让排班/任务重新接管。旧版漏了这一步，放出后会卡在原地。
+        clearCombatStateOnTransition(maid, true);
+        // 魂符放出/区块重载：烧制/酿造解绑一次旧工位、重新扫台（避免一直抱着
+        // 收魂前的熔炉，看不见旁边新放的高炉）。
+        com.maidsmart.task.MaidWorkTags.bumpStationGen(maid);
+        com.maidsmart.task.MaidWorkTags.setStationLock(maid, false);
+        com.maidsmart.task.MaidCookBehavior.forgetStation(maid.getUUID());
+        com.maidsmart.task.MaidBrewBehavior.forgetStation(maid.getUUID());
         // v1.2.0 实测五百五十六：入世界 → 延迟给主人补一次实体包（治"客户端实体丢失"）
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
         // 实测五百七十六：入世界第一拍法术数据可能还没就绪 —— 清掉位移法术的书单缓存，
@@ -831,6 +922,14 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         //
         //  （事件链的最末）而不是魂符自己的流程里，正是因为"最后一步最安全"。
         com.maidsmart.combat.GunnerTetherManager.onMaidJoin(maid);
+        // 实测一千〇一十一：入世界第一拍就补一次「最后位置 + 跟随票」——旧版要等每 5 秒
+        // 一次的全量 tick；这 5 秒里主人若被命令瞬移走，她的区块会先卸载（EntityLeaveLevel
+        // reason=null），随后既不在实体表里、一键集合又只能靠可能过期的 LAST_SEEN 召回
+        // （实测「女仆突然彻底消失」）。tick 本身是幂等的，重复调用无害。
+        try {
+            com.maidsmart.follow.MaidChunkLoadManager.tick(maid.level().getServer());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("ProMaidExtension", ignored);
+        }
     }
 
     /**
@@ -889,6 +988,16 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         }
     }
 
+    /** issue #40：旧版自动收符可能留下"快照为空"的废符，释放时 TLM 读 Owner 崩客户端。
+     *  每 100 tick 扫一次背包，把这类符还原成空魂符——见
+     *  {@link com.maidsmart.combat.MaidSoulSpellGuard#sweepBrokenSlabs} */
+    @net.neoforged.bus.api.SubscribeEvent
+    public void onPlayerTickSoulSlabSanity(net.neoforged.neoforge.event.tick.PlayerTickEvent.Post event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) {
+            com.maidsmart.combat.MaidSoulSpellGuard.sweepBrokenSlabs(sp);
+        }
+    }
+
     /** 见 {@link #onPlayerTickBoxCarry}：掉线也要把鼠标上那一叠还回去 */
     @net.neoforged.bus.api.SubscribeEvent
     public void onPlayerLoggedOutBoxCarry(
@@ -900,30 +1009,38 @@ net.minecraft.server.MinecraftServer server = event.getServer();
 
     @Override
     public void registerAITool(ToolRegister register) {
-        register.register(new SmartMoveToTool());
-        register.register(new SmartGiveItemTool());
-        register.register(new SmartPickupTool());
-        register.register(new SmartReportTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartMoveToTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartGiveItemTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartPickupTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartReportTool()));
         // v1.5.136：战斗指挥（"去打那只怪/攻击最近的怪/帮我打它"——切攻击任务+锁目标）
-        register.register(new com.maidsmart.tool.SmartAttackTool());
-        register.register(new SmartBuildTool());
-        register.register(new SmartBuildListTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SmartAttackTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartBuildTool()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new SmartBuildListTool()));
         // v1.5.94：AI 画蓝图（子 Agent 设计器）——玩家对话描述 → 子 LLM 设计 → 存手册 → 正常建造
-        register.register(new com.maidsmart.build.SmartDesignTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.build.SmartDesignTool()));
         // v1.5.86：AI 记忆检索工具（LLM 对话中按需调用）
-        register.register(new QueryMemoryTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new QueryMemoryTool(),
+                m -> AiMemoryManager.isEnabled(m)));
         // v1.5.95：LLM 主动写记忆工具（"记住…"当场写，与被动提取互补）
-        register.register(new com.maidsmart.memory.RememberTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.memory.RememberTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_REMEMBER.get()));
         // v1.5.95：工作笔记工具（跨对话任务状态，临时可覆盖）
-        register.register(new com.maidsmart.memory.WorkingNoteTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.memory.WorkingNoteTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_WORKING_NOTE.get()));
         // 多级记忆索引查询工具（移植自 Sphantosis query_memory_index：日/3日/周/月
         // 日记式摘要，先列跨度再查内容，前缀和式逐步缩小时间范围）
-        register.register(new com.maidsmart.memory.QueryMemoryIndexTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.memory.QueryMemoryIndexTool(),
+                m -> AiMemoryManager.isEnabled(m)
+                        && com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()));
         // v1.5.190：帮主人做事的"双手"工具——合成 / 放方块（让 AI 女仆有玩家能力）
-        register.register(new com.maidsmart.tool.SmartCraftTool());
-        register.register(new com.maidsmart.tool.SmartPlaceTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SmartCraftTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_CRAFT.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SmartPlaceTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_PLACE.get()));
         // v1.5.196：感知查询工具（先查后做——look_around/terrain/build_site/inspect/scanblock/scanentity）
-        register.register(new com.maidsmart.dialogue.PerceptionQueryTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.dialogue.PerceptionQueryTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_PERCEPTION.get()));
         // v1.5.244：启动预热加载 WorldProbe——LLM 工具在异步线程首次访问该类时
         // ModuleClassLoader 偶发 ClassNotFoundException（实测"让女仆帮忙填坑"对话
         // 报 Async tool execution failed: NoClassDefFoundError: WorldProbe，jar 里
@@ -938,19 +1055,25 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     .warn("WorldProbe preload failed: {}", t.toString());
         }
         // v1.5.196：工作清单工具（query_todo/build_need——任务计划与材料缺口查询闭环）
-        register.register(new com.maidsmart.dialogue.WorkListTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.dialogue.WorkListTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_WORK_LIST.get()));
         // v1.5.287：查看主人物品栏工具（确认/获得主人背包里有什么——只读查询）
-        register.register(new com.maidsmart.tool.OwnerInventoryTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.OwnerInventoryTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_OWNER_INVENTORY.get()));
         // v1.2.2 实测五百七十八【指挥三件套 + 自检】：让模型真正能"换模式 / 起飞 / 定工位 /
         // 查能不能干"。此前 LLM 只能打怪（smart_attack 顺手切攻击任务），别的模式够不到：
         //   smart_switch_task —— 切换任意任务（TLM 原生 + 本模组，支持中文别名，认不出就回可用列表）
         //   smart_air_raid    —— 起飞空袭（近战/远程 + 锁目标 + 缺件回报）/ 停止空袭落地
         //   smart_work_area   —— 设工作区并驻守 / 解除驻守跟随（写的就是 TLM 那份 SchedulePos）
         //   smart_readiness   —— 只读自检（空袭三件套、弹药、驻守、排班、锚点、血量）
-        register.register(new com.maidsmart.tool.SwitchTaskTool());
-        register.register(new com.maidsmart.tool.AirRaidTool());
-        register.register(new com.maidsmart.tool.WorkAreaTool());
-        register.register(new com.maidsmart.tool.ReadinessTool());
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.SwitchTaskTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_SWITCH_TASK.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.AirRaidTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_AIR_RAID.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.WorkAreaTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_WORK_AREA.get()));
+        register.register(new com.maidsmart.tool.GatedTool<>(new com.maidsmart.tool.ReadinessTool(),
+                m -> com.maidsmart.config.MaidSmartConfig.TOOL_READINESS.get()));
     }
 
     @Override
@@ -1024,7 +1147,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     this.coreLogged = true;
                     org.slf4j.Logger log = com.mojang.logging.LogUtils.getLogger();
                     log.info("extra-core registered: SelfPreservation=250 WaterClutch=240 "
-                            + "MaceSmash=235 CombatTactics=230 "
+                            + "MaceSmash=235 CombatTactics=230 " + "SpearCharge=236 SpearAirRaid=237 "
                             + "ToolAutoEquip=200 AidOwner=190 Torch=185 Shield=180 "
                             + "FlightFollow=246");
                 }
@@ -1055,6 +1178,12 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                         // 落地缓冲改由本行为在【猛击结算后】请求 WaterClutchBehavior 强放
                         // 一格水/雪（重锤专属落地水，实测四百四十二）
                         Pair.of(235, new com.maidsmart.combat.MaidMaceSmashBehavior()),
+                        // 实测一千〇一十八：攻击模式长矛持续冲锋——高于战术（230），
+                        // 追击/后撤的直连导航由它独占；那一记平A由近战 mixin 整记吞掉。
+                        Pair.of(236, new com.maidsmart.combat.SpearAttackBehavior()),
+                        // 【R1080】鞘翅长矛：先按通用近战空袭起飞，0.5 秒后切换幻翼状态机
+                        // （环绕 → 俯冲 → 长矛冲锋 → 惯性平飞 1 秒 → 循环）。高于战术（230）。
+                        Pair.of(237, new com.maidsmart.combat.SpearAirRaidBehavior()),
                         // v1.5.134：单兵作战战术（PVP 式走位/拉扯/距离控制）——低于自保/落地水，
                         // 高于自动装备/施工区避让；Brain 1.20.1 无高优先级阻断，不影响 WORK 战斗行为
                         Pair.of(230, new com.maidsmart.combat.MaidCombatTacticsBehavior()),

@@ -10,7 +10,9 @@ import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 骑乘链路的能力探测与公共工具：只回答「能不能给她骑」与「骑上后该走多快」。
@@ -717,7 +719,18 @@ public final class MaidRideKit {
             // 喂走位，也就没有"我们自己在写导航"需要放行这回事了。
             if (mob.getNavigation() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation) {
                 // 渠道一：只会跑的坐骑 —— 1:1 走位（喂它自己的地面寻路）
-                mob.getNavigation().moveTo(target.x, target.y, target.z, modifier);
+                // 【R1037】寻路失败（目标点在围栏/窄缝/刷怪笼死角，马体进不去）时，
+                // `PathNavigation.moveTo` 会把旧路径清成 null；每 tick 重试 = 每 tick 清一次，
+                // 表现就是"坐骑原地不动"。这里退一步用 MoveControl 直推：不建路径、不依赖
+                // 绕障，至少让她朝目标压过去（贴墙时由碰撞挡住，不会穿墙）。
+                // 只在她**确实有活攻击目标**时启用：平时跟随主人跨沟/跨岩浆时，寻路失败
+                // 就保持原地，不能把坐骑往直线上带。
+                if (!mob.getNavigation().moveTo(target.x, target.y, target.z, modifier)) {
+                    if (rider instanceof EntityMaid fighting && fighting.getTarget() != null) {
+                        mob.getMoveControl().setWantedPosition(target.x, target.y, target.z, modifier);
+                        logNavFallback(mob, target);
+                    }
+                }
             } else {
                 // 渠道二：不只是会跑路的坐骑 —— 直连操纵，不依赖地面寻路
                 mob.getMoveControl().setWantedPosition(target.x, target.y, target.z, modifier);
@@ -736,6 +749,29 @@ public final class MaidRideKit {
             }
             mob.getNavigation().stop();
             mob.getMoveControl().setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0.0);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
+        }
+    }
+
+    /** 寻路失败改直推的留痕（节流 5 秒/只，日志搜「模组坐骑·直达」）。 */
+    private static final Map<UUID, Long> NAV_FALLBACK_AT = new ConcurrentHashMap<>();
+
+    private static void logNavFallback(Entity mount, Vec3 target) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = NAV_FALLBACK_AT.get(mount.getUUID());
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            NAV_FALLBACK_AT.put(mount.getUUID(), now);
+            if (NAV_FALLBACK_AT.size() > 512) {
+                NAV_FALLBACK_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·直达",
+                    String.valueOf(mount.getType()).replace("entity.minecraft.", "")
+                            + " 寻路失败 → MoveControl 直推（"
+                            + String.format(Locale.ROOT, "%.1f, %.1f, %.1f", target.x, target.y, target.z)
+                            + "）");
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
     }

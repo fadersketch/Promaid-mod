@@ -1,5 +1,7 @@
 package com.maidsmart.patrol;
 
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -7,7 +9,10 @@ import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.Level;
+
+import java.util.List;
 
 /**
  * <ol>
@@ -22,7 +27,7 @@ import net.minecraft.world.level.Level;
  *       半径/挡路方块判据都只回一句 ⚠ 提醒（v1.3.9.3，
  *       {@link PatrolAdapt} 抬一抬，她自己也会绕开（见 {@code MaidBroomDrive.steerTo}）。</li>
  * </ol>
- * <p>标记只在**手持航图**时于世界里可见（菱形核 + 地面光环 + 竖针，首点青绿、末点品红； 右键女仆不再有任何巡逻含义（绑定/解绑都在界面里点）。 <p>光效沿用管理道具惯例（{@code isFoil} 恒 true）。
+ * <p>标记只在**手持航图**时于世界里可见（菱形核 + 地面光环 + 竖针，首点青绿、末点品红； 右键女仆不再有任何巡逻含义（绑定/解绑都在界面里点）。 <p>光效只在**真正打过有效标记**之后出现（R1129）：没用过的航图是普通物品，用过之后永远带附魔光、金色名字与署名，且只认原作者。
  */
 public class PatrolChartItem extends Item {
 
@@ -30,16 +35,51 @@ public class PatrolChartItem extends Item {
         super(props);
     }
 
-    /** 常驻附魔光效——与蓝图手册/排班表同款 */
+    /** 【R1129】只有真正打过标记的航图才有附魔光（旧版是常驻 true）。 */
     @Override
     public boolean isFoil(ItemStack stack) {
-        return true;
+        return PatrolChartData.marked(stack);
+    }
+
+    /** 用过的航图名字变金色，并带上署名。 */
+    @Override
+    public Component getName(ItemStack stack) {
+        if (!PatrolChartData.marked(stack)) {
+            return super.getName(stack);
+        }
+        String owner = PatrolChartData.ownerName(stack);
+        if (owner.isEmpty()) {
+            return Component.translatable("item.maid_smart.patrol_chart")
+                    .withStyle(ChatFormatting.GOLD);
+        }
+        return Component.translatable("item.maid_smart.patrol_chart.signed", owner)
+                .withStyle(ChatFormatting.GOLD);
+    }
+
+    /** 用过的航图多一行金色署名描述（没用过的保持原样，一个字都不加）。 */
+    @Override
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context,
+                                List<Component> tooltip, TooltipFlag flag) {
+        if (!PatrolChartData.marked(stack)) {
+            return;
+        }
+        String owner = PatrolChartData.ownerName(stack);
+        tooltip.add(owner.isEmpty()
+                ? Component.translatable("item.maid_smart.patrol_chart.marked.desc")
+                        .withStyle(ChatFormatting.GOLD)
+                : Component.translatable("item.maid_smart.patrol_chart.signed.desc", owner)
+                        .withStyle(ChatFormatting.GOLD));
     }
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
         if (!level.isClientSide() && player instanceof ServerPlayer sp) {
+            // 【R1129】署了名的航图只认原作者；别人捡起来右键只收到一句"无法使用"。
+            if (!PatrolChartData.canUse(stack, player)) {
+                sp.sendSystemMessage(Component.translatable("item.maid_smart.patrol_chart.locked"));
+                return new InteractionResultHolder<>(InteractionResult.FAIL, stack);
+            }
             // 服务端发 S2C 开屏（照 ScheduleBookItem → ScheduleNetworking.openFor 的口径）。
             // 这一下同时"结束标记"（）。
             PatrolNetworking.openFor(sp, hand);

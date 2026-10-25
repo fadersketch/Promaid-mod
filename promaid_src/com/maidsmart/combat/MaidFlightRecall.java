@@ -58,6 +58,14 @@ public final class MaidFlightRecall {
             if (!MaidFlightKit.isFlightTask(maid)) {
                 return; // 只管两种空袭任务
             }
+            // 【R1118】显式「飞过去」/ 拴绳挂载 / 飞行跟随进行中：牵引绳整条静默。
+            // 旧版在她飞向远处目标点时反复"距主人 101 格 → 传送回主人身边"，
+            // 而 Entity.teleportTo 的 unRide() 会把绳子上的玩家甩下去 = 绳子当场断。
+            if (com.maidsmart.patrol.MaidTravelTarget.active(maid)
+                    || com.maidsmart.combat.GunnerTetherManager.isHanging(maid)
+                    || com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+                return;
+            }
             if (!(maid.m_9236_() instanceof ServerLevel level)) {
                 return;
             }

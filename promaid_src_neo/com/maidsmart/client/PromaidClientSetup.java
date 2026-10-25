@@ -42,8 +42,12 @@ public final class PromaidClientSetup {
     public static void registerIndexStoneHooks() {
         com.maidsmart.build.IndexStonePreviewClient.ensureRegistered();        // v1.2.2 实测五百八十七：女仆放置物的淡粉色标记（纯客户端渲染）
         com.maidsmart.client.BombMarkClient.ensureRegistered();
+        // 实测一千〇六：女仆放置方块的金色描边（S2C 位置表 → LINES 管线，与 BombMark 同源）
+        com.maidsmart.client.PlacedMarkClient.ensureRegistered();
         // v1.3.7 实测六百六十七：武装拴绳的绳子（S2C 状态 → LINES 管线，与 BombMark 同源）
         com.maidsmart.client.GunnerTetherClient.ensureRegistered();
+        // 【R1108】手持武装拴绳/指标石时准星指向的女仆描边（客户端 tick 维护目标，零网络）
+        com.maidsmart.client.MaidAimGlowClient.ensureRegistered();
     }
 
     /**
@@ -67,7 +71,8 @@ public final class PromaidClientSetup {
             com.maidsmart.patrol.PatrolNetworking.OpenPatrolPacket pkt) {
         try {
             com.maidsmart.patrol.PatrolChartScreen.accept(pkt.offHand, pkt.book,
-                    pkt.problems, pkt.notes, pkt.length, pkt.seconds, pkt.open);
+                    pkt.problems, pkt.notes, pkt.length, pkt.seconds, pkt.open,
+                    pkt.canFlyToTarget, pkt.playerDim);
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PromaidClientSetup", ignored);
         }
     }
@@ -103,8 +108,11 @@ public final class PromaidClientSetup {
      */
     public static void registerSeatSyncClear() {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
-                (net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) ->
-                        com.maidsmart.combat.RideBindManager.clearSyncedSeats());
+                (net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) -> {
+                    com.maidsmart.combat.RideBindManager.clearSyncedSeats();
+                    // 烟花尾迹的客户端窗口（实体 id 跨世界会撞，退出必须清）
+                    com.maidsmart.client.FireworkTrailClient.clear();
+                });
     }
 
     /**
@@ -138,6 +146,22 @@ public final class PromaidClientSetup {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
                 (net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) ->
                         com.maidsmart.config.ConfigSyncNetworking.restoreOwn());
+    }
+
+    /**
+     * v1.3.3 实测一千〇二【粉火黑块】：把 {@code maid_smart:pink_fire} 登记进 cutout 渲染层——
+     * 渲染层按【方块实例】查表（javap 实证 ItemBlockRenderTypes：原版把 FIRE 映射到 cutout，
+     * 表里没有的方块回退 solid）——{@code extends FireBlock} 不继承表项，粉火落回 solid：贴图
+     * 透明像素（火焰形状之外）被画成纯黑，整团火就是一块黑板。NeoForge 21.1 的表与回退同构
+     * （javap 实证），一样要登记；时机有硬校验（{@code checkClientLoading}：仅客户端加载期），
+     * 故挂 FMLClientSetupEvent。
+     */
+    public static void registerPinkFireRenderType(net.neoforged.bus.api.IEventBus modBus) {
+        modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent e) ->
+                e.enqueueWork(() -> net.minecraft.client.renderer.ItemBlockRenderTypes.setRenderLayer(
+                        com.maidsmart.combat.PinkFireBlock.block(),
+                        // RenderType.cutout()（Mojmap；两树同为 cutout 层，口径一致）
+                        net.minecraft.client.renderer.RenderType.cutout())));
     }
 
     private static void onPlaySound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {

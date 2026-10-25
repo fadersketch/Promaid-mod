@@ -952,6 +952,12 @@ public final class RideBindManager {
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
         }
+        // 【R1078】重绑/退出重进后清掉所有"按载具 UUID 记的飞行状态"：降落跑道、爬升窗口、
+        // 助跑带、悬停机头、俯冲段……它们存的是旧位置/旧时间的结论，跨存档保留会让重进后的
+        // 第一段飞行按旧计划走（玩家报的"固定翼重进后彻底失衡"里，姿态与这些残留都有份）。
+        MaidMountCompat.resetAfterTeleport(mount);
+        MaidAirCombat.clear(maid);
+        MaidAirCombat.forgetMount(mount);
         LINKS.put(maid.getUUID(), new Link(maid, mount, player, chair, prevCmd, prevSitting));
         // v1.3.2 实测八百六十三：绑定**飞行载具**后先给一段"启动时间"（引擎起、车不动），让玩家上机
         double startupSecs = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_STARTUP_SECONDS.get();
@@ -1039,6 +1045,7 @@ public final class RideBindManager {
             // 【实测七百七十】模组仆从坐骑：把"她的速度"修改器摘掉，还它原本的移速。
             MaidRideKit.clearRiddenSpeed(mount);
             MaidRideKit.stopNavigation(mount);
+            LAST_MOUNT_POS.remove(mount.getUUID());
         }
         try {
             if (maid.getVehicle() != null) {
@@ -1482,6 +1489,9 @@ public final class RideBindManager {
     /** 配对同步的留痕节流表（与其它几条日志互不顶掉）。 */
     private static final Map<UUID, Long> SEAT_LOG_AT = new HashMap<>();
 
+    /** 【R1118】飞行载具沿航迹的状态留痕节流（gameTime，100 = 5 秒/只） */
+    private static final Map<UUID, Long> PATROL_LOG_AT = new HashMap<>();
+
     private static void logSeatSync(EntityMaid maid, int mountId) {
         try {
             long now = System.currentTimeMillis();
@@ -1569,7 +1579,16 @@ public final class RideBindManager {
                 EntityMaid maid = link.maid.get();
                 Entity mount = link.mount.get();
                 ServerPlayer owner = link.owner.get();
-                if (maid == null || !maid.isAlive() || mount == null || !mount.isAlive()) {
+                if (maid == null) {
+                    // 【R1078】旧世界残留：没有实体可释放，**按 key** 移除。旧版 deferred.add(null)
+                    // 再 releaseMaidQuiet(null) 清的是 null 键，UUID 条目一直留着 → 重进后
+                    // restore 看到"已有链路"就永不重建。
+                    it.remove();
+                    continue;
+                }
+                if (!maid.isAlive() || mount == null || !mount.isAlive()) {
+                    // 实体还在（可能已死）→ 交给 releaseMaidQuiet：它会按她的 UUID 移除，
+                    // 并还原坐姿/悬空鞍位的重力，这一步不能省。
                     deferred.add(maid);
                     continue;
                 }
@@ -1577,6 +1596,8 @@ public final class RideBindManager {
                     deferred.add(maid);
                     continue;
                 }
+                // 外部「一键传送」把载具整体搬走 → 先作废旧位置上的飞行状态，再驱动
+                checkMountTeleport(maid, mount);
                 // 【实测七百二十三 / 七百二十四】悬空鞍位（龙）：她**不是乘客**，判据换成"由我们每拍摆位"。
                 // 723 的旧版这里 gap > CHAIR_MAX_GAP 就**解除链路**——但解除走的是 releaseMaidQuiet，
                 // 它不还原重力/龙的行动档（她永久无重力、龙永久卡跟随档），而且是"时不时断开"的来源：
@@ -1650,6 +1671,7 @@ public final class RideBindManager {
             // 【实测七百七十】模组仆从坐骑：把"她的速度"修改器摘掉，还它原本的移速。
             MaidRideKit.clearRiddenSpeed(mount);
             MaidRideKit.stopNavigation(mount);
+            LAST_MOUNT_POS.remove(mount.getUUID());
         }
     }
 
@@ -1663,6 +1685,71 @@ public final class RideBindManager {
     private static final java.util.Set<UUID> PLAYER_DRIVING = new java.util.HashSet<>();
     /** v1.3.2 实测八百六十三：绑定飞行载具后的「启动截止时刻」（gameTime tick；到时清）。 */
     private static final java.util.Map<java.util.UUID, Long> STARTUP_UNTIL = new java.util.HashMap<>();
+
+    /**
+     * 上一拍看到的载具位置（载具 UUID → 坐标），只服务于"瞬移检测"。
+     * <p>「一键传送」不是我们的传送链路（战术地图 / 召回道具 / 命令都会直接改实体坐标），
+     * 所以只能靠"一 tick 内位置跳了多远"来认：正常飞行每拍最多 {@code AIRCRAFT_HMAX}=2.6 格，
+     * 超过 {@link #MOUNT_TELEPORT_JUMP} 格只可能是瞬移。
+     */
+    private static final java.util.Map<UUID, Vec3> LAST_MOUNT_POS = new HashMap<>();
+
+    /** 一 tick 内位移超过这么多格 = 载具被瞬移（不是它自己飞出来的）。 */
+    private static final double MOUNT_TELEPORT_JUMP = 16.0;
+
+    /**
+     * 载具被外部「一键传送」整体搬走 → 把**绑定在旧位置上的飞行状态**全部作废。
+     * <p>不清的话：盘旋旋向/固定翼通场航线/降落跑道/起飞助跑带/地面调头符号/悬停机头/
+     * 刹车脉冲/索敌锁定/在飞炮弹，仍然指着旧坐标或旧地形——飞机传送过来后会先掉头飞回
+     * 旧战场，或按旧跑道起降，玩家看到的就是「飞行链路彻底混乱」。
+     * <p>清完下一拍全部按新位置重新采样；链路、电量、姿态、动量都不动。
+     */
+    private static void checkMountTeleport(EntityMaid maid, Entity mount) {
+        try {
+            if (mount == null) {
+                return;
+            }
+            UUID id = mount.getUUID();
+            Vec3 now = mount.position();
+            Vec3 prev = LAST_MOUNT_POS.put(id, now);
+            if (prev == null) {
+                return; // 第一次见：只记基线，不判
+            }
+            double jump = prev.distanceTo(now);
+            if (jump < MOUNT_TELEPORT_JUMP) {
+                return;
+            }
+            // 本场遭遇的盘旋相位/通场航线/爬升窗：作废（下一拍重新起手）
+            MaidAirCombat.clear(maid);
+            // 旧位置锁定的目标：连同 brain 的 ATTACK/LOOK 一起擦掉（否则还追着旧战场打）
+            FlightTargeting.forgetAndErase(maid);
+            // 旧位置打出去的炮弹：追不到新位置，直接放手（含未加载区块里冻住的那种）
+            MaidShellHoming.forgetMaid(maid.getUUID());
+            // 旧地形的降落跑道 / 助跑带 / 地面调头 / 瞄准缓存：全部清掉
+            MaidMountCompat.resetAfterTeleport(mount);
+            // 她脑里的旧走位路径：地面载具瞬移后会照着它往回开
+            clearRiderNav(maid);
+            MaidRideKit.stopNavigation(mount);
+            MaidMountCompat.logDrive(mount, "检测到载具瞬移 " + Math.round(jump)
+                    + " 格（一键传送/召回）→ 清空盘旋、航线、降落/助跑缓存、索敌锁定与在飞炮弹，"
+                    + "按新位置重新起手");
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+    }
+
+    /** 清掉她自己的寻路目标（乘客状态下的"走位意图"），让瞬移后从新位置重新规划。 */
+    private static void clearRiderNav(EntityMaid maid) {
+        try {
+            maid.getNavigation().stop();
+            maid.getBrain().setMemory(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET,
+                    java.util.Optional.empty());
+            maid.getBrain().setMemory(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.PATH,
+                    java.util.Optional.empty());
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+    }
 
     private static void drive(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
@@ -1717,7 +1804,28 @@ public final class RideBindManager {
                 MaidRideKit.applyRiddenSpeed(mount, maid);
                 return;
             }
-            if (maid.isHomeModeEnable()) {
+            // 【R1082】守家（home）只停走位，不停武器：索敌/开火/装弹放到 home 闸之前，
+            // 载具停在原地也会继续打活动范围内的敌人（地面载具的索敌仍受 home 圈约束）。
+            MaidMountCompat.markTick(maid.level().getGameTime());
+            MaidMountCompat.tickAttack(mount, maid);
+            if (MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE) {
+                feedAmmoThrottled(mount, maid);
+            }
+            // 【R1083】FH-77BW：玩家坐主炮位时只停车，主炮交给玩家自己开；停稳后
+            // SWB 自己的 baseTick 会把尾部驻锄放下（HOE_UP=false）。
+            // 必须放在 home 闸**之前**：home 档下也要把驾驶让出来，否则 AI 一边转炮塔
+            // 一边停走位，玩家既开不动也打不准。
+            if (MaidMountCompat.isFh77bw(mount)
+                    && MaidMountCompat.seatHasPlayer(mount, 1)) {
+                MaidMountCompat.stop(mount);
+                return;
+            }
+            // 【R1114】她驾驶飞行载具且绑了闭环航迹 = 按航迹巡逻，不是守家停驻：
+            // 放它越过下面的 home 闸进入飞行档；接敌仍由飞行档的敌人分支优先接管。
+            boolean patrolFlight = MaidAirCombat.enabled()
+                    && com.maidsmart.patrol.PatrolFlight.onFlyingVehicle(maid)
+                    && com.maidsmart.patrol.PatrolFlight.effective(maid) != null;
+            if (maid.isHomeModeEnable() && !patrolFlight) {
                 // 【实测七百八十三】固定翼（AC-130H 这类）单独开一档"安全降落"：
                 //   地面 → 与别的坐骑一样**停住不动**；
                 //   空中 → **立刻执行一次降落进近**（选一块够平的地、照下滑道轻轻接地）。
@@ -1748,24 +1856,10 @@ public final class RideBindManager {
                 faceOwner(mount, owner);
                 return;
             }
-            // 【实测七百四十一·点3】刷新"当前刻"：机头瞄准请求带几拍时效（见 MaidMountCompat.NOSE_AIM），
-            // 由这里统一喂，免得本类去依赖任何一侧的 level 状态。
-            MaidMountCompat.markTick(maid.level().getGameTime());
-            // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】：每拍把她的攻击目标交给坐骑——
-            // 卓越前线载具走内置 Mob-乘客自动开火、冰火传说龙走吐息、**其余任何 Mob 坐骑**
-            // 走通用兜底（无条件把她的 target 写下去，让它自己那套目标 AI 用它自己的攻击方式打）。
-            // 实测七百一十九·点4 起这一档不再只对"模组坐骑"开——原版兽同样走一遍（它们没有
-            // 目标 AI 时写了也无副作用），这样"别的模组的可骑乘战斗生物"零适配即可服从。
-            MaidMountCompat.tickAttack(mount, maid);
             // 【实测七百五十六·点2】载具之间"挤成一团"的互斥：5 格以内的**别的女仆骑着的载具**
-            // 朝远离方向弹开（每 tick 一点点，见 repelPeerVehicles）。
+            // 朝远离方向弹开（每 tick 一点点，见 repelPeerVehicles）。守家档已经在上面 return，
+            // 不会把停住的载具互相弹开。
             repelPeerVehicles(mount);
-            // 【实测七百二十六·点6】女仆自己往载具装弹：她背包里若有**这车当前武器对得上的**
-            // 子弹，搬进车自己的弹药容器（车的枪弹是从车容器取的，见 MaidMountCompat.feedVehicleAmmo）。
-            // 节流 0.5 秒一次——弹药消耗远慢于此，每 2 拍扫一遍背包是浪费。
-            if (MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE) {
-                feedAmmoThrottled(mount, maid);
-            }
             double mod = MaidRideKit.speedModifierFor(mount, maid);
             // 【实测七百二十七·点1 + 七百二十八·玩家补正】飞行载具（卓越前线的直升机 /
             // 固定翼）分**两档高度**：
@@ -1780,19 +1874,26 @@ public final class RideBindManager {
                 // 发现 50 格 / 维持 128 格、无视排班盒子）——
                 //
                 // 而 TLM 那条链按 16/8 格援护半径丢目标，boss 一飞高/一掉下去就没了。
+                // 【实测一千零五十八】固定翼**不许退回 brain**：索敌器说没有目标就真的没有
+                // （它已按 384/576 + 视线 + LiveThreat 判过）。旧版回退 liveTargetOf 会把
+                // TLM 写的远目标捞回来——实机：索敌器说没有活敌人，飞机却追着 400+ 格外的目标开火。
+                boolean fixedWing = MaidMountCompat.isAircraft(mount);
                 LivingEntity foe = FlightTargeting.resolve(maid);
-                if (foe == null) {
+                if (foe == null && !fixedWing
+                        && com.maidsmart.patrol.MaidTravelTarget.aim(maid) == null
+                        && MaidMountCompat.riderEngageAllowed(maid)) {
                     foe = liveTargetOf(maid); // 索敌器这一拍没结果 → 退回 brain（只认"活敌人"，见 LiveThreat）
                 }
                 // 【实测七百三十·点2】"发现攻击范围内没有主人"→ 放弃当前敌人、转去追主人。
-                // 参照半径直接复用索敌器的**发现半径**（{@link FlightTargeting#RANGE} = 50）：
-                // 主人离得比"她还愿意接敌的距离"还远，就说明这一场不在主人身边打——收手回去。
-                // MaidMountCompat#AIRCRAFT_ENGAGE_LEASH} = 200 格）：它一次通场 + 掉头就要飞出
-                // 100~200 格，按 50 判等于每一趟都在半路把敌人丢掉——玩家看到的"飞机不支援战斗"
-                // 有一半是这条闸造成的。直升机/扫帚/飞艇照旧 50 格。
-                boolean fixedWing = MaidMountCompat.isAircraft(mount);
+                // 固定翼用 {@link MaidMountCompat#AIRCRAFT_ENGAGE_LEASH} = 450 格：它一次
+                // ingress + egress 就要飞出 300 多格，按 50 判等于每一趟都在半路把敌人丢掉。
+                // 直升机/扫帚/飞艇用 {@link MaidMountCompat#FLY_ENGAGE_LEASH} = 100 格
+                // （【R1078】50 → 100：玩家实测稍微飞远一点就脱战）。
+                // 【实测一千零五十四】固定翼分两档：侧射炮艇（AC-130H）→ 敌上方 165 格、半径
+                // 84 格盘旋；前射机（A-10/J-16/Ju-87/TOM6）→ REJOIN/ATTACK/EGRESS 通场，只在 ATTACK 开火。
+                boolean gunship = fixedWing && MaidMountCompat.isGunship(mount);
                 double engageLeash = fixedWing
-                        ? MaidMountCompat.AIRCRAFT_ENGAGE_LEASH : FlightTargeting.RANGE;
+                        ? MaidMountCompat.AIRCRAFT_ENGAGE_LEASH : MaidMountCompat.FLY_ENGAGE_LEASH;
                 if (foe != null && maid.distanceTo(owner) > engageLeash) {
                     if (LEASH_LOGGED.add(maid.getUUID())) {
                         MaidMountCompat.logDrive(mount, "主人超出接敌半径（"
@@ -1804,29 +1905,56 @@ public final class RideBindManager {
                     LEASH_LOGGED.remove(maid.getUUID());
                 }
                 Vec3 air;
+                String branch = "?";
                 if (foe != null && foe.isAlive() && foe.level() == maid.level()) {
-                    // 【实测七百七十九·点2】固定翼 = **轰炸机航线**：胡萝卜取"敌正上方"，
-                    // 让她一趟趟从敌人头顶冲过去（炸弹由 tickAttack 的投弹链路照常丢）；
-                    // 直升机/飞艇/扫帚仍取"圈上一点"（它们悬停/盘旋那一套本来就是对的）。
-                    air = fixedWing ? MaidAirCombat.bomberRunTarget(maid, foe)
-                            : MaidAirCombat.combatTarget(maid, foe);
+                    // 【实测七百七十九·点2 → 一千零五十四】固定翼不再统一走"敌正上方"轰炸航线：
+                    // 侧射炮艇要高位横飞让侧炮压住目标，前射机要直线通场把机炮/火箭打完。
+                    branch = "接敌";
+                    air = !fixedWing ? MaidAirCombat.combatTarget(maid, foe)
+                            : gunship ? MaidAirCombat.gunshipOrbitTarget(maid, mount, foe)
+                            : MaidAirCombat.fixedWingAttackTarget(maid, mount, foe);
                 } else {
                     MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新起手
-                    // 【实测七百三十八·玩家坐副驾】
-                    //
-                    // 根因：跟随档的高度基准是**主人的 Y**，玩家一上机，owner.getY() == 机身自己的
-                    // Y → 目标高度 = 她自己的高度 + followAlt，每拍 +N 的棘轮，永远往上飞。
-                    // 所以"机上有玩家"这一档不追任何基准，直接悬停在她现在的位置（水平+竖直都保持）；
-                    // 接敌那一支在上面，完全不受影响（玩家要的"锁敌的时候正常"）。
-                    if (MaidMountCompat.hasPlayerAboard(mount)) {
-                        // 【实测七百九十四·玩家报的"飞行立刻丢失目标"】固定翼（AIRCRAFT）**不能悬停**
-                        // ——它没有竖直轴（反编译 aircraftEngine 实证：高度只由"速度 × 俯仰"积分），
-                        // 738/741 给它的 holdHere 等于"目标点=它此刻的位置"→ 距离死区 FLIGHT_ARRIVE
-                        // 立刻判"到了"→ 不给油，可它**没有制动**，于是带着残余速度一路平飞漂出战场；
-                        // 下一拍锁敌器的圆心是**主人**、又只在主人水平 50 格内找，飞机早已飞出那个圈
-                        // →「女仆的飞行就会立刻丢失掉目标」就是这么来的。
-                        // 所以这一档改走**同一条降落链路**（实测七百八十三那套 home 安全降落，
-                        // 红线"口径只有一处"）：选一块够平的地 → 怠速 → 受控下沉 → 轻接地 → 停住。 返回 false（拿不到驱动口 / 找不到平地）→ 落回下面的 holdHere 悬停，一个字节不变。 为什么"降落"能救回锁敌：落点是在**她当前位置周围 48 格**里选平地，且下降段 每拍水平阻尼 0.94（约 2 秒降到亚音速以下）——她**留在主人附近**，于是下一拍 锁敌器（圆心=主人、水平 50 格）照样能发现敌人。敌人一出现，上面 `foe != null` 那一支立刻接管：爬升 → 敌正上方轰炸航线（= 玩家要的"绕着敌人转圈并攻击"）。 若敌人在**接地后**才出现，下一拍 driveFlight 的接敌档会照常把她从地面拔起来。
+                    // 【R1113】巡逻航图「飞过去」：把"跟随主人"的基准换成目标点。
+                    // 机上有玩家时旧版会原地悬停（怕拿机身当基准产生爬升棘轮），这里目标
+                    // 是玩家显式点的坐标，直接用它，不碰主人 Y。
+                    Vec3 travel = com.maidsmart.patrol.MaidTravelTarget.aim(maid,
+                            new Vec3(mount.getX(), mount.getY(), mount.getZ()));
+                    // 【R1114】没有「飞过去」目标时，若绑了闭环航迹就按航迹飞——与扫帚同一套
+                    // PatrolFlight（纯追踪 + 偏航回正）；航迹点的 y 就是飞行高度，不再叠加跟随高差。
+                    Vec3 patrol = travel == null ? com.maidsmart.patrol.PatrolFlight.nextPoint(maid,
+                            new Vec3(mount.getX(), mount.getY(), mount.getZ())) : null;
+                    // 【R1118】只要她身上绑了航迹，就绝不回落到"跟随主人"（哪怕航迹还没闭环）：
+                    // 跟随档以主人 Y 为基准，玩家在机上时就是永久爬升棘轮。
+                    // 【R1121】但航迹只对 **home** 女仆生效（玩家口径：跟随模式下轨道完全没用）：
+                    // 没开 home 就当作没绑，直接走常链路（机上有人→悬停 / 跟随主人）。
+                    boolean routeBound = maid.isHomeModeEnable()
+                            && com.maidsmart.patrol.PatrolFlight.boundRoute(maid) != null;
+                    if (travel != null) {
+                        branch = "飞过去";
+                        air = MaidAirCombat.hoverAt(maid, travel.x, travel.z, travel.y);
+                    } else if (patrol != null) {
+                        branch = "航迹";
+                        air = patrol;
+                    } else if (patrolFlight) {
+                        // 【R1117】home + 有效航迹，但这一拍算不出航迹点（路径刚重建/偏得太远）：
+                        // 守住当前位置（home 的语义是守家/巡逻，绝不回落到"跟随主人"——
+                        // 主人一旦坐进机舱，跟随目标会随载具一起涨，变成永久爬升）。
+                        branch = "航迹·本拍无点→悬停";
+                        air = MaidAirCombat.holdHere(maid, mount);
+                    } else if (routeBound) {
+                        // 【R1118】绑了航迹但 effective 不生效（未闭环/点数不足/维度不同）：
+                        // 悬停等玩家补完，绝不追主人（那就是"无限向上"的棘轮）。
+                        branch = "航迹未生效→悬停";
+                        air = MaidAirCombat.holdHere(maid, mount);
+                    } else if (MaidMountCompat.hasPlayerAboard(mount)) {
+                        branch = "机上有人→悬停";
+                        // 【实测七百三十八·玩家坐副驾】跟随档以主人 Y 为基准，玩家一上机 owner.Y 就是
+                        // 机身自己的 Y → 每拍 +followAlt 的棘轮，永远往上飞；所以这一档不追基准。
+                        // 【实测七百九十四】固定翼不能悬停（高度只由"速度 × 俯仰"积分）：holdHere 等于
+                        // "目标点=此刻位置" → 判"到了"就不给油，可它没有制动，会一路平飞漂出战场、
+                        // 接着丢失锁敌。所以改走同一条降落链路（选平地 → 怠速 → 受控下沉 → 轻接地），
+                        // 落点在她周围 48 格内，仍在主人的锁敌圈里；返回 false 再退回 holdHere。
                         if (fixedWing && MaidMountCompat.aircraftHomeLanding(mount, maid, "机上有人且周围无敌人")) {
                             return;
                         }
@@ -1837,17 +1965,38 @@ public final class RideBindManager {
                             MaidRideKit.feedNavigation(mount, air, mod, maid);
                             return;
                         }
-                    }
-                    // 跟随：**高度基准永远是主人**（比主人高三格，七百三十三 玩家纠正口径）。
-                    // 【实测七百三十四·棘轮修正】七百三十三 这一档"够近就原地悬停"错误地把基准
-                    // 传成了**她自己的 Y**，于是目标 = 她现在的高度 + 3 ——她每贴到一次就被抬高
-                    // 3 格、目标跟着水涨船高，形成**每拍 +3 的棘轮**，几秒就窜到主人上方十几二十格
-                    // （玩家实机反馈）。两档的差别只应在**水平位置**：够远飞到他正上方，够近就守住
-                    // 当前水平位置；**竖直基准一律是主人的 Y**，任何情况下都不拿她自己的高度当参照。
-                    if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
-                        air = MaidAirCombat.hoverAt(maid, owner.getX(), owner.getZ(), owner.getY());
                     } else {
-                        air = MaidAirCombat.hoverAt(maid, maid.getX(), maid.getZ(), owner.getY());
+                        // 【R1120】跟随必须是**最后的 else**：此前这一段无条件执行，会把上面
+                        // 「飞过去 / 航迹 / 航迹悬停」刚算好的 air 整份覆盖成主人坐标——日志
+                        // 「生效=true 分支=跟随主人」就是它。主人坐进机舱后目标随主人一起涨，
+                        // 于是每拍 +3 的爬升棘轮（玩家看到的"直升机无限向上"）。
+                        // 跟随：**高度基准永远是主人**（比主人高三格，七百三十三 玩家纠正口径）。
+                        // 【实测七百三十四·棘轮修正】两档的差别只应在**水平位置**：够远飞到他
+                        // 正上方，够近就守住当前水平位置；**竖直基准一律是主人的 Y**，任何情况下
+                        // 都不拿她自己的高度当参照。
+                        if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
+                            branch = "跟随主人";
+                            air = MaidAirCombat.hoverAt(maid, owner.getX(), owner.getZ(), owner.getY());
+                        } else {
+                            branch = "跟随主人·近距悬停";
+                            air = MaidAirCombat.hoverAt(maid, maid.getX(), maid.getZ(), owner.getY());
+                        }
+                    }
+                    // 【R1118】完整决策留痕：事后一眼看出"这一拍为什么这么飞"。
+                    long now = maid.level().getGameTime();
+                    Long last = PATROL_LOG_AT.get(maid.getUUID());
+                    if (last == null || now - last >= 100L) {
+                        PATROL_LOG_AT.put(maid.getUUID(), now);
+                        com.maidsmart.tool.PromaidLog.log("航迹飞行",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + " home=" + maid.isHomeModeEnable()
+                                + " 绑定=" + routeBound
+                                + " 生效=" + patrolFlight
+                                + " 说明=" + com.maidsmart.patrol.PatrolFlight.explain(maid)
+                                + " 分支=" + branch
+                                + (air == null ? " 目标=null"
+                                   : String.format(" 目标=(%.1f, %.1f, %.1f)",
+                                         air.x, air.y, air.z)));
                     }
                 }
                 if (air != null) {
@@ -1864,15 +2013,17 @@ public final class RideBindManager {
             // 这里给地面载具补同一套绕圈（同一段 CombatOrbit 状态机、同一个"追逐式胡萝卜"），
             // 高度贴着敌人、撞墙/卡住自动反向（见 MaidAirCombat.groundOrbitTarget 与
             // MaidMountCompat.groundReverse）。
+
+            // 【R1082/R1083】FH-77BW 的"玩家坐主炮位 → 停车让炮"已在 home 闸之前处理。
             if (MaidAirCombat.enabled() && MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE
                     && !MaidMountCompat.isFlyingVehicle(mount)) {
                 LivingEntity gfoe = FlightTargeting.resolve(maid);
-                if (gfoe == null) {
+                if (gfoe == null && com.maidsmart.patrol.MaidTravelTarget.aim(maid) == null
+                        && MaidMountCompat.riderEngageAllowed(maid)) {
                     gfoe = liveTargetOf(maid); // 【七百五十七】只认"活敌人"（见 LiveThreat）
                 }
-                if (gfoe != null && maid.distanceTo(owner) > FlightTargeting.RANGE) {
-                    gfoe = null; // 与飞行档同一道"主人不在场就收手"的闸（口径只有一处）
-                }
+                // 【R1078】接敌时不再拿"主人距离"当闸：只要目标还活着就一直打，脱离只由
+                // 索敌半径与目标存活决定（旧版 192 格仍会把追出去的坦克拉回停车）。
                 if (gfoe != null && gfoe.isAlive() && gfoe.level() == maid.level()) {
                     Vec3 gair = MaidAirCombat.groundOrbitTarget(maid, mount, gfoe);
                     if (gair != null) {
@@ -1926,7 +2077,8 @@ public final class RideBindManager {
             // 749 的"够近就停"会把 724 点5 的主动索敌整个吃掉（坦克停在你身边、再也不去找敌人）。
             if (mount instanceof net.minecraft.world.entity.Entity
                     && MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE
-                    && !fighting) {
+                    && !fighting
+                    && MaidMountCompat.riderEngageAllowed(maid)) {
                 tryEngageRider(maid);
             }
             // ① 模式下的走位意图（1:1 还原）——只在"确实有模式在指挥"时才认
@@ -2526,7 +2678,10 @@ public final class RideBindManager {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
         }
         try {
-            return maid.getTarget();
+            // 【R1077】兜底也要 isAlive：死目标不再算 fighting，否则 modeMove 会继续把
+            // 旧战斗走位点喂给车（目标死后"疯狂鬼畜"就是这条）。
+            LivingEntity t = maid.getTarget();
+            return t != null && t.isAlive() ? t : null;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             return null;
         }
@@ -2551,11 +2706,24 @@ public final class RideBindManager {
                 }
                 Entity mount = maid.getVehicle();
                 if (mount == null || mount instanceof EntityMaid) {
-                    try {
-                        maid.getPersistentData().remove(TAG_RIDE_MOUNT);
-                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+                    // 【R1083】重进世界时乘客关系可能还没恢复（载具比女仆晚加载 / 玩家尚未登录），
+                    // 旧版在这一拍就把留痕删了 → 链路永久丢失，固定翼只会一直向前飞。
+                    // 现在按 tag 里的载具 UUID 找回并重新骑上；实在找不到就**保留**留痕，
+                    // 下一次房子活（HOUSEKEEP_DIV）再试。
+                    mount = mountFromTag(level, tag);
+                    if (mount == null || mount instanceof EntityMaid) {
+                        continue;
                     }
-                    continue;
+                    try {
+                        if (maid.getVehicle() != mount) {
+                            maid.startRiding(mount, true);
+                        }
+                    } catch (Throwable ignored) {
+                        com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+                    }
+                    if (maid.getVehicle() != mount) {
+                        continue;
+                    }
                 }
                 LivingEntity owner = maid.getOwner();
                 if (owner instanceof ServerPlayer sp) {
@@ -2563,18 +2731,33 @@ public final class RideBindManager {
                     // 这里她是乘客，绑前值无从得知，就用"当前值"当还原目标，最保守）。
                     LINKS.put(maid.getUUID(), new Link(maid, mount, sp, MaidMountCompat.isSitting(maid)));
                     MaidMountCompat.setSitting(maid, true);
+                    // 【R1078】世界重载后的自愈：清掉按载具 UUID 残留的飞行计划/姿态缓存。
+                    MaidMountCompat.resetAfterTeleport(mount);
+                    MaidAirCombat.clear(maid);
+                    MaidAirCombat.forgetMount(mount);
                     mark(maid);
                     mark(mount);
                     com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "恢复：女仆="
                             + com.maidsmart.tool.PromaidLog.nameOf(maid)
                             + " 仍骑在 " + MaidRideKit.describe(mount) + " 上 → 重建链路");
-                } else {
-                    try {
-                        maid.getPersistentData().remove(TAG_RIDE_MOUNT);
-                    } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
-                    }
                 }
+                // 【R1083】owner 还没加载（重进世界的前几拍常见）→ 什么都不删，等下一拍。
             }
+        }
+    }
+
+    /** 从留痕 {@code 女仆UUID|名字|载具UUID} 找回载具实体；格式不对/找不到返回 null。 */
+    private static Entity mountFromTag(ServerLevel level, String tag) {
+        try {
+            int i = tag.lastIndexOf('|');
+            if (i < 0 || i + 1 >= tag.length()) {
+                return null;
+            }
+            java.util.UUID id = java.util.UUID.fromString(tag.substring(i + 1));
+            return level.getEntity(id);
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+            return null;
         }
     }
 

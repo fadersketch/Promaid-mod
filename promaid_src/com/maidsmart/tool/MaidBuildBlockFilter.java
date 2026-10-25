@@ -19,7 +19,7 @@ import net.minecraftforge.registries.ForgeRegistries;
  * "下落方块"，火把进了"数量最多"就选它 → 垫了个寂寞还白消耗。
  * 判定（全部通过才可用）：
  * 1. BlockItem（必须是方块物品）；
- * 2. 非下落方块（沙/砾石/铁砧——放下就掉）；
+ * 2. 非下落方块（沙/砾石/铁砧——放下就掉）、非床/门/高植物（两格方块——单格放不住）；
  * 3. 非 TNT；
  * 4. 不在伤害黑名单（仙人掌/岩浆块/甜浆果/营火/灵魂营火——踩上掉血）；
  * 5. 【有完整碰撞形状】：m_60796_（isSolidRender…实为 canOcclude/isCollisionShapeFullBlock
@@ -75,6 +75,17 @@ public final class MaidBuildBlockFilter {
             if (block instanceof FallingBlock || block instanceof TntBlock) {
                 return false;
             }
+            // v1.3.3 实测一千〇一【两格方块禁止垫脚】：床 / 门 / 高植物这类"占两格、
+            // 两半互相依存"的方块——她垫脚只做单格放置，放下那一半下一拍就被原版
+            // updateShape 打掉（另一半不在），"垫了个寂寞"还白扣一块。旧口径拦不住：
+            // 静态判定（level/pos 传 null）只查"默认碰撞形状非空"，而床/门两半的
+            // 碰撞箱都非空。硬闸（与沙/砾石同档、先于玩家名单）：放进「放宽名单」
+            // 也不放行——它根本放不住。类口径与 BlueprintBlockTraits 的两格分类同源。
+            if (block instanceof net.minecraft.world.level.block.BedBlock
+                    || block instanceof net.minecraft.world.level.block.DoorBlock
+                    || block instanceof net.minecraft.world.level.block.DoublePlantBlock) {
+                return false;
+            }
             ResourceLocation id = ForgeRegistries.BLOCKS.getKey(block);
             String sid = id == null ? "" : id.toString();
             if (HARM_BLOCK_IDS.contains(sid)) {
@@ -87,8 +98,8 @@ public final class MaidBuildBlockFilter {
                 return false;
             }
             // v1.3.0(beta) 实测六百八十：玩家自己那张「搭方块禁用名单」（面板「移动与行为 →
-            // 搭路 → 搭方块禁用名单」）——本方法就是四个消费方（自保搭高/挖矿/伐木/搭路）
-            // 的公共入口，所以这一条天然覆盖玩家要求的全部四个链路（口径只有一处）。
+            // 搭路 → 搭方块禁用名单」）——本方法就是五个消费方（自保搭高/挖矿/伐木/搭路/指标石）
+            // 的公共入口，所以这一条天然覆盖玩家要求的全部五个链路（口径只有一处）。
             if (isBlacklistedBuildBlock(sid)) {
                 return false;
             }

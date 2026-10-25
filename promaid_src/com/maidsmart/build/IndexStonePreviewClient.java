@@ -142,6 +142,11 @@ public final class IndexStonePreviewClient {
         if (mc.f_91077_ instanceof net.minecraft.world.phys.EntityHitResult) {
             return;
         }
+        // 【R1108】视线里 512 格内有一只女仆 → 同样让给服务端：远处右击走 RightClickItem，
+        // 那边会用同长度长射线绑她；锁定状态下也要放行（绑定本来就要求先锁方块）。
+        if (aimsAtFarMaid(mc)) {
+            return;
+        }
         if (locked) {
             // v1.2.0 实测四百八十五【锁定期间不可改选】：锁定的语义 = 期间只能操作这一格。
             // 等于锁定期间还能改选别的方块 —— 与用户要求不符。现在改为：
@@ -151,7 +156,7 @@ public final class IndexStonePreviewClient {
             // 解锁原本只有"重新右击那一格"一条路，而锁定格完全可能已经瞄不到（水/地形
             // 遮挡、走远超出 512 格长射线）→ 永久死锁。潜行右键在这里不占任何既有操作，
             // 是安全的逃生通道；服务端仍按原规则校验（女仆正在搭建时会婉拒）。
-            if (mc.f_91074_.m_6040_()) {
+            if (mc.f_91074_.m_6144_()) {
                 IndexStoneNetworking.CHANNEL.sendToServer(new IndexStoneNetworking.LockRequestPacket(true, 0, 0, 0));
                 event.setCanceled(true);
                 return;
@@ -190,8 +195,7 @@ public final class IndexStonePreviewClient {
      * 而这个判断对**近处方块同样成立**（锁定的方块常常就在眼前）。
      * `farPick` 会把 ≤ 触及距离的命中过滤成 null，拿它判断会漏掉近处的锁定格。
      * @return 命中的非空气方块；未命中/空气 → null
-     */
-    private static BlockPos pickAnyBlock(Minecraft mc) {
+     */    private static BlockPos pickAnyBlock(Minecraft mc) {
         try {
             Entity cam = mc.m_91288_() != null ? mc.m_91288_() : mc.f_91074_;
             HitResult hit = cam.m_19907_(PICK_RANGE, mc.m_91296_(), false);
@@ -204,6 +208,19 @@ public final class IndexStonePreviewClient {
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
         }
         return null;
+    }
+
+    /** 【R1108】512 格视线里是否有一只女仆（是 → 这次右击交给服务端长射线绑定） */
+    private static boolean aimsAtFarMaid(Minecraft mc) {
+        try {
+            Entity cam = mc.m_91288_() != null ? mc.m_91288_() : mc.f_91074_;
+            HitResult hit = cam.m_19907_(PICK_RANGE, mc.m_91296_(), false);
+            return hit instanceof net.minecraft.world.phys.EntityHitResult ehr
+                    && ehr.m_82443_() instanceof
+                    com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("IndexStonePreviewClient", ignored);
+        }
+        return false;
     }
 
     /** 长射线命中的方块位置；命中距离 ≤ 原版触及距离 或 未命中/空气 → null */

@@ -17,7 +17,7 @@ BASE = _find_repo_root(__file__)
 STAGING = os.path.join(BASE, 'staging_promaid_neo')
 OUT = os.path.join(BASE, 'out_promaid_neo')
 SRC = os.path.join(BASE, 'promaid_src_neo')
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.2-neoforge-1.21.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.3-neoforge-1.21.1.jar')
 
 # 实测九百一十六 / v1.5.400：mixin 注入点审计闸门（只读，硬闸门）——javac 只保证注解字符串是
 # 合法 Java，**不保证目标类真有这个方法、更不保证签名对得上**；没有 refmap 的手工编译里名字

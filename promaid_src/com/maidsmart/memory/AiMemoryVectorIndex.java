@@ -96,6 +96,37 @@ public final class AiMemoryVectorIndex {
         save();
     }
 
+    /** 批量写入/更新（一次落盘，避免 32 条向量重写 32 次文件）。 */
+    public synchronized void putAll(List<String> ids, List<float[]> vecs) {
+        if (ids == null || vecs == null) {
+            return;
+        }
+        boolean changed = false;
+        int n = Math.min(ids.size(), vecs.size());
+        for (int k = 0; k < n; k++) {
+            String id = ids.get(k);
+            float[] vec = vecs.get(k);
+            if (id == null || vec == null || vec.length == 0) {
+                continue;
+            }
+            boolean replaced = false;
+            for (int i = 0; i < this.entries.size(); i++) {
+                if (id.equals(this.entries.get(i).id)) {
+                    this.entries.set(i, new Entry(id, vec));
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                this.entries.add(new Entry(id, vec));
+            }
+            changed = true;
+        }
+        if (changed) {
+            save();
+        }
+    }
+
     /** 语义检索：按余弦相似度降序取 top limit。 */
     public synchronized List<Hit> search(float[] query, int limit) {
         List<Hit> out = new ArrayList<>();

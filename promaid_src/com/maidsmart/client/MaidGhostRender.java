@@ -23,9 +23,9 @@ import java.util.Map;
  * 【为什么必须换渲染类型】女仆模型走 {@code RenderType.entityCutoutNoCull}，透明态是 {@code NO_TRANSPARENCY}
  * ——**混合根本没开**，只压顶点 alpha 不会透明。原版"幽灵渲染"用 {@code itemEntityTranslucentCull}（透明态
  * TRANSLUCENT）+ 顶点 alpha 0.15；本类两件都做：① 换成同贴图的 itemEntityTranslucentCull；② 顶点色 alpha 乘配置值。
- * 【何时幽灵化】女仆档：① 你骑着她且是**拴绳挂的**（{@code GunnerTetherManager#isGunner}）；② 你坐在一把
- * 扫帚上、她也坐同一把（换座态）。扫帚档：① 你正骑它；② 你吊在骑它的女仆下面。三硬门对所有档成立：**总开
- * 关开着、透明度 < 1、相机第一人称**——第三人称/别的玩家一律照旧。
+ * 【何时幽灵化】只认**武装拴绳**（{@code GunnerTetherManager#isGunner}，服务端 S2C 状态）：女仆档 = 你骑着她
+ * 或与她同骑一把扫帚；扫帚档 = 她骑着它且被拴绳，或你骑的扫帚上坐着被拴绳的她。正常骑扫帚（没拴绳）
+ * 一律不透明。三硬门对所有档成立：**总开关开着、透明度 &lt; 1、相机第一人称**——第三人称/别的玩家一律照旧。
  * 【贴图怎么来】反射读 RenderType 内部的 {@code CompositeState → EmptyTextureStateShard → Optional<ResourceLocation>}
  * （**按字段类型找、不按字段名**，两版通用）→ 换成同贴图的 itemEntityTranslucentCull；本就半透明的只压 alpha。
  * 反射失灵时女仆档退化成"只换当前贴图那一档"、扫帚档只压 alpha（视觉不变但绝不崩）；**绝不因渲染抛异常**（全包 try）。
@@ -125,19 +125,15 @@ public final class MaidGhostRender {
             return false;
         }
         Player me = firstPersonPlayer();
-        if (me == null) {
+        if (me == null || !tether(maid, me)) {
             return false;
         }
-        // ① 挂着的那只：我正骑着她（空袭档 / 扫帚档都算）。只认拴绳链路——别人骑她一概不动。
+        // 只认武装拴绳：① 我正骑着她；② 我和她同骑一把扫帚。
+        // 正常骑扫帚（没拴绳）一律不半透明——玩家口径见 R1127。
         if (me.m_20202_() == maid) {
-            return com.maidsmart.combat.GunnerTetherManager.isEnabled()
-                    && com.maidsmart.combat.GunnerTetherManager.isGunner(maid, me);
+            return true;
         }
-        // ② 同一把扫帚上的那只：我在扫帚上、她也在同一把上（"换座"态 = 我在驾驶位、她在第二乘客）
-        if (me.m_20202_() instanceof EntityBroom broom && broom.m_20197_().contains(maid)) {
-            return isMyMaid(maid, me);
-        }
-        return false;
+        return me.m_20202_() instanceof EntityBroom broom && broom.m_20197_().contains(maid);
     }
 
     /** 是不是"该幽灵化的那把扫帚" */
@@ -149,24 +145,24 @@ public final class MaidGhostRender {
         if (me == null) {
             return false;
         }
-        // ① 我正骑着这把扫帚（自己开 / 换座共乘）：扫帚本体就在视野正前方
-        if (me.m_20202_() == broom) {
-            return true;
-        }
-        // ② 我吊在她下面、她骑着这把扫帚：扫帚在我头顶，同样挡视线
+        // 只认武装拴绳链路：她骑着的扫帚 / 我和拴着的那位同骑的扫帚。
         if (me.m_20202_() instanceof EntityMaid maid && maid.m_20202_() == broom) {
-            return com.maidsmart.combat.GunnerTetherManager.isGunner(maid, me);
+            return tether(maid, me);
+        }
+        if (me.m_20202_() == broom) {
+            for (net.minecraft.world.entity.Entity e : broom.m_20197_()) {
+                if (e instanceof EntityMaid maid && tether(maid, me)) {
+                    return true;
+                }
+            }
         }
         return false;
     }
 
-    /** 她是不是"我的"女仆（同乘扫帚那一档的判据；认主人 UUID，不认实体身份） */
-    private static boolean isMyMaid(EntityMaid maid, Player me) {
-        try {
-            return maid.m_269323_() != null && maid.m_269323_().m_20148_().equals(me.m_20148_());
-        } catch (Throwable t) {
-             com.maidsmart.diag.Diag.swallow("MaidGhostRender", t); return false;
-        }
+    /** 武装拴绳链路（服务端 S2C 状态）——正常骑乘/同乘一律不算。 */
+    private static boolean tether(EntityMaid maid, Player me) {
+        return com.maidsmart.combat.GunnerTetherManager.isEnabled()
+                && com.maidsmart.combat.GunnerTetherManager.isGunner(maid, me);
     }
 
     /**

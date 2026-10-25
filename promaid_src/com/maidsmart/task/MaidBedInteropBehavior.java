@@ -55,6 +55,9 @@ public class MaidBedInteropBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean m_6114_(ServerLevel level, EntityMaid maid) {
+        if (com.maidsmart.task.MaidWakeHandler.isBedBlocked(maid)) {
+            return false; // 【R1109】刚被叫醒：60 秒内不找床
+        }
         if (!MaidSmartConfig.MISC_BED_INTEROP.get()) {
             return false;
         }

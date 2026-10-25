@@ -66,10 +66,13 @@ public final class AiMemoryStore {
     private final AiMemoryContinuityStore continuityStore;
     /** 向量索引（语义检索，移植自 MemoryVectorIndex；按需开启） */
     private final AiMemoryVectorIndex vectorIndex;
+    /** 上次落盘的索引清单指纹（避免每次防抖写盘都重写清单）。 */
+    private String lastManifestFingerprint = "";
 
     private AiMemoryStore(Path dir, String worldId) {
         this.dir = dir;
         this.worldId = worldId;
+        this.lastManifestFingerprint = AiMemoryAudit.readManifestFingerprint(dir);
         this.indexStore = new AiMemoryIndexStore(dir);
         this.indexStore.setDirtyCallback(this::markDirty); // 审计优化5：add 即标脏
         this.continuityStore = new AiMemoryContinuityStore(dir);
@@ -193,8 +196,12 @@ public final class AiMemoryStore {
             Files.writeString(this.dir.resolve("meta.json"),
                     AiMemoryModels.GSON.toJson(this.meta), StandardCharsets.UTF_8);
             this.indexStore.save();
-            // 实测八百二十九c：索引清单——记录本份段落集合指纹，供归档器判断索引是否过期
-            AiMemoryAudit.writeManifest(this.dir, factsFingerprint(), this.indexStore.all().size());
+            // 实测八百二十九c：索引清单——记录本份段落集合指纹；指纹没变就不重写，减少磁盘 IO。
+            String manifestFingerprint = factsFingerprint();
+            if (!manifestFingerprint.equals(this.lastManifestFingerprint)) {
+                AiMemoryAudit.writeManifest(this.dir, manifestFingerprint, this.indexStore.all().size());
+                this.lastManifestFingerprint = manifestFingerprint;
+            }
             this.dirty = false; // 全部写盘成功后再清脏标记，失败保留重试
         } catch (Exception e) {
             org.slf4j.Logger log = com.mojang.logging.LogUtils.getLogger();
@@ -448,7 +455,7 @@ public final class AiMemoryStore {
             if (old.personId().equals(p.personId())) {
                 String merged = old.profileText() + "；" + p.profileText();
                 this.profiles.set(i, new AiMemoryModels.Profile(old.personId(),
-                        AiMemoryModels.clip(merged, 800),
+                        AiMemoryModels.clip(merged, 1200),
                         old.evidenceIds() + "," + p.evidenceIds(), p.updatedAt()));
                 this.markDirty();
                 return;
@@ -518,11 +525,13 @@ public final class AiMemoryStore {
         this.timeIndex.insert(np.eventTimeStart(), np.hash());
         this.profiles.removeIf(pr -> pr.evidenceIds().contains(oldHash));
         this.markDirty();
-        AiMemoryAudit.append(this.dir, "correct", oldHash, reason == null ? "" : reason);
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_AUDIT_ENABLE.get()) {
+            AiMemoryAudit.append(this.dir, "correct", oldHash, reason == null ? "" : reason);
+        }
         return np.hash();
     }
 
-    /** 段落集合指纹（写索引清单用；供归档器判断索引是否过期）。 */
+    /** 段落集合指纹（写索引清单/检测记忆是否变化用）。 */
     public synchronized String factsFingerprint() {
         return AiMemoryAudit.fingerprint(this.paragraphs);
     }
@@ -537,7 +546,7 @@ public final class AiMemoryStore {
         return this.vectorIndex;
     }
 
-    /** 记忆快照文本（第一人称"心里话"，≤200 字；无则空串）。 */
+    /** 记忆快照文本（第一人称"心里话"，≤400 字；无则空串）。 */
     public String snapshotText() {
         return AiMemorySnapshotStore.load(this.dir);
     }
@@ -591,7 +600,7 @@ public final class AiMemoryStore {
                         }
                         // v1.5.103：合并内容（drop 的独有细节并入 keep，clip 600）——
                         // 旧版只 remove(drop) 不并入，drop 的内容直接丢失；hash 随合并内容重算
-                        String mergedContent = AiMemoryModels.clip(keep.content() + "；" + drop.content(), 600);
+                        String mergedContent = AiMemoryModels.clip(keep.content() + "；" + drop.content(), 1000);
                         long nowMs = System.currentTimeMillis();
                         AiMemoryModels.Paragraph mergedP = new AiMemoryModels.Paragraph(
                                 AiMemoryModels.hashOf(mergedContent), keep.sourceType(), keep.role(),

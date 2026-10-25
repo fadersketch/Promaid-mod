@@ -130,6 +130,40 @@ public final class MaidExtraContainer {
     }
 
     /**
+     * 她"身上"有没有匹配 {@code filter} 的东西：主手/副手 → 她自己的背包
+     * （压缩盒延伸格已由 mixin 追加）→ 额外容器（精妙背包/旅行者背包）。
+     * 只读探针：额外容器那一层与 {@link #contains} 相同（取出 1 件立刻放回）。
+     * 用于"有没有这件东西"的判定；真正取物请用 {@link #pull}。
+     */
+    public static boolean any(EntityMaid maid, Predicate<ItemStack> filter) {
+        if (maid == null || filter == null) {
+            return false;
+        }
+        try {
+            if (matches(maid.getMainHandItem(), filter) || matches(maid.getOffhandItem(), filter)) {
+                return true;
+            }
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (matches(inv.getStackInSlot(i), filter)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
+        }
+        return contains(maid, filter);
+    }
+
+    private static boolean matches(ItemStack stack, Predicate<ItemStack> filter) {
+        try {
+            return stack != null && !stack.isEmpty() && filter.test(stack);
+        } catch (Throwable ignored) {
+            com.maidsmart.diag.Diag.swallow("MaidExtraContainer", ignored);
+            return false;
+        }
+    }
+
+    /**
      * 请 TLM 的额外容器系统把匹配物**搬进她的背包**。
      * ── 走的是 TLM 自己那条路 ──
      * {@code ItemsUtil.findStackSlot(她自己的背包, filter, maxCount)}：先扫她背包

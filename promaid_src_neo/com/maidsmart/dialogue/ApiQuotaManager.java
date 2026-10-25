@@ -27,6 +27,17 @@ public final class ApiQuotaManager {
 
     /** 配额内返回 true 并计数；当日已满返回 false（调用方应跳过本次 LLM 调用） */
     public static boolean tryAcquire() {
+        return tryAcquire(1);
+    }
+
+    /**
+     * 一次申请 n 个调用额度（双 agent 提取这类一次发两条请求的场景必须整批申请，
+     * 避免只拿到一半额度、发出一条后再被拒）。0 = 不限时不计费，保持旧语义。
+     */
+    public static synchronized boolean tryAcquire(int n) {
+        if (n <= 0) {
+            return true;
+        }
         try {
             net.minecraft.server.MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
             if (server != null) {
@@ -43,15 +54,15 @@ public final class ApiQuotaManager {
         if (limit <= 0) {
             return true;
         }
-        if (count >= limit) {
+        if (count + n > limit) {
             return false;
         }
-        count++;
+        count += n;
         return true;
     }
 
     /** 当日剩余配额（用于调试/显示；0=不限时返回 -1 表示不限） */
-    public static int remaining() {
+    public static synchronized int remaining() {
         int limit = dailyApiLimit();
         if (limit <= 0) {
             return -1;

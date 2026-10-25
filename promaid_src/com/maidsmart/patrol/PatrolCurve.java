@@ -195,6 +195,58 @@ public final class PatrolCurve {
             return i < 0 ? null : poly.get(i);
         }
 
+        /** 【R1128】局部投影窗口外回退：窗口内最近点还超过这么远（格）就重新全局找 */
+        private static final double NEAR_JUMP = 12.0;
+
+        /**
+         * 【R1128】局部投影：只在上一拍投影点附近找（前 40 / 后 80 个采样点）。
+         * <p>航线两段靠得近（回头路、绕圈）时，全局最近点会在两段之间来回跳，胡萝卜
+         * 跟着跳，机身就摆。窗口内离得太远（被吹飞 / 传送）→ 回到全局最近点。
+         */
+        public int nearestNear(Vec3 p, int last) {
+            int n = poly.size();
+            if (n == 0) {
+                return -1;
+            }
+            if (last < 0 || last >= n) {
+                return nearest(p);
+            }
+            int best = -1;
+            double bd = Double.MAX_VALUE;
+            for (int k = last - 40; k <= last + 80; k++) {
+                int i;
+                if (loop) {
+                    i = ((k % n) + n) % n;
+                } else if (k >= 0 && k < n) {
+                    i = k;
+                } else {
+                    continue;
+                }
+                double d = poly.get(i).m_82557_(p);
+                if (d < bd) {
+                    bd = d;
+                    best = i;
+                }
+            }
+            if (best < 0 || bd > NEAR_JUMP * NEAR_JUMP) {
+                return nearest(p);
+            }
+            return best;
+        }
+
+        /** 第 i 个采样点（越界 → null） */
+        public Vec3 pointAt(int i) {
+            return i < 0 || i >= poly.size() ? null : poly.get(i);
+        }
+
+        /** 从已知投影下标 i 往前取 {@code lookahead} 格的胡萝卜（不再重算最近点） */
+        public Vec3 aimFrom(int i, double lookahead) {
+            if (i < 0 || i >= poly.size()) {
+                return null;
+            }
+            return at(cum[i] + Math.max(0.5, lookahead));
+        }
+
         /** 按弧长取点（闭环回绕；开放航迹夹在两端） */
         public Vec3 at(double s) {
             int n = poly.size();

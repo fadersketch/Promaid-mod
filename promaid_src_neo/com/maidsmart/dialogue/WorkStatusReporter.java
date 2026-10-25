@@ -78,7 +78,8 @@ if (++this.tick < com.maidsmart.config.MaidSmartConfig.DIALOGUE_REPORT_CHECK.get
             return;
         }
         // v1.5.88：工作播报开关（配置面板 dialogue.statusReporter）
-        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_STATUS_REPORTER.get()) {
+        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.DIALOGUE_STATUS_REPORTER.get()) {
             return;
         }
         long now = maid.level().getGameTime();
