@@ -148,7 +148,7 @@ Desktop.ini
 /compile_out.txt
 
 # ---- 架构数据生成器的中间产物 ----
-# 结构数据本身（normify-promaid/）是**要提交**的架构文档，别加进来。
+# 结构数据本身（normify-promaid/）只留本地，不随远程仓库发布。
 /tools/arch/__pycache__/
 /tools/**/__pycache__/
 
@@ -180,3 +180,22 @@ Desktop.ini
 /nul
 /nul_scan.py
 /739
+
+# =====================================================================
+# 远程仓库只保留模组实际内容（源码 / 资源 / README / 许可证 / 发布说明）。
+# 以下均为本地开发、发布、诊断资料：文件继续留在本机，但不进版本库。
+# =====================================================================
+/PUBLISH_GUIDE.md
+/WORKFLOW.md
+/DEV_GUIDE.md
+/BUILD.md
+/GIT_SYNC.md
+/DEDICATED_SERVER_NOTES.md
+/ARCHITECTURE.md
+/ARCHITECTURE-SWITCHES.md
+/DEBT.md
+/机制详解.md
+/rounds/
+/normify-promaid/
+/diag_src/
+/tools/
