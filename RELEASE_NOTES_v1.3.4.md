@@ -15,6 +15,7 @@
 
 ## 二、改动
 
+- **发布 jar 文件名统一为 `Touhou Little Maid-Promaid-<MC版本>-<loader>-<模组版本>.jar`**：1.20.1 Forge 为 `Touhou Little Maid-Promaid-1.20.1-forge-1.3.4.jar`，1.21.1 NeoForge 为 `Touhou Little Maid-Promaid-1.21.1-neoforge-1.3.4.jar`；modId、注册名与内容不变。
 - **模组改名「车万女仆：身怀百技」**：显示名从「Promaid (更智能的车万女仆)」改为「车万女仆：身怀百技」，README、配置界面标题、手册书名与章节标题、聊天前缀同步；英文名与英文译文保持 Promaid。modId（`promaid`）与物品 / 存档命名空间（`maid_smart`）没有变，旧存档、旧配置、旧蓝图直接兼容。
 - **烧制时正对绑定台**：站定后身体、头与视线都会转向自己绑定的炉子 / 营火；走来时的朝向不会再留在原地。
 - **坐下 / 站起会重置整条工作链路**：每次切换坐姿都清空烧制或酿造的台子、冷却、站位与空转计时，下一 tick 重新找台，避免反复坐/站后卡在旧状态。
