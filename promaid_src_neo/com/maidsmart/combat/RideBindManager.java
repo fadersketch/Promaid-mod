@@ -169,11 +169,17 @@ public final class RideBindManager {
         if (!(player instanceof ServerPlayer)) {
             // 客户端：只做"吞掉这一下"，**不执行业务逻辑**（绑定/解除只由服务端做一次，
             // 否则同一个右击会在两侧各绑一次）。认得出是棍子 + 认得的目标就取消事件。
+            if (tryPlaceCarriedMaid(player, event)) {
+                return;
+            }
             cancelClientBatonInteract(player, event);
             return;
         }
         InteractionHand hand = event.getHand();
         ItemStack stack = player.getItemInHand(hand);
+        if (tryPlaceCarriedMaid(player, event)) {
+            return;
+        }
         if (!(stack.getItem() instanceof RideBatonItem)) {
             // 【实测七百三十七·双人座·空手右击】
             //
@@ -257,6 +263,179 @@ public final class RideBindManager {
     }
 
     /**
+     * 原版 TLM 的「用鞍抱起女仆」：拿鞍右击女仆 → 她坐到你身上（{@code SaddleMaidEvent}）。
+     * 抱起后再点卓越前线载具时，TLM 自己的 {@code MaidSaddleClickEvent} 放的是女仆，但
+     * SWB 的 {@code interact} 会同时把玩家本人塞上驾驶位（客户端本地预测也会）。所以这一档
+     * 全程由我们接管：手里拿鞍 + 怀里有女仆 + 点是卓越前线载具 = 只把女仆放进空座，玩家一步不上。
+     */
+    private static boolean tryPlaceCarriedMaid(Player player, PlayerInteractEvent.EntityInteract event) {
+        try {
+            if (!handleCarriedMaidClick(player, event.getTarget(), event.getHand())) {
+                return false;
+            }
+            if (!(player instanceof ServerPlayer)) {
+                // 本地预测那一拍 SWB 的 interact 会 setDriverAngle（把视角拧向车头）：
+                // 先快照并钉几拍，这一下放女仆不该带动镜头。
+                ViewSnapshot.pin(player, ViewSnapshot.capture(player));
+            }
+            event.setCanceled(true); // 两侧都吞：别让 SWB 把玩家自己塞上驾驶位/把女仆踢下去
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+            return false;
+        }
+    }
+
+    /**
+     * 「鞍抱女仆上载具」的唯一入口：手里拿着鞍 + 身上正驮着一位女仆（TLM 的抱起 =
+     * 女仆 {@code startRiding(player)}）+ 目标是卓越前线载具。服务端顺手把她放上去。
+     * <p>返回 true = 这一下归"放女仆"，调用方必须 cancel。除了真正放下女仆的那一下，
+     * **同一次点击的第二个交互入口**（interactAt / interact 各发一次）也要吞掉：那时女仆
+     * 已经不在身上了，若放行就会溜进 {@code handlePassengerSeat}，把主人当成"来坐副驾"
+     * 再登一次车（失败就冒一句"这辆车没有能坐的副驾"），客户端那一份还会转视角。
+     */
+    private static boolean handleCarriedMaidClick(Player player, Entity rawTarget,
+                                                   net.minecraft.world.InteractionHand hand) {
+        Entity target = MaidMountCompat.resolveMount(rawTarget);
+        if (target == null || !MaidMountCompat.isVehicle(target) || player.isShiftKeyDown()) {
+            return false;
+        }
+        if (player.getItemInHand(hand).getItem() instanceof RideBatonItem) {
+            return false; // 指挥棒的绑定/解除不归这一档（即使刚放下过女仆）
+        }
+        EntityMaid carried = carriedMaidWithSaddle(player, hand);
+        if (carried != null) {
+            markSaddlePlacement(player, target); // 女仆放下后就不在玩家身上了：先记账，随后拦玩家登乘
+            if (player instanceof ServerPlayer sp) {
+                placeCarriedMaid(sp, target, carried);
+            }
+            return true;
+        }
+        return saddlePlacementActive(player, target); // 同一拍的第二入口：仍然归这一下
+    }
+
+    /** 玩家拿鞍的那一下（只认这一只手，免得把指挥棒/别的右击抢过来）。 */
+    private static EntityMaid carriedMaidWithSaddle(Player player,
+                                                    net.minecraft.world.InteractionHand hand) {
+        try {
+            if (player == null || player.isShiftKeyDown()) {
+                return null;
+            }
+            if (player.getItemInHand(hand).getItem() != net.minecraft.world.item.Items.SADDLE) {
+                return null;
+            }
+            return carriedMaid(player);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+        return null;
+    }
+
+    /** 两只手任意一只拿鞍都算（登乘闸用：EntityMountEvent 里拿不到"点的是哪只手"）。 */
+    private static EntityMaid carriedMaidWithSaddle(Player player) {
+        try {
+            if (player == null || player.isShiftKeyDown()) {
+                return null;
+            }
+            boolean saddle = player.getItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND)
+                            .getItem() == net.minecraft.world.item.Items.SADDLE
+                    || player.getItemInHand(net.minecraft.world.InteractionHand.OFF_HAND)
+                            .getItem() == net.minecraft.world.item.Items.SADDLE;
+            return saddle ? carriedMaid(player) : null;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+        return null;
+    }
+
+    /** 玩家身上正驮着的那位女仆（TLM 的"用鞍抱起" = 女仆 startRiding(player)）；没有 → null。 */
+    private static EntityMaid carriedMaid(Player player) {
+        for (Entity p : player.getPassengers()) {
+            if (p instanceof EntityMaid m) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 「这一下右击 = 放女仆」的短时凭据（玩家UUID|载具UUID → 失效毫秒）。
+     * 女仆一旦被放下就不再骑在玩家身上，登乘闸就认不出"他刚才是来放女仆的"；
+     * 所以点击那一拍先记账，随后玩家的 {@code startRiding} 一律拦下（1.5 秒后自动作废）。
+     */
+    private static final Map<String, Long> SADDLE_PLACE_UNTIL = new HashMap<>();
+    private static final long SADDLE_PLACE_WINDOW_MS = 1500L;
+
+    private static String saddlePlaceKey(Player player, Entity vehicle) {
+        return player.getUUID() + "|" + vehicle.getUUID();
+    }
+
+    private static void markSaddlePlacement(Player player, Entity vehicle) {
+        long now = System.currentTimeMillis();
+        if (SADDLE_PLACE_UNTIL.size() > 256) {
+            SADDLE_PLACE_UNTIL.entrySet().removeIf(e -> e.getValue() < now);
+        }
+        SADDLE_PLACE_UNTIL.put(saddlePlaceKey(player, vehicle), now + SADDLE_PLACE_WINDOW_MS);
+    }
+
+    private static boolean saddlePlacementActive(Player player, Entity vehicle) {
+        long now = System.currentTimeMillis();
+        String key = saddlePlaceKey(player, vehicle);
+        Long until = SADDLE_PLACE_UNTIL.get(key);
+        if (until == null) {
+            return false;
+        }
+        if (until < now) {
+            SADDLE_PLACE_UNTIL.remove(key);
+            return false;
+        }
+        return true;
+    }
+
+    private static void clearSaddlePlacement(Player player, Entity vehicle) {
+        SADDLE_PLACE_UNTIL.remove(saddlePlaceKey(player, vehicle));
+    }
+
+    /** 卓越前线载具的宽判据：反射初始化失败时按类名兜底（"玩家不许跟着上车"这道闸不能漏）。 */
+    private static boolean isSwbVehicleLoose(Entity e) {
+        try {
+            if (e == null) {
+                return false;
+            }
+            if (MaidMountCompat.isVehicle(e)) {
+                return true;
+            }
+            for (Class<?> c = e.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                if ("com.atsuishio.superbwarfare.entity.vehicle.base.VehicleEntity".equals(c.getName())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+        return false;
+    }
+
+    /** 服务端把抱着的女仆放进载具空座（两个交互入口可能各来一次，已放好就静默）。 */
+    private static void placeCarriedMaid(ServerPlayer player, Entity target, EntityMaid carried) {
+        try {
+            if (carried.getVehicle() == target) {
+                return; // interactAt + interact 双发：这一下已经放好了
+            }
+            if (MaidMountCompat.firstFreeSeatExcept(target, carried) < 0) {
+                player.displayClientMessage(Component.literal("\u00a7c这辆车没有空座了～"), false);
+                return;
+            }
+            if (carried.startRiding(target, true)) {
+                player.displayClientMessage(Component.literal("\u00a7a把她放上载具了～\u00a7f（"
+                        + MaidRideKit.describe(target) + "\u00a7f）"), false);
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "鞍抱女仆上车：女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(carried)
+                        + " 载具=" + MaidRideKit.describe(target));
+            } else {
+                player.displayClientMessage(Component.literal("\u00a7c放不上去：这辆车没有空座～"), false);
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
+    }
+
+    /**
      * <p>
      * 而它见"第一乘客不是玩家"就把女仆 {@code stopRiding} 踢下来、自己坐驾驶位（反编译实证）。
      * 这里把这一档接过来：认得出来（自己女仆开的车 + 有空副驾）就两侧都 cancel，服务端再把主人
@@ -267,9 +446,30 @@ public final class RideBindManager {
             if (!isEnabled()) {
                 return;
             }
+            // 潜行右击 = 玩家要看载具自己的物品栏（SWB VehicleEntity.interact 的
+            // isShiftKeyDown + hasMenu 分支），不是要坐副驾。这一下必须原样放行。
+            if (player.isShiftKeyDown()) {
+                return;
+            }
+            if (event.isCanceled()) {
+                return; // 已经被 TLM 的鞍联动/别的模组处理掉
+            }
             Entity target = MaidMountCompat.resolveMount(event.getTarget());
             if (target == null || !allowsOwnerPassengerSeat(player, target)) {
-                return; // 不是"自己女仆开的车"→ 不插手
+                return; // 不是"自己女仆开的车"→ 不插手（骑马/普通坐骑的鞍也照旧）
+            }
+            // 手里拿鞍 = TLM 的 SWB 联动"MaidSaddleClickEvent"要用：玩家正骑着一只女仆时，
+            // 拿鞍右击载具是让**这只女仆**坐上去。这一档要放行给 TLM，不能吞。
+            // 但玩家没骑女仆、或这辆车已满员时 TLM 不会成功；此时必须由我们吞掉这一下，
+            // 否则 SWB 的 interact 会把驾驶位的女仆踢下车、自己坐上去。
+            if (player.getItemInHand(event.getHand()).getItem() == net.minecraft.world.item.Items.SADDLE) {
+                Entity riding = player.getVehicle();
+                boolean tlmCanBoard = riding instanceof EntityMaid
+                        && MaidMountCompat.firstFreeSeatExcept(target, riding) >= 0;
+                if (!tlmCanBoard) {
+                    event.setCanceled(true);
+                }
+                return;
             }
             event.setCanceled(true); // 两侧都吞：挡住 SWB 本地预测把她踢下车
             if (!(player instanceof ServerPlayer sp)) {
@@ -294,9 +494,23 @@ public final class RideBindManager {
     private static boolean cancelClientPassengerSeatInteract(Player player,
                                                              PlayerInteractEvent.EntityInteract event) {
         try {
+            // 潜行右击 = 开载具物品栏，客户端不能 cancel。
+            if (player.isShiftKeyDown()) {
+                return false;
+            }
             Entity target = MaidMountCompat.resolveMount(event.getTarget());
             if (target == null || !allowsOwnerPassengerSeat(player, target)) {
                 return false;
+            }
+            // 手持鞍：正骑着女仆时交给 TLM 的鞍联动（客户端座位表可能还没同步，别抢）；
+            // 没骑女仆时 TLM 不会处理，这一下要吞掉，否则本地预测会把驾驶位女仆踢下去。
+            if (player.getItemInHand(event.getHand()).getItem() == net.minecraft.world.item.Items.SADDLE) {
+                if (player.getVehicle() instanceof EntityMaid) {
+                    return false;
+                }
+                ViewSnapshot.pin(player, ViewSnapshot.capture(player));
+                event.setCanceled(true);
+                return true;
             }
             ViewSnapshot.pin(player, ViewSnapshot.capture(player)); // 顺带抹掉 SWB 本地那一拍转视角
             event.setCanceled(true);
@@ -454,9 +668,18 @@ public final class RideBindManager {
         }
         // 【实测七百七十三·点1】骑乘 + 手持指挥棒 → 这一下整个取消（与 onInteract 同一口径；
         // 不依赖 batonExclusive 档位——玩家的要求是"骑乘时右击一律无效"）。
-        if (event.getEntity() instanceof Player riding
-                && riding.isPassenger()
+        Player riding = event.getEntity();
+        if (riding.isPassenger()
                 && riding.getItemInHand(event.getHand()).getItem() instanceof RideBatonItem) {
+            event.setCanceled(true);
+            return;
+        }
+        // 【鞍抱女仆上载具】手里拿鞍、身上驮着女仆：只把女仆放上去。interactAt 是客户端
+        // 右击的第一个入口，不吞掉的话 SWB 的本地链路会让玩家也一起坐上去。
+        if (handleCarriedMaidClick(riding, event.getTarget(), event.getHand())) {
+            if (!(riding instanceof ServerPlayer)) {
+                ViewSnapshot.pin(riding, ViewSnapshot.capture(riding));
+            }
             event.setCanceled(true);
             return;
         }
@@ -465,11 +688,7 @@ public final class RideBindManager {
         }
         // 【实测七百二十三】与 onInteract 同款放宽到 Player：客户端那份不拦就还会走
         // SWB 的本地 interactAt 分支。这里纯当闸门（只 cancel）。
-        if (!(event.getEntity() instanceof Player)) {
-            return;
-        }
-        Player player = event.getEntity();
-        ItemStack stack = player.getItemInHand(event.getHand());
+        ItemStack stack = riding.getItemInHand(event.getHand());
         if (!(stack.getItem() instanceof RideBatonItem)) {
             return;
         }
@@ -487,13 +706,32 @@ public final class RideBindManager {
     @SubscribeEvent
     public static void onMount(EntityMountEvent event) {
         try {
-            if (!isEnabled() || !batonExclusive()) {
-                return;
-            }
             if (!event.isMounting()) {
                 return;
             }
             if (!(event.getEntityMounting() instanceof Player player)) {
+                return;
+            }
+            Entity beingMounted = event.getEntityBeingMounted();
+            // 【鞍抱女仆上载具】玩家拿鞍 + 身上驮着女仆 + 目标是卓越前线载具 = 这一下只放女仆，
+            // 玩家本人一步都不许上。放在 ride 总开关与 batonExclusive 之前：这是 TLM"抱起"功能的
+            // 安全修正，关掉本模组骑乘也要生效；只拦玩家，女仆自己 startRiding 不受影响。
+            EntityMaid carried = carriedMaidWithSaddle(player);
+            boolean saddlePlace = saddlePlacementActive(player, beingMounted);
+            if ((carried != null || saddlePlace)
+                    && isSwbVehicleLoose(beingMounted)
+                    && !remountPermitted(player, beingMounted)) {
+                // 凭据不清：同一次右击的两个交互入口都可能尝试登乘，要一并拦下（1.5 秒后自然过期）。
+                event.setCanceled(true);
+                if (player instanceof ServerPlayer sp && carried != null) {
+                    placeCarriedMaid(sp, beingMounted, carried);
+                }
+                return;
+            }
+            if (!isEnabled()) {
+                return;
+            }
+            if (!batonExclusive()) {
                 return;
             }
             if (!holdsBaton(player)) {
@@ -501,7 +739,7 @@ public final class RideBindManager {
             }
             // 【实测七百四十二·点1】换座自己那一下必须放行（否则"拿指挥棒"的人永远回不到车上）。
             // 放行条只在这一个动作期间存在，见 grantRemount/remountPermitted。
-            if (remountPermitted(player, event.getEntityBeingMounted())) {
+            if (remountPermitted(player, beingMounted)) {
                 return;
             }
             // 【实测七百三十八·指挥棒绝不登乘】手里拿着指挥棒 = 一律拦下（含副驾）。
@@ -635,7 +873,26 @@ public final class RideBindManager {
      */
     public static boolean denyMountForBatonHolder(Player player, Entity vehicle) {
         try {
-            if (player == null || !isEnabled()) {
+            if (player == null) {
+                return false;
+            }
+            // 【鞍抱女仆上载具】玩家拿鞍 + 抱着女仆（或刚放下女仆的那一拍）→ 玩家本人不许登乘。
+            // 这里是 startRiding 的 HEAD：客户端本地预测与服务端在同一处一刀切，没有"先坐上去再撤销"。
+            // 不看 ride 总开关：这是 TLM 自带"抱起"功能的安全修正，关掉本模组骑乘也要生效。
+            EntityMaid carried = carriedMaidWithSaddle(player);
+            if ((carried != null || saddlePlacementActive(player, vehicle))
+                    && isSwbVehicleLoose(vehicle)
+                    && !remountPermitted(player, vehicle)) {
+                // 凭据不清：同一次右击的两个交互入口都可能尝试登乘，要一并拦下（1.5 秒后自然过期）。
+                if (player instanceof ServerPlayer sp && carried != null) {
+                    placeCarriedMaid(sp, vehicle, carried);
+                }
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "鞍抱女仆：拦下玩家登乘（女仆="
+                        + (carried != null ? "仍在身上" : "已放下")
+                        + "，载具=" + MaidRideKit.describe(vehicle) + "）");
+                return true;
+            }
+            if (!isEnabled()) {
                 return false;
             }
             // 【实测七百二十三】被"悬空鞍位"占着的龙：**谁都不许骑上去**（
@@ -1003,6 +1260,14 @@ public final class RideBindManager {
     }
 
     /**
+     * 换座后的解绑：清链路/标记/驱动状态，但**不把她从座位上请下来**——
+     * 她已经换成普通乘客，继续坐在副驾/其他座位。
+     */
+    static void releaseMaidKeepSeat(EntityMaid maid, String why) {
+        releaseMaidImpl(maid, true, why, true);
+    }
+
+    /**
      * 【实测七百二十三】给传送链路用的公开入口：跨维度跟随要先把"悬空鞍位"那条链路干净解除
      * （还原她的重力与龙的行动档），再单独传她一个人。与包内 {@code releaseMaid} 同一实现。
      */
@@ -1011,6 +1276,10 @@ public final class RideBindManager {
     }
 
     private static void releaseMaidImpl(EntityMaid maid, boolean natural, String why) {
+        releaseMaidImpl(maid, natural, why, false);
+    }
+
+    private static void releaseMaidImpl(EntityMaid maid, boolean natural, String why, boolean keepSeat) {
         if (maid == null) {
             return;
         }
@@ -1020,6 +1289,10 @@ public final class RideBindManager {
         // 同口径）。不清的话她下次再骑上去会带着上一场的盘旋高度/方位角。
         MaidAirCombat.clear(maid);
         Entity mount = link == null ? null : link.mount.get();
+        // 解除绑定时还原被我们压成 -1 的"选中武器"（否则玩家随后坐进这个位会没有选中炮）。
+        if (mount != null) {
+            MaidMountCompat.restoreEngineAutoFire(mount);
+        }
         // 【实测七百二十五·点1】解绑还原坐姿（绑前是站姿就还原站姿）——玩家的原版"坐下"指令 /
         // 手动让她坐下，都不会被我们吃掉。
         MaidMountCompat.setSitting(maid, link != null && link.prevSitting);
@@ -1047,11 +1320,15 @@ public final class RideBindManager {
             MaidRideKit.stopNavigation(mount);
             LAST_MOUNT_POS.remove(mount.getUUID());
         }
-        try {
-            if (maid.getVehicle() != null) {
-                maid.stopRiding();
+        if (!keepSeat) {
+            try {
+                if (maid.getVehicle() != null) {
+                    maid.stopRiding();
+                }
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
             }
-        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        } else {
+            clearSeatCombatTarget(maid);
         }
         if (!natural) {
             bubble(maid, "好，我自己走～");
@@ -1059,6 +1336,15 @@ public final class RideBindManager {
         com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "解除(" + why + ")：女仆="
                 + com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + (mount == null ? "" : " 坐骑=" + MaidRideKit.describe(mount)));
+    }
+
+    /** 换座解绑后她只是普通乘客：把绑定期间留下的攻击目标清掉，别再让车载引擎替她开火。 */
+    private static void clearSeatCombatTarget(EntityMaid maid) {
+        try {
+            maid.setTarget(null);
+            maid.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("RideBindManager", ignored);
+        }
     }
 
     /* ==================== 待配对状态 ==================== */
@@ -1285,6 +1571,16 @@ public final class RideBindManager {
             // "拿指挥棒不许上车"的 mixin（见 armClientRemount 的注释）。
             MaidSeatNetworking.armRemount(player, mount.getId());
             String msg = MaidMountCompat.swapOwnerSeat(mount, player, maid);
+            // 【换座即解绑】先完成换座（主人在 0 号座、她挪到副驾/其他座），再解除绑定。
+            // 只清链路/标记/驱动状态，**不把她请下车**：她从此就是普通乘客。
+            boolean swapped = MaidMountCompat.playerHoldsDriverSeat(mount)
+                    && MaidMountCompat.seatIndexOf(mount, maid) > 0;
+            if (swapped) {
+                releaseMaidKeepSeat(maid, "主人换到主驾");
+                if (msg != null) {
+                    msg = msg + "\u00a77（已解除绑定，她留在座位上）\u00a7r";
+                }
+            }
             if (msg != null) {
                 player.displayClientMessage(Component.literal(msg), true); // 动作栏一行，不刷聊天
             }
@@ -1683,6 +1979,8 @@ public final class RideBindManager {
      * 已绑定载具数量）。
      */
     private static final java.util.Set<UUID> PLAYER_DRIVING = new java.util.HashSet<>();
+    /** 玩家作为**副驾/乘客**坐在女仆的陆地载具上：只停一次跟随驱动，避免车原地鬼畜。 */
+    private static final java.util.Set<UUID> PLAYER_ABOARD_GROUND = new java.util.HashSet<>();
     /** v1.3.2 实测八百六十三：绑定飞行载具后的「启动截止时刻」（gameTime tick；到时清）。 */
     private static final java.util.Map<java.util.UUID, Long> STARTUP_UNTIL = new java.util.HashMap<>();
 
@@ -1774,6 +2072,23 @@ public final class RideBindManager {
                 return;
             }
             PLAYER_DRIVING.remove(mount.getUUID());
+            // 玩家作为副驾/乘客坐在女仆的**陆地**载具上：方向盘仍在女仆手里，但我们不能再跑
+            // "跟随主人/接敌走位"那条驱动链——玩家自己的重量/碰撞和我们的每拍输入会互相顶，
+            // 车就在原地鬼畜。这里只停一次（清掉残留输入），武器/装弹照旧。
+            // 飞行载具不在此列：玩家坐副驾时仍由她飞（原有高度档/盘旋档依赖这条）。
+            if (MaidMountCompat.isVehicle(mount) && !MaidMountCompat.isFlyingVehicle(mount)
+                    && MaidMountCompat.hasPlayerAboard(mount)) {
+                MaidMountCompat.markTick(maid.level().getGameTime());
+                MaidMountCompat.tickAttack(mount, maid);
+                feedAmmoThrottled(mount, maid);
+                if (PLAYER_ABOARD_GROUND.add(mount.getUUID())) {
+                    MaidMountCompat.stop(mount);
+                    MaidMountCompat.logDrive(mount,
+                            "玩家坐进陆地载具（副驾/乘客）→ 暂停跟随驱动，避免原地鬼畜（武器与装弹照旧）");
+                }
+                return;
+            }
+            PLAYER_ABOARD_GROUND.remove(mount.getUUID());
             // v1.3.2 实测八百六十三【飞行载具"启动时间"】：绑定后这段时间内不喂任何移动（起飞/接敌都压后），
             // 给玩家上机的机会；玩家若已坐上驾驶位，上面那一档已把控制权交给他。
             Long startUntil = STARTUP_UNTIL.get(maid.getUUID());

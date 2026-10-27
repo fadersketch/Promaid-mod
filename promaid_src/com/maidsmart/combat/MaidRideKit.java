@@ -664,14 +664,24 @@ public final class MaidRideKit {
         }
     }
 
-    /** 这只坐骑背上是不是正驮着本模组的女仆（{@link #isDriven} 的前半） */
+    /**
+     * 这只坐骑背上是不是正驮着本模组的女仆（{@link #isDriven} 的前半）。
+     * 同一辆车可能驮着多位女仆（棍子绑的驾驶 + 鞍抱上来的乘客）：棍子绑的那位优先。
+     */
     public static EntityMaid riderOf(Entity mount) {
         try {
+            EntityMaid fallback = null;
             for (Entity p : mount.m_20197_()) {
                 if (p instanceof EntityMaid m) {
-                    return m;
+                    if (isBatonBound(m)) {
+                        return m;
+                    }
+                    if (fallback == null) {
+                        fallback = m;
+                    }
                 }
             }
+            return fallback;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidRideKit", ignored);
         }
         return null;

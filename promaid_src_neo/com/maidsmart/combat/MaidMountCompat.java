@@ -151,6 +151,10 @@ public final class MaidMountCompat {
     /* 【实测七百七十七·点1】引擎自己的"无限弹"判据（见 vehicleHasInfiniteAmmo 的说明）：
      * InventoryTool.hasCreativeAmmoBox(Entity) -> boolean（反编译 InventoryTool:296）。 */
     private static Method mHasCreativeAmmoBoxEntity;
+    /* 【R1154】VehicleEntity.modifyGunData(String, Consumer<GunData>)：改完会 save() 并**强制同步**
+     * GUN_DATA_MAP。我们直接写 GunData.ammo 只在服务端生效，玩家座舱 HUD 读的是同步下来的那份，
+     * 于是一直显示 0——"武器上面没有弹药却还在开火"有一半就是这种显示脱节。 */
+    private static Method mModifyGunData;
     /* 【实测七百七十七·点1】"直接把弹匣写满"所需的反射（见 forceMagazineFull 的说明）：
      * GunData.ammo（public IntValue）+ IntValue.get()/set(int) + GunProp.MAGAZINE。 */
     private static java.lang.reflect.Field fGunAmmo;
@@ -162,6 +166,13 @@ public final class MaidMountCompat {
      * GunProp.EMPTY_RELOAD_TIME（打完一匣要多少拍）。配合上面那个 MAGAZINE 一起算
      * "一匣打完 + 装满一匣"的**固有循环**——见 fireIntervalTicks 的说明。 */
     private static java.lang.reflect.Field fGunPropEmptyReload;
+
+    /** 引擎"Mob 乘客自动开火"抑制表：{@code 车UUID|座位} → 原选中武器索引。
+     * SWB 的 baseTick 另有按"选中炮 RPM"、不看弹匣循环的自动开火；把女仆座位选中项压成 -1
+     * 可让 {@code getGunData(mob)} 为 null 从而跳过。我们按炮名逐门开火，不读该索引。
+     * 解除绑定时还原，避免玩家接管该座位后没有选中炮。 */
+    private static final java.util.Map<String, Integer> ENGINE_FIRE_SUPPRESSED =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /* 【实测七百八十六】"这炮的 json 到底写没写射速"所需的两个属性（见 fireIntervalTicks）：
      * GunProp.NORMAL_RELOAD_TIME（每发装填）与 GunProp.HEAT_PER_SHOOT（每发积热）。
@@ -623,6 +634,13 @@ public final class MaidMountCompat {
                 mHasCreativeAmmoBoxEntity = itCls777.getMethod("hasCreativeAmmoBox", Entity.class);
             } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 mHasCreativeAmmoBoxEntity = null;
+            }
+            // 【R1154】改弹要跟着同步：见 mModifyGunData 的说明。
+            try {
+                mModifyGunData = cVehicle.getMethod("modifyGunData", String.class,
+                        java.util.function.Consumer.class);
+            } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                mModifyGunData = null;
             }
             // 【实测七百七十七·点1】"直接把弹匣写满"的反射（见 forceMagazineFull）。
             try {
@@ -5247,6 +5265,12 @@ public final class MaidMountCompat {
                 return false;
             }
             int curIdx = asInt(mGetWeaponIndex.invoke(mount, seat), -1);
+            if (curIdx < 0) {
+                // 正在抑制引擎自动开火（选中武器 = -1）。这时**不要**再切选中炮：
+                // 切回一个有效索引会让 SWB 的 Mob 自动开火链重新按 RPM 乱打；
+                // 我们本来就是按炮名逐门开火，第一门没弹不影响第二门。
+                return false;
+            }
             int count = seatWeaponCount(mount, seat);
             for (int w = 0; w < count; w++) {
                 if (w == curIdx) {
@@ -5414,7 +5438,13 @@ public final class MaidMountCompat {
             }
             // ② 她自己那一座（旧行为，保住已经能用的单座车）
             if (maid != null) {
-                String own = gunNameAt(mount, seatIndexOf(mount, maid));
+                int ownSeat = seatIndexOf(mount, maid);
+                String own = gunNameAt(mount, ownSeat);
+                if (own == null) {
+                    // 抑制引擎自动开火后"选中武器"被写成 -1，这里回退到她座上的第一门炮，
+                    // 保证单座载具（坦克那类）仍能由我们逐炮瞄/打。
+                    own = gunNameAtWeapon(mount, ownSeat, 0);
+                }
                 if (own != null) {
                     return own;
                 }
@@ -5555,6 +5585,72 @@ public final class MaidMountCompat {
             return v instanceof String s && !s.isEmpty() ? s : null;
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
             return null;
+        }
+    }
+
+    /** 某一座第 {@code w} 门炮的名字（不读"当前选中"；抑制引擎自动开火后靠它取回主炮）。 */
+    private static String gunNameAtWeapon(Entity mount, int seat, int w) {
+        try {
+            if (seat < 0 || w < 0 || mGetGunNameAtSeatWeapon == null) {
+                return null;
+            }
+            Object v = mGetGunNameAtSeatWeapon.invoke(mount, seat, w);
+            return v instanceof String s && !s.isEmpty() ? s : null;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            return null;
+        }
+    }
+
+    /**
+     * 把女仆所在座的"选中武器"写成 -1，掐掉 SWB 自带的 Mob 乘客自动开火（见
+     * {@link #ENGINE_FIRE_SUPPRESSED}）。每拍调用；已经 -1 时是空操作。
+     */
+    private static void suppressEngineAutoFire(Entity mount, EntityMaid maid) {
+        try {
+            if (mount == null || maid == null || mGetWeaponIndex == null || mSetWeaponIndex == null) {
+                return;
+            }
+            int seat = seatIndexOf(mount, maid);
+            if (seat < 0) {
+                return;
+            }
+            int cur = asInt(mGetWeaponIndex.invoke(mount, seat), -1);
+            if (cur < 0) {
+                return; // 已经是"无选中武器"
+            }
+            if (ENGINE_FIRE_SUPPRESSED.size() > 256) {
+                ENGINE_FIRE_SUPPRESSED.clear();
+            }
+            ENGINE_FIRE_SUPPRESSED.putIfAbsent(mount.getUUID() + "|" + seat, cur);
+            mSetWeaponIndex.invoke(mount, seat, -1);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+    }
+
+    /** 解除绑定时把这条车上被我们抑制过的选中武器索引全部还原。 */
+    public static void restoreEngineAutoFire(Entity mount) {
+        try {
+            if (mount == null || mSetWeaponIndex == null) {
+                return;
+            }
+            String prefix = mount.getUUID() + "|";
+            for (String key : new java.util.ArrayList<>(ENGINE_FIRE_SUPPRESSED.keySet())) {
+                if (!key.startsWith(prefix)) {
+                    continue;
+                }
+                Integer prev = ENGINE_FIRE_SUPPRESSED.remove(key);
+                if (prev == null) {
+                    continue;
+                }
+                try {
+                    int seat = Integer.parseInt(key.substring(prefix.length()));
+                    if (seat >= 0) {
+                        mSetWeaponIndex.invoke(mount, seat, prev);
+                    }
+                } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
         }
     }
 
@@ -6195,11 +6291,14 @@ public final class MaidMountCompat {
             if (mount == null || gun == null) {
                 return;
             }
-            if (vehicleHasInfiniteAmmo(mount)) {
+            // 【R1154】只认**车容器里**的创造盒。引擎的 hasCreativeAmmoBox(车) 还会把任何乘客
+            // （包括玩家的整个背包）里的盒子算进来——玩家在创造模式随手带一个，女仆就对着空炮
+            // 一直扣扳机。容器里没盒时走正常装填；且"车容器里没有真弹"就绝不装填，
+            // 否则 reloadAmmo 会从那个虚拟源把弹匣灌满，下一拍又变成"有弹"。
+            if (vehicleContainerHasCreativeAmmoBox(mount)) {
                 // 【实测七百七十八·点1】后门（玩家口径：「一检测到创造弹药盒让他强制允许开炮就可以了，
                 // 完全不需要做任何的审查」）：这里**不再**走 ensureGunLoaded / 换弹种 / 换炮 / 缺弹留痕，
                 // 只把这一门炮按到可开火就返回。
-                //
                 Object infGd = gunDataOf(mount, gun);
                 if (infGd != null) {
                     forceAllowShoot(infGd);
@@ -6213,7 +6312,9 @@ public final class MaidMountCompat {
                     return;
                 }
             }
-            ensureGunLoaded(mount, gun);
+            if (gunHasLiveAmmo(mount, gunDataOf(mount, gun))) {
+                ensureGunLoaded(mount, gun);
+            }
             Object gd = gunDataOf(mount, gun);
             if (gd == null || mGunCanShoot == null) {
                 return;
@@ -6223,7 +6324,10 @@ public final class MaidMountCompat {
                 return;
             }
             if (switchGunAmmoType(gd, supplier, gun)) {
-                ensureGunLoaded(mount, gd);
+                Object switched = gunDataOf(mount, gun);
+                if (gunHasLiveAmmo(mount, switched)) {
+                    ensureGunLoaded(mount, switched);
+                }
                 if (Boolean.TRUE.equals(mGunCanShoot.invoke(gd, supplier))) {
                     return;
                 }
@@ -6246,6 +6350,104 @@ public final class MaidMountCompat {
         }
         return mount;
     }
+
+    /**
+     * 这门炮此刻**能不能真的打出一发**（弹匣/后备弹、装填/拉栓/蓄力/过热），走引擎自己的
+     * {@code GunData.canShoot}（载具武器是 {@code VehicleGunItem.canShoot} 覆写，最后一关是
+     * {@code getAmmo(data) >= AMMO_COST_PER_SHOOT}）。引擎的 {@code vehicleShoot} 只扣扳机、
+     * 不查弹匣；直瞄失败回退到它时不回查就会"武器空了还在打"。反射拿不到 → true（不锁死）。
+     */
+    private static boolean canGunShoot(Entity mount, String gun) {
+        try {
+            if (mount == null || gun == null || mGunCanShoot == null) {
+                return true;
+            }
+            Object gd = gunDataOf(mount, gun);
+            if (gd == null) {
+                return false;
+            }
+            // 【R1154】引擎的 canShoot 会被"乘客背包里的创造盒"骗过（见 gunHasLiveAmmo），
+            // 先用我们自己的"车容器/弹匣里真有弹"把一道关，再问引擎的装填/过热/拉栓。
+            if (!gunHasLiveAmmo(mount, gd)) {
+                return false;
+            }
+            return Boolean.TRUE.equals(mGunCanShoot.invoke(gd, ammoSupplierOf(mount)));
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            return true;
+        }
+    }
+
+    /**
+     * 这门炮在**车自己的容器/弹匣**里有没有真弹（不吃"乘客背包里的创造盒"）。
+     * <p>SWB 的 {@code hasCreativeAmmoBox(车)} 把任何乘客（含玩家整个背包）的盒子都算成
+     * 这辆车的无限弹——玩家创造模式随手带一个，女仆就对着空炮扣扳机。这里只认：车容器里
+     * 真有的创造盒，或 {@code selectedAmmoConsumer().count(gd, 车) > 0} 的实弹（只扫车容器）。
+     */
+    private static boolean gunHasLiveAmmo(Entity mount, Object gd) {
+        try {
+            if (mount == null || gd == null) {
+                return false;
+            }
+            if (vehicleContainerHasCreativeAmmoBox(mount)) {
+                return true; // 车容器里的创造盒：玩家明确放进来的无限弹
+            }
+            // 弹匣型：只有 MAGAZINE > 0 时才读 ammo（背包弹型的 ammo 不参与判据）。
+            if (fGunAmmo != null && mIntValueGet != null && fGunPropMagazine != null && mGunGetProp != null) {
+                Object magObj = mGunGetProp.invoke(gd, fGunPropMagazine.get(null));
+                if (magObj instanceof Number magNum && magNum.intValue() > 0) {
+                    Object v = fGunAmmo.get(gd);
+                    Object n = v == null ? null : mIntValueGet.invoke(v);
+                    if (n instanceof Number num && num.intValue() > 0) {
+                        return true; // 弹匣里现成的
+                    }
+                }
+            }
+            // 车容器里的实弹（不含乘客背包/客座创造盒）。
+            if (mGunSelectedAmmo != null && mConsumerCount != null) {
+                Object consumer = mGunSelectedAmmo.invoke(gd);
+                if (consumer != null) {
+                    Object c = mConsumerCount.invoke(consumer, gd, ammoSupplierOf(mount));
+                    if (c instanceof Integer i && i > 0) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+        return false;
+    }
+
+    /**
+     * 【R1154】把"强制写弹"通过车自己的 {@code modifyGunData(gun, Consumer)} 落地：它会
+     * {@code save()} 并强制同步 {@code GUN_DATA_MAP}。直接写 {@code GunData.ammo} 只有服务端知道，
+     * 玩家座舱 HUD 一直显示 0，看起来就是"武器没弹也能开火"。
+     */
+    private static void forceAllowShootSynced(Entity mount, String gun, Object gd) {
+        forceAllowShoot(gd); // 服务端先按平：保证这一发能打，不依赖同步是否成功
+        if (mModifyGunData == null || mount == null || gun == null) {
+            return;
+        }
+        try {
+            long now = System.currentTimeMillis();
+            String key = mount.getUUID() + "|" + gun;
+            Long last = FORCE_SYNC_AT.get(key);
+            if (last != null && now - last < FORCE_SYNC_INTERVAL_MS) {
+                return; // 连射时不必每一发都 save+sync，HUD 半秒内刷新一次就够
+            }
+            FORCE_SYNC_AT.put(key, now);
+            if (FORCE_SYNC_AT.size() > 256) {
+                FORCE_SYNC_AT.clear();
+            }
+            java.util.function.Consumer<Object> noop = data -> { };
+            mModifyGunData.invoke(mount, gun, noop);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+        }
+    }
+
+    /** {@link #forceAllowShootSynced} 的同步频限（车+炮，毫秒）。 */
+    private static final java.util.Map<String, Long> FORCE_SYNC_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long FORCE_SYNC_INTERVAL_MS = 500L;
 
     /**
      * 在这门炮自己的弹种表里换一个"真有余弹"的弹种（775·点1）。
@@ -6365,6 +6567,13 @@ public final class MaidMountCompat {
             if (use == null || mVehicleShootByName == null) {
                 return false;
             }
+            // 【实测一千一百零九】引擎那条 vehicleShoot 不看弹匣——Mob 自动开火链的旧口径
+            // （它只按 RPM 扣扳机）。没弹/正在装填/过热时若放它进去，就是"武器明明空了
+            // 还在开火"。直瞄那条已经查过 canShoot，这里给引擎回退补同一道闸。
+            if (!canGunShoot(mount, use)) {
+                logShotHeld(mount, use, "没有可用弹药 / 正在装填或过热");
+                return false;
+            }
             mVehicleShootByName.invoke(mount, maid, use, target.getUUID(), null);
             logShot(mount, maid, use, shootPosOfGun(mount, use),
                     firingSolution(mount, use, maid, target), target, false);
@@ -6465,10 +6674,11 @@ public final class MaidMountCompat {
             if (gd == null) {
                 return false;
             }
-            // 【实测七百七十八·点1】创造盒在车里 → 先把这门炮按到可开火（不依赖 prepareGun 先跑）：
+            // 【实测七百七十八·点1 / R1154】只认**车容器里**的创造盒 → 先把这门炮按到可开火：
             // 弹匣/后备弹写足 + 清装填·拉栓·蓄力 + 过热度归零，见 forceAllowShoot。
-            if (vehicleHasInfiniteAmmo(mount)) {
-                forceAllowShoot(gd);
+            // 走 modifyGunData 同步到客户端，座舱 HUD 才不会一直显示 0。
+            if (vehicleContainerHasCreativeAmmoBox(mount)) {
+                forceAllowShootSynced(mount, use, gd);
             }
             Entity supplier = mount;
             if (mAmmoSupplier != null) {
@@ -6479,6 +6689,11 @@ public final class MaidMountCompat {
                     }
                 } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
                 }
+            }
+            // 【R1154】乘客背包里的创造盒不算这辆车的弹——引擎 canShoot 会被它骗过，
+            // 这里先用"车容器/弹匣里真有弹"关一道，杜绝空炮发射。
+            if (!gunHasLiveAmmo(mount, gd)) {
+                return false;
             }
             // 没弹/没拉栓 → 交回原路：它会去装弹 / 换一个"有弹的模式"（ensureAmmo/ensureUsableAmmoMode）。
             if (mGunCanShoot != null) {
@@ -7036,6 +7251,26 @@ public final class MaidMountCompat {
         return false;
     }
 
+    /**
+     * 【R1154】只看**车自己的容器**里有没有创造盒（不含乘客背包）。
+     *
+     * <p>引擎的 {@code hasCreativeAmmoBox(车)} 会把乘客（玩家的整个背包算一个 item handler）
+     * 的盒子也算成这辆车的无限弹；玩家在创造模式随手带一个，女仆就会对着一门空炮开火。
+     * 只有玩家**明确放进车容器**的盒子才该是"这辆车无限弹"（见 {@link #gunHasLiveAmmo}）。
+     */
+    private static boolean vehicleContainerHasCreativeAmmoBox(Entity mount) {
+        try {
+            if (mount == null || mGetInventory == null) {
+                return false;
+            }
+            Object inv = mGetInventory.invoke(mount);
+            return inv instanceof net.neoforged.neoforge.items.IItemHandler handler
+                    && containerHasCreativeAmmoBox(handler);
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidMountCompat", ignored);
+            return false;
+        }
+    }
+
     /** 创造弹药盒进车留痕（节流 5 秒/车）：日志搜「创造弹药盒」。 */
     private static void logCreativeAmmo(Entity mount) {
         try {
@@ -7235,6 +7470,7 @@ public final class MaidMountCompat {
                 }
                 if (kindOf(mount) == Kind.VEHICLE) {
                     applyVehicleAiTargets(mount, null);
+                    suppressEngineAutoFire(mount, maid);
                 }
                 return;
             }
@@ -7280,6 +7516,10 @@ public final class MaidMountCompat {
                 }
             }
             if (k == Kind.VEHICLE) {
+                // 【多武器射速】先掐掉 SWB 自带的 Mob 乘客自动开火：它只按选中炮的 RPM 扣扳机、
+                // 不看弹匣/装填循环，会和我们的逐炮开火叠加（坦克主炮被打成同轴机枪的射速）。
+                // 选中武器写成 -1 → getGunData(maid) 为 null → 引擎那条链跳过。
+                suppressEngineAutoFire(mount, maid);
                 // 【实测七百四十一·点2b/点3】这一拍由谁开火——**判据只有一条**：
                 // 该用的那门炮（gunNameFor）是不是**就在她坐的那一座**上。
                 //   · 是（prism_tank 座 0 的激光、M1A2 座 0 的 120mm、AH-6 座 0 的机炮）→
@@ -7330,6 +7570,9 @@ public final class MaidMountCompat {
                     // 瞄准（观感 + 引擎原路的对准闸）只对**主炮**做一次：直瞄那一档每一门炮
                     // 都有自己的解算方向（directFireAt 内部按炮名算），不需要等炮塔转到位。
                     boolean aimed = playerMainGun || aimBallistic(mount, maid, target);
+                    // aimBallistic 内部的 ensureUsableAmmoMode 可能为了找有弹的炮而切回有效索引；
+                    // 这里再压一次，保证这一拍剩余时间引擎不会自己开火。
+                    suppressEngineAutoFire(mount, maid);
                     Vec3 want = lastDesired(mount);
                     if (!playerMainGun) {
                         logAim(mount, gun, aimed, aimErrorDeg(mount, gun, want));
@@ -7391,6 +7634,8 @@ public final class MaidMountCompat {
                         }
                     }
                 }
+                // prepareGun / 换弹链路可能又写回有效索引；收尾再压一次（下一拍开始也压）。
+                suppressEngineAutoFire(mount, maid);
                 return;
             }
             // 【实测七百二十三】DRAGON：本类不再触发（她不是乘客/控制者）——见上面那段。
