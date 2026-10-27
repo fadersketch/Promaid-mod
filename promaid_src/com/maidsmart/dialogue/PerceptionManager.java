@@ -249,8 +249,11 @@ public class PerceptionManager {
         // v1.5.103：修天气判定——旧版 `m_46758_ ? thunder : m_46749_ ? rain : clear` 是错的：
         // m_46758_ = isRainingAt（雨/雷雨都 true），m_46749_ = isLoaded（女仆所在区块恒已加载）
         // → 非雷雨时 weather 恒为 "rain"，"clear" 永不出现。正确区分：m_46470_ = isThundering（无参）。
+        // 【雨中误报"雨停了"】isRainingAt(她的位置) 还要求"她头顶能看见天空"：她站在屋里/树下/
+        // 洞里时，世界在下雨而这里恒为 false → 快照从 rain 变 clear，她就播"天气变成晴了"。
+        // 天气是世界状态，不是她脚下那一格的状态，所以这里改用无参的 m_46471_ = isRaining。
         boolean thundering = level.m_46470_();
-        boolean raining = level.m_46758_(maid.m_20183_());
+        boolean raining = level.m_46471_();
         String weather = thundering ? "thunder" : (raining ? "rain" : "clear");
         String timePhase = timePhase(level);
         Snapshot now = new Snapshot(hostiles, nearest, ownerHealth, ownerLooking, weather, timePhase);

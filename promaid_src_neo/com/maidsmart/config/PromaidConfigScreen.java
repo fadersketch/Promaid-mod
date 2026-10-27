@@ -488,9 +488,12 @@ public class PromaidConfigScreen extends Screen {
     /** 实测四百二十三：小类（每个小类一页参数行；同一大类下的小类在二级页列出）。 */
     private enum Section {
         COMMON_PAGE("常用", Group.COMMON),
-        BUILD("建造", Group.WORK), MINE("挖矿", Group.WORK), WOOD("伐木", Group.WORK),
+        BUILD("建造", Group.WORK), MINE("PM挖矿", Group.WORK), WOOD("PM伐木", Group.WORK),
         COOK_BREW("烹饪与酿造", Group.WORK), FARM("农场与宰杀", Group.WORK),
         FISHING("钓鱼", Group.WORK),
+        // 【AI 总开关独立成板块】它是整个模组 AI 功能的唯一总闸，必须一眼看见、一步关掉：
+        // 放在「AI 与对话」大类的最上面（枚举声明顺序 = 二级页按钮顺序），与「AI 工具」平级。
+        AI_MAIN("AI 总开关", Group.AI),
         MEMORY("AI 记忆", Group.AI), DIALOGUE("对话与自主", Group.AI), PERCEPTION("感知", Group.AI),
         AFFECT("情绪", Group.AI), AITOOLS("AI 工具", Group.AI),
         SELF_PRESERVE("自保与保命", Group.COMBAT), SELF_TACTICS("自保战术", Group.COMBAT),
@@ -880,6 +883,7 @@ public class PromaidConfigScreen extends Screen {
             case FARM -> this.farmRows();
             case FISHING -> this.fishingRows();
             case MEMORY -> this.memoryRows();
+            case AI_MAIN -> this.aiMainRows();
             case DIALOGUE -> this.dialogueRows();
             case PERCEPTION -> this.perceptionRows();
             case AFFECT -> this.affectRows();
@@ -3071,9 +3075,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new SectionRow("—— 工作：挖矿与伐木 ——", true));
         this.rows.add(new NoteRow("\u00a77这两个是本模组的**新任务**：智能挖矿 / 智能伐木会自己隔墙找目标，"
                 + "名单（目标矿物 / 木材 / 障碍物 / 危险方块）与检索半径都在各自页里。"));
-        this.rows.add(new BtnRow("挖矿", "前往 \u2192", () -> this.jumpTo("MINE", null),
+        this.rows.add(new BtnRow("PM挖矿", "前往 \u2192", () -> this.jumpTo("MINE", null),
                 "智能挖矿 / 检索半径 / 矿物与危险方块名单"));
-        this.rows.add(new BtnRow("伐木", "前往 \u2192", () -> this.jumpTo("WOOD", null),
+        this.rows.add(new BtnRow("PM伐木", "前往 \u2192", () -> this.jumpTo("WOOD", null),
                 "智能伐木 / 砍伐距离 / 木材名单"));
 
         this.rows.add(new SectionRow("—— 工作：钓鱼与农场 ——", true));
@@ -3632,11 +3636,16 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.AFFECT_RECOVER_INTERVAL, s), "情绪静默恢复间隔（秒，无事件时情绪值缓慢回归）"));
     }
 
-    /** AI 工具页 */
-    private void aiToolsRows() {
-        this.rows.add(new SectionRow("Promaid AI（总开关 + LLM 工具）", false));
+    /** AI 总开关页：整个模组 AI 功能的唯一总闸（主动对话/自主决策/记忆/工具/翻译一起停）。 */
+    private void aiMainRows() {
+        this.rows.add(new SectionRow("Promaid AI 总开关（一键关闭本模组全部 AI 功能）", false));
         this.rows.add(new BoolRow("Promaid AI 总开关（默认开）", MaidSmartConfig.AI_ENABLE.get(),
                 v -> MaidSmartConfig.AI_ENABLE.set(v), "Promaid AI 总开关（默认开）：关闭 = 本模组自己的主动对话、自主决策、AI 记忆提取/注入/检索、AI 工具、语言翻译等全部停手；不影响 TLM 自带 AI 对话、TTS 或其他模组。下方各分项设置保留。"));
+    }
+
+    /** AI 工具页 */
+    private void aiToolsRows() {
+        this.rows.add(new SectionRow("Promaid AI 工具（总开关 + 各工具开关）", false));
         this.rows.add(new BoolRow("Promaid AI 工具总开关（默认开）", MaidSmartConfig.AITOOLS_ENABLE.get(),
                 v -> MaidSmartConfig.AITOOLS_ENABLE.set(v), "Promaid AI 工具总开关（默认开）：只影响本模组登记的 AI 工具，不影响 TLM 自带 AI 对话、TTS 或其他模组；关闭 = 模型不再调用本模组工具（记忆、笔记、任务等），下方各工具勾选保留。"));
         this.rows.add(new BoolRow("remember（主动写记忆）", MaidSmartConfig.TOOL_REMEMBER.get(),

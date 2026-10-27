@@ -293,7 +293,8 @@ public class ProactiveDialogueManager {
             facts.add("外面雷雨交加");
             focus.add("外面雷雨交加");
             query.add("雷雨");
-        } else if (level.m_46758_(player.m_20183_())) {
+        } else if (level.m_46471_()) {
+            // 天气是世界状态：不能再用 isRainingAt(玩家位置)（玩家在屋里/树下时会误判成晴）。
             facts.add("外面正在下雨");
             focus.add("外面正在下雨");
             query.add("下雨");

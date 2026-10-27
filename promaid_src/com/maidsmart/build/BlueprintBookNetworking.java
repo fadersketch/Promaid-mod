@@ -255,7 +255,9 @@ public final class BlueprintBookNetworking {
             case "build":
                 return "建筑";
             case "mine":
-                return "挖矿";
+                return "PM挖矿";
+            case "woodcut":
+                return "PM伐木";
             case "cook":
                 return "烧制"; // v1.1.0 实测一百六十一：烹饪改名
             case "brew":

@@ -65,12 +65,14 @@ public class SwitchTaskTool implements ITool<SwitchTaskTool.Result> {
         alias("flight_ranged", "maid_smart:flight_ranged");
         // ---- 本模组：生产类 ----
         alias("挖矿", "maid_smart:mine");
+        alias("PM挖矿", "maid_smart:mine");
         alias("mine", "maid_smart:mine");
         alias("挖矿模式", "maid_smart:mine");
         alias("砍树", "maid_smart:woodcut");
         alias("wood", "maid_smart:woodcut");
         alias("woodcut", "maid_smart:woodcut");
         alias("伐木", "maid_smart:woodcut");
+        alias("PM伐木", "maid_smart:woodcut");
         alias("做饭", "maid_smart:cook");
         alias("cook", "maid_smart:cook");
         alias("酿造", "maid_smart:brew");
