@@ -20,7 +20,8 @@ public final class GuideChaptersBasics {
                         + "[[@WORK:WOOD|伐木]] · [[@WORK:COOK_BREW|烹饪与酿造]] · [[@WORK:FARM|农场与宰杀]] · "
                         + "[[@WORK:FISHING|钓鱼]] · "
                         + "[[@WORK:SCHEDULE|排班表]] · [[@WORK:BUILD:\u6307\u6807\u77f3|\u6307\u6807\u77f3]]",
-                "§e② AI 与对话§r：[[@AI:MEMORY|AI 记忆]] · [[@AI:DIALOGUE|对话与自主]] · "
+                "§e② AI 与对话§r：[[@AI:MAIN|AI 总开关]] · [[@AI:MEMORY|AI 记忆]] · "
+                        + "[[@AI:DIALOGUE|对话与自主]] · "
                         + "[[@AI:PERCEPTION|感知]] · [[@AI:AFFECT|情绪]] · [[@AI:AITOOLS|AI 工具]]",
                 "§e③ 战斗与自保§r：[[@COMBAT:SELF_PRESERVE|自保与保命]] · "
                         + "[[@COMBAT:SELF_TACTICS|自保战术]] · [[@COMBAT:TACTICS|单兵战术]] · "

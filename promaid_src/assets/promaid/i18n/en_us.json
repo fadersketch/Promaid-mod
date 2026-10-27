@@ -7611,5 +7611,16 @@
   "右键排班表 → 点「红魔」→ 选「全天」→ 前 3 格选种植、后 3 格选挖矿 → 保存——之后她每天 0~12 点种植、12~24 点挖矿，自动切换。": "Right-click the book → pick Hong Meiling → All-day → farming in the first 3 slots, mining in the last 3 → Save — from then on she farms 0:00~12:00 and mines 12:00~24:00, switching automatically.",
   "§e总开关§r：「模组详细配置 → 生产与工作 → 排班表」（默认开；关掉 = 排班停摆，日程数据保留，重开即恢复）。": "§eMaster switch§r: Detailed config → Work → Schedule (default on; off pauses all scheduling while keeping the saved plans).",
   "§e贴身气泡与语音§r：你靠近干活的女仆（默认 3.5 格）时她会碎碎念、打招呼，30 秒最多一次；开关与距离在「语音与显示 → 语音与 TTS → 气泡与提示」。": "§eProximity bubbles & voice§r: near a working maid (default 3.5 blocks) she murmurs and greets you, at most once per 30 seconds; switch and distance under UI → Voice & TTS → Bubbles & notices.",
-  "§e硬规则：压缩盒不能叠放§r——空盒、完全相同的盒子也不叠（一叠会共用同一份内容，拆开就复制物品）。旧存档里叠着的盒子会在她加载时自动拆开，内容保留在第一只上。": "§eHard rule: boxes never stack§r — not even empty or identical ones (a stack would share one set of contents, and splitting it duplicates items). Old stacked boxes split automatically when she loads, contents kept in the first one."
+  "§e硬规则：压缩盒不能叠放§r——空盒、完全相同的盒子也不叠（一叠会共用同一份内容，拆开就复制物品）。旧存档里叠着的盒子会在她加载时自动拆开，内容保留在第一只上。": "§eHard rule: boxes never stack§r — not even empty or identical ones (a stack would share one set of contents, and splitting it duplicates items). Old stacked boxes split automatically when she loads, contents kept in the first one.",
+  "AI 总开关": "AI Master Switch",
+  "§eAI 总开关§r：在「AI 与对话」最上面，一键关闭本模组全部 AI 功能（记忆 / 对话 / 感知 / 情绪 / 工具）。": "§eAI Master Switch§r: at the top of \"AI & Dialogue\"; turns off every AI feature of this mod in one click (memory / dialogue / perception / emotion / tools).",
+  "压缩盒 · 女仆使用、爆炸物与配置": "Compression Box · Maids, Explosives & Config",
+  "排班表 · 示例、总开关与气泡": "Shift Schedule · Example, Master Switch & Bubbles",
+  "自保与保命 · 原理、逃生与魂符": "Self-Preservation · Basics, Escape & Soul Charms",
+  "主动参战 · 选模式、还原与免伤": "Auto-Combat · Modes, Restoring & Friendly Protection",
+  "空袭与飞行作战 · 开关、法术与数值": "Air Raid & Flight · Toggles, Spells & Numbers",
+  "扫帚模式 · 入门、飞行与限制": "Broom Mode · Basics, Flight & Limits",
+  "扫帚模式 · 随机环绕、弹药与排查": "Broom Mode · Random Orbits, Ammo & Troubleshooting",
+  "骑乘指挥棒 · 走位、索敌、载具与固定翼": "Riding Baton · Movement, Targeting, Vehicles & Fixed-Wing",
+  "饰品「大运」 · 规则、效果与配置": "Trinket \"Great Fortune\" · Rules, Effects & Config"
 }
