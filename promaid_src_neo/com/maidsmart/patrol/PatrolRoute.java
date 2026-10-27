@@ -61,7 +61,8 @@ public final class PatrolRoute {
     private String id = "";
     /**
      * 【R1127】减速点：标记下标集合。玩家在「标记管理」里把某个标记设成减速点后，
-     * 绑定这条轨道、正在巡逻的女仆（扫帚/飞行载具）进入该标记 **8×8×8** 范围就会大幅减速。
+     * 绑定这条轨道、正在巡逻的女仆（扫帚/飞行载具）进入该标记周围的减速区就会大幅减速
+     * （半径与倍率走面板配置，默认 5 格 = 10×10×10、×0.1）。
      * 下标跟着 {@link #points} 走——删标记时由 {@link #removeAt(int)} 同步平移。
      */
     private final Set<Integer> slow = new TreeSet<>();

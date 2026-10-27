@@ -35,7 +35,7 @@ public class MaidWakeHandler {
     private static final long BED_BLOCK_TICKS = 1200L;
 
     /** 抱怨台词：走 addTextChatBubble → 既有 TTS/语音包链路 */
-    private static final String COMPLAINT = "唔…主人，人家还想再睡一会儿嘛～";
+    public static final String COMPLAINT = "唔…主人，人家还想再睡一会儿嘛～";
 
     public static boolean isBedBlocked(EntityMaid maid) {
         try {
@@ -69,6 +69,9 @@ public class MaidWakeHandler {
         if (!isOurItem(stack)) {
             return;
         }
+        if (!enabled()) {
+            return;
+        }
         event.setCanceled(true);
         player.m_6674_(event.getHand());
         wake(maid, player);
@@ -79,6 +82,9 @@ public class MaidWakeHandler {
     public void onUseItem(PlayerInteractEvent.RightClickItem event) {
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || !isOurItem(player.m_21120_(event.getHand()))) {
+            return;
+        }
+        if (!enabled()) {
             return;
         }
         EntityMaid maid = pickSleeping(player);
@@ -94,6 +100,9 @@ public class MaidWakeHandler {
     public void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
         if (!(event.getEntity() instanceof ServerPlayer player)
                 || !isOurItem(player.m_21120_(event.getHand()))) {
+            return;
+        }
+        if (!enabled()) {
             return;
         }
         EntityMaid maid = sleepingNear(player, event.getPos());
@@ -147,6 +156,15 @@ public class MaidWakeHandler {
         return null;
     }
 
+    /** 【R1146】右击叫醒总开关（默认开；关 = 右键完全不接管） */
+    private static boolean enabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.MISC_RIGHT_CLICK_WAKE.get();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWakeHandler", ignored);
+            return true;
+        }
+    }
+
     /** 【R1109】本模组物品 = 注册命名空间 maid_smart（武装拴绳/指标石/蓝图书……全部算） */
     private static boolean isOurItem(ItemStack stack) {
         if (stack == null || stack.m_41619_()) {
@@ -167,6 +185,8 @@ public class MaidWakeHandler {
             ((net.minecraft.world.entity.ai.Brain) maid.m_6274_())
                     .m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_); // 别接着往床边走
             BED_BLOCK_UNTIL.put(maid.m_20148_(), maid.m_9236_().m_46467_() + BED_BLOCK_TICKS);
+            // 【R1149】叫醒语音直接发给叫醒者：不依赖气泡 5 秒限频、不依赖 owner 在线。
+            com.maidsmart.voice.SystemTTSManager.speakTo(maid, player, COMPLAINT);
             maid.getChatBubbleManager().addTextChatBubble(COMPLAINT);
             com.maidsmart.tool.PromaidLog.log("叫醒", "玩家=" + player.m_7755_().getString()
                     + " 叫醒了女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)

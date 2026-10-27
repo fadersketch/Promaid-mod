@@ -51,10 +51,29 @@ public final class PatrolFlight {
 
     /* ==================== R1127：减速点 ==================== */
 
-    /** 减速点的影响半径（格）：玩家口径是 10×10×10，所以三轴各 ±5。 */
-    public static final double SLOW_HALF = 5.0;
-    /** 减速点内的速度倍率（"大幅减速"）：0.1 = 巡航速度的十分之一。 */
-    public static final double SLOW_SCALE = 0.1;
+    /**
+     * 【R1151】减速点的影响半径（格）：默认 5（10×10×10），面板「物品 → 巡逻航图 → 巡逻·减速区半径」可调。
+     * 读配置异常时退回 5，不让一次读配置失败把整条减速链路掐掉。
+     */
+    public static double slowHalf() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_PATROL_SLOW_HALF.get();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
+            return 5.0;
+        }
+    }
+
+    /**
+     * 【R1151】减速区内的速度倍率：默认 0.1（= 1/10），面板「物品 → 巡逻航图 → 巡逻·减速程度」可调。
+     * 每拍读配置，所以调完立即生效（正在区里巡逻的女仆也按新值走）。读配置异常退回 0.1。
+     */
+    public static double slowScale() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_PATROL_SLOW_SCALE.get();
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);
+            return 0.1;
+        }
+    }
 
     /** 女仆 UUID → 缓存 */
     private static final Map<UUID, Cache> CACHE = new HashMap<>();
@@ -293,10 +312,10 @@ public final class PatrolFlight {
     /* ==================== R1127：减速点 ==================== */
 
     /**
-     * 她此刻在不在某个减速点的 8×8×8 里。判据与 {@link #effective} 同源：只有**绑定这条航迹 +
-     * 正在巡逻**的女仆才算，跟随/战斗/换任务后立即失效。扫帚与飞行载具共用这一个入口。
+     * 她此刻在不在某个减速点的立方体里（边长 = 2×{@link #slowHalf()}）。判据与 {@link #effective} 同源：
+     * 只有**绑定这条航迹 + 正在巡逻**的女仆才算，跟随/战斗/换任务后立即失效。扫帚与飞行载具共用这一个入口。
      * @param pos 真正在移动的那个实体的坐标（骑扫帚/载具时传载具，不是女仆座位）
-     * @return 在减速点内返回 {@link #SLOW_SCALE}，否则 1.0
+     * @return 在减速点内返回 {@link #slowScale()}，否则 1.0
      */
     public static double speedScale(EntityMaid maid, Vec3 pos) {
         try {
@@ -307,15 +326,16 @@ public final class PatrolFlight {
             if (route == null) {
                 return 1.0;
             }
+            double half = slowHalf();
             for (int idx : route.slowIndexes()) {
                 Vec3 p = route.point(idx);
                 if (p == null) {
                     continue;
                 }
-                if (Math.abs(pos.f_82479_ - p.f_82479_) <= SLOW_HALF
-                        && Math.abs(pos.f_82480_ - p.f_82480_) <= SLOW_HALF
-                        && Math.abs(pos.f_82481_ - p.f_82481_) <= SLOW_HALF) {
-                    return SLOW_SCALE;
+                if (Math.abs(pos.f_82479_ - p.f_82479_) <= half
+                        && Math.abs(pos.f_82480_ - p.f_82480_) <= half
+                        && Math.abs(pos.f_82481_ - p.f_82481_) <= half) {
+                    return slowScale();
                 }
             }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("PatrolFlight", ignored);

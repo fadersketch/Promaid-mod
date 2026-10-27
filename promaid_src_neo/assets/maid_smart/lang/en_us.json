@@ -1,6 +1,6 @@
 {
- "config.promaid.ai": "Promaid AI",
- "config.promaid.ai.enable": "Promaid AI Master Switch",
+  "config.promaid.ai": "Promaid AI",
+  "config.promaid.ai.enable": "Promaid AI Master Switch",
   "config.promaid.bombing.enable": "Bombing Master Switch",
   "config.promaid.dialogue.enable": "Dialogue & Broadcast Master Switch",
   "config.promaid.aitools.enable": "AI Tools Master Switch",
@@ -354,9 +354,9 @@
   "config.promaid.wood.skipReportInterval": "Announcement rate limit (tick)",
   "config.promaid.wood.chainMining": "Chain Lumber",
   "config.promaid.wood.autoCollect": "**Auto Collect**",
-
   "config.promaid.wood.noPickup": "Disable pickup while lumbering",
-  "config.promaid.wood.hardTimeout": "Per-tree hard timeout",  "config.promaid.wood.chainLimit": "Chain felling limit (blocks)",
+  "config.promaid.wood.hardTimeout": "Per-tree hard timeout",
+  "config.promaid.wood.chainLimit": "Chain felling limit (blocks)",
   "config.promaid.combat.autoSwitch": "Actively switch combat mode",
   "config.promaid.combat.autoSwitchRadius": "Response radius (blocks)",
   "config.promaid.combat.autoSwitchModWeight": "Mod Weapon Weight",
@@ -432,6 +432,7 @@
   "config.promaid.combat.selfPreserveEnvFirePanic": "Environment: Fire Panic",
   "config.promaid.combat.selfPreserveEnvDrown": "Environment: Drowning Escape",
   "config.promaid.combat.selfPreserveEnvSuffocate": "Environment: Suffocation Escape",
+  "config.promaid.combat.suffocateHits": "Environment: Suffocation Hit Threshold",
   "config.promaid.combat.selfPreserveEnvDamageCell": "Environment: Damage Block Escape",
   "config.promaid.combat.selfPreserveLowHp": "Low-HP Self-Preservation (default on)",
   "config.promaid.combat.selfPreserveLowHpHeal": "Low HP: Potions/Food (default on)",
@@ -453,6 +454,7 @@
   "config.promaid.misc.processCooldown": "Processing Interval (tick)",
   "config.promaid.misc.bubbleLimitMs": "Bubble Rate Limit (ms)",
   "config.promaid.misc.promaidHints": "Bubbles and messages",
+  "config.promaid.misc.rightClickWake": "Right-click to wake a sleeping maid",
   "config.promaid.misc.pickupPriority": "Disable pickup while mining",
   "config.promaid.combat.autoSwitchAllowModTasks": "Mod Task Auto-Switch (Default On): mod attack tasks only engage when the maid holds non-vanilla items; Off = autonomous combat uses vanilla tasks only",
   "config.promaid.combat.taskModes": "Combat Mode Category Table (one per line: TaskUID=Melee/Ranged/None; blank = all follow built-in rules)",
@@ -581,10 +583,10 @@
   "config.promaid.mine.skipReportInterval": "Skip/loot-miss report interval (ticks)",
   "config.promaid.mine.noTargetPause": "No-target idle pause (seconds)",
   "config.promaid.mine.autoCollect": "Auto collect",
-
-  "config.promaid.mine.hardTimeout": "Per-ore hard timeout",  "config.promaid.wood.plantSaplingEnabled": "Plant saplings",
-
-  "config.promaid.mine.autoCollectMigrated": "Internal: auto-collect default-on migration done",  "config.promaid.wood.plantSaplingCooldown": "Sapling replant cooldown (ticks)",
+  "config.promaid.mine.hardTimeout": "Per-ore hard timeout",
+  "config.promaid.wood.plantSaplingEnabled": "Plant saplings",
+  "config.promaid.mine.autoCollectMigrated": "Internal: auto-collect default-on migration done",
+  "config.promaid.wood.plantSaplingCooldown": "Sapling replant cooldown (ticks)",
   "config.promaid.wood.scanBudget": "Woodcutting scan budget (blocks/tick)",
   "config.promaid.memory.scanInterval": "Memory scan interval (seconds)",
   "config.promaid.memory.projectionChars": "Memory projection char cap",
@@ -738,5 +740,7 @@
   "config.promaid.airRaid.spearPassRange": "Spear Air Raid: Pre-charge Boost Range (blocks)",
   "config.promaid.airRaid.spearBoostInterval": "Spear Air Raid: Inertia Flight Duration (ticks)",
   "config.promaid.airRaid.spearDecayPerTick": "Spear Air Raid: Phantom Speed Decay (per tick)",
-  "config.promaid.airRaid.spearMaxDecay": "Spear Air Raid: Phantom Max Speed Decay"
+  "config.promaid.airRaid.spearMaxDecay": "Spear Air Raid: Phantom Max Speed Decay",
+  "config.promaid.patrol.slowHalf": "Patrol - slow-zone radius (blocks)",
+  "config.promaid.patrol.slowScale": "Patrol - slowdown strength (multiplier)"
 }

@@ -170,5 +170,6 @@ public final class PromaidClientSetup {
 
     private static void onClientTickPost(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
         com.maidsmart.voice.ClientVoicePlayback.onClientTick();
+        com.maidsmart.client.PromaidVoiceSoundInstance.tickPending();
     }
 }

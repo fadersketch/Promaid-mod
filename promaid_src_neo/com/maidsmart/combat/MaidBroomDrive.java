@@ -1487,8 +1487,8 @@ public final class MaidBroomDrive {
         }
         // 到点减速带：远处全速、近了按距离线性收干（分子分母同量纲，dist→0 时速度→0）
         double ramp = Math.min(1.0, dist / ARRIVE_RAMP);
-        // 【R1127】绑定航迹的 8×8×8 减速点内大幅降速（只削水平分量：竖直还按原高差走，
-        // 免得减速时掉高度）。不在巡逻/不在减速点/接敌 → 1.0，一切照旧。
+        // 【R1127/R1151】绑定航迹的减速区内降速（半径与倍率走面板配置，默认 5 格 / ×0.1；
+        // 只削水平分量：竖直还按原高差走，免得减速时掉高度）。不在巡逻/不在减速点/接敌 → 1.0。
         double routeScale = combat ? 1.0 : com.maidsmart.patrol.PatrolFlight.speedScale(maid,
                 new Vec3(broom.getX(), broom.getY(), broom.getZ()));
         double inv = 1.0 / dist;

@@ -489,13 +489,13 @@ public final class PatrolPreviewClient {
     }
 
     /**
-     * 【R1127】减速点的 8×8×8 影响范围：12 条琥珀色棱 + 6 个很淡的面。
+     * 【R1127】减速点的影响范围：12 条琥珀色棱 + 6 个很淡的面。
      *
-     * <p>以标记点为中心、三轴各 ±4 格（{@link PatrolFlight#SLOW_HALF}）。面上的 alpha 压得很低
-     * （0.07），只用来"看出这是一块区域"，不挡住航线与方块；棱用 ribbon 画，远近都看得见。
+     * <p>以标记点为中心、三轴各 ±{@link PatrolFlight#slowHalf()} 格（默认 5 = 10×10×10，面板可调）。
+     * 面上的 alpha 压得很低（0.07），只用来"看出这是一块区域"，不挡住航线与方块；棱用 ribbon 画，远近都看得见。
      */
     private static void slowZone(VertexConsumer vc, Matrix4f mat, Vec3 cam, Vec3 p) {
-        double h = PatrolFlight.SLOW_HALF;
+        double h = PatrolFlight.slowHalf();
         double x0 = p.x - h, x1 = p.x + h;
         double y0 = p.y - h, y1 = p.y + h;
         double z0 = p.z - h, z1 = p.z + h;

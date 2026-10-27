@@ -213,9 +213,12 @@ public final class PatrolNetworking {
                         // 【R1128】绑定是深拷：改书不会自动落到女仆身上，必须同步一份。
                         int synced = PatrolChartData.syncSlowToBound(
                                 player.m_9236_().m_7654_(), r.id(), idx, slow);
+                        // 【R1151】范围与倍率文案跟着配置走：默认 5 → 10×10×10、0.1 → ×0.1
+                        int size = (int) Math.round(PatrolFlight.slowHalf() * 2.0);
                         player.m_213846_(Component.m_237113_(slow
                                 ? "§6已把「" + r.displayName() + "」第 " + (idx + 1)
-                                  + " 个标记设为减速点（周围 10×10×10 内巡逻速度降至 1/10"
+                                  + " 个标记设为减速点（周围 " + size + "×" + size + "×" + size
+                                  + " 内巡逻速度 ×" + PatrolFlight.slowScale()
                                   + (synced > 0 ? "，已同步 " + synced + " 只女仆" : "") + "）"
                                 : "§7已取消「" + r.displayName() + "」第 " + (idx + 1)
                                   + " 个标记的减速点"));

@@ -588,7 +588,7 @@ public final class ConfigSyncNetworking {
                 }
                 broadcast(sp.level().getServer());
                 sp.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                        "\u00a7a[Promaid] 全服预设已" + (pkt.diy ? "切到 DIY 模式" : "恢复默认模式")
+                        "\u00a7a[身怀百技] 全服预设已" + (pkt.diy ? "切到 DIY 模式" : "恢复默认模式")
                                 + "（改动 " + changed + " 项）"));
             });
         }

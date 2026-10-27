@@ -208,45 +208,41 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /* ===================== v1.2.4 实测六百四十七：窒息伤害台账 ===================== */
 
     /**
-     * 「我卡住了，快喘不过气了！」的播报台账——累计【真的吃到的窒息伤害】。
+     * 「我卡住了，快喘不过气了！」的播报台账——累计【真的吃到的窒息次数】。
      * 用户口径（实测六百四十七
      * 且形状够实）就播报——她挤过窄缝、被自己/别人放的方块顶一下、上下坡抬头都能
      * 瞬时命中这个几何条件，**一点血都没掉也照样喊"喘不过气"**；再叠加"每次自保
      * 会话进场都会重置播报标记"（{@code sessionEnter} 里 {@code announcedEnv=false}），
-     * 就成了"老不停说自己窒息了"。 现在改成：**先记账、再开口**——只有 {@code in_wall}（原版窒息伤害，见 {@code data/minecraft/damage_type/in_wall.json}，1.20.1 与 1.21.1 都是 {@code "message_id": "inWall"}）累计超过 4 点才播报。原版活体是"每 tick 卡在 可窒息方块里吃 1 点"（{@code LivingEntity.baseTick} 实证），所以真被闷住时 0.25 秒就能到门槛；反过来，几何命中但没掉血就一个字都不说。 <p>【实测七百九十九·issue #30 五修：账本改成"滚动窗口 + 记账里带'喊过没有'”】 <ol> <li><b>累计不随时间回落</b>：窗口内的"新账"是 `旧账 + 本次伤害`，只要她一直卡着， 总量就单调往上涨（2937 点）；</li> <li><b>"喊过没有"是会话字段</b>（{@code announcedSuffocate}），会被 {@code sessionEnter} 清成 false，而判据读的是静态台账 → 自保会话每重进一次就能再喊一次。</li> </ol> 现在：①账本按**滑动窗口**算——只把"窗口内"那些伤害点加起来（每个伤害点带自己的 tick， 旧的自动过期），于是"一直卡着"的读数稳定在窗口内的真实累计，而不是无限增长； ②"喊过没有"（{@code announced}）存进记账本身，复位条件只有一个——**窗口内一点伤害都没有了** （真的不卡了），会话怎么重进都不影响。
+     * 就成了"老不停说自己窒息了"。 现在改成：**先记账、再开口**——只有 {@code in_wall}（原版窒息伤害，见 {@code data/minecraft/damage_type/in_wall.json}，1.20.1 与 1.21.1 都是 {@code "message_id": "inWall"}）命中次数达到门槛（默认 4 次）才播报。原版活体是"每 tick 卡在 可窒息方块里吃 1 点"（{@code LivingEntity.baseTick} 实证），所以真被闷住时很快就能到门槛；反过来，几何命中但没掉血就一个字都不说。 <p>【实测七百九十九·issue #30 五修：账本改成"滚动窗口 + 记账里带'喊过没有'”】 <ol> <li><b>累计不随时间回落</b>：窗口内的"新账"是 `旧账 + 本次伤害`，只要她一直卡着， 总量就单调往上涨（2937 点）；</li> <li><b>"喊过没有"是会话字段</b>（{@code announcedSuffocate}），会被 {@code sessionEnter} 清成 false，而判据读的是静态台账 → 自保会话每重进一次就能再喊一次。</li> </ol> 现在：①账本按**滑动窗口**算——只把"窗口内"那些伤害点加起来（每个伤害点带自己的 tick， 旧的自动过期），于是"一直卡着"的读数稳定在窗口内的真实累计，而不是无限增长； ②"喊过没有"（{@code announced}）存进记账本身，复位条件只有一个——**窗口内一点伤害都没有了** （真的不卡了），会话怎么重进都不影响。
      */
     private static final java.util.Map<java.util.UUID, SuffocateLedger> SUFFOCATE_DAMAGE =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** 台账累计窗口（tick，5 秒）——超过这么久没有新的窒息伤害就当清零 */
+    /** 台账窗口（tick，5 秒）——超过这么久没有新的窒息伤害就当清零 */
     private static final long SUFFOCATE_WINDOW_TICKS = 100L;
-
-    /** 播报门槛（点）——用户口径"超过 4 点" */
-    private static final float SUFFOCATE_ANNOUNCE_MIN = 4.0f;
 
     /** 诊断日志限频（tick，30 秒/女仆） */
     private static final long SUFFOCATE_DIAG_INTERVAL = 600L;
 
     /**
-     * 单只女仆的窒息记账（实测七百九十九）。
+     * 单只女仆的窒息记账（R1149：由"伤害点数"改为"命中次数"）。
      *
-     * <p>{@code hits} = 窗口内的伤害点（tick → 该次伤害量）；求和即"窗口内累计"，旧点按
-     * {@link #SUFFOCATE_WINDOW_TICKS} 过期——所以读数会随时间回落，而不是单调增长。
-     * {@code announced} = 这一阵是否已经喊过"我卡住了"；只在窗口内伤害点全部过期（她真的
-     * 不卡了）时复位。它是**静态账本的一部分**，不再受 {@code sessionEnter} 摆布。
+     * <p>{@code hits} = 窗口内每次 in_wall 的计数（tick → 该 tick 的次数）；累计即"窗口内吃了几次"，
+     * 旧点按 {@link #SUFFOCATE_WINDOW_TICKS} 过期。{@code announced} = 这一阵是否已经喊过，
+     * 只在窗口内计数全部过期（她真的不卡了）时复位。
      */
     private static final class SuffocateLedger {
-        final java.util.TreeMap<Long, Float> hits = new java.util.TreeMap<>();
+        final java.util.TreeMap<Long, Integer> hits = new java.util.TreeMap<>();
         boolean announced = false;
 
-        /** 丢掉窗口外的伤害点，返回窗口内累计 */
-        float sumSince(long now) {
+        /** 丢掉窗口外的点，返回窗口内的命中次数 */
+        int countSince(long now) {
             hits.headMap(now - SUFFOCATE_WINDOW_TICKS, false).clear();
-            float s = 0.0f;
-            for (float v : hits.values()) {
-                s += v;
+            int n = 0;
+            for (int v : hits.values()) {
+                n += v;
             }
-            return s;
+            return n;
         }
 
         boolean empty() {
@@ -267,18 +263,18 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 msgId.toLowerCase(java.util.Locale.ROOT).replace("_", ""));
     }
 
-    /** 最近 5 秒内累计吃到的窒息伤害（滚动窗口；没吃过 / 全部过期 → 0） */
-    private static float recentSuffocateDamage(EntityMaid maid) {
+    /** 最近 5 秒内吃到的窒息次数（滚动窗口；没吃过 / 全部过期 → 0） */
+    private static int recentSuffocateHits(EntityMaid maid) {
         SuffocateLedger led = SUFFOCATE_DAMAGE.get(maid.getUUID());
         if (led == null) {
-            return 0.0f;
+            return 0;
         }
-        float sum = led.sumSince(maid.level().getGameTime());
+        int n = led.countSince(maid.level().getGameTime());
         if (led.empty()) {
             SUFFOCATE_DAMAGE.remove(maid.getUUID());
-            return 0.0f;
+            return 0;
         }
-        return sum;
+        return n;
     }
 
     /** 诊断日志限频（30 秒/女仆）——返回 true = 这一轮该落日志 */
@@ -344,12 +340,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 long nowS = maid.level().getGameTime();
                 java.util.UUID idS = maid.getUUID();
                 SuffocateLedger led = SUFFOCATE_DAMAGE.computeIfAbsent(idS, k -> new SuffocateLedger());
-                led.sumSince(nowS); // 先清掉窗口外的旧点（同一 tick 多次结算也安全）
-                // 同一 tick 可能有多笔 in_wall 结算 → 累加到同一个 tick 槽位
-                led.hits.merge(nowS, event.getAmount(), Float::sum);
+                led.countSince(nowS); // 先清掉窗口外的旧点（同一 tick 多次结算也安全）
+                // 同一 tick 可能有多笔 in_wall 结算 → 累加次数（R1149：按次数，不按伤害点数）
+                led.hits.merge(nowS, 1, Integer::sum);
                 if (SUFFOCATE_DAMAGE.size() > 256) {
                     SUFFOCATE_DAMAGE.entrySet().removeIf(e -> {
-                        e.getValue().sumSince(nowS);
+                        e.getValue().countSince(nowS);
                         return e.getValue().empty();
                     });
                 }
@@ -4877,22 +4873,21 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 方块闷住、又掉血又吃东西、始终不提示"——他要的只是一件事：**真被闷住就说话**。 <p>所以搬到这里：常驻轻量检查（与 {@code tickCureNegativeEffects} 同层，会话内外都跑）， 判据只有一个——**最近 5 秒累计吃到的 in_wall 伤害过没过门槛**。挪位置/顶出那个保命动作 仍留在逃生链路里（那条只管动作、不管提示）。 <p>【为什么不是"一生一次"】"喊过没有"这个状态存在**静态账本**里（{@link SuffocateLedger#announced}）， 只在窗口内伤害点**全部过期**（她真的不卡了）时复位——同一阵里她若又卡住，还能再喊一次； 喊过之后若持续被闷着（伤害一直在窗口内），就只说那一次，不刷屏。 <p>【实测七百九十九·issue #30 五修】旧版把"喊过没有"放在行为字段 {@code announcedSuffocate} 上，而 {@code sessionEnter} 每次都清它——可判据读的是静态台账，于是自保会话每重进一次就 能再喊一次（反馈者日志里 `99 → 107 → 113 → 2937` 的重复播报）。现在它跟着账本走， 与自保会话完全解耦。
      */
     private void checkSuffocateAnnounce(EntityMaid maid) {
-        float suffocate = recentSuffocateDamage(maid);
-        if (suffocate <= 0.0f) {
-            // 窗口内一点伤害都没有了（她真的不卡了）→ 账本里复位，下一回卡住还能再喊
+        int hits = recentSuffocateHits(maid);
+        int need = com.maidsmart.config.MaidSmartConfig.COMBAT_SUFFOCATE_HITS.get();
+        if (hits <= 0) {
+            // 窗口内一次都没有了（她真的不卡了）→ 账本里复位，下一回卡住还能再喊
             SuffocateLedger led = SUFFOCATE_DAMAGE.get(maid.getUUID());
             if (led != null) {
                 led.announced = false;
             }
             return;
         }
-        if (suffocate < SUFFOCATE_ANNOUNCE_MIN) {
+        if (hits < need) {
             // 正在吃、但还没到门槛 → 低频诊断（30 秒/女仆），对账用
             if (suffocateDiagDue(maid, maid.level().getGameTime())) {
                 com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 累计吃到 " + String.format("%.1f", suffocate)
-                        + " 点窒息伤害，未到门槛 " + String.format("%.1f", SUFFOCATE_ANNOUNCE_MIN)
-                        + " → 未播报");
+                        + " 最近 5 秒吃到 " + hits + " 次窒息，未到门槛 " + need + " 次 → 未播报");
             }
             return;
         }
@@ -4902,10 +4897,14 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
         led.announced = true;
         maid.getChatBubbleManager().addTextChatBubble("我卡住了，快喘不过气了！");
+        // 【R1149】到次数就传送：找 8 格内最近的真正安全格（空气 + 实心脚下 + 不在危险表）
+        boolean warped = false;
+        if (com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_SUFFOCATE.get()) {
+            warped = com.maidsmart.protect.DangerEscapeHandler.escapeSuffocation(maid);
+        }
         com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                + " 累计吃到 " + String.format("%.1f", suffocate)
-                + " 点窒息伤害（in_wall，门槛 " + String.format("%.1f", SUFFOCATE_ANNOUNCE_MIN)
-                + "）→ 播报（常驻检查，与自保会话/岩浆无关）");
+                + " 最近 5 秒吃到 " + hits + " 次窒息（in_wall，门槛 " + need
+                + " 次）→ 播报" + (warped ? " + 传送到附近安全格" : "（未传送：开关关闭或 8 格内无安全格）"));
     }
 
     /** v1.5.281：是否"无增益 + 有负面"——牛奶前提（牛奶清全部效果，

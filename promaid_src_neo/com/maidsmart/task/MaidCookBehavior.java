@@ -132,6 +132,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     /** 【R1133】看门狗判过"60 秒零进展"的炉子：台键 → 解禁 gameTime。专炉现在排在最前，
      *  万一那台够不着/烧不动，解绑后重扫会立刻挑回同一台 → 60 秒内先别选它。 */
     private static final java.util.Map<String, Long> STATION_STUCK_UNTIL = new java.util.HashMap<>();
+    /** 【R1146】上一 tick 的 TLM 坐姿标记——玩家反复坐/站时把整条链路清空重跑 */
+    private Boolean lastSitting = null;
 
     /** 清掉该女仆在静态占用表里的记录（魂符收起/放出时台子不再被"预留"）。 */
     public static void forgetStation(java.util.UUID maidId) {
@@ -249,6 +251,22 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
         this.lastGameTime = gameTime;
+        // 【R1146】玩家在烧制中让她坐下/站起：旧链路里的台、站位、冷却全部作废，
+        // 下一 tick 从"找台"重新走一遍，避免坐姿切换后卡在旧状态里不再动作。
+        this.syncPostureReset(level, maid);
+        // 【R1149】危险优先于烟熏炉：燃烧 / 岩浆 / 灵魂灼烧期间立刻放台、解除站桩，
+        // 交给 DangerEscapeHandler 撤离；否则她会为了守住炉子站在灵魂营火旁继续挨打。
+        if (com.maidsmart.protect.DangerEscapeHandler.isHeatDanger(maid)) {
+            if (this.furnacePos != null) {
+                this.releaseFurnace();
+                this.furnacePos = null;
+                this.stationCampfire = false;
+            }
+            this.standUp(maid);
+            MaidWorkTags.setStationLock(maid, false);
+            MaidWorkTags.setStill(maid, false);
+            return;
+        }
         // R1131：骑乘中不占台——否则启动时绑上的台会被"带走"，落地后还挂着一个
         // 远在几十格外的台（她以为自己在做饭，实际在跟着主人飞）。落地后由 start/tick 重找。
         if (maid.getVehicle() != null) {
@@ -327,6 +345,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         // （见 reconsiderStation），营火优先的口径由 findStation 保证；正在烧的台不打断。
         BlockState state = level.getBlockState(this.furnacePos);
         // 【R1106】绑定校验改看"是不是营火"——熄灭的营火也算有效台，点亮逻辑在走到之后
+        // 【R1149】灵魂营火与普通营火同级：同一套方块实体与营火配方，都算有效台
         if (this.stationCampfire ? !isCampfireBlock(state)
                 : !isFurnaceFamilyBlock(level, this.furnacePos, state)) {
             this.trace(maid, gameTime, "check:block", "台=" + this.furnacePos + " 方块已不是烧制台");
@@ -412,6 +431,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 stand.getX() + 0.5, stand.getY() + 0.5, stand.getZ() + 0.5);
         // 站在台子格上（含营火格，会烧伤）也算没到位，必须先挪到邻格
         if (standSq > 1.0 || maid.blockPosition().equals(this.furnacePos)) {
+            // 【R1149】走位期间先解除站桩：上一 tick 若已 setStill(true)，WORK_STILL 会
+            // 经 MaidMoveSuppressMixin 把导航掐掉——站在点燃的营火/灵魂营火上就永远下不来。
+            MaidWorkTags.setStill(maid, false);
+            this.standUp(maid); // 同时解除上一步强制写入的 Pose.SITTING，站起来迈步
             // 【R1139】先确认她的腿是通的：MOVEMENT_SPEED 被第三方事件置 0 时，
             // 寻路再正确也会被 MaidMoveControl 算成 setSpeed(0)——有路、navDone=false、一步不动。
             this.ensureMovable(maid, gameTime);
@@ -430,18 +453,29 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 ++this.standNoProgressTicks;
             }
             this.lastStandDistSq = standSq;
-            if (this.standNoProgressTicks >= 200) {
-                // 10 秒一步没靠近：这台走不到，不再"隔空开工"
+            // 【R1149】已站在营火上、标准站位就在 2 格内却一步不动（导航 navDone 但不位移）
+            // → 直接挪到站位，别再干等 10 秒；这是玩家看到的"站了半天才开工"。
+            if (this.standNoProgressTicks >= 20 && standSq <= 4.0) {
+                maid.teleportTo(stand.getX() + 0.5, stand.getY(), stand.getZ() + 0.5);
+                maid.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+                MaidWorkTags.setStill(maid, false);
                 this.standNoProgressTicks = 0;
                 this.lastStandDistSq = -1.0;
-                LOGGER.info("cook stand-giveup: maid={} 10 秒没靠近标准站位（台={}，站位={}，距台 {} 格"
+                this.trace(maid, gameTime, "stand:snap", "站位=" + stand + " 1 秒未动 → 直接落位");
+                return;
+            }
+            if (this.standNoProgressTicks >= 60) {
+                // 3 秒一步没靠近：这台走不到，不再"隔空开工"
+                this.standNoProgressTicks = 0;
+                this.lastStandDistSq = -1.0;
+                LOGGER.info("cook stand-giveup: maid={} 3 秒没靠近标准站位（台={}，站位={}，距台 {} 格"
                                 + "，移速={}）→ 收成品换台",
                         com.maidsmart.tool.PromaidLog.nameOf(maid), this.furnacePos, stand,
                         String.format("%.2f", Math.sqrt(distSq)),
                         String.format("%.2f", maid.getAttributeValue(
                                 net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED)));
                 this.trace(maid, gameTime, "stand:giveup", "台=" + this.furnacePos
-                        + " 站位=" + stand + " 10 秒未靠近 → 换台");
+                        + " 站位=" + stand + " 3 秒未靠近 → 换台");
                 this.giveUpStation(level, maid);
             }
             return;
@@ -470,6 +504,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         MaidWorkTags.setStill(maid, true);
         maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         maid.getNavigation().stop(); // 【R1138】到站：停掉直连导航（recomputePath 会重新算路）
+        this.faceStation(maid); // 【R1146】烧制时视线与身体正对自己绑定的台
         // v1.5.252：绑定完成 → 立刻坐下不动（每 tick 保持坐姿防状态机重置）
         if (!maid.isMaidInSittingPose()) {
             maid.setPose(net.minecraft.world.entity.Pose.SITTING);
@@ -546,6 +581,56 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         // 【R1137】一轮四步（收成品 → 补柴 → 喂料 → 取回烧不动的）走完，回到"选台"这一步
         // 重新判断——不再只在"收完成品"时特判换台。正在烧的台由 reconsiderStation 保留。
         this.reconsiderStation(level, maid);
+    }
+
+    /** 【R1146】坐下/站起切换一次 → 清空一次绑定与计时，让整条链路从"找台"重跑。
+     *  只清本行为的瞬时状态；不给台子记冷却、不强制改变她的姿势（姿势是玩家刚切的）。 */
+    private void syncPostureReset(ServerLevel level, EntityMaid maid) {
+        boolean sitting = maid.isMaidInSittingPose();
+        Boolean prev = this.lastSitting;
+        this.lastSitting = sitting;
+        if (prev == null || prev == sitting) {
+            return;
+        }
+        BlockPos old = this.furnacePos;
+        this.releaseFurnace();
+        this.furnacePos = null;
+        this.stationCampfire = false;
+        this.cooldown = 0;
+        this.scanCooldown = 0;
+        this.wanderCooldown = 0;
+        this.lastProgressGameTime = this.lastGameTime;
+        this.standNoProgressTicks = 0;
+        this.lastStandDistSq = -1.0;
+        this.idleSinceGameTime = 0L;
+        this.tookOutputThisRound = false;
+        MaidWorkTags.setStationLock(maid, false);
+        MaidWorkTags.setStill(maid, false);
+        maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        if (maid.getNavigation() != null) {
+            maid.getNavigation().stop();
+        }
+        this.trace(maid, this.lastGameTime, "posture:reset",
+                (sitting ? "坐下" : "站起") + " → 清空链路" + (old == null ? "" : "（原台=" + old + "）"));
+    }
+
+    /** 【R1146】站定后把身体/头/视线都转向绑定的台（营火/炉子同一套）。 */
+    private void faceStation(EntityMaid maid) {
+        if (this.furnacePos == null) {
+            return;
+        }
+        double tx = this.furnacePos.getX() + 0.5;
+        double ty = this.furnacePos.getY() + 0.5;
+        double tz = this.furnacePos.getZ() + 0.5;
+        double dx = tx - maid.getX();
+        double dz = tz - maid.getZ();
+        if (dx * dx + dz * dz > 1.0E-4) {
+            float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+            maid.setYRot(yaw);     // setYRot
+            maid.setYBodyRot(yaw); // setYBodyRot
+            maid.setYHeadRot(yaw); // setYHeadRot
+        }
+        maid.getLookControl().setLookAt(tx, ty, tz, 30.0F, 30.0F);
     }
 
     /**
@@ -2120,10 +2205,11 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 选台（R1104）：台型优先级每轮流程结束重算——营火/灵魂营火最高（开关开 +
+     * 选台（R1104）：台型优先级每轮流程结束重算——**营火（普通 / 灵魂同级）**最高（开关开 +
      * 身上有营火食材 + 点着 + 工作区内 + 未被占用 + **有空位**，不耗燃料），其次按
      * 背包炉型偏好的烟熏炉/高炉，最后熔炉（含等价族）。满载的营火不入选：先去炉子，
      * 弹出成品腾出空位后下一轮自然回到营火。两类台共用同一张占用表（同维同坐标不撞）。
+     * 【R1149】灵魂营火与普通营火同档：营火配方相同、同样不耗燃料，比烟熏炉优先。
      */
     private BlockPos findStation(ServerLevel level, EntityMaid maid) {
         this.nearestLitCampfire = null;

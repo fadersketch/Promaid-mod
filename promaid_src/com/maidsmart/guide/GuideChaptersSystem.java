@@ -2,10 +2,9 @@ package com.maidsmart.guide;
 
 
 /**
- * 手册章节——记忆/对话/工具/语音/面板/术语/规则（v1.2.4 从 GuideContent 拆出）。
- * 
- * 记忆、对话、感知、工具、语音、配置面板入口、术语表、药水规则、
- * 建造内部机制、成本规则。纯文本，逐字未改。
+ * 手册章节——AI 与对话（记忆/对话/感知/工具/语音）、配置导航、术语与细则。
+ *
+ * 【R1152】全篇重写为「说明书」口吻：短段、分步、例子化，不写实现细节。
  */
 public final class GuideChaptersSystem {
     private GuideChaptersSystem() {
@@ -13,245 +12,171 @@ public final class GuideChaptersSystem {
 
     static GuideContent.Chapter memoryGuide() {
         return new GuideContent.Chapter("AI 记忆系统",
-                "女仆会把重要的事\u00a7e记下来\u00a7r（长期记忆），下次对话还记得——这是她「有人味」的核心。"
-                        + "需要 LLM 支持（见「准备篇：配置 LLM」章）。",
-                "记什么：对话里提到的重要事实（段落）、\u00a7e关系三元组\u00a7r（主人-喜欢-红茶）、主人画像、工作笔记。",
-                "怎么记：① 对话积累到阈值（默认 10 条）后 LLM 自动提取；② 她主动调用 remember 工具；"
-                        + "③ 感知/情绪系统把环境与状态变化写进去。",
-                "怎么查：手册 → 女仆记忆 → 点女仆查看她记得什么；还能进\u00a7e链路调试\u00a7r页面对单条记忆"
-                        + "上调/下调重要度、标记删除、恢复、强化。",
-                "遗忘：记忆按\u00a7e衰减周期\u00a7r（默认 7 天）慢慢淡出，重要度高的保留——她不会永远记住一切。",
-                "\u00a7e记忆日记\u00a7r（多级记忆索引）：她把每天的事写成第一人称\u00a7e日记\u00a7r——日/3日/周/月四级，"
-                        + "跨度越大压缩越狠（月日记只留最重要的事）；对话时她会带着最近的日记，"
-                        + "也能用 query_memory_index 工具翻旧日记回答「上个月我们做了什么」。",
-                "\u00a7e\u7761\u4e00\u89c9\u81ea\u52a8\u6574\u7406\u00a7r\uff1a\u5168\u5458\u771f\u5b9e\u7761\u8fc7\u591c\u540e\uff0c\u5979\u6536\u5c3e\u521a\u7ed3\u675f\u7684\u4e00\u5929\u2014\u2014\u751f\u6210\u5f53\u65e5\u65e5\u8bb0 + \u628a\u5e74\u9f84\u8d85\u8fc7 3 \u6e38\u620f\u65e5\u4e14\u591f\u91cd\u8981\u7684\u8bb0\u5fc6\u00a7e\u6c89\u6dc0\u4e3a\u957f\u671f\u00a7r\uff08\u4e0d\u518d\u968f\u65f6\u95f4\u6de1\u5fd8\uff09\u3002\u71ac\u591c\u8fc7\u591c\u4e0d\u6574\u7406\uff08\u6ca1\u6709\u300c\u7761\u4e00\u89c9\u300d\u5c31\u6ca1\u6709\u6574\u7406\uff09\uff1b\u670d\u52a1\u5668\u4e0a\u73a9\u5bb6\u767b\u51fa\u4e5f\u7b97\u4e00\u5929\u7ed3\u675f\uff08\u4e0b\u6b21\u8fdb\u6e38\u620f\u8865\u5b8c\u6210\uff0c\u5355\u673a\u65e0\u6b64\u6b65\uff09\u3002",
-                "\u00a7e【举例】教她记住你的喜好：\u00a7r",
-                "对她说「记住我喜欢喝红茶，讨厌辣椒」→ 她调用 remember 工具当场写入长期记忆 → "
-                        + "下次对话她提起「主人想喝红茶吗」——这就是有记忆和没记忆的区别。",
-                "AI 记忆使用的 API 默认跟随原版（TLM）配置，无需单独设置。",
-                "\u00a7e\u4eba\u683c\u79cd\u5b50\u00a7r\uff08\u9ed8\u8ba4\u5f00\uff09\uff1a\u628a\u300c\u4eba\u8bbe\u300d\u548c\u300c\u804a\u5929\u8bb0\u5fc6\u300d\u00a7e\u5206\u5f00\u5b58\u00a7r\u2014\u2014\u5979\u7684\u4eba\u683c\u7531\u72ec\u7acb\u7684\u4e09\u4efd\u53ea\u8bfb\u6587\u4ef6\u63cf\u8ff0\uff08\u00a7epersona.properties\u00a7r \u4eba\u683c\u53c2\u6570\u3001\u00a7etraits.properties\u00a7r \u6027\u683c\u7279\u8d28\u3001\u00a7ecore_memories.jsonl\u00a7r \u6838\u5fc3\u8bb0\u5fc6\uff09\uff0c\u9996\u6b21\u8fd0\u884c\u81ea\u52a8\u751f\u6210\u9ed8\u8ba4\u6a21\u677f\u3002\u00a7e\u597d\u5904\u662f\u804a\u5929\u4e0d\u4f1a\u628a\u4eba\u683c\u5e26\u504f\u00a7r\uff1b\u5979\u539f\u7248\u5df2\u6709\u4eba\u8bbe\u65f6\uff0c\u4eba\u683c\u79cd\u5b50\u4f1a\u00a7e\u81ea\u52a8\u964d\u7ea7\u4e3a\u8865\u5145\u00a7r\uff08\u53ea\u8865\u4eba\u683c\u53c2\u6570/\u6838\u5fc3\u8bb0\u5fc6\uff0c\u4e0d\u91cd\u590d\u8eab\u4efd\uff09\u3002",
-                "\u00a7e双 agent 提取\u00a7r（默认开）：记忆提取走\u00a7e两次独立的 LLM 调用\u00a7r——"
-                        + "一次专心提炼摘要、一次专心抓事实/事件，\u00a7e互不阻塞、各写各的\u00a7r（比一次调用里"
-                        + "同时干两件事更聚焦）。关掉 = 单次合并提取，省 token。",
-                "\u00a7e成本控制：注入条数、消息截断、投影字符上限都能调\u00a7r——调小省 token，调大记得更细。"
-                        + "（详细的省钱口径见「细则：记忆与对话成本控制」章。）");
+                "女仆会把重要的事\u00a7e记下来\u00a7r，下次对话还记得——这是她「有人味」的核心。需要先配好 AI（见「准备篇」章）。",
+                "\u00a7e她记什么\u00a7r：对话里提到的重要事实（比如你说过喜欢红茶）、你们的关系、主人画像、工作笔记。",
+                "\u00a7e怎么记\u00a7r：聊天攒够一批后自动提炼；或直接对她说「记住 XXX」让她当场写入。",
+                "\u00a7e怎么查\u00a7r：手册 → 女仆记忆 → 点女仆，能看她记得的全部内容，也能调重要度或删除。",
+                "\u00a7e记忆日记\u00a7r：她把每天的事写成第一人称日记——日 / 3 日 / 周 / 月四级，"
+                        + "跨度越大记得越粗；对话时会自动带上最近的日记。",
+                "\u00a7e睡一觉自动整理\u00a7r：全员真实睡过夜后，她收尾这一天——写当日日记、"
+                        + "把重要的旧记忆转成长期（不再淡忘）。没睡就没有整理。",
+                "\u00a7e【举例】教她记住你的喜好\u00a7r：",
+                "对她说「记住我喜欢喝红茶，讨厌辣椒」→ 下次对话她会主动问「主人想喝红茶吗」。",
+                "\u00a7e省成本\u00a7r：记忆的注入条数、消息截断等都在「AI 与对话 → AI 记忆」页可调——"
+                        + "调小省费用，调大记得更细（详见「细则：记忆与对话成本控制」章）。");
     }
 
     static GuideContent.Chapter dialogueGuide() {
         return new GuideContent.Chapter("主动对话 / 工作播报 / 自主决策",
-                "女仆会\u00a7e自己开口说话\u00a7r（气泡 + TTS），不用你先搭话——需要 LLM（见「准备篇：配置 LLM」章）。"
-                        + "「对话提示」板块（配置面板 → 对话提示）控制全部参数：",
-                "\u00a7e\u2460 \u4e3b\u52a8\u5bf9\u8bdd\u00a7r\uff08\u9ed8\u8ba4\u5f00\uff09\uff1a\u5173\u5fc3\uff08\u4f60\u91cd\u4f24\u65f6\uff09\u3001\u591c\u665a\u56f0\u5026\u611f\u6168\u3001\u597d\u611f\u5347\u7ea7\u5f00\u5fc3\u3001\u957f\u65f6\u95f4\u6c89\u9ed8\u627e\u8bdd\u9898\u2014\u2014\u65e5\u4e0a\u9650\u9ed8\u8ba4 12 \u6b21/\u5929\uff0c\u4e24\u6b21\u95f4\u9694 \u2265 \u51b7\u5374\u5206\u949f\u6570\uff1b\u00a7e\u51fb\u6740\u654c\u4eba\u9080\u529f\u00a7r\uff08\u00a7c\u9ed8\u8ba4\u5173\u00a7r\u2014\u2014\u6218\u6597\u9891\u7e41\u65f6\u51fb\u6740\u5c31\u5192\u4e00\u6b21\u3001\u65f6\u523b\u5237\u5c4f\u5f88\u5435\uff0c\u60f3\u542c\u9080\u529f\u5728\u300c\u5bf9\u8bdd\u63d0\u793a\u300d\u6253\u5f00\u300c\u51fb\u6740\u9080\u529f\u5bf9\u8bdd\u300d\uff09\uff1b",
-                "\u00a7e② 工作播报\u00a7r（默认开）：她干活卡住时用气泡解释原因（缺什么料/够不到/被挡路），"
-                        + "间隔和范围可调；",
-                "\u00a7e③ 自主决策\u00a7r（默认开，\u00a7c必须 LLM\u00a7r）：空闲 + 白天（默认 1000~13000 tick）+ 主人在 16 格内时，"
-                        + "她自己判断该干什么并换任务（去种地/去挖矿），回复以气泡呈现；冷却默认 10 分钟、"
-                        + "日上限默认 10 次；\u00a7e【举例】\u00a7r你不管她几分钟，她可能突然说"
-                        + "「我自己决定去挖矿了」然后自己切任务——不想让她乱跑就关掉或用口头干预；"
-                        + "没配 LLM 时它\u00a7e不会触发\u00a7r（日志无报错，属正常）；",
-                "\u00a7e\u2463 \u56de\u590d\u53cd\u9988\u5b66\u4e60\u00a7r\uff1a\u4f60\u8bf4\u300c\u522b\u8bf4\u4e86/\u597d\u70e6\u300d\u2192 \u5979\u8bb0\u4f4f\u4e0d\u518d\u63d0\u8be5\u8bdd\u9898\u3001\u8bed\u6c14\u8f6c\u514b\u5236\uff1b\u8bf4\u300c\u8c22\u8c22/\u8bf4\u5f97\u5bf9\u300d\u2192 \u5f3a\u5316\u8bb0\u5fc6\uff1b\u5979\u8fd8\u4f1a\u8bb0\u5f55\u4f60\u591a\u4e45\u6ca1\u7406\u5979\uff08\u771f\u6c89\u9ed8\u8ba1\u65f6\uff09\uff1b",
-                "\u00a7e\u2464 \u8f93\u51fa\u8bed\u8a00\u00a7r\uff08\u9009\u9879\u9009\u62e9\uff09\uff1a\u9009\u300c\u4e2d\u6587\u300d= \u5f3a\u5236\u4e2d\u6587\uff0c\u9009\u300c\u8ddf\u968f\u6e38\u620f\u8bed\u8a00\u300d= \u7528\u5ba2\u6237\u7aef\u5f53\u524d\u8bed\u8a00\uff08\u5ba2\u6237\u7aef\u88ab\u6539\u8fc7\u65f6\u5973\u4ec6\u4f1a\u8ddf\u7740\u53d8\uff09\u3002",
-                "所有主动发言共用\u00a7e API 日配额\u00a7r（所有女仆合计默认 40 次/天，0 = 不限）控 LLM 成本。");
+                "女仆会\u00a7e自己开口说话\u00a7r（气泡 + 语音），不用你先搭话。需要 AI。开关都在"
+                        + "「AI 与对话 → 对话与自主」页。",
+                "\u00a7e① 主动对话\u00a7r（默认开）：关心（你重伤时）、夜晚感慨、好感升级开心、"
+                        + "长时间没聊天找话题。每天最多 12 次，防刷屏；",
+                "\u00a7e② 工作播报\u00a7r（默认开）：干活卡住时用气泡告诉你原因（缺料 / 够不到 / 被挡路）；",
+                "\u00a7e③ 自主决策\u00a7r（默认开，需要 AI）：空闲时她自己判断该干什么并换任务"
+                        + "（比如「地里熟了，我去收一下」），一天最多 10 次；",
+                "\u00a7e④ 回复反馈学习\u00a7r：你说「别说了」，她就不再提这个话题；说「谢谢」，她会记住你认可。",
+                "\u00a7e⑤ 输出语言\u00a7r：选「中文」= 她始终说中文；选「跟随游戏语言」= 跟客户端语言走。",
+                "所有主动发言共用一个\u00a7e API 日配额\u00a7r（全部女仆合计，默认 40 次/天，0 = 不限）控制费用。",
+                "\u00a7e【举例】\u00a7r：你重伤倒地，她会主动问「主人你没事吧？」并跑来救你——"
+                        + "这就是主动对话 + 感知在工作。");
     }
 
     static GuideContent.Chapter perceptionAffectGuide() {
         return new GuideContent.Chapter("感知与情绪",
-                "\u00a7e感知系统\u00a7r（纯规则、零 token）：女仆会「注意到」身边的变化并播报/记入记忆——"
-                        + "敌人出现/靠近/离开、主人受伤/低血/盯着她看、天气变化。"
-                        + "同类事件有限频（敌对播报默认 5 分钟一次，检测照常只是少说）。",
-                "\u00a7e情绪系统\u00a7r（PAD 三维模型）：愉悦-唤醒-支配三个数值独立于 TLM 好感等既有数值，"
-                        + "由事件驱动（你喂她、夸她、打她都会改变），无事件时缓慢回归；"
-                        + "情绪会注入对话上下文（ai_affect），让她说话带着当下心情。",
-                "\u00a7e【举例】\u00a7r：你连续喂她几天好吃的、夸她，她的愉悦值会升高——"
-                        + "对话里她会更热情（语气由情绪驱动）；你打她一下，支配值变化，她可能委屈地提一句。",
-                "\u00a7e怎么影响情绪\u00a7r：\u00a7a喂她吃的、夸她\u00a7r会让愉悦上升，\u00a7c挨打\u00a7r会把它拉下来；"
-                        + "被主人打还会压低\u00a7e支配\u00a7r，并欠下一次需要\u00a7a道歉\u00a7r偿还的\u00a7e修复债\u00a7r；"
-                        + "在世界里受的伤只算「受了委屈」，不算在你头上。一段时间没受伤，情绪会慢慢回到基线。",
-                "两者开关与参数都在对应板块（配置面板 → 感知 / 情绪）。");
+                "\u00a7e感知\u00a7r（不花 AI 费用）：她会「注意到」身边的变化并播报——敌人出现、主人受伤、天气变化等。"
+                        + "同类播报有限频，不会刷屏。",
+                "\u00a7e情绪\u00a7r：她有一套独立于好感的心情值——\u00a7e愉悦 / 唤醒 / 支配\u00a7r三个数值，"
+                        + "由发生的事驱动：\u00a7a喂她吃的、夸她\u00a7r会让心情变好，\u00a7c打她\u00a7r会变差；"
+                        + "一段时间没事发生就慢慢回到平静。",
+                "情绪会带进她的说话语气：心情好时更热情，受委屈时说话会带点小情绪。",
+                "\u00a7e【举例】\u00a7r：连续几天喂她好吃的、夸夸她——对话里她会明显更黏你；"
+                        + "打她一下，她可能委屈地提一句，需要你道个歉。",
+                "两个系统的开关与参数都在「AI 与对话 → 感知 / 情绪」页。");
     }
 
     static GuideContent.Chapter toolsGuide() {
         return new GuideContent.Chapter("AI 工具大全（对话直接喊）",
-                "这些是 LLM 对话里女仆能\u00a7e实际执行\u00a7r的「双手」——需要 LLM（见「准备篇：配置 LLM」章），"
-                        + "直接对她说就行：",
-                "· smart_move_to ——「过来我身边」（走过去，一次性）；",
-                "· smart_give_item ——「给我钻石/给我一组圆石」（从背包取给你，最多一组）；",
-                "· smart_set_pickup ——「别捡东西了/开始捡」（切换自动拾取）；",
-                "· smart_report ——「汇报你的状态」（血量/好感/任务/作息/拾取）；",
-                "· smart_attack ——「去打那只怪/攻击最近的怪」（切攻击任务+锁目标）；",
-                "· smart_craft ——「帮我合成一把石剑」（自己背包取材料合成，成品交给你）；",
-                "· smart_place ——「帮我把这里填上」（从背包取方块放到指定位置）；",
-                "· smart_build / smart_build_list ——「照着图纸建」/「列出你能建的建筑」；",
-                "· smart_design ——「设计一个 X」（子 AI 出蓝图存进手册）；",
-                "· remember ——「记住我喜欢喝红茶」（当场写长期记忆）；",
-                "· working_note ——「记下我们在挖钻石」（跨对话工作笔记）；",
-                "· query_memory ——「你还记得上次我们…吗」（检索记忆）；",
-                "· query_memory_index ——「上周/这个月我们都做了什么」（翻记忆日记：日/3日/周/月四级摘要，先列时间跨度再查内容）；",
-                "· perception_query ——「先看看周围地形再建」（建造前探查环境）；",
-                "· work_list ——「你现在在干什么/还缺什么材料」（任务清单与缺口）；",
-                "\u00b7 smart_owner_inventory \u2014\u2014\u300c\u6211\u80cc\u5305\u91cc\u6709\u4ec0\u4e48\u300d/\u300c\u6211\u8fd8\u6709\u94bb\u77f3\u5417\u300d\uff08\u53ea\u8bfb\u67e5\u770b\u4e3b\u4eba\u7269\u54c1\u680f\uff09\uff1b",
-                "· smart_switch_task ——「去挖矿 / 切空袭 / 砍树去 / 跟着我别干活了」（换任务或工作模式：TLM 原生 + 本模组任务全可切，支持中文别名；排班中的女仆拒绝外部指派）；",
-                "· smart_air_raid ——「起飞打那只僵尸 / 别飞了回来打」（起飞空袭：近战或远程、顺手锁目标，缺件会如实告诉你；停止 = 清目标清本轮状态并切回地面攻击）；",
-                "· smart_work_area ——「这儿归你管 / 别干活了跟着我 / 你的工作区在哪」（把工作区设到主人脚下或她自己所在处并驻守、解除驻守、只查看锚点）；",
-                "· smart_readiness ——「你能飞吗 / 带够箭了吗 / 你怎么不去干活」（只读自检：空袭三件套缺件、远程弹药、驻守与排班状态、工作锚点、血量、主人饥饿）。",
-                "\u00a7e【举例】\u00a7r：对她说「给我 8 个石砖」——她从背包取出最多一组石砖递给你；"
-                        + "说「你现在在干什么」——她汇报当前任务和缺料情况。",
-                "每个工具都能在「AI 工具」板块单独关掉（配置面板 → AI 工具）。");
+                "这些是女仆在对话里\u00a7e能实际执行的「双手」\u00a7r——需要 AI。直接对她说人话就行：",
+                "· 「过来我身边」——她走过去；· 「给我钻石」——从背包取给你（最多一组）；",
+                "· 「别捡东西了 / 开始捡」——切换自动拾取；"
+                        + "· 「汇报你的状态」——血量 / 好感 / 任务 / 作息；",
+                "· 「去打那只怪」——切攻击任务并锁定目标；"
+                        + "· 「帮我合成一把石剑」——用她背包的材料合成后交给你；",
+                "· 「帮我把这里填上」——拿方块放到指定位置；"
+                        + "· 「照着图纸建 / 列出你能建的建筑」——建造；",
+                "· 「设计一个 X」——AI 设计蓝图存进手册；"
+                        + "· 「记住 XXX」——当场写进长期记忆；",
+                "· 「你还记得上次……吗」——检索记忆；「这个月我们都做了什么」——翻记忆日记；",
+                "· 「去挖矿 / 切空袭 / 跟着我」——换任务或工作模式；"
+                        + "· 「起飞打那只僵尸」——直接起飞空袭（缺装备会如实告诉你）；",
+                "· 「这儿归你管」——把工作区设到你脚下并驻守；"
+                        + "· 「你能飞吗 / 带够箭了吗」——只读自检；",
+                "· 「我背包里有什么」——查看你的物品栏（只读）。",
+                "\u00a7e【举例】\u00a7r：对她说「给我 8 个石砖」——她取出来递给你；"
+                        + "说「你现在在干什么」——她汇报当前任务和缺料。",
+                "每个工具都能在「AI 与对话 → AI 工具」页单独关掉。");
     }
 
     static GuideContent.Chapter voiceGuide() {
         return new GuideContent.Chapter("语音系统（TTS）",
-                "女仆说话除了气泡还有\u00a7e语音\u00a7r（需 TLM 的 TTS 总开关开启）：",
-                "\u00a7e\u5185\u7f6e\u65e5\u8bed\u8bed\u97f3\u5305\uff08\u5f00\u7bb1\u5373\u7528\uff09\u00a7r\uff1a\u6a21\u7ec4\u81ea\u5e26\u4e00\u5957\u00a7e\u5973\u4ec6\u65e5\u8bed\u8bed\u97f3\u00a7r\uff0867 \u6761\u7cfb\u7edf\u6d88\u606f\u53f0\u8bcd + 49 \u6761\u6392\u73ed\u8d34\u8eab\u6c14\u6ce1 + 6 \u6761\u62e5\u62b1/\u6478\u5934\u4eb2\u6635\u53f0\u8bcd\uff0c\u5171 122 \u6761\uff0c\u968f jar \u5206\u53d1\uff1b\u6309\u60c5\u5883\u5206\u00a7e\u4e94\u6863\u60c5\u7eea\u00a7r\u2014\u2014\u6218\u6597\u00b7\u7d27\u5f20/\u5173\u5fc3\u00b7\u6e29\u67d4/\u4fcf\u76ae\u00b7\u65e5\u5e38/\u5e72\u6d3b\u00b7\u6c47\u62a5/\u8bf7\u6c42\u00b7\u4e3a\u96be\uff0c\u7528\u540c\u4e00\u4f4d\u5973\u4ec6\u7684\u4e24\u6761\u53c2\u8003\u97f3\u9891 + \u8bed\u901f\u533a\u5206\uff09\u2014\u2014\u89e6\u53d1\u7cfb\u7edf\u6d88\u606f\u6216\u00a7e\u6392\u73ed\u6c14\u6ce1\u00a7r\u65f6\u00a7e\u81ea\u52a8\u64ad\u653e\u65e5\u8bed\u8bed\u97f3\u00a7r\uff0c\u4f18\u5148\u7ea7\u00a7e\u9ad8\u4e8e TLM \u539f\u751f\u8bed\u97f3\u5305\u4e0e TTS \u5408\u6210\u00a7r\uff0c\u00a7c\u4e0d\u9700\u8981\u914d\u7f6e\u4efb\u4f55 TTS \u7ad9\u70b9\u00a7r\u3002\u64ad\u653e\u671f\u95f4\u4f1a\u00a7e\u6682\u538b TLM \u539f\u751f\u8bed\u97f3\u5305\u00a7r\uff08\u907f\u514d\u4e24\u5957\u8bed\u97f3\u91cd\u53e0\uff09\uff0c\u64ad\u653e\u7ed3\u675f\u81ea\u52a8\u89e3\u9664\u3002\u00a7e\u5f00\u5173 / \u97f3\u91cf / \u6700\u5c0f\u95f4\u9694\u00a7r\u5728\u300c\u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e \u2192 \u8bed\u97f3\u4e0e\u663e\u793a \u2192 \u8bed\u97f3\u4e0e TTS\u300d\u91cc\u8c03\uff1b\u8bed\u97f3\u7d20\u6750\u5df2\u505a\u00a7e\u5cf0\u503c\u5f52\u4e00\u5316\u00a7r\uff08\u54cd\u5ea6\u63d0\u5347\u7ea6 11 dB\uff09\uff0c\u300c\u5185\u7f6e\u8bed\u97f3\u5305\u97f3\u91cf\u300d\u4e00\u822c 1.0~2.0 \u5c31\u591f\uff0c\u4ecd\u5acc\u5c0f\u53ef\u8c03\u5230\u6700\u9ad8 20\u3002",
-                "· \u00a7e音量倍率\u00a7r：TLM 原始语音偏小，默认放大到 2.0 倍（0.1~5.0 可调）；",
-                "· \u00a7e系统消息朗读\u00a7r：感知/工作/自保等规则气泡也播语音（有独立冷却防轰炸）；",
-                "· \u00a7e系统语音包\u00a7r：把常用系统消息预制成 ogg 音频放进 config/maid_smart/system_voice/"
-                        + "（manifest.json 映射文本→音频），命中直接播放、免 TTS——一次制作永久使用；"
-                        + "面板里有「选择文件导入」按钮直接选 zip；",
-                "· 语音缓存：训练生成的音频会缓存复用（voice_cache/），上限可调，超出删最旧。",
-                "§e排班贴身气泡§r的开关与触发距离也在这页的「气泡与提示」小节"
-                        + "（与 TTS 总开关同页；键名和默认值未变）。",
-                "\u00a7e【举例】做一个语音包：\u00a7r",
-                "① 用 TTS 工具把「主人，小心！」生成成 ogg 文件，命名如 alert.ogg；"
-                        + "② 放进 config/maid_smart/system_voice/；"
-                        + "③ 在 manifest.json 里加一行「主人，小心！」→ alert.ogg 的映射；"
-                        + "④ 配置面板 → 语音 → 启用语音包 + 重新加载——以后女仆播这条消息直接放音频，不调 LLM。");
+                "女仆说话除了气泡还有\u00a7e语音\u00a7r。总开关是 TLM 原版的 TTS 开关；"
+                        + "本模组的音量与增强在「语音与显示 → 语音与 TTS」页。",
+                "\u00a7e内置日语语音包（开箱即用）\u00a7r：自带一套女仆日语语音（百余条台词，按情境分五档情绪），"
+                        + "无需任何配置；配合音量倍率使用（默认放大 2 倍，0.1~5.0 可调）。",
+                "\u00a7e系统消息朗读\u00a7r（默认开）：自保、工作、感知等系统提示也出声（有独立冷却防轰炸）。",
+                "\u00a7e排班贴身气泡\u00a7r：开关与触发距离在同页「气泡与提示」小节。",
+                "\u00a7e做自己的语音包\u00a7r：",
+                "① 用任意 TTS 工具把一句话生成 ogg 文件（如 alert.ogg）；"
+                        + "② 放进 config/maid_smart/system_voice/ 文件夹；"
+                        + "③ 在 manifest.json 里加一行「文本 → 文件名」。命中相同文本时直接播放，不用在线合成。",
+                "生成过的语音会自动缓存复用（缓存上限可调，超出删最旧）。");
     }
 
-        static GuideContent.Chapter configPanelGuide() {
+    static GuideContent.Chapter configPanelGuide() {
         return new GuideContent.Chapter("模组详细配置面板导航",
-                "\u6253\u5f00\u65b9\u5f0f\uff1a\u624b\u518c \u2192 \u300c\u2699 \u6a21\u7ec4\u8be6\u7ec6\u914d\u7f6e\u300d\uff08\u6216\u5728 Forge \u6a21\u7ec4\u5217\u8868 \u2192 Config \u91cc\u6253\u5f00\uff09\u3002\u00a7e\u6240\u6709\u5f00\u5173/\u53c2\u6570\u90fd\u53ea\u5728\u8fd9\u4e2a\u9762\u677f\u91cc\u00a7r\uff08\u624b\u518c\u5185\u6ca1\u6709\u5355\u72ec\u7684\u8bbe\u7f6e\u9875\uff09\u3002\u7ed3\u6784\uff1a\u9996\u9875\u5217\u51fa\u5404\u7c7b\u00a7e\u5927\u7c7b\u00a7r\uff0c\u70b9\u5927\u7c7b\u540e\u4e00\u822c\u5148\u5217\u51fa\u8be5\u7c7b\u4e0b\u7684\u00a7e\u5c0f\u7c7b\u00a7r\u3001\u70b9\u5c0f\u7c7b\u8fdb\u5165\u53c2\u6570\u9875\uff08\u53ef\u7ffb\u9875\uff09\uff1b\u00a7e\u53ea\u6709\u4e00\u4e2a\u5b50\u7c7b\u7684\u5927\u7c7b\uff08\u5982\u7f6e\u9876\u7684\u300c\u5e38\u7528\u300d\uff09\u6ca1\u6709\u8fd9\u4e00\u5c42\u2014\u2014\u70b9\u5b83\u76f4\u63a5\u8fdb\u53c2\u6570\u9875\u00a7r\uff1b\u6539\u5b8c\u6309 Esc \u5173\u95ed \u00a7a\u81ea\u52a8\u4fdd\u5b58\u00a7r \u5e76\u7acb\u5373\u751f\u6548\uff08\u4e0d\u7528\u91cd\u542f\uff09\u3002",
-                "\u00a7e\u4e03\u4e2a\u5927\u7c7b\u4e0e\u5404\u81ea\u7684\u5c0f\u7c7b\u00a7r\uff1a",
+                "打开方式：手册 → 「⚙ 模组详细配置」。\u00a7e所有开关参数都只在这里\u00a7r："
+                        + "首页列大类，点进去列小类，再点进参数页。",
+                "\u00a7e七个大类\u00a7r：",
                 "① \u00a7e生产与工作\u00a7r：建造 / 挖矿 / 伐木 / 烹饪与酿造 / 农场与宰杀 / 钓鱼 / 排班表；",
                 "② \u00a7eAI 与对话\u00a7r：AI 记忆 / 对话与自主 / 感知 / 情绪 / AI 工具；",
-                "③ \u00a7e战斗与自保\u00a7r：自保与保命 / 自保战术 / 单兵战术 / 主动参战 / 贴身辅助 / 玩家伤害策略 / 危险方块；",
-                "④ \u00a7e生存与复活\u00a7r：落地缓冲 / 死亡与复活 / 传送与逃生；",
-                "\u2464 \u00a7e\u79fb\u52a8\u4e0e\u884c\u4e3a\u00a7r\uff1a\u79fb\u52a8\u4e0e\u8ddf\u968f / \u7a7a\u95f2\u4e0e\u6d41\u7545 / \u642d\u8def / \u98de\u884c\u8ddf\u968f / \u626b\u5e1a\u6a21\u5f0f / \u6b66\u88c5\u62f4\u7ef3 / \u9a91\u4e58\u6307\u6325\u68d2 / \u9970\u54c1\u300c\u5927\u8fd0\u300d\uff08\u540e\u56db\u4e2a\u5c0f\u7c7b\u4e0e\u98de\u884c\u8ddf\u968f\u5e73\u7ea7\uff0c\u90fd\u5728\u8fd9\u4e00\u5927\u7c7b\u4e0b\uff09\uff1b",
-                "⑥ \u00a7e语音与显示\u00a7r：语音与 TTS / 显示与提示；",
-                "⑦ \u00a7e系统与杂项\u00a7r：交互与杂项 / 运行日志。",
-                "\u00a7e怎么找某个开关\u00a7r：先想它属于哪类功能——",
-                "· 干活（建造/挖矿/伐木/烧制/农场/宰杀/排班）→ 生产与工作；",
-                "· 记忆/说话/感知/情绪/AI 工具 → AI 与对话；",
-                "· 打架/保命/投喂治愈/共享盾牌图腾/被玩家打 → 战斗与自保；",
-                "· \u00a7e空袭（飞行作战）\u00a7r → \u00a7e总开关与各项数值都在「战斗与自保 → 空袭数值」\u00a7r"
-                        + "（页首第一条就是「空袭·总开关（飞行作战）」；往下是起飞与爬升 / 收翅俯冲 / 盘旋与补高 / 远程开火 / 近身弹开 / 位移法术 六段）；"
-                        + "而「免疫鞘翅撞击 / 空袭免疫摔落 / 近距离弹开 / 空袭牵引绳」四项在\u00a7e「生存与复活 → 落地缓冲」\u00a7r——跟落地水放一起（同一套落地缓冲链路）；",
-                "· 落地水/魂符/自动复活/传送/珍珠/区块保载 → 生存与复活；危险方块避让/险境脱离/危险方块名单 → 战斗与自保；",
-                "· 跟随/拉回/散步/搭路/飞行跟随 → 移动与行为；",
-                "· 语音/气泡/冷却 HUD → 语音与显示；",
-                "· 床铺互通/手持光源/蛋糕可食用/悬空禁搭/运行日志 → 系统与杂项；",
-                "\u00a7e【举例】改投喂阈值（4 步）：\u00a7r",
-                "手册 → \u2699 模组详细配置 → \u00a7e战斗与自保\u00a7r → \u00a7e贴身辅助\u00a7r → "
-                        + "把「投喂触发饱食度」改成 20 → 按 Esc 关闭（自动保存）——立即生效，女仆 3 秒内会喂你。",
-                "小知识：输入框是延迟提交——打字只校验格式，\u00a7e按 Esc 关闭面板时\u00a7r才真正写入并保存；"
-                        + "非法输入显示红字，合法白字。返回按钮：小类页「← 返回分类」回大类页（只有一个子类的大类没有中间层，直接回首页），"
-                        + "大类页「← 返回大类」回首页。");
+                "③ \u00a7e战斗与自保\u00a7r：自保与保命 / 自保战术 / 单兵战术 / 主动参战 / 贴身辅助 / "
+                        + "玩家伤害策略 / 危险方块 / 空袭数值 / 空中接敌机动；",
+                "④ \u00a7e生存与复活\u00a7r：落地缓冲 / 死亡与复活 / 传送与逃生；"
+                        + "　⑤ \u00a7e移动与行为\u00a7r：跟随 / 搭路 / 飞行跟随 / 扫帚模式等；",
+                "⑥ \u00a7e语音与显示\u00a7r；　⑦ \u00a7e系统与杂项\u00a7r。"
+                        + "另有\u00a7e物品\u00a7r大类：压缩盒 / 拴绳 / 指挥棒 / 大运 / 巡逻航图 / 指标石。",
+                "\u00a7e怎么找某个开关\u00a7r：先想它属于哪类功能——干活在「生产与工作」、"
+                        + "打架保命在「战斗与自保」、空袭数值在「战斗与自保 → 空袭数值」、"
+                        + "复活传送在「生存与复活」、飞行在「移动与行为」、语音在「语音与显示」。"
+                        + "或者直接用「功能总览」章的一键链接。",
+                "\u00a7e【举例】改投喂阈值（4 步）\u00a7r：",
+                "手册 → ⚙ 模组详细配置 → 战斗与自保 → 贴身辅助 → 把「投喂触发饱食度」改成 20 → "
+                        + "按 Esc 关闭（自动保存）——立即生效。",
+                "\u00a7e输入框规则\u00a7r：打字只校验格式，\u00a7e按 Esc 关闭面板时才真正保存\u00a7r；"
+                        + "非法输入显示红字。每页「← 返回」逐级退回。");
     }
 
     static GuideContent.Chapter termsGuide() {
         return new GuideContent.Chapter("专业术语解释",
-                "· \u00a7eTLM\u00a7r：车万女仆 Touhou Little Maid 模组，本模组的母体；",
-                "· \u00a7eLLM\u00a7r：大语言模型（如 DeepSeek/ChatGPT），女仆对话的「大脑」；",
-                "· \u00a7e气泡\u00a7r：女仆头顶显示的一句话（对话/播报）；",
-                "· \u00a7eTTS\u00a7r：文字转语音，女仆说话出声；",
-                "· \u00a7etoken\u00a7r：LLM 计费/长度单位，对话与记忆都消耗它；",
-                "· \u00a7e好感\u00a7r：TLM 女仆的好感度——影响她说话的语气亲疏；",
-                "· \u00a7e蓝图\u00a7r：建筑图纸（方块列表），女仆照着搭；",
-                "· \u00a7e区块\u00a7r：建造计划的施工区域（金色框/红色框），女仆只在该区域内施工；"
-                        + "每个区块有「创建于 x, y, z」坐标标签（世界内透显可见）；",
-                "· \u00a7e投影\u00a7r：区块预览里的半透明幽灵方块轮廓（预览=青色随你移动，建造中区块=橙色按原点落地）——"
-                        + "只有方框看不出建筑朝向，投影连门开在哪边都看得见；"
-                        + "卡帧的机器可在配置面板「建造」页关掉\u00a7e幽灵方块投影（性能）\u00a7r，"
-                        + "只留红框/金框线框（指标石临时蓝图的橙影同关）；",
-                "· \u00a7e工头\u00a7r：一个建造区块的队长——一区块只设一个（区块名单页手动指定，不指定则自动随机）；"
-                        + "该区块的播报/缺料/完成汇报统一由工头发送；",
-                "· \u00a7e锚点\u00a7r：挖矿任务以它为中心扫描找矿的基准点；",
-                "· \u00a7eCD\u00a7r：冷却时间——同一件事最短间隔多久再做；",
-                "· \u00a7e效果\u00a7r：药水给的状态（抗火/水肺/迅捷…），有持续时间；",
-                "· \u00a7e情境药水\u00a7r：只在特定情境喝/投的药水（着火→抗火、溺水→水肺、中毒→牛奶/蜂蜜）；",
-                "· \u00a7e治疗链\u00a7r：主人低血时女仆依次尝试「扔治疗→金苹果→扔再生→塞药水→喂食物」的保命顺序；",
-                "· \u00a7ePAD 情绪\u00a7r：愉悦-唤醒-支配三维情绪模型，独立于好感；",
-                "· \u00a7e记忆段落 / 关系三元组 / 画像\u00a7r：记忆的三种形态——重要事实 / 主谓宾关系 / 主人性格总结；",
-                "· \u00a7e材料等价族\u00a7r：蓝图要橡木木板时任意木板都算数的等价材料规则；",
-                "\u00b7 \u00a7e\u5f3a\u5236\u52a0\u8f7d\u533a\u5757\u00a7r\uff1a\u8ba9\u8fdc\u5904\u533a\u5757\u6301\u7eed\u88ab\u8ba1\u7b97\uff0c\u5973\u4ec6\u624d\u80fd\u8fdc\u7a0b\u65bd\u5de5\uff1b\u00a7e\u5973\u4ec6\u672c\u4f53\u4e5f\u6301\u7eed\u4fdd\u8f7d\u00a7r\uff1a\u6240\u6709\u6709\u4e3b\u5973\u4ec6\u2014\u2014\u542b\u5728\u5bb6/\u5750\u59ff/\u9a91\u4e58\uff0c\u4e09\u6001\u8c41\u514d\u7684\u53ea\u662f\u4f20\u9001\u3001\u4e0d\u8c41\u514d\u52a0\u8f7d\u2014\u2014\u6240\u5728\u533a\u5757\u6c38\u4e45\u4fdd\u6301\u5b9e\u4f53 ticking\uff08\u4e0e\u73a9\u5bb6\u540c\u7ea7\uff09\uff0c\u8ddf\u968f\u843d\u540e\u4e3b\u4eba\u518d\u8fdc\u4e5f\u4e0d\u4f1a\u51bb\u7ed3\u5931\u8054\uff0c\u968f\u65f6\u53ef\u88ab\u4f20\u9001/\u53ec\u56de/\u6551\u63f4\uff08\u914d\u7f6e\u9762\u677f\u6742\u9879\u300cmaidChunkLoad\u300d\u53ef\u6574\u4f53\u5173\u95ed\uff09\uff1b",
-                "· \u00a7e落地水 / 搭高 / 珍珠逃生\u00a7r：三种保命动作——坠落放水缓冲 / 垫方块上高处 / 扔末影珍珠瞬移；",
-                "· \u00a7e受困救援\u00a7r：被困下界基岩顶层或虚空时，自动安全传回主人身边（跨维度通用；配置面板「生存与复活 → 传送与逃生」可关）；",
-                "\u00b7 \u00a7e\u5371\u9669\u65b9\u5757\u907f\u8ba9\u00a7r\uff1a\u5973\u4ec6\u89c4\u5212\u8def\u5f84\u65f6\u81ea\u52a8\u7ed5\u5f00\u5ca9\u6d46/\u706b/\u8425\u706b/\u5ca9\u6d46\u5757/\u4ed9\u4eba\u638c/\u751c\u6d46\u679c\u4e1b/\u7ec6\u96ea\u7b49\u5371\u9669\u65b9\u5757\u2014\u2014\u5b81\u53ef\u505c\u4e0b\u7b49\u8fc7\u8fdc\u4f20\u9001\u515c\u5e95\u4e5f\u4e0d\u5f80\u91cc\u8d70\uff1b\u00a7e\u5df2\u8eab\u5904\u9669\u5883\u00a7r\uff08\u7ad9\u5728\u5ca9\u6d46\u9762/\u706b/\u8425\u706b/\u5ca9\u6d46\u5757\u4e0a\uff09\u65f6\u6bcf 0.5 \u79d2\u5de1\u68c0\u81ea\u52a8\u632a\u5230\u6700\u8fd1\u5b89\u5168\u683c+\u5e94\u6025\u706d\u706b\uff08\u4e0d\u7b49\u8840\u91cf\u8dcc\u7834\u81ea\u4fdd\u7ebf\uff1b\u5750\u59ff/\u9a91\u4e58/\u81ea\u4fdd\u4e2d\u8ba9\u4f4d\uff09\u3002\u5371\u9669\u8868\u53ef\u5728\u300c\u6218\u6597\u4e0e\u81ea\u4fdd \u2192 \u5371\u9669\u65b9\u5757 \u2192 \u5371\u9669\u65b9\u5757\u540d\u5355\u300d\u589e\u5220\uff08\u9ed8\u8ba4\u542b\u8425\u706b/\u7075\u9b42\u8425\u706b\u2014\u2014\u5b83\u4eec\u6bcf\u523b\u70eb\u5979\u5374\u4e0d\u4f1a\u70b9\u71c3\uff0c\u65e7\u8868\u4e0b\u5979\u53ea\u4f1a\u7ad9\u5728\u706b\u4e0a\u767d\u6328\uff09\uff1b\u300cdangerAvoid\u300d\u53ea\u7ba1\u5bfb\u8def\u7ed5\u5f00\u3001\u300cdangerEscape\u300d\u53ea\u7ba1\u8131\u56f0\u6551\u4eba\uff0c\u4e24\u8005\u72ec\u7acb\u4e92\u4e0d\u5f71\u54cd\uff0c\u53e6\u6709\u4e00\u6761\u300c\u7ad9\u5728\u4f24\u5bb3\u65b9\u5757\u4e0a\u300d\u7684\u81ea\u4fdd\u515c\u5e95\u8131\u79bb\u4e0d\u53d7\u8fd9\u4e24\u4e2a\u5f00\u5173\u9650\u5236\uff1b",
-                "\u00b7 \u00a7e\u98de\u884c\u5371\u9669\u73af\u5883\u907f\u8ba9\u00a7r\uff1a\u4e0a\u9762\u90a3\u5f20\u5371\u9669\u8868**\u98de\u884c\u65f6\u4e5f\u7ba1**\u2014\u2014\u626b\u5e1a\u6a21\u5f0f\u81ea\u5df1\u9a7e\u626b\u5e1a\u3001\u7a7a\u88ad/\u98de\u884c\u8ddf\u968f\u5728\u6ed1\u7fd4\u7684\u00a7e\u9014\u4e2d\u00a7r\uff0c\u4f1a\u628a\u5ca9\u6d46/\u706b/\u5ca9\u6d46\u5757\u8fd9\u4e9b\u00a7e\u5f53\u6210\u4e0d\u53ef\u9760\u8fd1\u7684\u5730\u533a\u00a7r\uff1a\u822a\u6bb5\u8981\u7a7f\u8fdb\u5371\u9669\u683c\u5c31\u4fa7\u5411\u7ed5\u5f00\uff08\u7ed5\u4e0d\u5f00\u5c31\u62ac\u5347\u722c\u8fc7\u53bb\uff09\uff0c\u00a7e\u6ed1\u7fd4\u4e0b\u6c89\u5230\u5371\u9669\u683c\u4e0a\u65b9\u65f6\u628a\u7ad6\u76f4\u901f\u5ea6\u62ac\u5e73\u3001\u4e0d\u5f80\u683c\u91cc\u6c89\u00a7r\u3002\u00a7e\u653b\u51fb\u52a8\u4f5c\u4e0d\u53d7\u5f71\u54cd\u00a7r\uff08\u7a7a\u88ad\u7684\u6536\u7fc5\u4fef\u51b2/\u4fef\u51b2\u52a9\u63a8\u7167\u65e7\u671d\u76ee\u6807\u51b2\uff09\u3002\u5f00\u5173 = \u914d\u7f6e\u9762\u677f\u6218\u6597\u300cflightDangerAvoid\u300d\uff08\u9ed8\u8ba4\u5f00\uff0c\u5371\u9669\u8868\u4ecd\u662f misc\u300cdangerBlocks\u300d\u90a3\u4e00\u4efd\uff09\uff1b",
-                "\u00b7 \u00a7e\u5ca9\u6d46\u5224\u5b9a\u6309\u300c\u5979\u7684\u8eab\u4f4d\u300d\u7b97\u00a7r\uff1a\u5979\u5bbd 0.6 \u683c\u3001\u00a7e\u6a2a\u8de8\u4e24\u5217\u00a7r\uff0c\u6240\u4ee5\u5224\u5b9a\u4e0d\u662f\u300c\u811a\u5e95\u90a3\u4e00\u683c\u300d\uff0c\u800c\u662f\u00a7e\u5979\u7684\u6574\u4e2a\u8eab\u4f4d\u00a7r\uff08\u6c34\u5e73 \u00b11 \u683c\u5168\u626b\uff0c\u7ad6\u76f4\u4ecd\u53ea\u7b97\u7ad9\u7acb\u683c/\u811a\u4e0b/\u5934\u9876\u707c\u70e7\u578b\uff09\u2014\u2014\u300c\u5979\u8fd9\u4e00\u683c\u5b89\u5168\u3001\u9694\u58c1\u5c31\u662f\u5ca9\u6d46\u300d\u4e5f\u4f1a\u88ab\u5f53\u6210\u5371\u9669\uff0c\u5979\u4e0d\u4f1a\u64e6\u7740\u5ca9\u6d46\u8fb9\u7f18\u8d70/\u98de\u3002\u914d\u5957\uff1a\u2460 \u00a7e\u5730\u9762\u300c\u9644\u8fd1\u5ca9\u6d46\u907f\u8ba9\u300d\u63a2\u7684\u662f\u811a\u5e95\u90a3\u4e00\u5c42\u00a7r\uff0c\u8d34\u7740\u5730\u9762\u8d70\u8fdb\u6d45\u5ca9\u6d46\u4e5f\u4f1a\u88ab\u907f\u5f00\uff1b\u2461 \u00a7e\u626b\u5e1a\u300c\u5f85\u547d\u964d\u56de\u5730\u9762\u300d\u8ba4\u5ca9\u6d46\u00a7r\u2014\u2014\u843d\u70b9\u82e5\u662f\u5371\u9669\u683c\u5c31\u7167\u65e7\u60ac\u505c\u3001\u7edd\u4e0d\u843d\u8fc7\u53bb\uff1b\u2462 \u98de\u884c\u8ddf\u968f\u4e5f\u6709\u300c\u4e0d\u5f80\u683c\u91cc\u6c89\u300d\u3002",
-                "\u00b7 \u00a7e\u5ba2\u6237\u7aef\u53ef\u89c1\u6027\u81ea\u6108\u00a7r\uff1a\u5979\u00a7e\u6d3b\u7740\u00a7r\u5374\u300c\u79bb\u5f00\u4e16\u754c\u300d\u00a7r\uff08\u65e5\u5fd7\u91cc\u90a3\u884c `\u79bb\u573a \u2026 reason=null`\uff09\u4e0d\u662f\u6b7b\u4ea1\u2014\u2014\u90a3\u662f\u00a7e\u5979\u7684\u533a\u5757\u6389\u51fa\u5b9e\u4f53ticking / \u88ab\u5378\u8f7d\u00a7r\uff08\u8fd9\u65f6\u5ba2\u6237\u7aef\u4f1a\u6536\u5230\u4e00\u6b21\u5220\u5305\uff0c\u8868\u73b0\u662f\u00a7e\u300c\u590d\u6d3b\u4e4b\u540e\u5efa\u6a21\u88ab\u5361\u6389\u3001\u53d8\u6210\u5e7d\u7075\u72b6\u6001\u300d\u00a7r\uff09\u3002\u4e09\u9053\u95e8\u4e00\u8d77\u515c\uff1a\u2460 \u5979\u00a7e\u6362\u533a\u5757\u00a7r\u65f6\u4fdd\u8f7d\u7968**\u5f53\u573a\u8ddf\u8fc7\u53bb**\uff08\u4e0d\u4f1a\u51fa\u73b0\u300c\u6ca1\u7968\u7684\u5973\u4ec6\u300d\uff1a\u670d\u52a1\u7aef\u4e0d tick\u3001\u539f\u7248\u4e5f\u4e0d\u540c\u6b65\uff09\uff1b\u2461 \u590d\u6d3b/\u53ec\u56de\u843d\u5230\u522b\u5904\u65f6**\u7acb\u523b\u8865\u7968**\uff1b\u2462 \u6bcf tick \u5de1\u68c0\u4e00\u6b21\u00a7e\u300c\u4e3b\u4eba\u5ba2\u6237\u7aef\u8ba4\u4e0d\u8ba4\u5f97\u5979\u300d\u00a7r\u2014\u2014\u8ba4\u4e0d\u5f97\u5c31\u00a7e\u5f53\u573a\u91cd\u5efa\u00a7r\uff08\u5979\u754c\u9762\u5f00\u7740\u65f6\u987a\u5ef6\uff09\u3002\u65e5\u5fd7\u641c\u00a7e\u300c\u53ef\u89c1\u6027\u81ea\u6108\u300d\u00a7r\uff08`\u91cd\u540c\u6b65` \u7c7b\uff09\u5373\u53ef\u770b\u5230\u8865\u4e86\u51e0\u6b21\u3001\u54ea\u4e00\u6b21\uff1b",
-                "· \u00a7e感知快照\u00a7r：定期对比周围环境快照，发现变化就播报/记录；",
-                "· \u00a7e工作笔记\u00a7r：跨对话保存的任务状态（在挖什么/缺什么），续上话题用的；",
-                "\u00b7 \u00a7e\u7a7a\u88ad\u8f70\u70b8\u00a7r\uff1a\u7a7a\u88ad\u91cc\u90a3\u6761\u300c\u987a\u624b\u653e\u70b8\u5f39\u300d\u7684\u9644\u52a0\u94fe\u8def\u2014\u2014\u672b\u5730\u6c34\u6676 / \u91cd\u751f\u951a / \u5e8a / \u6295\u63b7 TNT\uff0c\u4e09\u6bb5\u5404\u8d70\u5404\u7684\u3001\u6709\u6750\u6599\u5c31\u653e\uff0c\u4e0d\u5360\u7528\u5979\u7684\u884c\u52a8\u4e0e\u98de\u884c\uff1b",
-                "\u00b7 \u00a7e\u7c89\u8272\u706b\u7130\u00a7r\uff1a\u5979\u90a3\u4e00\u70b8\u70b9\u7740\u7684\u706b\uff08\u7c89\u8272\u8d34\u56fe\uff09\u2014\u2014\u4e0d\u8513\u5ef6\u3001\u4f1a\u81ea\u5df1\u706d\uff0c\u5e76\u4e14\u00a7e\u73a9\u5bb6\u4e0e\u5973\u4ec6\u90fd\u4e0d\u88ab\u5b83\u70b9\u71c3\u3001\u4e0d\u6389\u8840\u00a7r\uff1b",
-                "\u00b7 \u00a7e\u98de\u884c\u8ddf\u968f\u00a7r\uff08\u9ed8\u8ba4\u5173\uff09\uff1a\u4f60\u98de\u8fdc\u4e86\uff0c\u5979\u80cc\u4e0a\u9798\u7fc5\u8ffd\u8fc7\u6765\uff08\u8d77\u624b 25 \u683c / \u6536\u624b 5 \u683c\u4e24\u4e2a\u7403\uff09\uff1b",
-                "\u00b7 \u00a7e\u538b\u7f29\u76d2\u00a7r\uff1a5 \u683c \u00d7 \u6bcf\u683c 114514 \u7684\u6536\u7eb3\u9053\u5177\uff0c\u653e\u8fdb\u5979\u80cc\u5305\u5c31\u7b97\u00a7e\u5979\u80cc\u5305\u7684\u5ef6\u4f38\u00a7r\u2014\u2014\u5979\u4f1a\u4ece\u91cc\u9762\u62ff\u6750\u6599\u3001\u4e5f\u80fd\u5403\u91cc\u9762\u7684\u98df\u7269\uff1b",
-                "\u00b7 \u00a7e\u6218\u6597\u6a21\u5f0f\u5206\u7c7b\u8868\u00a7r\uff1a\u9010\u4efb\u52a1\u70b9\u540d\u300c\u8fd1\u6218 / \u8fdc\u7a0b / \u4e0d\u53c2\u4e0e\u300d\uff0c\u51b3\u5b9a\u5979\u53c2\u6218\u65f6\u9009\u4ec0\u4e48\u3001\u4ee5\u53ca\u54ea\u4e9b\u6a21\u5f0f\u4e0d\u53c2\u4e0e\u81ea\u4e3b\u5207\u6362\uff1b",
-                "\u00b7 \u00a7e\u6563\u6b65\u901f\u5ea6\u500d\u7387\u00a7r\uff1a\u5979\u7a7a\u95f2\u6563\u6b65\u7684\u5feb\u6162\uff08\u76f8\u5bf9\u5979\u81ea\u5df1\u7684\u79fb\u52a8\u901f\u5ea6\u5c5e\u6027\uff09\uff0c\u9ed8\u8ba4 0.4 \u2248 3.3 \u683c/\u79d2\uff08\u73a9\u5bb6\u8d70\u8def 4.32\u3001\u8dd1\u6b65 5.61\uff09\u3002",
-                "\u00b7 \u00a7e\u5e72\u6d3b\u65f6\u79fb\u901f\u538b\u56de 0 \u597d\u611f\u6863\u00a7r\uff08\u9ed8\u8ba4\u5f00\uff09\uff1a\u5de5\u4f5c/\u751f\u4ea7\u4efb\u52a1\u7684\u5973\u4ec6\uff0c\u4e0d\u8bba\u597d\u611f\u5ea6\u591a\u9ad8\uff0c\u79fb\u52a8\u901f\u5ea6\u90fd\u6309\u300c0 \u597d\u611f\u6863\u300d\u8d70\uff08\u94b3\u5230\u57fa\u7840\u79fb\u901f 0.7\uff09\uff1b\u00a7e\u6218\u6597\u4efb\u52a1 / \u7a7a\u95f2 / \u8ddf\u968f / \u9a91\u4e58\u4e00\u5f8b\u4fdd\u6301\u539f\u6837\u00a7r\u3002\u6ce8\uff1aTLM \u672c\u8eab\u5176\u5b9e\u00a7e\u6ca1\u6709\u00a7r\u300c\u597d\u611f\u5ea6\u8d8a\u9ad8\u8d8a\u5feb\u300d\u8fd9\u6761\u52a0\u6210\uff08\u597d\u611f\u5ea6\u53ea\u52a0\u8840\u548c\u653b\u51fb\uff09\u2014\u2014\u771f\u6b63\u8ba9\u9ad8\u597d\u611f\u5973\u4ec6\u663e\u5feb\u7684\u662f\u00a7e\u9970\u54c1\u680f\u66f4\u591a\u00a7r\uff080~1 \u7ea7 10 \u683c / 2 \u7ea7 20 \u683c / 3 \u7ea7 30 \u683c\uff0c\u80fd\u6302\u66f4\u591a\u52a0\u901f\u9970\u54c1\uff09\u3001\u300c\u6563\u6b65\u901f\u5ea6\u500d\u7387\u300d\u3001\u4ee5\u53ca\u672c\u6a21\u7ec4\u53d6\u6d88\u7684\u539f\u7248\u8d70\u8def\u5239\u8f66\u7a97\u53e3\u3002\u5f00\u5173\u5728\u300c\u79fb\u52a8\u4e0e\u884c\u4e3a \u2192 \u79fb\u52a8\u4e0e\u8ddf\u968f\u300d\u9875\u3002",
-                "\u00b7 \u00a7e\u5e72\u6d3b\u65f6\u4e0d\u8bb8\u51fa\u5708\u00a7r\uff08\u9ed8\u8ba4\u5f00\uff09\uff1a\u70e7\u5236/\u917f\u9020/\u5bb0\u6740\u5728\u300c\u6ca1\u6d3b\u53ef\u5e72\u300d\u65f6\u7684\u95f2\u901b\uff0c\u53d6\u70b9\u951a\u70b9\u7528\u00a7e\u56fa\u5b9a\u5706\u5fc3\u00a7r\uff08home = \u4f60\u753b\u7684\u5708\u5fc3 / \u8ddf\u968f = \u4f60\u8eab\u8fb9\uff09\uff0c\u4e14\u00a7e\u8ddf\u968f\u6a21\u5f0f\u4e5f\u5fc5\u987b\u843d\u5728\u5708\u5185\u00a7r\u2014\u2014\u4e0d\u4f1a\u968f\u5979\u5f53\u524d\u4f4d\u7f6e\u6bcf 2 \u79d2\u53d6\u4e00\u70b9\u800c\u968f\u673a\u6e38\u8d70\u6f02\u51fa\u53bb\u3002\u534a\u5f84 = \u300c\u6392\u73ed\u6d3b\u52a8\u534a\u5f84\u300d\u3002",
-                "\u00b7 \u00a7e\u7f57\u76d8\u5708\u4f18\u5148\u00a7r\uff08\u9ed8\u8ba4\u5f00\uff09\uff1a\u4f60\u7528\u00a7e\u6cb3\u7ae5\u7684\u7f57\u76d8\u00a7r / \u00a7e\u6f5c\u884c+\u4e2d\u952e\u00a7r\u753b\u7684\u5708\uff0c\u672c\u6a21\u7ec4\u4f1a\u8bb0\u4e00\u4e2a\u300c\u73a9\u5bb6\u5708\u300d\u6807\u8bb0\u2014\u2014\u6b64\u540e\u00a7e\u6392\u73ed\u8868 / \u5efa\u9020\u7684\u300c\u62ff\u5f53\u524d\u4f4d\u7f6e\u81ea\u52a8\u951a\u5b9a\u300d\u4e00\u5f8b\u8ba9\u4f4d\u00a7r\uff0c\u4e0d\u518d\u9876\u6389\u4f60\u753b\u7684\u5708\uff1b\u5e76\u4e14\u00a7e\u5373\u4f7f\u5979\u6ca1\u5f00 home\uff08\u8ddf\u968f\u4e2d\uff09\uff0c\u5e72\u6d3b\uff08\u6316\u77ff/\u4f10\u6728/\u5bb0\u6740/\u519c\u6d3b\uff09\u7684\u9009\u70b9\u4e5f\u88ab\u94b3\u5728\u8fd9\u4e2a\u5708\u91cc\u00a7r\u3002\u7f57\u76d8\u4e0e\u4e2d\u952e\u4e4b\u95f4\u4ecd\u662f\u300c\u8c01\u540e\u5199\u8c01\u751f\u6548\u300d\u3002",
-                "\u00b7 \u00a7e\u975e\u6218\u6597\u79fb\u901f\u4e0a\u9650\u00a7r\uff08\u9ed8\u8ba4\u5f00\uff09\uff1a\u975e\u6218\u6597\u65f6\uff0c\u628a\u5973\u4ec6\u00a7e\u9760\u817f\u8d70\u00a7r\u7684\u901f\u5ea6\u786c\u94b3\u5230\u4e0d\u8d85\u8fc7\u300c\u4e0a\u9650\u300d\u90a3\u4e00\u9879\uff08\u9ed8\u8ba4 0.56 \u2248 \u4f60\u5954\u8dd1\u7684 5.6 \u683c/\u79d2\uff09\u3002\u00a7e\u5979\u5bfb\u8def\u627e\u76ee\u6807\u8d70\u7684\u5c31\u662f\u8fd9\u6761\u94fe\u8def\u00a7r\uff1a\u5927\u8111\u5199 WALK_TARGET \u2192 \u539f\u7248\u628a\u5b83\u53d8\u6210\u8def\u5f84 \u2192 TLM \u7684 MaidMoveControl \u6bcf tick \u7b97\u51fa\u300c\u500d\u7387 \u00d7 \u5979\u7684\u79fb\u901f\u5c5e\u6027\u300d\u2192 \u8c03 Mob.setSpeed\uff0c\u800c travel \u6b63\u662f\u7528\u8fd9\u4e2a\u6570\u7b97\u4f4d\u79fb\u2014\u2014\u00a7e\u6240\u4ee5\u94b3\u5728\u8fd9\u91cc\uff0c\u5bfc\u822a\u8d70\u8def / \u76f4\u8fde moveTo / \u95f2\u901b / \u519c\u6d3b / \u8ddf\u968f / \u6316\u77ff\u8d76\u8def\uff0c\u4e00\u6761\u90fd\u7ed5\u4e0d\u5f00\u00a7r\u3002TLM \u7ed9\u5979\u7684\u9ed8\u8ba4\u500d\u7387\uff08\u8ddf\u968f\u8d70\u4f4d 1.0\u3001\u672c\u6a21\u7ec4\u6316\u77ff\u8d76\u8def 0.9\uff09\u7b97\u4e0b\u6765\u662f 8~14 \u683c/\u79d2\uff0c\u672c\u6765\u5c31\u6bd4\u4f60\u5954\u8dd1\uff085.61\uff09\u8fd8\u5feb\u3002\u00a7e\u6218\u6597\uff08\u542b\u7b2c\u4e09\u65b9\u653b\u51fb\u4efb\u52a1\uff09/ \u81ea\u4fdd\u9003\u8dd1 / \u98de\u884c / \u626b\u5e1a / \u5750\u7740 / \u4e58\u5ba2 / \u7761\u89c9\u4e00\u5f8b\u4e0d\u94b3\u00a7r\u3002\u6570\u503c\u5728\u300c\u79fb\u52a8\u4e0e\u884c\u4e3a \u2192 \u79fb\u52a8\u4e0e\u8ddf\u968f\u300d\u9875\u53ef\u8c03\uff080.05~1.5\uff1b\u586b\u5927=\u653e\u5bbd\uff0c\u586b\u5c0f=\u66f4\u8001\u5b9e\uff0c0.2 \u4ee5\u4e0b\u51e0\u4e4e\u4e0d\u8d70\uff09\u3002",
-                "\u00b7 \u00a7e\u95f2\u901b / \u6f2b\u6e38\u4e5f\u8d70\u300c\u6563\u6b65\u901f\u5ea6\u500d\u7387\u300d\u00a7r\uff1a\u5e72\u6d3b\u300c\u6ca1\u6d3b\u53ef\u5e72\u300d\u65f6\u7684\u95f2\u901b\u3001\u4ee5\u53ca home \u6f2b\u6e38 / \u5de1\u903b\uff0c\u901f\u5ea6\u7edf\u4e00\u8bfb\u300c\u6563\u6b65\u901f\u5ea6\u500d\u7387\u300d\uff08\u9ed8\u8ba4 0.4 \u2248 3.3 \u683c/\u79d2\uff09\u2014\u2014\u4e00\u4e2a\u65cb\u94ae\u540c\u65f6\u7ba1\u7a7a\u95f2\u6563\u6b65 / \u5e72\u6d3b\u95f2\u901b / home \u6f2b\u6e38\u3002\u60f3\u66f4\u6162\uff080.3\uff09\u6216\u66f4\u5feb\uff080.6+\uff09\u6539\u8fd9\u4e00\u4e2a\u503c\u5373\u53ef\u3002");
+                "手册里反复出现的词，都在这里一次讲清：",
+                "· \u00a7eTLM\u00a7r：车万女仆 Touhou Little Maid，本模组的母体；",
+                "· \u00a7eLLM / AI\u00a7r：大语言模型（DeepSeek / ChatGPT 这类），女仆对话的「大脑」；"
+                        + "· \u00a7etoken\u00a7r：AI 计费 / 长度单位，对话与记忆都消耗它；",
+                "· \u00a7e气泡\u00a7r：女仆头顶显示的一句话；\u00a7eTTS\u00a7r：文字转语音，说话出声；",
+                "· \u00a7e好感\u00a7r：TLM 的好感度，影响她说话的亲疏；\u00a7eCD\u00a7r：冷却时间；",
+                "· \u00a7e蓝图\u00a7r：建筑图纸，女仆照着搭；\u00a7e区块\u00a7r：建造的施工区域（金框 / 红框）；",
+                "· \u00a7e投影\u00a7r：区块预览里的半透明方块轮廓——只有方框看不出朝向，投影连门开哪边都看得见；",
+                "· \u00a7e工头\u00a7r：一个建造区块的队长，该区块的播报统一由她说；",
+                "· \u00a7e锚点\u00a7r：挖矿等任务围绕它找目标的中心点；",
+                "· \u00a7e效果\u00a7r：药水给的状态（抗火 / 水肺 / 迅捷……）；"
+                        + "\u00a7e情境药水\u00a7r：只在对应情境使用（着火→抗火、溺水→水肺）；",
+                "· \u00a7e治疗链\u00a7r：主人低血时她按「治疗药水→金苹果→再生药水→食物」依次尝试；",
+                "· \u00a7e材料等价族\u00a7r：蓝图要橡木木板时任意木板都算数的规则；",
+                "· \u00a7e落地水 / 搭高 / 珍珠逃生\u00a7r：三种保命动作——坠落放水 / 垫方块上高处 / 扔末影珍珠瞬移；",
+                "· \u00a7e受困救援\u00a7r：被困基岩顶或虚空时自动安全传回主人身边；",
+                "· \u00a7e危险方块避让\u00a7r：寻路自动绕开岩浆 / 火 / 仙人掌等危险，已身处险境会自动挪开；",
+                "· \u00a7e飞行跟随\u00a7r（默认关）：你飞远了，她背上鞘翅追过来；",
+                "· \u00a7e压缩盒\u00a7r：大容量收纳道具，放进她背包就是\u00a7e她背包的延伸\u00a7r；",
+                "· \u00a7e散步速度倍率\u00a7r：她空闲散步的快慢（相对她自己的移速），默认 0.4 ≈ 3.3 格/秒。");
     }
 
     static GuideContent.Chapter potionRules() {
         return new GuideContent.Chapter("细则：药水与投喂规则",
-                "这套规则是反复打磨出来的，直接决定了女仆会不会浪费药水：",
-                "\u00a7e① 药水形态\u00a7r：同一瓶药水，饮用效果最长，喷溅只有一半、滞留只有四分之一"
-                        + "（滞留是 30 秒云）。所以女仆自己喝药优先\u00a7e饮用型\u00a7r，只有没有饮用型才用喷溅/滞留兜底；"
-                        + "投喂主人时喷溅比滞留好（扔给她她能接住喝）。",
-                "\u00a7e② 同种药水 CD\u00a7r：CD = 该药水持续时间。同一种药水（按效果算，long_/strong_ 前缀和"
-                        + "喷溅/滞留形态都不算区别）CD 内不能重复喝/投，但\u00a7e其他种类照常\u00a7r；"
-                        + "瞬间治疗例外——短 CD 可以连喝/连投；投喂的 3 秒只是\u00a7e投掷动作间隔\u00a7r。",
-                "\u00a7e\u2462 \u60c5\u5883\u836f\u6c34\u00a7r\uff1a\u6297\u706b/\u6c34\u80ba/\u591c\u89c6/\u8df3\u8dc3\u5f52\u300c\u60c5\u5883\u300d\u2014\u2014\u53ea\u5728\u5bf9\u5e94\u60c5\u5883\u559d/\u6295\uff08\u7740\u706b\u2192\u6297\u706b\u3001\u6eba\u6c34\u2192\u6c34\u80ba\uff09\uff0c\u5e73\u65f6\u7edd\u4e0d\u4e71\u559d\u3002\u6295\u5582\u7aef\u7684\u6b63\u95e8\u662f\u00a7e\u6548\u679c\u5224\u5b9a\u00a7r\uff1a\u4e3b\u4eba\u8eab\u4e0a\u53ea\u8981\u6709\u8fd9\u79cd\u6548\u679c\uff08\u4efb\u4f55\u53d8\u4f53\uff09\uff0c\u4efb\u4f55\u53d8\u4f53\u90fd\u4e0d\u518d\u6295\uff1b\u6548\u679c\u6d88\u5931\u7acb\u5373\u8865\u3002",
-                "\u00a7e④ 治疗链只看血量\u00a7r：主人血量低于阈值就治疗（扔治疗→金苹果→扔再生→塞药水→喂食物），"
-                        + "不受身上抗火/水肺效果残留影响；\u00a7e环境优先\u00a7r靠分支顺序保证——着火先投抗火、"
-                        + "溺水先投水肺，处理成功才轮到治疗链。",
-                "\u00a7e\u2464 \u98df\u7269\u76f4\u63a5\u5582\u00a7r\uff1a\u719f\u98df/\u8702\u871c\u74f6\u4e0d\u585e\u4e3b\u4eba\u80cc\u5305\uff0c\u800c\u662f\u00a7e\u9971\u98df\u5ea6\u76f4\u63a5\u52a0\u00a7r\uff08\u539f\u7248\u5403\u98df\u7269\u8bed\u4e49\uff09\uff0c\u6709\u5403/\u559d\u97f3\u6548\u548c\u7cfb\u7edf\u6d88\u606f\uff1b\u8702\u871c\u74f6\u662f\u6295\u5582\u98df\u7269\u4e4b\u4e00\uff08\u997f\u4f1a\u5582\u3001\u4e2d\u6bd2\u65f6\u4f18\u5148\u89e3\u6bd2\uff09\uff0c\u5582\u8702\u871c\u8fd8\u8fd4\u8fd8\u73bb\u7483\u74f6\uff1b\u5973\u4ec6\u00a7e\u624b\u6301\u00a7r\u7684\u98df\u7269\u540c\u6837\u53c2\u4e0e\u9009\u4f18\u3002",
-                "\u00a7e⑥ 负面效果\u00a7r：中毒/凋零/虚弱等会投牛奶（清全部效果；主人身上\u00a7e有增益效果\u00a7r时"
-                        + "不喂牛奶——会把增益一起清掉，此时只喂蜂蜜解中毒）。",
-                "\u00a7e⑦ 自己喝还是喂别人\u00a7r：她自己喝药只看\u00a7e自己的处境\u00a7r——12 格内有敌人时喝增益，"
-                        + "血量低于 50% 时喝治疗/吃金苹果，濒死才连同逃跑/搭高一起做全套自保；喂别人只看\u00a7e对方\u00a7r——"
-                        + "主人在 16 格内且着火/溺水/有负面效果/血量低于「治疗触发血量」才出手。两边同时满足时"
-                        + "\u00a7e自己优先\u00a7r（自保行为 250 高于投喂 190）；药水是同一份背包，只有一瓶时会被她自己先用掉。",
-                "\u00a7e⑧ 飞行 / 空袭中也喝\u00a7r：空中不做搭高/逃跑/传送，但治疗药水、金苹果与增益药水照喝——"
-                        + "血低于 50% 先补血，有攻击目标时按药水 CD 喝增益；不会再出现「血快没了还硬飞」。",
-                "排查浪费的日志关键词：latest.log 搜 aid-owner throw（投掷）、aid feed（投喂：含阈值/饱食度/喂了什么）、"
-                        + "self drink（自喝）。");
+                "这套规则决定女仆怎么用药水才不浪费：",
+                "· \u00a7e药水形态\u00a7r：饮用型效果最长，喷溅减半、滞留只剩四分之一——她自己喝优先饮用型，"
+                        + "投喂你时喷溅优先（扔过去你能接住喝）；",
+                "· \u00a7e同种药水有 CD\u00a7r：CD = 药水持续时间，CD 内不重复喝 / 投同一种，其它种类照常；",
+                "· \u00a7e情境药水\u00a7r：抗火 / 水肺等只在对应情境使用（着火才喝抗火），平时绝不乱喝；",
+                "· \u00a7e治疗链只看血量\u00a7r：血低就治疗，先处理着火 / 溺水这类紧急情况；",
+                "· \u00a7e食物直接喂\u00a7r：熟食 / 蜂蜜瓶直接加饱食度（不塞背包），有吃喝音效；"
+                        + "蜂蜜瓶中毒时优先喂；",
+                "· \u00a7e负面效果\u00a7r：中毒 / 凋零等投牛奶清除；你身上有增益时不喂牛奶（会连增益一起清），改喂蜂蜜；",
+                "· \u00a7e飞行中也照喝\u00a7r：空袭时她照样补血、喝增益药水，不会「血快没了还硬飞」。",
+                "排查：运行日志搜 aid-owner（投喂主人）、self drink（自喝）可看她每一次用药的判断。");
     }
 
     static GuideContent.Chapter buildInternals() {
         return new GuideContent.Chapter("细则：建造运作逻辑",
-                "\u5efa\u9020\u4e0d\u662f\u77ac\u95f4\u751f\u6210\u2014\u2014\u9ed8\u8ba4\u6863\u4f4d\u662f\u00a7e\u00d71\u00a7r\uff0c\u60f3\u5feb\u53ef\u5728\u624b\u518c\u901f\u5ea6\u6309\u94ae\u6216\u914d\u7f6e\u91cc\u5207 \u00a7e\u00d71.5 / \u00d73 / \u6781\u901f\u00a7r\uff08\u6781\u901f = \u653e\u7f6e\u51b7\u5374\u5f52\u96f6\uff0c\u6bcf tick \u4e00\u5757\u3001\u5403\u6ee1\u670d\u52a1\u5668\u4e0a\u9650\uff0c\u6027\u80fd\u98ce\u9669\u81ea\u8d1f\uff09\uff1a",
-                "· \u00a7e材料判定\u00a7r：两种下达方式行为不同——\u00a7e对话下达\u00a7r（LLM）：材料不足时\u00a7e不开始建造\u00a7r，"
-                        + "报告缺失清单并问你「先建一部分还是放弃」，同意后只建材料够的前缀；"
-                        + "\u00a7e手册下达\u00a7r：女仆缺料时自动从你背包取料（无需重新下达），你也没有则气泡提示缺什么，"
-                        + "缺的部分延后，补料后自动续建；",
-                "· \u00a7e材料等价族\u00a7r：木板/原木/石砖/圆石/玻璃/门等按族互通，放置时用实际消耗的方块；",
-                "· \u00a7e被占位跳过\u00a7r：目标位置已有方块（别人放的）自动跳过，绝不破坏玩家建筑；",
-                "· \u00a7e进度持久化\u00a7r：计划随女仆存档，重进游戏继续建；重启后从档案恢复建造状态（缓存防重复解析）；",
-                "· \u00a7e自适应速度\u00a7r：每 tick 测服务器 TPS，卡了就自动降速；多只女仆一起建会翻倍加速"
-                        + "（全局放置配额兜底防拖垮服务器）；",
-                "· \u00a7e强制加载\u00a7r：超大蓝图按面积折算区块数，超过上限只建玩家附近（防止内存爆炸）；",
-                "· \u00a7e建筑质量\u00a7r：蓝图支持精确方块朝向（台阶/楼梯/门/床）和方块实体（箱子内容/告示牌文字）；",
-                "· \u00a7e汇报归工头\u00a7r：建造完成、缺料暂停、卡住播报等所有状态消息，统一由该区块的工头发出"
-                        + "（一区块一工头，可在「区块名单」页手动指定）。");
+                "建造不是瞬间生成——默认 ×1 速度，手册速度按钮或配置里可切 ×1.5 / ×3 / 极速（极速性能风险自负）：",
+                "· \u00a7e材料判定\u00a7r：对话下达（AI）时材料不足会先问你「先建一部分还是放弃」；"
+                        + "手册下达时她会自动从你背包和工地区块的箱子里取料；",
+                "· \u00a7e材料等价族\u00a7r：木板 / 原木 / 石砖 / 圆石 / 玻璃 / 门等按族互通；",
+                "· \u00a7e不破坏玩家建筑\u00a7r：目标位置已有方块就自动跳过；",
+                "· \u00a7e进度持久化\u00a7r：建造计划随女仆存档保存，重进游戏接着建；",
+                "· \u00a7e自适应速度\u00a7r：服务器卡顿自动降速；多女仆一起建会翻倍加速（有全局配额兜底）；",
+                "· \u00a7e强制加载\u00a7r：超大蓝图只强制加载必要区块，超过上限只建你附近的部分；",
+                "· \u00a7e汇报归工头\u00a7r：缺料、完成等消息统一由该区块的工头女仆发出。");
     }
 
     static GuideContent.Chapter costRules() {
         return new GuideContent.Chapter("细则：记忆与对话成本控制",
-                "LLM 是花钱的，这套系统的每一条主动行为都有\u00a7e配额\u00a7r保护：",
-                "· \u00a7e主动对话\u00a7r：每只女仆每天最多 12 次主动发言（可调），两次间隔 ≥ 冷却分钟数；"
-                        + "所有女仆共享 API 日配额（默认 40 次调用，0 = 不限）；",
-                "· \u00a7e自主决策\u00a7r：一天最多 10 次（可调 0~50），决策冷却默认 10 分钟防反复横跳；"
-                        + "空闲 + 白天 + 主人在 16 格内才触发，战斗中冻结；",
-                "· \u00a7e记忆提取\u00a7r：攒满阈值条数（默认 10）才触发一次 LLM 提取；每条消息截断、"
-                        + "投影字符上限、注入条数都控 token；",
-                "· \u00a7e感知\u00a7r：纯规则零 token（快照对比），播报有限频；",
-                "· \u00a7e记忆衰减\u00a7r：重要度低的记忆定期淡出，防无限膨胀；维护周期定期固化重要记忆；",
-                "· \u00a7e防抖写盘\u00a7r：多女仆时记忆批量落盘，防服务端卡顿（关掉=每次立即写盘更可靠）；",
-                "\u00b7 \u00a7e\u56de\u590d\u53cd\u9988\u00a7r\uff1a\u88ab\u5426\u5b9a\u7684\u4e3b\u52a8\u8bdd\u9898\u51b7\u5374 N \u5206\u949f\u4e0d\u518d\u63d0\uff0c\u51cf\u5c11\u65e0\u6548\u5bf9\u8bdd\u6d6a\u8d39\u3002",
+                "AI 是花钱的，每一条主动行为都有\u00a7e配额\u00a7r保护：",
+                "· \u00a7e主动对话\u00a7r：每只女仆每天最多 12 次，两次间隔有冷却；全部女仆共享 API 日配额（默认 40 次）；",
+                "· \u00a7e自主决策\u00a7r：一天最多 10 次、冷却 10 分钟，只在空闲 + 白天 + 你在身边时触发；",
+                "· \u00a7e记忆提取\u00a7r：攒满一批才调用一次，消息截断与注入条数都控费用；",
+                "· \u00a7e感知\u00a7r：纯规则，不花 AI 费用；播报有限频；",
+                "· \u00a7e记忆衰减\u00a7r：不重要的事定期淡出，防无限膨胀。",
                 "一句话：想省钱就把「对话提示」「AI 记忆」里的上限调小；想热闹就调大。");
     }
 }

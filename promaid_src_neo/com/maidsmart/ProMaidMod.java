@@ -50,9 +50,10 @@ public class ProMaidMod {
             () -> new com.maidsmart.build.IndexStoneItem(new Item.Properties()));
 
     /** 压缩盒（v1.2.2 实测六百一十六）：5 格 × 每格 114514，放进女仆背包 = 背包延伸
-     *  （网络层经 @EventBusSubscriber 自注册，与药剂手册同款） */
+     *  （网络层经 @EventBusSubscriber 自注册，与药剂手册同款）
+     *  【R1146】不可堆叠：一叠多个盒子共用同一份 NBT，拆 stack 会把内容复制成多份。 */
     public static final DeferredItem<Item> COMPRESSION_BOX = ITEMS.register("compression_box",
-            () -> new com.maidsmart.box.CompressionBoxItem(new Item.Properties()));
+            () -> new com.maidsmart.box.CompressionBoxItem(new Item.Properties().stacksTo(1)));
 
     /** 武装拴绳（v1.3.7 实测六百六十七）：右击飞行中的女仆把自己挂到她下方（直升机二号位），再右击解除 */
     public static final DeferredItem<Item> COMBAT_LEASH = ITEMS.register("combat_leash",

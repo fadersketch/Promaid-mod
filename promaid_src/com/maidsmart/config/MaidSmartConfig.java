@@ -385,6 +385,7 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_FIRE_PANIC;
     public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_DROWN;
     public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_SUFFOCATE;
+    public static final ForgeConfigSpec.IntValue COMBAT_SUFFOCATE_HITS;
     public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE_ENV_DAMAGE_CELL;
     public static final ForgeConfigSpec.DoubleValue COMBAT_ENTER_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_EXIT_RATIO;
@@ -1109,6 +1110,10 @@ public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
     public static final ForgeConfigSpec.DoubleValue COMBAT_PATROL_CLEARANCE;
     /** 巡逻航迹最大水平半径（格，0=不限制）。 */
     public static final ForgeConfigSpec.IntValue COMBAT_PATROL_MAX_RADIUS;
+    /** 【R1151】减速点影响半径（格，1.0~16.0；默认 5 = 10×10×10）。 */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_PATROL_SLOW_HALF;
+    /** 【R1151】减速区内的速度倍率（0.05~1.0；默认 0.1 = 1/10）。 */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_PATROL_SLOW_SCALE;
 /**
  * 口径来自作者
  * 所以它们是**搭路这一档的替代路径**：条件满足时她直接起飞，条件不满足时搭路那条老链路一字不动。
@@ -1283,6 +1288,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
     /** 【R1109】本模组加入的气泡与系统消息总开关（关 = 全部静默，不含原版/别的模组） */
     public static final ForgeConfigSpec.BooleanValue MISC_PROMAID_HINTS;
+    /** 【R1146】右击叫醒睡着的女仆（默认开）。 */
+    public static final ForgeConfigSpec.BooleanValue MISC_RIGHT_CLICK_WAKE;
     public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_BUBBLE_ENABLED;
     public static final ForgeConfigSpec.DoubleValue MISC_SCHEDULE_BUBBLE_RADIUS;
     public static final ForgeConfigSpec.BooleanValue MISC_PICKUP_PRIORITY;
@@ -1496,7 +1503,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILD_STRUCTURE_MAX_BLOCKS = BUILDER.comment("结构文件蓝图方块上限（100万是服务器负担）")
                 .translation("config.promaid.build.structureMaxBlocks")
                 .defineInRange("structureMaxBlocks", 1000000, 10000, 4000000);
-        BUILD_MAX_MAIDS = BUILDER.comment("Promaid 手册女仆管理列表上限")
+        BUILD_MAX_MAIDS = BUILDER.comment("身怀百技手册女仆管理列表上限")
                 .translation("config.promaid.build.maxMaids").defineInRange("maxMaids", 30, 8, 64);
         BUILD_ORIGIN_PLAYER = BUILDER.comment("建造地点基准：true=玩家脚下（默认），false=女仆脚下")
                 .translation("config.promaid.build.originPlayer").define("originPlayer", true);
@@ -2167,6 +2174,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.selfPreserveEnvDrown").define("selfPreserveEnvDrown", true);
         COMBAT_SELF_PRESERVE_ENV_SUFFOCATE = BUILDER.comment("环境·窒息脱困：头卡进方块时找最近空气格并挪过去；关闭 = 不再主动找空气（硬性防卡墙位移仍保留）。")
                 .translation("config.promaid.combat.selfPreserveEnvSuffocate").define("selfPreserveEnvSuffocate", true);
+        COMBAT_SUFFOCATE_HITS = BUILDER.comment("环境·窒息次数门槛（默认 4，范围 1~20）：最近 5 秒内真的吃到几次 in_wall 窒息伤害就触发窒息自保（播报 + 传送到附近安全格）；按次数不按伤害点数，1 = 第一次窒息就触发。")
+                .translation("config.promaid.combat.suffocateHits")
+                .defineInRange("suffocateHits", 4, 1, 20);
         COMBAT_SELF_PRESERVE_ENV_DAMAGE_CELL = BUILDER.comment("环境·伤害方块脱离：站在营火/岩浆块等伤害方块上时走开或短距传送；关闭 = 不再主动离开（伤害照常结算）。")
                 .translation("config.promaid.combat.selfPreserveEnvDamageCell").define("selfPreserveEnvDamageCell", true);
         COMBAT_SELF_PRESERVE_LOW_HP = BUILDER.comment("低血自保（默认开）：血量低于「触发血量」时插保命动作；细项见下方「低血·」。关闭 = 低血不主动自保，环境自保仍按自己的开关工作。")
@@ -2742,13 +2752,17 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离【参照点】超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回参照点，免得飞太远回不来。0 = 关闭。参照点是【非守家=你；守家(home)=她的工作区圈心】（守家时你走多远都不再把她拽走，拉回来的是家/岗位）。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）\n\n【巡逻航迹】她正沿巡逻轨道飞时，这条牵引绳**整体不生效**——巡逻期间不做任何距离判据；口径与「巡逻跳过工作圈夹取」同源（都问 PatrolFlight.effective）。")
                 .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);
-        // ---- v1.3.8「巡逻航迹」（配置面板：移动与行为 → 扫帚模式 板块末尾）----
+        // ---- v1.3.8「巡逻航迹」（配置面板：物品 → 巡逻航图；R1149 从扫帚页独立）----
         COMBAT_PATROL_ENABLE = BUILDER.comment("巡逻航迹总开关（默认开）：扫帚模式 **+ 在家模式** 下，若她身上绑了一条**已连接（闭环）**的航迹，她就沿那条航迹飞，**替代**原本「沿工作范围那个圈盘旋」的守家行为。\n\n【怎么用】拿「巡逻航图」（纸 + 指南针 + 墨囊）：**右键**开界面 → 点「＋ 创建一个轨道」→ 进它的管理页把女仆绑上、点「开始标记」→ 退出界面后**鼠标中键**（不用潜行；空中地面都行）在你站/飞的位置记一个标记 → 再**右键**回界面点「连接」把首尾接成闭环。**连接没有任何门槛**（原来的点数/坡度/自交/半径/挡路方块判据全部只作为 ⚠ 提醒，触犯了也照样连上，后果由玩家自己负责）。然后她的任务切成「扫帚模式」、开着在家模式即可；巡逻期间她**不受扫帚牵引绳影响**。\n\n【敌人怎么办】有敌人时**仍然先接敌**（爬升 → 绕圈/轰炸），敌人消失后自己回到航迹——这是相位顺序白捡的，不需要额外配置。\n\n【为什么与 home 绑在一起】巡逻相当于替代了原来 home 模式下的守家盘旋，所以只对 home 模式下的扫帚模式女仆生效。关掉这一项 = 绑了的航迹不起作用，扫帚模式回到原本的守家盘旋。\n\n【删掉轨道会怎样】删掉一条轨道 = **绑着它的女仆一并作废、回到默认状态**（回到原本的守家盘旋 / 跟随 / 悬停），不用你一只只手动解绑；她此刻不在场（区块未加载）也不要紧，等她下次被载入时同样自行失效（作废是**落盘**的：删一条轨道会在全服记一笔 id，见 PatrolRevocation）。\n\n【排查】日志搜「扫帚巡逻」；命令 /maid_smart broom_patrol status 看生效与否。")
                 .translation("config.promaid.patrol.enable").define("patrolEnable", true);
         COMBAT_PATROL_CLEARANCE = BUILDER.comment("新建航迹的默认净空半径（格，默认 1.5，0.5~6.0）：航迹每个采样点周围要留出这么多空隙——「连接」时沿曲线密采样逐点查方块，有阻挡或危险方块（岩浆/火/仙人掌…）只给一句**黄色提示**（**不再**导致连接失败，飞的时候她会让一让）。它同时是「两段航线贴太近」那项提醒的阈值来源（贴得比 2× 本值还近就提醒）。\n\n每条航迹自己存一份（打点当时的值），改这一项只影响**之后新建**的航迹。调大 = 更早开始抬升（空中走廊更宽），调小 = 更贴着障碍走。\n\n【为什么还要查障碍】查的是**曲线上**的密采样点，不是只看标记：两个标记本身都在空气里，它们之间完全可能穿进山体。查到只提示，不作为门槛——交给女仆自己的寻路去绕。")
                 .translation("config.promaid.patrol.clearance").defineInRange("clearance", 1.5, 0.5, 6.0);
         COMBAT_PATROL_MAX_RADIUS = BUILDER.comment("巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制）：连接/绑定时航迹的水平包围盒半径超过它**只给一句提醒**（不再拒绝——强制连接，后果由玩家自己负责，原来那些门禁只作为提醒）。它原来的用途是防一条横跨几百格的航线让她飞出你找得着的范围（每只女仆自带 2 区块、随她移动的区块票，不预载整条航迹）——现在超限的后果由玩家自己承担。")
                 .translation("config.promaid.patrol.maxRadius").defineInRange("maxRadius", 128, 0, 512);
+        COMBAT_PATROL_SLOW_HALF = BUILDER.comment("减速区半径（格，默认 5.0，1.0~16.0）：在「轨道管理 → 标记管理」里把某个标记设为减速点后，她飞进以该点为中心、三轴各 ±本值 的立方体就减速。默认 5 = 10×10×10；调大 = 减速带更宽（例如 8 = 16×16×16），调小 = 只在点附近收一下。改这一项对已有轨道立即生效（不写入轨道存档），正在巡逻的女仆下一拍就按新范围判定。只在「绑了这条轨道 + 正在巡逻」时计算；接敌、跟随、鞘翅飞行都不减速。世界里的琥珀色范围框按本值实时绘制。")
+                .translation("config.promaid.patrol.slowHalf").defineInRange("slowHalf", 5.0, 1.0, 16.0);
+        COMBAT_PATROL_SLOW_SCALE = BUILDER.comment("减速程度（速度倍率，默认 0.1，0.05~1.0）：进减速区后巡航速度乘以本值。默认 0.1 = 降到十分之一；0.5 = 只减一半；1.0 = 不减速（范围框还在，但等于关掉减速效果）。改这一项立即生效——正在减速区里巡逻的女仆下一拍就按新值走，不需要重新绑定或重进世界；不写入轨道存档。只在「绑了这条轨道 + 正在巡逻」时计算；接敌、跟随、鞘翅飞行都不减速。")
+                .translation("config.promaid.patrol.slowScale").defineInRange("slowScale", 0.1, 0.05, 1.0);
         // v1.3.0(beta) 实测六百八十二：上面「接敌爬升高度」默认 10 → 15 的一次性迁移标记。
         // 【为什么用标记，而不是"值 == 10 就迁"】老档 toml 里都写着 10，只凭值分不出
         // "旧默认留下的"和"玩家自己就要 10"——用标记钉死只迁一次，之后玩家想写回 10 随便写。
@@ -3409,6 +3423,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 5000, 500, 60000);
         MISC_PROMAID_HINTS = BUILDER.comment("气泡与系统消息（默认开）：开 = 保留本模组加入的聊天气泡、同步到聊天框的台词、与各功能的操作提示；关 = 这些提示全部静默（只管本模组，原版与别的模组的消息不受影响）")
                 .translation("config.promaid.misc.promaidHints").define("promaidHints", true);
+        MISC_RIGHT_CLICK_WAKE = BUILDER.comment("右击叫醒睡着的女仆（默认开）：手持本模组物品右击睡着的她 = 叫醒 + 一句抱怨气泡（带语音）+ 60 秒内不再找床睡；关 = 右键不接管，交给原版 / TLM 的睡眠逻辑")
+                .translation("config.promaid.misc.rightClickWake").define("rightClickWake", true);
         // v1.1.0 实测四百一十：排班女仆贴身情绪气泡（30 条文本池，触发 CD 30 秒）
         MISC_SCHEDULE_BUBBLE_ENABLED = BUILDER.comment("排班贴身气泡（默认开）：靠近排班中的女仆（3.5 格内）时，她随机冒出一条贴身气泡对话（30 条文本池，每只女仆 30 秒最多一条）——情绪价值小彩蛋；战斗/自保/睡觉中不打扰")
                 .translation("config.promaid.misc.scheduleBubbleEnabled").define("scheduleBubbleEnabled", true);
@@ -3630,7 +3646,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     MISC_SERVER_FORCED_CONFIG = BUILDER.comment("多人服务器：配置以服务端为准（默认关）。\n\n【作用】关着 = 各人改各人自己那份配置，互不干扰。打开后全服以服务端这一份为准：服务端把配置推给每个客户端，非 OP 只能看、不能改，OP 在面板里的改动写回服务端并同步全服。\n\n【显示条件】只在专用服务器、或局域网里已有多人在线时，且只对本机是 OP 的玩家显示这一行；单机不显示。\n\n【撤销】关掉它，或直接改服务端的 config/promaid-common.toml，即可恢复各人自配。")
             .translation("config.promaid.misc.serverForcedConfig").define("serverForcedConfig", false);
     // 【R1079】整合包/生存服：开局手册的发放与配置入口拆分。
-    MISC_GIVE_STARTER_BOOKS = BUILDER.comment("进入存档时发书（默认开）：首次进入存档时把《Promaid 手册》与《排班表》放进背包。关闭 = 一件都不发（整合包作者可让玩家自行获取）。只影响首次发放，已领过的存档不受影响")
+    MISC_GIVE_STARTER_BOOKS = BUILDER.comment("进入存档时发书（默认开）：首次进入存档时把《身怀百技手册》与《排班表》放进背包。关闭 = 一件都不发（整合包作者可让玩家自行获取）。只影响首次发放，已领过的存档不受影响")
             .translation("config.promaid.misc.giveStarterBooks").define("giveStarterBooks", true);
     MISC_BOOK_CONFIG_ACCESS = BUILDER.comment("手册显示配置入口（默认开）：手册首页的「模组详细配置」与「DIY / 默认模式」两个按钮。关闭 = 手册只保留指南/建造/女仆/记忆，生存玩家看不到配置页；整合包作者可先 DIY 好默认配置再关掉它（配置本身仍可从模组列表的 Config 进入）")
             .translation("config.promaid.misc.bookConfigAccess").define("bookConfigAccess", true);

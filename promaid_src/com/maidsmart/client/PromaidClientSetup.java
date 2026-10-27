@@ -47,6 +47,7 @@ public final class PromaidClientSetup {
     private static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
         if (event.phase == net.minecraftforge.event.TickEvent.Phase.END) {
             com.maidsmart.voice.ClientVoicePlayback.onClientTick();
+            com.maidsmart.client.PromaidVoiceSoundInstance.tickPending();
         }
     }
 

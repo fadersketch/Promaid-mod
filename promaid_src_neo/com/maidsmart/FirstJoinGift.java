@@ -75,7 +75,7 @@ public final class FirstJoinGift {
                 com.maidsmart.tool.PromaidLog.log("赠礼",
                         (player.getDisplayName() != null ? player.getDisplayName().getString()
                                 : player.getUUID().toString())
-                                + " 首次进入，已发放《Promaid 手册》与《排班表》");
+                                + " 首次进入，已发放《身怀百技手册》与《排班表》");
                 player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                         "\u00a7a[maid_smart] \u300aPromaid \u624b\u518c\u300b\u4e0e\u300a\u6392\u73ed\u8868\u300b"
                                 + "\u5df2\u9001\u5230\u4f60\u80cc\u5305\uff01\u624b\u6301\u53f3\u952e\u6253\u5f00\u5168\u90e8"

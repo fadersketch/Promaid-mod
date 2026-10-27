@@ -43,6 +43,9 @@ public class DangerEscapeHandler {
     /** 每女仆脱困尝试冷却（gameTime）——防振荡（刚挪走又在边缘反复触发） */
     private static final Map<UUID, Long> LAST_TRY = new HashMap<>();
 
+    /** 【R1149】窒息传送冷却（gameTime）：2 秒，避免连续窒息判定反复传 */
+    private static final Map<UUID, Long> SUFFOCATE_ESCAPE_UNTIL = new HashMap<>();
+
     /** 冷却间隔（tick）：30 = 1.5 秒 */
     private static final long RETRY_INTERVAL = 30L;
 
@@ -50,6 +53,9 @@ public class DangerEscapeHandler {
      *  闭环岩浆测试里女仆距安全地面只有 2~3 格，4 格内全是岩浆+玩家中心格，
      *  容易在可救范围内找不到安全格而走上静默放弃路径） */
     private static final int SEARCH_RADIUS = 8;
+    /** 【R1149】灵魂营火：扫描半径 6 格找源头；撤离只要站到营火旁 1 格，不往远处甩 */
+    private static final int SOUL_SCAN_RADIUS = 6;
+    private static final double SOUL_ESCAPE_DIST_SQ = 0.9;
 
     public static void register() {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(new DangerEscapeHandler());
@@ -84,17 +90,33 @@ if (++this.throttle < 10) {
                         || maid.getOwner() == null) {
                     continue; // 无主不处理
                 }
-                // 自保中让位（自保有珍珠/放水/垫高专属链路）；坐姿/骑乘跳过（见类注释）；
-                // 【实测七百二十四】悬空鞍位（龙）那条她**不是乘客**、isPassenger 认不出她，
-                // 单独判一次——否则危险方块撤离会把她从龙背鞍位上拽下来。
-                // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）。
-                if (((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(SelfPreservationBehavior.PRESERVE_TAG)
-                        || maid.isMaidInSittingPose() || maid.isPassenger()
+                // 【R1149】坐姿/自保不再是无条件的免死金牌：烧制会强制 Pose.SITTING，
+                // 而灵魂营火的「灵魂灼烧」范围比燃烧更远——她吃不到火却持续掉血，
+                // 自保会话也不认这个 debuff。骑乘/特殊鞍位仍然跳过（有专属链路）。
+                BlockPos feet = maid.blockPosition();
+                boolean burning = maid.isOnFire() || maid.isInLava();
+                BlockPos soulFire = findLitSoulCampfire(level, feet, SOUL_SCAN_RADIUS);
+                // 只有整个人站在营火格上才撤；站到旁边 1 格就停，避免反复传送
+                boolean soulBurn = soulFire != null && hasSoulBurn(maid)
+                        && feet.distToCenterSqr(soulFire.getX() + 0.5,
+                                soulFire.getY() + 0.5, soulFire.getZ() + 0.5) < 1.0;
+                if (maid.isPassenger()
                         || com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                     continue;
                 }
-                BlockPos feet = maid.blockPosition();
-                boolean inDanger = DangerBlocks.cellDangerous(level,
+                if (((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(SelfPreservationBehavior.PRESERVE_TAG)
+                        && !burning && !soulBurn) {
+                    continue;
+                }
+                if (maid.isMaidInSittingPose() && !burning && !soulBurn) {
+                    continue;
+                }
+                // 【R1149】点燃的营火/灵魂营火单独判一次：营火的伤害不一定给她挂上
+                // isOnFire（它直接造成 inFire 伤害），只靠燃烧标志会漏；也不能只靠
+                // 危险表——老存档的危险表可能被玩家删过营火。营火格本身即危险。
+                boolean litCampfire = isLitCampfire(level.getBlockState(feet))
+                        || isLitCampfire(level.getBlockState(feet.below()));
+                boolean inDanger = burning || litCampfire || soulBurn || DangerBlocks.cellDangerous(level,
                         feet.getX(), feet.getY(), feet.getZ());
                 if (!inDanger) {
                     LAST_TRY.remove(maid.getUUID());
@@ -103,9 +125,10 @@ if (++this.throttle < 10) {
                 // 实测九百三十九【抗火 / 火焰保护饰品豁免】：危险**全部**来自热源（火 / 岩浆 /
                 // 营火 / 岩浆块）而她此刻烫不疼时，不搬走——否则每次路过熔岩 / 营火旁边都被
                 // 弹开（有抗火仍被传送的根因）。非热危险（仙人掌 / 细雪 / 石笋等）不走此豁免。
-                if (SelfPreservationBehavior.fireImmune(maid)
-                        && DangerBlocks.heatOnlyDanger(level, feet.getX(),
-                                feet.getY(), feet.getZ())) {
+                // 【R1149】已经在燃烧/灵魂灼烧就不豁免（豁免只挡"没受伤的烫"）。
+                if (!burning && !soulBurn && SelfPreservationBehavior.fireImmune(maid)
+                        && (litCampfire || DangerBlocks.heatOnlyDanger(level, feet.getX(),
+                                feet.getY(), feet.getZ()))) {
                     LAST_TRY.remove(maid.getUUID()); // 不记账：豁免一旦消失，下一轮立即恢复抢救
                     continue;
                 }
@@ -114,7 +137,9 @@ if (++this.throttle < 10) {
                     continue;
                 }
                 LAST_TRY.put(maid.getUUID(), now);
-                BlockPos safe = findNearestSafe(level, feet);
+                // 灵魂灼烧：只要离开营火格、站到相邻安全格即可（最近的那座营火）
+                BlockPos safe = soulFire == null ? findNearestSafe(level, feet)
+                        : findNearestSafeAwayFrom(level, feet, soulFire, SOUL_ESCAPE_DIST_SQ);
                 String name = maid.getDisplayName() != null ? maid.getDisplayName().getString()
                         : maid.getUUID().toString();
                 if (safe == null) {
@@ -139,9 +164,109 @@ if (++this.throttle < 10) {
                 com.maidsmart.tool.PromaidLog.log("险境脱离", name + " "
                         + feet.getX() + "," + feet.getY() + "," + feet.getZ()
                         + " -> " + safe.getX() + "," + safe.getY() + "," + safe.getZ()
-                        + (doused ? "（应急灭火）" : ""));
+                        + (doused ? "（应急灭火）" : "")
+                        + (soulBurn ? "（灵魂灼烧）" : ""));
             }
         }
+    }
+
+    /** 【R1149】点燃的营火：灵魂营火也继承 CampfireBlock，共用 LIT */
+    private static boolean isLitCampfire(net.minecraft.world.level.block.state.BlockState state) {
+        return state != null
+                && state.getBlock() instanceof net.minecraft.world.level.block.CampfireBlock
+                && state.getValue(net.minecraft.world.level.block.CampfireBlock.LIT);
+    }
+
+    /** 【R1149】工作行为让位判据：正在燃烧 / 泡岩浆 / **站在**灵魂营火格上且被灼烧 → 先处理危险。
+     *  灵魂灼烧残留（已退到旁边）不打断烧制/酿造，否则灵魂营火不能当烹饪台。 */
+    public static boolean isHeatDanger(EntityMaid maid) {
+        if (maid == null) {
+            return false;
+        }
+        if (maid.isOnFire() || maid.isInLava()) {
+            return true;
+        }
+        if (!hasSoulBurn(maid) || !(maid.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        BlockPos feet = maid.blockPosition();
+        BlockPos fire = findLitSoulCampfire(level, feet, SOUL_SCAN_RADIUS);
+        return fire != null && feet.distToCenterSqr(fire.getX() + 0.5,
+                fire.getY() + 0.5, fire.getZ() + 0.5) < 1.0;
+    }
+
+    /** 【R1149】窒息自保：到次数后传送到 8 格内最近的安全格；返回是否真的传送 */
+    public static boolean escapeSuffocation(EntityMaid maid) {
+        try {
+            if (maid == null || !(maid.level() instanceof ServerLevel level)) {
+                return false;
+            }
+            long now = level.getGameTime();
+            Long last = SUFFOCATE_ESCAPE_UNTIL.get(maid.getUUID());
+            if (last != null && now < last) {
+                return false;
+            }
+            SUFFOCATE_ESCAPE_UNTIL.put(maid.getUUID(), now + 40L);
+            BlockPos from = maid.blockPosition();
+            BlockPos safe = findNearestSafe(level, from);
+            String name = maid.getDisplayName() != null ? maid.getDisplayName().getString()
+                    : maid.getUUID().toString();
+            if (safe == null) {
+                com.maidsmart.tool.PromaidLog.log("窒息脱离",
+                        name + " 8 格内没有可落足的安全格，保留原地顶出兜底");
+                return false;
+            }
+            maid.teleportTo(safe.getX() + 0.5, safe.getY(), safe.getZ() + 0.5);
+            maid.fallDistance = 0.0f;
+            maid.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            com.maidsmart.task.MaidWorkTags.setStill(maid, false);
+            com.maidsmart.tool.PromaidLog.log("窒息脱离", name + " "
+                    + from.getX() + "," + from.getY() + "," + from.getZ()
+                    + " -> " + safe.getX() + "," + safe.getY() + "," + safe.getZ());
+            return true;
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DangerEscapeHandler", ignored);
+            return false;
+        }
+    }
+
+    /** 【R1149】点燃的灵魂营火：按注册名认，避开 SRG 常量差异 */
+    private static BlockPos findLitSoulCampfire(ServerLevel level, BlockPos feet, int radius) {
+        BlockPos best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (BlockPos p : BlockPos.betweenClosed(feet.offset(-radius, -4, -radius),
+                feet.offset(radius, 4, radius))) {
+            var state = level.getBlockState(p);
+            var id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock());
+            if (id == null || !"minecraft:soul_campfire".equals(id.toString())
+                    || !state.getValue(net.minecraft.world.level.block.CampfireBlock.LIT)) {
+                continue;
+            }
+            double sq = feet.distToCenterSqr(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5);
+            if (sq < bestSq) {
+                bestSq = sq;
+                best = new BlockPos(p);
+            }
+        }
+        return best;
+    }
+
+    /** 【R1149】身上带「灵魂灼烧」类 debuff：注册名同时含 soul 与 burn（如 goety:soul_burn） */
+    public static boolean hasSoulBurn(EntityMaid maid) {
+        try {
+            for (net.minecraft.world.effect.MobEffectInstance inst : maid.getActiveEffects()) {
+                var id = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT
+                        .getKey(inst.getEffect().value());
+                if (id == null) {
+                    continue;
+                }
+                String path = id.getPath().toLowerCase();
+                if (path.contains("soul") && path.contains("burn")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("DangerEscapeHandler", ignored);
+        }
+        return false;
     }
 
     /**
@@ -153,7 +278,19 @@ if (++this.throttle < 10) {
      * 近距"安全格"是主人脚下那格，脱离会把女仆传进玩家身体，碰撞再把女仆 挤回岩浆（反复循环掉血、永远站不上安全格）。
      */
     private static BlockPos findNearestSafe(ServerLevel level, BlockPos from) {
-        for (int r = 0; r <= SEARCH_RADIUS; r++) {
+        return findNearestSafe(level, from, null, 0.0, SEARCH_RADIUS);
+    }
+
+    /** 【R1149】灵魂灼烧专用：目标格必须离开源头 minDistSq 以上；搜不到才退回普通安全格 */
+    private static BlockPos findNearestSafeAwayFrom(ServerLevel level, BlockPos from,
+                                                    BlockPos avoid, double minDistSq) {
+        BlockPos safe = findNearestSafe(level, from, avoid, minDistSq, SEARCH_RADIUS);
+        return safe != null ? safe : findNearestSafe(level, from);
+    }
+
+    private static BlockPos findNearestSafe(ServerLevel level, BlockPos from,
+                                            BlockPos avoid, double minDistSq, int radius) {
+        for (int r = 0; r <= radius; r++) {
             for (int dx = -r; dx <= r; dx++) {
                 for (int dz = -r; dz <= r; dz++) {
                     if (Math.max(Math.abs(dx), Math.abs(dz)) != r) {
@@ -161,6 +298,10 @@ if (++this.throttle < 10) {
                     }
                     for (int dy = -2; dy <= 2; dy++) {
                         BlockPos c = from.offset(dx, dy, dz);
+                        if (avoid != null && c.distToCenterSqr(avoid.getX() + 0.5,
+                                avoid.getY() + 0.5, avoid.getZ() + 0.5) <= minDistSq) {
+                            continue;
+                        }
                         if (isSafeCell(level, c) && !cellOccupied(level, c)) {
                             return c;
                         }

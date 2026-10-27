@@ -166,6 +166,8 @@ public class CompressionBoxItem extends Item {
             }
             tooltip.add(Component.m_237113_("\u00a78每格上限 \u00a7e" + cap
                     + "\u00a78；右键打开；放进女仆背包时视作她背包的延伸（她一次最多拿 64）"));
+            tooltip.add(Component.m_237113_(
+                    "\u00a78不可堆叠（与附魔书同口径：空盒、NBT 完全相同也不叠）；只认她自己 36 格背包，放进精妙背包 / 旅行者背包只是普通物品"));
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("CompressionBoxItem", ignored);
             // 描述只是好看，任何异常都不该影响物品本身
         }

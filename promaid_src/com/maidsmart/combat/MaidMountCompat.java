@@ -1785,7 +1785,7 @@ public final class MaidMountCompat {
 
             double hspeed = horizontalSpeed(mount);
             // 【R1127】航迹巡逻 / 减速点：巡逻时用**连续限速**代替 0.5 秒急停脉冲。
-            // routeScale：8×8×8 减速点内大幅降速（1.0 = 不在减速点里）。
+            // routeScale：减速区内降速（半径/倍率都走面板配置，默认 5 格 / ×0.1；1.0 = 不在减速点里）。
             final boolean patrol = !fighting && isPatrolRoute(maid);
             final double routeScale = patrol ? routeSpeedScale(maid, mount) : 1.0;
 
@@ -4741,7 +4741,7 @@ public final class MaidMountCompat {
         }
     }
 
-    /** 【R1127】减速点倍率：在绑定航迹的 8×8×8 减速点内返回 {@code PatrolFlight.SLOW_SCALE}，否则 1。 */
+    /** 【R1127/R1151】减速点倍率：在绑定航迹的减速区内返回 {@code PatrolFlight.slowScale()}（默认 0.1），否则 1。 */
     private static double routeSpeedScale(Entity maid, Entity mount) {
         try {
             if (!(maid instanceof EntityMaid em) || mount == null) {

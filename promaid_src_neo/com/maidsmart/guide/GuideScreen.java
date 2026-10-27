@@ -11,9 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Promaid 详细介绍界面（v1.5.252h 收官功能）。
+ * 身怀百技 · 详细介绍界面（v1.5.252h 收官功能）。
  *
- * 结构与 Promaid 手册的"建筑页面"一致：章节目录（按钮列表，翻页）→
+ * 结构与 身怀百技手册的"建筑页面"一致：章节目录（按钮列表，翻页）→
  * 点章节 → 正文分页阅读（< 上一页 / 下一页 > + 页码）。
  *
  * 布局（照手册样式，全部自适应防重叠/出屏）：
@@ -277,7 +277,7 @@ public class GuideScreen extends Screen {
     /** 自跟踪焦点（同配置面板：键盘输入直接转发给点击过的输入框） */
 
     public GuideScreen(Screen parent) {
-        super(Component.literal("Promaid 详细介绍"));
+        super(Component.literal("身怀百技 · 详细介绍"));
         this.parent = parent;
     }
 
@@ -709,7 +709,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
             super.renderBackground(graphics, 0, 0, 0);
         }
         // v1.1.0 实测三百一十七（反馈："UI 美化仅更改了手册第一主界面，其他子界面
-        // 一点都没变"）：Promaid 详细介绍（手册子界面）补上蓝金品牌渐变——与手册
+        // 一点都没变"）：身怀百技 · 详细介绍（手册子界面）补上蓝金品牌渐变——与手册
         // 主界面同款（半透明色带叠加 = 渐变，fill 走 ARGB）
         int w = this.width;
         int h = this.height;
@@ -729,7 +729,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
                 this.renderLines(graphics);
             }
         } else {
-            this.drawCentered(graphics, "\u00a7ePromaid 详细介绍 · 章节目录", 36, 0xFFFFFF);
+            this.drawCentered(graphics, "\u00a7e身怀百技 · 详细介绍 · 章节目录", 36, 0xFFFFFF);
             // v1.5.252h：目录页不再显示章节总数说明（要求"不要再有字"）
         }
         // 页码（v1.1.0 实测二十五：画在两箭头中间 h-26 行——箭头 20px 在两侧，

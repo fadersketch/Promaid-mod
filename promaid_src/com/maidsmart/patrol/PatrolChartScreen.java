@@ -634,7 +634,10 @@ public class PatrolChartScreen extends Screen {
         // 【R1128】本地先翻面：按下就立刻看到按钮/行文字变化，服务端回包后再以物品为准。
         boolean slow = r.toggleSlow(idx);
         sendOp("slowat", r.id(), Integer.toString(idx));
-        hint(slow ? "已设为减速点（10×10×10，速度 1/10）" : "已取消减速点");
+        // 【R1151】范围与倍率文案都跟着配置走：默认 5 → 10×10×10、0.1 → ×0.1
+        int size = (int) Math.round(PatrolFlight.slowHalf() * 2.0);
+        hint(slow ? "已设为减速点（" + size + "×" + size + "×" + size
+                + "，速度 ×" + PatrolFlight.slowScale() + "）" : "已取消减速点");
         rebuild();
     }
 

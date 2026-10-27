@@ -24,6 +24,11 @@ public final class MaidWorkSpeedHandler {
     public void onMaidTick(MaidTickEvent event) {
         try {
             MaidWorkSpeedLimiter.tick(event.getMaid());
+            // 【R1146】服务端每 20 tick 兜底：旧存档里叠着的压缩盒拆成单只，防止拆 stack 复制内容
+            if (event.getMaid().m_9236_() instanceof net.minecraft.server.level.ServerLevel sl
+                    && sl.m_46467_() % 20L == 0L) {
+                com.maidsmart.box.CompressionBoxMaidInv.sanitizeIfNeeded(event.getMaid());
+            }
         } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow("MaidWorkSpeedHandler", ignored);
         }
     }

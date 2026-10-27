@@ -19,7 +19,7 @@ import java.util.function.Function;
  * Promaid 模组配置面板（v1.5.100 重构——手册式跳转 + 翻页，取代 v1.5.99 的
  * 横排 Tab + 滚轮方案：横排 Tab 在窄屏（GUI 缩放大）会超出屏幕，滚轮滚动有 bug）。
  *
- * 交互与Promaid 手册完全一致：
+ * 交互与身怀百技手册完全一致：
  * - 目录页：两列竖排板块按钮，点击跳转对应板块页
  * - 板块页：内容行按页翻页（"< 上一页 / 下一页 >" 按钮 + 页码），无滚轮
  * - 挖矿板块：参数行之外，第一行是"可挖掘方块表 →"入口——点进矿表子页
@@ -541,6 +541,10 @@ public class PromaidConfigScreen extends Screen {
         // v1.5.393 实测八百零四：饰品「大运」——与"飞行三件套"/骑乘指挥棒同族（都是"她怎么动"），
         // 且本身就是一件可佩戴的道具，故与它们并排挂在「移动与行为」下（顺序 = 本枚举声明顺序）。
         DA_YUN("饰品「大运」", Group.ITEM),
+        // 【R1149】巡逻航图也是道具：配置归到「物品」大类，别再埋在扫帚数值/单兵战术里
+        PATROL("巡逻航图", Group.ITEM),
+        // 【R1150】指标石同样是道具：从「建造」页中段独立到「物品」大类
+        INDEX_STONE("指标石", Group.ITEM),
         // v1.3.0(beta) 实测七百〇三：空中接敌机动——**两条链路共有**的一件事（扫帚接敌 + 鞘翅空袭），
         // 所以单独成板而不是塞进任一边（塞进去另一边的人会找不到）。挂在「战斗与自保」下、
         // 紧跟在「空袭数值」之后（顺序 = 本枚举声明顺序）。
@@ -915,6 +919,8 @@ public class PromaidConfigScreen extends Screen {
             case TETHER -> this.tetherRows();
             case RIDE -> this.rideRows();
             case DA_YUN -> this.daYunRows();
+            case PATROL -> this.patrolRows();
+            case INDEX_STONE -> this.indexStoneRows();
             case REVIVE -> this.reviveRows();
             case ESCAPE -> this.escapeRows();
             case DANGER -> this.dangerRows();
@@ -3118,7 +3124,8 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NoteRow("\u00a77本模组的新道具都在这里：\u00a7e压缩盒\u00a77（把 TNT / 末地水晶 / 重生锚存进盒子，"
                 + "盒内 ≥2 件时女仆一次投 / 放出最多 5 个——凑出「压缩爆炸」，盒子也是她背包的延伸）、"
                 + "\u00a7e武装拴绳\u00a77（二号位：她挂在绳子上跟你飞）、\u00a7e骑乘指挥棒\u00a77（让她开你的载具）、"
-                + "\u00a7e饰品「大运」\u00a77（佩戴者高速撞击的伤害与保护）。点「前往」进各自的配置页。"));
+                + "\u00a7e饰品「大运」\u00a77（佩戴者高速撞击的伤害与保护）、\u00a7e巡逻航图\u00a77（画闭环航迹让她沿轨巡逻）、"
+                + "\u00a7e指标石\u00a77（锁定方块让她即兴搭一段）。点「前往」进各自的配置页。"));
         this.rows.add(new BtnRow("压缩盒", "前往 \u2192", () -> this.jumpTo("COMPRESSION_BOX", null),
                 "女仆背包延伸 / 每格上限 / 弹药加成"));
         // 实测九百八十五：别只跳压缩盒——另外三件新道具（拴绳 / 指挥棒 / 大运）也给「前往」
@@ -3128,6 +3135,11 @@ public class PromaidConfigScreen extends Screen {
                 "绑定与换座 / 飞行载具悬停与盘旋 / 替她装弹"));
         this.rows.add(new BtnRow("饰品「大运」", "前往 \u2192", () -> this.jumpTo("DA_YUN", null),
                 "撞击伤害 / 佩戴者保护 / 音乐"));
+        this.rows.add(new BtnRow("巡逻航图", "前往 \u2192", () -> this.jumpTo("PATROL", null),
+                "巡逻总开关 / 默认净空半径 / 最大水平半径 / 减速区半径与程度"));
+        // 【R1150】指标石也是道具，别只留在建造页
+        this.rows.add(new BtnRow("指标石", "前往 \u2192", () -> this.jumpTo("INDEX_STONE", null),
+                "指标石总开关 / 材料从哪来"));
     }
 
 
@@ -3173,7 +3185,7 @@ public class PromaidConfigScreen extends Screen {
                 : com.maidsmart.config.MaidConfigPreset.applyFactoryDefault();
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
         if (mc != null && mc.f_91074_ != null) {
-            mc.f_91074_.m_213846_(Component.m_237113_("[Promaid] 已"
+            mc.f_91074_.m_213846_(Component.m_237113_("[身怀百技] 已"
                     + (diy ? "切到 DIY 模式" : "恢复默认模式") + "（改动 " + changed + " 项）"));
         }
         this.pageIndex = 0;
@@ -3254,9 +3266,7 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.BUILD_MAX_MAIDS, s), "女仆管理上限：128 格内参与建造的女仆超过此数时手册列表截断（只影响显示，不影响实际建造）"));
         this.rows.add(new BoolRow("建造地点=玩家脚下", MaidSmartConfig.BUILD_ORIGIN_PLAYER.get(),
                 v -> MaidSmartConfig.BUILD_ORIGIN_PLAYER.set(v), "建造地点基准：true=玩家脚下（默认），false=女仆脚下"));
-        this.rows.add(new BoolRow("指标石",
-                MaidSmartConfig.BUILD_INDEX_STONE.get(),
-                v -> MaidSmartConfig.BUILD_INDEX_STONE.set(v),"指标石（默认开）：手持右击方块锁定（绿→红，可锁很远）→ 右击女仆绑定 → 从女仆所在格到锁定格之间的空气格组成临时蓝图，她立刻从背包（不够从你背包）取材料逐格填充。关 = 退化为普通物品。"));
+        // 【R1150】「指标石」开关已独立到「物品 → 指标石」页
         // v1.5.393 实测八百零三：建造不强制 home + 禁非玩家意愿的自动传送
         this.rows.add(new BoolRow("建造不强制 home",
                 MaidSmartConfig.BUILD_NO_FORCE_HOME.get(),
@@ -4489,6 +4499,8 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_DROWN.set(v), "环境·溺水自救：氧气不足时上浮、找空气格、喝水肺；关闭 = 不再主动上浮（溺水保护饰品仍有效）。"));
         this.rows.add(new BoolRow("环境·窒息脱困", MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_SUFFOCATE.get(),
                 v -> MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_SUFFOCATE.set(v), "环境·窒息脱困：头卡进方块时找最近空气格并挪过去；关闭 = 不再主动找空气（硬性防卡墙位移仍保留）。"));
+        this.rows.add(new NumRow("环境·窒息次数门槛", String.valueOf(MaidSmartConfig.COMBAT_SUFFOCATE_HITS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_SUFFOCATE_HITS, s), "最近 5 秒内吃到几次窒息伤害才触发窒息自保（播报 + 传送到附近安全格）；按次数不按伤害点数，范围 1~20。"));
         this.rows.add(new BoolRow("环境·伤害方块脱离", MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_DAMAGE_CELL.get(),
                 v -> MaidSmartConfig.COMBAT_SELF_PRESERVE_ENV_DAMAGE_CELL.set(v), "环境·伤害方块脱离：站在营火/岩浆块等伤害方块上时走开或短距传送；关闭 = 不再主动离开（伤害照常结算）。"));
         this.rows.add(new BoolRow("低血自保（默认开）", MaidSmartConfig.COMBAT_SELF_PRESERVE_LOW_HP.get(),
@@ -4649,11 +4661,43 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("重锤起跳距离（格）", String.valueOf(MaidSmartConfig.COMBAT_MACE_TRIGGER_RANGE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_MACE_TRIGGER_RANGE, s), "重锤起跳距离（格，默认 3）：女仆与目标距离在此值内才起跳猛击（参考 1.21.1 版的 3 格）"));
         this.cvAuto(MaidSmartConfig.COMBAT_HOE_NOT_WEAPON);
-        this.cvAuto(MaidSmartConfig.COMBAT_PATROL_CLEARANCE);
-        this.cvAuto(MaidSmartConfig.COMBAT_PATROL_ENABLE);
-        this.cvAuto(MaidSmartConfig.COMBAT_PATROL_MAX_RADIUS);
         this.cvAuto(MaidSmartConfig.COMBAT_SWEEP_ALWAYS);
 }
+
+    /** 【R1149】巡逻航图自己的配置页（物品大类）：原先只作为单兵战术页的自动补全项，玩家找不到 */
+    private void patrolRows() {
+        this.rows.add(new SectionRow("—— 巡逻航图（纸 + 指南针 + 墨囊）——", false));
+        this.rows.add(new BoolRow("巡逻航迹总开关", MaidSmartConfig.COMBAT_PATROL_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_PATROL_ENABLE.set(v),"扫帚模式 + 在家模式下，绑了已连接（闭环）轨道的女仆沿轨道飞，替代「沿工作范围盘旋」的守家行为。用法：右键巡逻航图创建轨道、标记后连接、再绑定女仆；删掉轨道 = 绑着的女仆作废。"));
+        this.rows.add(new NumRow("巡逻·默认净空半径（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_PATROL_CLEARANCE.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_PATROL_CLEARANCE, "巡逻·默认净空半径", 0.5, 6.0),"新建航迹时每个采样点周围要留出的空隙（格）。「连接」时沿曲线密采样查方块，有阻挡或危险方块只给黄色提示、不拦连接（飞行时航线会让一让或她自己脱困）。每条航迹各存一份。"));
+        this.rows.add(new NumRow("巡逻·最大水平半径（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_PATROL_MAX_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_PATROL_MAX_RADIUS, s),"连接/绑定时航迹的水平包围盒半径超过它只给一句提醒（不再拒绝连接，后果由玩家自己负责）；原用途是防一条横跨几百格的航线让她飞出你找得着的范围。0 = 不提醒。"));
+        this.rows.add(new NumRow("巡逻·减速区半径（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_PATROL_SLOW_HALF.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_PATROL_SLOW_HALF, "巡逻·减速区半径", 1.0, 16.0),
+                "标记设为减速点后，以该点为中心、三轴各 ±本值 的立方体（默认 5 = 10×10×10）。改完立即生效——正在巡逻的女仆下一拍就按新范围判定，不需要重新绑定；不写入轨道存档。"));
+        this.rows.add(new NumRow("巡逻·减速程度（倍率）",
+                String.valueOf(MaidSmartConfig.COMBAT_PATROL_SLOW_SCALE.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_PATROL_SLOW_SCALE, "巡逻·减速程度", 0.05, 1.0),
+                "进减速区后速度乘以本值（默认 0.1 = 1/10；0.5 = 只减一半；1.0 = 不减速）。改完立即生效——正在减速区里巡逻的女仆下一拍就按新值走，不需要重新绑定；不写入轨道存档。"));
+        this.rows.add(new InfoRow("巡逻·飞到指定坐标",
+                "/maid_smart broom_goto <x> <y> <z> [女仆]","「飞到某地」留给指令（仿 freeflight_goto，仅 OP）：到点/60 秒自动回航迹、有敌人先接敌；编辑器无单点按钮。状态 /maid_smart broom_patrol status"));
+    }
+
+    /** 【R1150】指标石自己的配置页（物品大类）：原先埋在「建造」页中段，按道具找不到 */
+    private void indexStoneRows() {
+        this.rows.add(new SectionRow("—— 指标石（即兴临时搭建）——", false));
+        this.rows.add(new BoolRow("指标石",
+                MaidSmartConfig.BUILD_INDEX_STONE.get(),
+                v -> MaidSmartConfig.BUILD_INDEX_STONE.set(v),"指标石（默认开）：手持右击方块锁定（绿→红，可锁很远）→ 右击女仆绑定 → 从女仆所在格到锁定格之间的空气格组成临时蓝图，她立刻从背包（不够从你背包）取材料逐格填充。关 = 退化为普通物品。"));
+        this.rows.add(new InfoRow("材料从哪来",
+                "她的双手 / 背包 / 附加容器 → 你的背包",
+                "启动前会先扫这三处：她自己的双手与背包、她的附加容器（精妙背包 / 旅行者背包），不够再从你的背包取；"
+                        + "具体用哪种方块仍走「生产与工作 → 建造」里的「搭方块禁用名单」与「只用原版天然方块」。"));
+    }
 
     private void autoCombatRows() {
         this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
@@ -4951,6 +4995,9 @@ public class PromaidConfigScreen extends Screen {
         }
         this.rows.add(new BoolRow("床铺互通", MaidSmartConfig.MISC_BED_INTEROP.get(),
                 v -> MaidSmartConfig.MISC_BED_INTEROP.set(v), "床铺互通（默认开）：女仆能睡原版床（16 色床——TLM 原生只认女仆床），玩家也能睡女仆床（并把女仆床设为重生点）——两个方向互开；关掉恢复 TLM 原版行为。玩家潜行右键女仆床仍是只染色不躺下"));
+        this.rows.add(new BoolRow("右击叫醒睡着的女仆", MaidSmartConfig.MISC_RIGHT_CLICK_WAKE.get(),
+                v -> MaidSmartConfig.MISC_RIGHT_CLICK_WAKE.set(v),
+                "右击叫醒（默认开）：手持本模组任意物品右击睡着的她 → 叫醒 + 一句抱怨气泡（带语音），60 秒内不再找床睡；关 = 右键不接管，交给原版 / TLM 的睡眠逻辑。"));
         // 实测四百四十三：悬空禁搭方块（反馈："悬空状态应禁止搭建方块——挖矿/伐木也通用"）
         this.rows.add(new BoolRow("悬空禁搭方块", MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get(),
                 v -> MaidSmartConfig.MISC_NO_PLACE_IN_AIR.set(v),"悬空禁搭方块（默认开）：她未落地时不再搭方块（自保搭高/搭路/挖矿垫脚/伐木垫脚）。触发：坠落距离达到「落地水触发高度」时禁（落地水此时接管，搭方块会挡住它）。水/岩浆、骑乘、滑翔不算悬空。"));

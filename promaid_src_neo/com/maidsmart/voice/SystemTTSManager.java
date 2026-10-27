@@ -169,6 +169,39 @@ public final class SystemTTSManager {
     }
 
     /**
+     * 【R1149】指定听者朗读：叫醒台词专用。
+     * 绕开气泡 5 秒限频、睡眠门与 owner 在线判断，只走内置语音包，直接发给叫醒她的玩家；
+     * 一次性交互台词不参与 8 秒共享间隔。
+     */
+    public static void speakTo(EntityMaid maid, ServerPlayer listener, String text) {
+        try {
+            if (maid == null || listener == null || text == null || text.isBlank()) {
+                return;
+            }
+            if (!(maid.level() instanceof ServerLevel)) {
+                return;
+            }
+            if (!MaidSmartConfig.MISC_PROMAID_HINTS.get()
+                    || !MaidSmartConfig.TTS_JAR_PACK_ENABLED.get()) {
+                return;
+            }
+            if (!speakable(text)) {
+                return;
+            }
+            String key = JarVoicePack.matchKey(text);
+            if (key == null) {
+                com.maidsmart.tool.PromaidLog.log("叫醒语音", "未命中内置语音包：" + text);
+                return;
+            }
+            LAST_JAR_PACK.put(maid.getUUID(), System.currentTimeMillis());
+            sendJarVoice(listener, maid, key);
+            com.maidsmart.tool.PromaidLog.log("叫醒语音", "已发送 " + key + " → "
+                    + listener.getName().getString());
+        } catch (Exception ignored) { com.maidsmart.diag.Diag.swallow("SystemTTSManager", ignored);
+        }
+    }
+
+    /**
      * 实测四百四十五：这些短促关键台词不受「内置包最小间隔」限制——被间隔吞掉时
      * 玩家会以为语音包失效（落地水/落地雪是自行动作反馈；敌人靠近是敌袭预警）。
      * 实测九百九十一：加「敌人清掉（enemy_clear）」——收尾台词同样不该被间隔吞
@@ -178,7 +211,9 @@ public final class SystemTTSManager {
         return "clutch_water.ogg".equals(jarKey)
                 || "clutch_snow.ogg".equals(jarKey)
                 || "enemy_near.ogg".equals(jarKey)
-                || "enemy_clear.ogg".equals(jarKey);
+                || "enemy_clear.ogg".equals(jarKey)
+                // 【R1146】叫醒抱怨是一次性交互台词，不能被 8 秒间隔吞掉
+                || "wake_complain.ogg".equals(jarKey);
     }
 
     /** 状态文本（设置面板"查看语音包状态"） */

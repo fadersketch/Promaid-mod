@@ -87,6 +87,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     private String myBrewKey = null;
     /** 已处理到的工位解绑代数（魂符收放/区块重载 → 解绑一次，见 MaidWorkTags#stationGen） */
     private int seenStationGen = -1;
+    /** 【R1146】上一 tick 的 TLM 坐姿标记——玩家反复坐/站时把整条链路清空重跑 */
+    private Boolean lastSitting = null;
 
     /** 清掉该女仆在静态占用表里的记录（魂符收起/放出时台子不再被"预留"）。 */
     public static void forgetStation(java.util.UUID maidId) {
@@ -299,6 +301,17 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
+        // 【R1146】玩家在酿造中让她坐下/站起：旧台与冷却全部作废，下一 tick 重新找台。
+        this.syncPostureReset(maid);
+        // 【R1149】危险优先于酿造台：燃烧 / 岩浆 / 灵魂灼烧期间放台并解除站桩
+        if (com.maidsmart.protect.DangerEscapeHandler.isHeatDanger(maid)) {
+            this.releaseBrew();
+            this.standPos = null;
+            this.standUp(maid);
+            MaidWorkTags.setStationLock(maid, false);
+            MaidWorkTags.setStill(maid, false);
+            return;
+        }
         // 魂符收放/区块重载：解绑一次并重新找台（不再抱着收魂前那台酿造台）。
         int gen = MaidWorkTags.stationGen(maid);
         if (gen != this.seenStationGen) {
@@ -398,6 +411,28 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         BlockEntity be = level.getBlockEntity(this.standPos);
         if (be instanceof BrewingStandBlockEntity) {
             this.processStand(maid, (Container) be);
+        }
+    }
+
+    /** 【R1146】坐下/站起切换一次 → 清空一次绑定与计时，让整条链路从"找台"重跑。
+     *  只清本行为的瞬时状态；不给台子记冷却、不强制改变她的姿势（姿势是玩家刚切的）。 */
+    private void syncPostureReset(EntityMaid maid) {
+        boolean sitting = maid.isMaidInSittingPose();
+        Boolean prev = this.lastSitting;
+        this.lastSitting = sitting;
+        if (prev == null || prev == sitting) {
+            return;
+        }
+        this.releaseBrew();
+        this.standPos = null;
+        this.cooldown = 0;
+        this.scanCooldown = 0;
+        this.wanderCooldown = 0;
+        MaidWorkTags.setStationLock(maid, false);
+        MaidWorkTags.setStill(maid, false);
+        maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+        if (maid.getNavigation() != null) {
+            maid.getNavigation().stop();
         }
     }
 

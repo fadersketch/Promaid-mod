@@ -56,6 +56,9 @@ public abstract class ChatBubbleLimitMixin {
         // v1.5.84：完成汇报（"建好啦"）——放行静默与限频（多女仆时第一个完成的女仆
         // 可能是非工头；且完成瞬间工头可能刚发过其他气泡），保证玩家一定收到汇报
         boolean completeReport = text != null && text.startsWith("建好啦");
+        // 【R1149】叫醒台词：一次性交互，必须每次都能弹（玩家右击一次就该看到一次），
+        // 不能被 5 秒限频吞掉；语音由 MaidWakeHandler 直接发，不再走下面的 speak。
+        boolean wakeComplaint = com.maidsmart.task.MaidWakeHandler.COMPLAINT.equals(text);
         if (!completeReport
                 && this.maid != null
                 && com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(this.maid)
@@ -63,7 +66,7 @@ public abstract class ChatBubbleLimitMixin {
             cir.setReturnValue(-1L);
             return;
         }
-        if (!completeReport) {
+        if (!completeReport && !wakeComplaint) {
             long now = System.currentTimeMillis();
             Long last = LAST_BUBBLE.get(this);
             if (last != null && now - last < bubbleLimitMs()) {
@@ -74,7 +77,7 @@ public abstract class ChatBubbleLimitMixin {
         }
         // v1.5.198：系统消息朗读——通过限频的真实气泡汇入 TTS
         //（①系统语音包命中 ②语音缓存命中 ③TLM TTS 合成；详细门禁见 SystemTTSManager）
-        if (this.maid != null) {
+        if (this.maid != null && !wakeComplaint) {
             com.maidsmart.voice.SystemTTSManager.speak(this.maid, text);
         }
         // v1.5.68：气泡内容同步到主人聊天框（可细看；不进女仆记忆）

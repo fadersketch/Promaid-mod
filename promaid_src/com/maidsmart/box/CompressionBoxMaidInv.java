@@ -102,6 +102,62 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         return CompressionBoxData.read(this.backing.getStackInSlot(cell.maidSlot));
     }
 
+    /** 【R1146】这一格盒子叠了多个：一叠共用同一份 NBT，拆开就会把内容复制成多份。
+     *  叠着的一律不读不写，等 {@link #sanitizeStackedBoxes()} 拆成单只。 */
+    private boolean stacked(Cell cell) {
+        return this.backing.getStackInSlot(cell.maidSlot).m_41613_() > 1;
+    }
+
+    /**
+     * 【R1146】把旧存档里叠着的压缩盒拆开：保留第一只（内容留在它身上），其余按空盒
+     * 放进背包空格；放不下就掉在脚边。旧版上限 64，一叠共用同一份 NBT，拆 stack 会让
+     * 每只都指向同一份内容（复制）；现在物品已不可堆叠，这里清存量。
+     *
+     * @return 拆出的空盒数量（0 = 没有叠着的）
+     */
+    public int sanitizeStackedBoxes() {
+        int split = 0;
+        int n = maidSlots();
+        for (int i = 0; i < n; i++) {
+            ItemStack src = this.backing.getStackInSlot(i);
+            if (!CompressionBoxData.isBox(src) || src.m_41613_() <= 1) {
+                continue;
+            }
+            int count = src.m_41613_();
+            // 第一只保留原 NBT（内容不丢），数量归 1
+            this.backing.setStackInSlot(i, src.m_41777_().m_255036_(1));
+            int remaining = count - 1;
+            split += remaining;
+            // 只往空格里放空盒；绝不塞进别的盒子/已有物品格，免得又叠起来
+            for (int j = 0; j < n && remaining > 0; j++) {
+                if (j == i || !this.backing.getStackInSlot(j).m_41619_()) {
+                    continue;
+                }
+                this.backing.setStackInSlot(j, new ItemStack(
+                        com.maidsmart.ProMaidMod.COMPRESSION_BOX.get()));
+                --remaining;
+            }
+            while (remaining-- > 0) {
+                net.minecraft.world.level.block.Block.m_49840_(
+                        this.maid.m_9236_(), this.maid.m_20183_(),
+                        new ItemStack(com.maidsmart.ProMaidMod.COMPRESSION_BOX.get()));
+            }
+        }
+        return split;
+    }
+
+    /** 【R1146】服务端女仆 tick 的兜底清理（每 20 tick 调一次；没有叠盒时几乎零开销）。 */
+    public static void sanitizeIfNeeded(EntityMaid maid) {
+        try {
+            if (maid != null
+                    && maid.getMaidInv() instanceof CompressionBoxMaidInv inv) {
+                inv.sanitizeStackedBoxes();
+            }
+        } catch (Throwable ignored) { com.maidsmart.diag.Diag.swallow(
+                "CompressionBoxMaidInv.sanitize", ignored);
+        }
+    }
+
     /**
      * 只含「盒子那几格」的一段视图（v1.2.2 实测六百一十八）。
      * 【为什么需要它】TLM 有几条路走的是 {@code getAvailableInv} /
@@ -143,7 +199,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
             return this.backing.getStackInSlot(slot);
         }
         Cell cell = cellAt(slot);
-        if (cell == null) {
+        if (cell == null || stacked(cell)) {
             return ItemStack.f_41583_;
         }
         ItemStack s = readBox(cell).get(cell.slotInBox);
@@ -172,7 +228,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
             return;
         }
         Cell cell = cellAt(slot);
-        if (cell == null) {
+        if (cell == null || stacked(cell)) {
             return;
         }
         List<ItemStack> items = readBox(cell);
@@ -204,7 +260,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
             return ItemStack.f_41583_;
         }
         Cell cell = cellAt(slot);
-        if (cell == null) {
+        if (cell == null || stacked(cell)) {
             return stack;
         }
         List<ItemStack> items = readBox(cell);
@@ -222,7 +278,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
             return this.backing.extractItem(slot, amount, simulate);
         }
         Cell cell = cellAt(slot);
-        if (cell == null || amount <= 0) {
+        if (cell == null || stacked(cell) || amount <= 0) {
             return ItemStack.f_41583_;
         }
         List<ItemStack> items = readBox(cell);
@@ -251,6 +307,11 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         // 六百二十起带附魔的物品同样不放行——判据统一在
         // CompressionBoxFilter（她的「顺手塞进盒子」走的是 ItemHandlerHelper.insertItemStacked，
         // 那一路会逐格问 isItemValid，所以挡在这里她就根本不会往盒子里放这类东西）
+        // 【R1146】叠着的盒子一律不写（等 sanitize 拆开），否则又会复制内容
+        Cell cell = cellAt(slot);
+        if (cell == null || stacked(cell)) {
+            return false;
+        }
         return CompressionBoxFilter.canStore(stack);
     }
 

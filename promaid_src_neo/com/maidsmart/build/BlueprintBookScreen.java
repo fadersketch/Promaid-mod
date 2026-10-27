@@ -13,7 +13,7 @@ import java.util.List;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Promaid 手册界面（v1.5.71 布局重构版）：
+ * 身怀百技手册界面（v1.5.71 布局重构版）：
  * - 大目录页：两个大入口【建造】【女仆管理】+ 顶部实时进度行
  * - 建造面板：总目录（全部建筑仅显示名称，翻页）→ 点名称 → 材料详情页
  *   材料详情：2 列 × 8 行 = 16 种/页（规则，小字体），放不下自动翻页
@@ -159,7 +159,7 @@ public class BlueprintBookScreen extends Screen {
                                   int regionW, int regionH, int regionD,
                                   boolean inPlanRegion, String currentPlanId,
                                   List<String[]> regions, int etaSec, String speedBps) {
-        super(Component.literal("Promaid 手册"));
+        super(Component.literal("身怀百技手册"));
         this.entries = entries;
         this.maids = maids == null ? new ArrayList<>() : maids;
         this.allMaids = allMaids == null ? new ArrayList<>() : allMaids;
@@ -984,11 +984,11 @@ public class BlueprintBookScreen extends Screen {
         if (mc != null && mc.player != null) {
             if (diy) {
                 mc.player.displayClientMessage(Component.literal(
-                        "\u00a7a[Promaid] 已应用 DIY 模式（改动 " + changed + " 项）：本模组不再介入女仆行为——"
+                        "\u00a7a[身怀百技] 已应用 DIY 模式（改动 " + changed + " 项）：本模组不再介入女仆行为——"
                                 + "要哪项加强，到「模组详细配置」对应板块里单独打开"), false);
             } else {
                 mc.player.displayClientMessage(Component.literal(
-                        "\u00a7a[Promaid] 已恢复默认模式（改动 " + changed + " 项）：按出厂推荐配置运行"), false);
+                        "\u00a7a[身怀百技] 已恢复默认模式（改动 " + changed + " 项）：按出厂推荐配置运行"), false);
             }
         }
     }
@@ -2764,7 +2764,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
             super.renderBackground(graphics, 0, 0, 0);
         }
         // v1.1.0 实测三百一十三（反馈："模组内新添加物品的 ui 背景都是用的原版 MC
-        // 格式，过于单调。在背景加上更多的颜色，ui 颜色也变一下"）：Promaid 手册
+        // 格式，过于单调。在背景加上更多的颜色，ui 颜色也变一下"）：身怀百技手册
         // 品牌渐变背景——蓝金主题（与手册建造功能呼应）。半透明色带叠加 = 渐变
         //（fill 走 ARGB，Alpha 叠加）
         int w = this.width;
@@ -2791,8 +2791,8 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
     /** 大目录渲染 */
     private void renderHome(net.minecraft.client.gui.GuiGraphics graphics) {
         // v1.5.64：固定布局（按钮在 70/130，文字不重叠）
-        // v1.5.100b：改名（Promaid 手册 → Promaid 功能手册）；v1.5.192：统一为 Promaid 手册
-        this.drawCentered(graphics, "\u00a7ePromaid 手册", 20, 0xFFFFFF);
+        // v1.5.100b：改名（身怀百技手册 → Promaid 功能手册）；v1.5.192：统一为 身怀百技手册
+        this.drawCentered(graphics, "\u00a7e身怀百技手册", 20, 0xFFFFFF);
         // v1.5.252w：大目录不再显示建造进度/进度条（要求——目录页保持干净，
         // 进度显示保留在建造面板/女仆管理等具体页面）
         this.drawCentered(graphics, "\u00a77点击下方入口进入对应面板", 46, 0x888888);
