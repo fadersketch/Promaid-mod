@@ -50,6 +50,8 @@
 
 ## 下载
 
+> GitHub 会把附件名中的空格自动显示为点（`Touhou.Little.Maid-Promaid-...`）；带空格的原名用于本地构建与 Modrinth / CurseForge 上传。
+
 | 版本 | 文件 | SHA-256 |
 |---|---|---|
 | Forge 1.20.1 | `Touhou Little Maid-Promaid-1.20.1-forge-1.3.4.jar` | `9D2A6F1D6D48C57B23685008E08179C1BC8683A9D06D1173C9F04F75F3265CAF` |
